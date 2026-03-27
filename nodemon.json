@@ -1,0 +1,5 @@
+{
+  "watch": ["dashboard_node.js"],
+  "ext": "js",
+  "delay": 500
+}
