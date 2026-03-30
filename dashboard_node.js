@@ -267,11 +267,17 @@ function buildSetupHTML({ prefill = {} } = {}) {
   .proj-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; letter-spacing:.3px; }
   .proj-trigger { width: 100%; background: var(--bg-el); border: 1px solid var(--bg-border); color: var(--text-1); border-radius: 8px; padding: 10px 14px; font-size: 14px; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-family: inherit; transition: border .2s; }
   .proj-trigger:hover { border-color: var(--c-blue); }
-  .proj-panel { border: 1px solid var(--bg-border); border-radius: 8px; margin-top: 4px; background: var(--bg-card); max-height: 220px; overflow-y: auto; display: none; }
+  .proj-panel { border: 1px solid var(--bg-border); border-radius: 8px; margin-top: 4px; background: var(--bg-card); display: none; }
   .proj-panel.open { display: block; }
+  .proj-search-wrap { padding: 8px 10px; border-bottom: 1px solid var(--bg-border); position: sticky; top: 0; background: var(--bg-card); z-index: 1; }
+  .proj-search { width: 100%; background: var(--bg-el); border: 1px solid var(--bg-border); color: var(--text-1); border-radius: 6px; padding: 7px 10px; font-size: 13px; font-family: inherit; outline: none; box-sizing: border-box; }
+  .proj-search:focus { border-color: var(--c-blue); }
+  .proj-search::placeholder { color: var(--text-faint); }
+  .proj-list { max-height: 200px; overflow-y: auto; }
   .proj-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; transition: background .15s; font-size: 13px; color: var(--text-2); }
   .proj-option:hover { background: var(--bg-el); }
   .proj-option input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--c-blue); cursor: pointer; flex-shrink: 0; }
+  .proj-empty { padding: 12px 14px; font-size: 13px; color: var(--text-faint); text-align: center; }
   .proj-footer { padding: 8px 14px; border-top: 1px solid var(--bg-border); }
   .proj-footer button { background: none; border: none; color: var(--text-faint); font-size: 12px; cursor: pointer; }
   .proj-footer button:hover { color: var(--c-red2); }
@@ -326,7 +332,12 @@ function buildSetupHTML({ prefill = {} } = {}) {
         <span id="proj-trigger-text">Selecione os projetos…</span>
         <span>▾</span>
       </button>
-      <div class="proj-panel" id="proj-panel"></div>
+      <div class="proj-panel" id="proj-panel">
+        <div class="proj-search-wrap">
+          <input type="text" class="proj-search" id="proj-search" placeholder="🔍 Buscar projeto…" oninput="filterProjects()" autocomplete="off">
+        </div>
+        <div class="proj-list" id="proj-list"></div>
+      </div>
       <div class="proj-count" id="proj-count"></div>
       <button class="btn-save" id="btn-save" onclick="doSave()">💾 Salvar e abrir dashboard</button>
     </div>
@@ -373,29 +384,59 @@ function buildSetupHTML({ prefill = {} } = {}) {
     }
   }
 
+  let ALL_PROJECTS = [];
+
   function renderProjects(projects) {
-    const panel = document.getElementById('proj-panel');
-    panel.innerHTML = projects.map(p => {
-      const esc = p.replace(/"/g, '&quot;');
-      const checked = PREFILL.includes(p) ? ' checked' : '';
-      return '<label class="proj-option"><input type="checkbox" value="' + esc + '" onchange="updateCount()"' + checked + '><span>' + p + '</span></label>';
-    }).join('') + '<div class="proj-footer"><button type="button" onclick="clearProjs()">✕ Limpar seleção</button></div>';
+    ALL_PROJECTS = projects;
+    renderProjectList(projects);
+    const footer = document.getElementById('proj-panel').querySelector('.proj-footer');
+    if (!footer) {
+      const f = document.createElement('div');
+      f.className = 'proj-footer';
+      f.innerHTML = '<button type="button" onclick="clearProjs()">✕ Limpar seleção</button>';
+      document.getElementById('proj-panel').appendChild(f);
+    }
     updateCount();
   }
 
+  function renderProjectList(projects) {
+    const list = document.getElementById('proj-list');
+    if (!projects.length) {
+      list.innerHTML = '<div class="proj-empty">Nenhum projeto encontrado.</div>';
+      return;
+    }
+    list.innerHTML = projects.map(p => {
+      const esc = p.replace(/"/g, '&quot;');
+      const checked = PREFILL.includes(p) || [...document.querySelectorAll('#proj-list input:checked')].map(c => c.value).includes(p) ? ' checked' : '';
+      return '<label class="proj-option"><input type="checkbox" value="' + esc + '" onchange="updateCount()"' + checked + '><span>' + p + '</span></label>';
+    }).join('');
+  }
+
+  function filterProjects() {
+    const q = document.getElementById('proj-search').value.toLowerCase().trim();
+    const filtered = q ? ALL_PROJECTS.filter(p => p.toLowerCase().includes(q)) : ALL_PROJECTS;
+    renderProjectList(filtered);
+  }
+
   function toggleProjPanel() {
-    document.getElementById('proj-panel').classList.toggle('open');
+    const panel = document.getElementById('proj-panel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+      setTimeout(() => document.getElementById('proj-search')?.focus(), 50);
+    }
   }
 
   function updateCount() {
-    const checked = [...document.querySelectorAll('#proj-panel input:checked')];
+    const checked = [...document.querySelectorAll('#proj-list input:checked')];
     const names = checked.map(c => c.value);
     document.getElementById('proj-trigger-text').textContent = names.length ? names.join(', ') : 'Selecione os projetos…';
     document.getElementById('proj-count').textContent = names.length ? names.length + ' projeto(s) selecionado(s)' : '';
   }
 
   function clearProjs() {
-    document.querySelectorAll('#proj-panel input').forEach(c => c.checked = false);
+    document.querySelectorAll('#proj-list input').forEach(c => c.checked = false);
+    document.getElementById('proj-search').value = '';
+    filterProjects();
     updateCount();
   }
 
@@ -407,7 +448,7 @@ function buildSetupHTML({ prefill = {} } = {}) {
   async function doSave() {
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
-    const selected = [...document.querySelectorAll('#proj-panel input:checked')].map(c => c.value);
+    const selected = [...document.querySelectorAll('#proj-list input:checked')].map(c => c.value);
     if (!selected.length) { showErr('Selecione ao menos um projeto para monitorar.'); return; }
     hideErr();
     const btn = document.getElementById('btn-save');
