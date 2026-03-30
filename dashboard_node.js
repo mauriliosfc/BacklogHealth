@@ -385,6 +385,7 @@ function buildSetupHTML({ prefill = {} } = {}) {
   }
 
   let ALL_PROJECTS = [];
+  let SELECTED_SET = new Set(PREFILL);
 
   function renderProjects(projects) {
     ALL_PROJECTS = projects;
@@ -407,9 +408,15 @@ function buildSetupHTML({ prefill = {} } = {}) {
     }
     list.innerHTML = projects.map(p => {
       const esc = p.replace(/"/g, '&quot;');
-      const checked = PREFILL.includes(p) || [...document.querySelectorAll('#proj-list input:checked')].map(c => c.value).includes(p) ? ' checked' : '';
-      return '<label class="proj-option"><input type="checkbox" value="' + esc + '" onchange="updateCount()"' + checked + '><span>' + p + '</span></label>';
+      const checked = SELECTED_SET.has(p) ? ' checked' : '';
+      return '<label class="proj-option"><input type="checkbox" value="' + esc + '" onchange="onProjChange(this)"' + checked + '><span>' + p + '</span></label>';
     }).join('');
+  }
+
+  function onProjChange(cb) {
+    if (cb.checked) SELECTED_SET.add(cb.value);
+    else SELECTED_SET.delete(cb.value);
+    updateCount();
   }
 
   function filterProjects() {
@@ -427,14 +434,13 @@ function buildSetupHTML({ prefill = {} } = {}) {
   }
 
   function updateCount() {
-    const checked = [...document.querySelectorAll('#proj-list input:checked')];
-    const names = checked.map(c => c.value);
+    const names = [...SELECTED_SET];
     document.getElementById('proj-trigger-text').textContent = names.length ? names.join(', ') : 'Selecione os projetos…';
     document.getElementById('proj-count').textContent = names.length ? names.length + ' projeto(s) selecionado(s)' : '';
   }
 
   function clearProjs() {
-    document.querySelectorAll('#proj-list input').forEach(c => c.checked = false);
+    SELECTED_SET.clear();
     document.getElementById('proj-search').value = '';
     filterProjects();
     updateCount();
@@ -448,7 +454,7 @@ function buildSetupHTML({ prefill = {} } = {}) {
   async function doSave() {
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
-    const selected = [...document.querySelectorAll('#proj-list input:checked')].map(c => c.value);
+    const selected = [...SELECTED_SET];
     if (!selected.length) { showErr('Selecione ao menos um projeto para monitorar.'); return; }
     hideErr();
     const btn = document.getElementById('btn-save');
