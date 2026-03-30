@@ -66,10 +66,10 @@ Para alterar a configuração posteriormente, clique no botão ⚙️ no cabeça
 
 ```bash
 # Modo desenvolvimento (com hot reload — não reabre o navegador a cada reinício)
-nodemon dashboard_node.js
+nodemon server.js
 
 # Modo produção (abre o navegador automaticamente)
-node dashboard_node.js
+node server.js
 ```
 
 O servidor sobe na porta **3030**. Para encerrar, pressione `Ctrl+C`.
@@ -80,7 +80,16 @@ O servidor sobe na porta **3030**. Para encerrar, pressione `Ctrl+C`.
 
 ```
 BacklogHealth/
-├── dashboard_node.js   # Servidor e toda a lógica da aplicação
+├── server.js           # Entry point: HTTP server, rotas, renderização de templates
+├── config.js           # Gerenciamento de configuração (load/save/getCfg)
+├── azureClient.js      # Cliente HTTP para a API REST do Azure DevOps
+├── projectService.js   # Lógica de negócio: queries, cálculo de saúde, cards HTML
+├── public/
+│   ├── style.css       # Todo o CSS (temas claro/escuro, dashboard, setup)
+│   └── app.js          # Todo o JS do browser (filtros, modal de detalhes, gráficos)
+├── views/
+│   ├── dashboard.html  # Template HTML do dashboard
+│   └── setup.html      # Template HTML da tela de configuração
 ├── config.json         # Credenciais e projetos monitorados (gerado automaticamente, não versionado)
 ├── nodemon.json        # Configuração do hot reload (define NO_OPEN_BROWSER=1)
 └── .gitignore

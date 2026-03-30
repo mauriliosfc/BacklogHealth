@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Backlog Health Dashboard</title>
+<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>📋 Backlog Health</h1>
+    <div class="subtitle">Azure DevOps · {{ORG}}</div>
+  </div>
+  <div class="refresh-bar">
+    <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Tema claro">☀️</button>
+    <button class="btn-theme" onclick="location.href='/settings'" title="Configurações">⚙️</button>
+    <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()">↻ Atualizar</button>
+    <div class="timer" id="timer">Próximo refresh em 5:00</div>
+    <div class="update" id="lastUpdate">Atualizado em {{LAST_UPDATE}}</div>
+  </div>
+</div>
+<div id="content">
+{{CARDS}}
+</div>
+
+<div id="detail-modal" class="modal-overlay" onclick="closeDetails(event)">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modal-title"></div>
+        <div class="modal-sub" id="modal-sub"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-refresh" type="button" id="btnRefreshDetail" onclick="loadDetailData(_detailProject, _detailSprints)" title="Atualizar dados">↻</button>
+        <button class="modal-maximize" type="button" id="btnMaximize" onclick="toggleMaximize()" title="Maximizar">⤢</button>
+        <button class="modal-close" type="button" onclick="closeDetailsBtn()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

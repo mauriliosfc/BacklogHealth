@@ -12,12 +12,31 @@ Automatizar a rotina de validação de backlog de projetos no **Azure DevOps**, 
 
 ## 🏗️ Arquitetura
 
+### Estrutura de arquivos
+
 ```
-Node.js Script (dashboard_node.js)
+dash_azure_gestao_pessoal/
+├── server.js           ← entry point: HTTP server, rotas, renderização de templates
+├── config.js           ← loadConfig, saveConfig, getCfg, getAuth
+├── azureClient.js      ← azureGet, azurePost, rawAzureGet
+├── projectService.js   ← fetchProject, fetchProjectDetail, buildCardHTML, calcHealth
+├── public/
+│   ├── style.css       ← todo o CSS (setup + dashboard, sem duplicatas)
+│   └── app.js          ← todo o JS do browser (filtros, modal, buildDetailHTML, etc.)
+├── views/
+│   ├── dashboard.html  ← template HTML do dashboard com tokens {{ORG}}, {{CARDS}}, etc.
+│   └── setup.html      ← template HTML do setup com tokens de configuração
+└── config.json         ← credenciais (gerado automaticamente, não versionado)
+```
+
+### Fluxo de dados
+
+```
+server.js (entry point)
         │
-        ├── config.json (credenciais salvas localmente)
+        ├── config.js          → gerencia config.json (org, pat, projects)
         │
-        ├── Chama API REST do Azure DevOps (HTTPS)
+        ├── azureClient.js     → chamadas HTTPS para a API REST do Azure DevOps
         │       ├── Projects API       → lista todos os projetos acessíveis pelo PAT
         │       ├── WIQL Query         → busca IDs de work items ativos (state NOT IN Closed/Done/Removed)
         │       ├── Work Items API     → detalhes dos items do dashboard principal (até 100)
@@ -26,13 +45,17 @@ Node.js Script (dashboard_node.js)
         │       ├── WIQL (tasks/bugs)  → todos os estados para CompletedWork e contagem total
         │       └── WIQL (allItems)    → todos os tipos/estados para distribuição por tipo
         │
+        ├── projectService.js  → lógica de negócio + renderização dos cards HTML
+        │
         └── Servidor HTTP local (porta 3030)
                 ├── GET /                    → dashboard principal (HTML cacheado)
                 ├── GET /refresh             → rebusca dados e retorna HTML atualizado
                 ├── GET /settings            → tela de configurações (pré-preenchida)
                 ├── GET /api/projects        → lista projetos disponíveis para o PAT informado
                 ├── POST /setup              → salva config.json e retorna JSON {ok:true}
-                └── GET /detail?project=NAME → JSON com items, taskItems, bugItems, allItems, iterMap
+                ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, allItems, iterMap
+                ├── GET /style.css           → arquivo estático
+                └── GET /app.js             → arquivo estático
 ```
 
 ---
@@ -44,7 +67,7 @@ Node.js Script (dashboard_node.js)
 | Porta local | `3030` |
 | Arquivo de configuração | `config.json` (gerado automaticamente na primeira execução) |
 | Autenticação | PAT (Personal Access Token) |
-| Hot reload | `nodemon dashboard_node.js` |
+| Hot reload | `nodemon server.js` |
 
 As credenciais são configuradas pela **tela de setup** na primeira execução e salvas em `config.json`. Não há valores hardcoded no código.
 
@@ -68,10 +91,10 @@ As credenciais são configuradas pela **tela de setup** na primeira execução e
 
 ```bash
 # Com hot reload (recomendado para desenvolvimento — não reabre o navegador a cada reinício):
-nodemon dashboard_node.js
+nodemon server.js
 
 # Sem hot reload (abre o navegador automaticamente):
-node dashboard_node.js
+node server.js
 
 # O servidor sobe em:
 # http://localhost:3030
@@ -224,6 +247,10 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 | 14 | Queries separadas para Tasks/Bugs (sem filtro de estado) | CompletedWork e contagem total precisam incluir itens já fechados |
 | 15 | Filtragem por sprint no cliente (detail) | Evita passar parâmetros de sprint para o servidor — dados brutos com IterationPath são filtrados no JS |
 | 16 | `SELECTED_SET` para seleção de projetos no setup | Seleções persistiam ao filtrar a lista — DOM era reconstruído e perdia o estado dos checkboxes ocultos |
+| 17 | Separação em módulos (config, azureClient, projectService, server) | Arquivo único de 1500+ linhas dificultava manutenção — cada módulo tem responsabilidade clara e pode ser editado sem risco de quebrar outras partes |
+| 18 | CSS e JS do browser em `public/` servidos como arquivos estáticos | Permite syntax highlighting real no editor, sem escaping de template literal; navegador faz cache automaticamente |
+| 19 | HTML em `views/` com tokens `{{TOKEN}}` e `renderTemplate` simples | Separa estrutura de apresentação da lógica sem adicionar dependência de template engine |
+| 20 | Templates lidos uma vez no startup (`fs.readFileSync`) | Evita I/O a cada request em ambiente de desenvolvimento local |
 
 ---
 
@@ -238,4 +265,4 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 
 ---
 
-*Documentação atualizada em Março/2026*
+*Documentação atualizada em Março/2026 — Refatoração modular*
