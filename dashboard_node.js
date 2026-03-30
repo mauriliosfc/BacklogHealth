@@ -142,9 +142,10 @@ async function fetchProject(project) {
 
 async function fetchProjectDetail(project) {
   try {
+    // Busca itens ativos (US, Bug, Feature, Epic, etc.)
     const wiql = await azurePost(
       `${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') ORDER BY [System.ChangedDate] DESC` }
+      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] NOT IN ('Closed','Done','Removed') ORDER BY [System.ChangedDate] DESC` }
     );
     const allIds = (wiql.workItems || []).slice(0, 500).map(w => w.id);
 
@@ -152,9 +153,59 @@ async function fetchProjectDetail(project) {
     for (let i = 0; i < allIds.length; i += 200) {
       const batch = allIds.slice(i, i + 200);
       const details = await azureGet(
-        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,Microsoft.VSTS.Scheduling.StoryPoints,System.IterationPath&api-version=7.0`
+        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,Microsoft.VSTS.Scheduling.StoryPoints,Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath&api-version=7.0`
       );
       items = items.concat(details.value || []);
+    }
+
+    // Busca Tasks, Bugs e todos os itens (sem filtro estado) em paralelo
+    const [taskWiql, bugWiql, allWiql] = await Promise.all([
+      azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
+        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Task' ORDER BY [System.ChangedDate] DESC` }),
+      azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
+        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Bug' ORDER BY [System.ChangedDate] DESC` }),
+      azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
+        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC` }),
+    ]);
+
+    const taskIds = (taskWiql.workItems || []).slice(0, 500).map(w => w.id);
+    let taskItems = [];
+    for (let i = 0; i < taskIds.length; i += 200) {
+      const batch = taskIds.slice(i, i + 200);
+      const details = await azureGet(
+        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath&api-version=7.0`
+      );
+      taskItems = taskItems.concat((details.value || []).map(t => ({
+        completedWork: t.fields?.["Microsoft.VSTS.Scheduling.CompletedWork"] || 0,
+        iteration:     t.fields?.["System.IterationPath"] || "",
+      })));
+    }
+
+    const bugIds = (bugWiql.workItems || []).slice(0, 500).map(w => w.id);
+    let bugItems = [];
+    for (let i = 0; i < bugIds.length; i += 200) {
+      const batch = bugIds.slice(i, i + 200);
+      const details = await azureGet(
+        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath&api-version=7.0`
+      );
+      bugItems = bugItems.concat((details.value || []).map(t => ({
+        completedWork: t.fields?.["Microsoft.VSTS.Scheduling.CompletedWork"] || 0,
+        iteration:     t.fields?.["System.IterationPath"] || "",
+      })));
+    }
+
+    const allIds2 = (allWiql.workItems || []).slice(0, 500).map(w => w.id);
+    let allItems = [];
+    for (let i = 0; i < allIds2.length; i += 200) {
+      const batch = allIds2.slice(i, i + 200);
+      const details = await azureGet(
+        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=System.WorkItemType,System.State,System.IterationPath&api-version=7.0`
+      );
+      allItems = allItems.concat((details.value || []).map(i => ({
+        type:      i.fields?.["System.WorkItemType"] || "",
+        state:     i.fields?.["System.State"] || "",
+        iteration: i.fields?.["System.IterationPath"] || "",
+      })));
     }
 
     let iterMap = {};
@@ -173,13 +224,16 @@ async function fetchProjectDetail(project) {
     return {
       project,
       iterMap,
+      taskItems,
+      bugItems,
+      allItems,
       items: items.map(i => ({
-        state:    i.fields?.["System.State"] || "",
-        type:     i.fields?.["System.WorkItemType"] || "",
-        pts:      i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null,
-        assigned: i.fields?.["System.AssignedTo"]?.displayName || null,
+        state:     i.fields?.["System.State"] || "",
+        type:      i.fields?.["System.WorkItemType"] || "",
+        pts:       i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null,
+        assigned:  i.fields?.["System.AssignedTo"]?.displayName || null,
         iteration: i.fields?.["System.IterationPath"] || "",
-        title:    i.fields?.["System.Title"] || "",
+        title:     i.fields?.["System.Title"] || "",
       })),
     };
   } catch (e) {
@@ -267,11 +321,17 @@ function buildSetupHTML({ prefill = {} } = {}) {
   .proj-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; letter-spacing:.3px; }
   .proj-trigger { width: 100%; background: var(--bg-el); border: 1px solid var(--bg-border); color: var(--text-1); border-radius: 8px; padding: 10px 14px; font-size: 14px; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-family: inherit; transition: border .2s; }
   .proj-trigger:hover { border-color: var(--c-blue); }
-  .proj-panel { border: 1px solid var(--bg-border); border-radius: 8px; margin-top: 4px; background: var(--bg-card); max-height: 220px; overflow-y: auto; display: none; }
+  .proj-panel { border: 1px solid var(--bg-border); border-radius: 8px; margin-top: 4px; background: var(--bg-card); display: none; }
   .proj-panel.open { display: block; }
+  .proj-search-wrap { padding: 8px 10px; border-bottom: 1px solid var(--bg-border); position: sticky; top: 0; background: var(--bg-card); z-index: 1; }
+  .proj-search { width: 100%; background: var(--bg-el); border: 1px solid var(--bg-border); color: var(--text-1); border-radius: 6px; padding: 7px 10px; font-size: 13px; font-family: inherit; outline: none; box-sizing: border-box; }
+  .proj-search:focus { border-color: var(--c-blue); }
+  .proj-search::placeholder { color: var(--text-faint); }
+  .proj-list { max-height: 200px; overflow-y: auto; }
   .proj-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; transition: background .15s; font-size: 13px; color: var(--text-2); }
   .proj-option:hover { background: var(--bg-el); }
   .proj-option input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--c-blue); cursor: pointer; flex-shrink: 0; }
+  .proj-empty { padding: 12px 14px; font-size: 13px; color: var(--text-faint); text-align: center; }
   .proj-footer { padding: 8px 14px; border-top: 1px solid var(--bg-border); }
   .proj-footer button { background: none; border: none; color: var(--text-faint); font-size: 12px; cursor: pointer; }
   .proj-footer button:hover { color: var(--c-red2); }
@@ -326,7 +386,12 @@ function buildSetupHTML({ prefill = {} } = {}) {
         <span id="proj-trigger-text">Selecione os projetos…</span>
         <span>▾</span>
       </button>
-      <div class="proj-panel" id="proj-panel"></div>
+      <div class="proj-panel" id="proj-panel">
+        <div class="proj-search-wrap">
+          <input type="text" class="proj-search" id="proj-search" placeholder="🔍 Buscar projeto…" oninput="filterProjects()" autocomplete="off">
+        </div>
+        <div class="proj-list" id="proj-list"></div>
+      </div>
       <div class="proj-count" id="proj-count"></div>
       <button class="btn-save" id="btn-save" onclick="doSave()">💾 Salvar e abrir dashboard</button>
     </div>
@@ -373,29 +438,65 @@ function buildSetupHTML({ prefill = {} } = {}) {
     }
   }
 
+  let ALL_PROJECTS = [];
+  let SELECTED_SET = new Set(PREFILL);
+
   function renderProjects(projects) {
-    const panel = document.getElementById('proj-panel');
-    panel.innerHTML = projects.map(p => {
-      const esc = p.replace(/"/g, '&quot;');
-      const checked = PREFILL.includes(p) ? ' checked' : '';
-      return '<label class="proj-option"><input type="checkbox" value="' + esc + '" onchange="updateCount()"' + checked + '><span>' + p + '</span></label>';
-    }).join('') + '<div class="proj-footer"><button type="button" onclick="clearProjs()">✕ Limpar seleção</button></div>';
+    ALL_PROJECTS = projects;
+    renderProjectList(projects);
+    const footer = document.getElementById('proj-panel').querySelector('.proj-footer');
+    if (!footer) {
+      const f = document.createElement('div');
+      f.className = 'proj-footer';
+      f.innerHTML = '<button type="button" onclick="clearProjs()">✕ Limpar seleção</button>';
+      document.getElementById('proj-panel').appendChild(f);
+    }
     updateCount();
   }
 
+  function renderProjectList(projects) {
+    const list = document.getElementById('proj-list');
+    if (!projects.length) {
+      list.innerHTML = '<div class="proj-empty">Nenhum projeto encontrado.</div>';
+      return;
+    }
+    list.innerHTML = projects.map(p => {
+      const esc = p.replace(/"/g, '&quot;');
+      const checked = SELECTED_SET.has(p) ? ' checked' : '';
+      return '<label class="proj-option"><input type="checkbox" value="' + esc + '" onchange="onProjChange(this)"' + checked + '><span>' + p + '</span></label>';
+    }).join('');
+  }
+
+  function onProjChange(cb) {
+    if (cb.checked) SELECTED_SET.add(cb.value);
+    else SELECTED_SET.delete(cb.value);
+    updateCount();
+  }
+
+  function filterProjects() {
+    const q = document.getElementById('proj-search').value.toLowerCase().trim();
+    const filtered = q ? ALL_PROJECTS.filter(p => p.toLowerCase().includes(q)) : ALL_PROJECTS;
+    renderProjectList(filtered);
+  }
+
   function toggleProjPanel() {
-    document.getElementById('proj-panel').classList.toggle('open');
+    const panel = document.getElementById('proj-panel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+      setTimeout(() => document.getElementById('proj-search')?.focus(), 50);
+    }
   }
 
   function updateCount() {
-    const checked = [...document.querySelectorAll('#proj-panel input:checked')];
-    const names = checked.map(c => c.value);
+    const names = [...SELECTED_SET];
     document.getElementById('proj-trigger-text').textContent = names.length ? names.join(', ') : 'Selecione os projetos…';
     document.getElementById('proj-count').textContent = names.length ? names.length + ' projeto(s) selecionado(s)' : '';
   }
 
   function clearProjs() {
-    document.querySelectorAll('#proj-panel input').forEach(c => c.checked = false);
+    SELECTED_SET.clear();
+    document.getElementById('proj-search').value = '';
+    filterProjects();
     updateCount();
   }
 
@@ -407,7 +508,7 @@ function buildSetupHTML({ prefill = {} } = {}) {
   async function doSave() {
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
-    const selected = [...document.querySelectorAll('#proj-panel input:checked')].map(c => c.value);
+    const selected = [...SELECTED_SET];
     if (!selected.length) { showErr('Selecione ao menos um projeto para monitorar.'); return; }
     hideErr();
     const btn = document.getElementById('btn-save');
@@ -437,9 +538,11 @@ function buildHTML(results) {
         <p style="color:#f87171">${error}</p>
       </div>`;
 
-    const total = items.length;
-    const semEst = items.filter(i => i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] == null).length;
-    const semResp = items.filter(i => !i.fields?.["System.AssignedTo"]).length;
+    const US_TYPES = ["User Story", "Product Backlog Item", "Requirement"];
+    const usOnlyItems = items.filter(i => US_TYPES.includes(i.fields?.["System.WorkItemType"]));
+    const total = usOnlyItems.length;
+    const semEst = usOnlyItems.filter(i => i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] == null).length;
+    const semResp = usOnlyItems.filter(i => !i.fields?.["System.AssignedTo"]).length;
     const bugs = items.filter(i => i.fields?.["System.WorkItemType"] === "Bug").length;
     const health = calcHealth(total, semEst, semResp, bugs);
 
@@ -473,18 +576,17 @@ function buildHTML(results) {
       assigned: !!i.fields?.["System.AssignedTo"],
     }))).replace(/</g, "\\u003c");
 
-    // Agrupa items por iteration path, sprint atual primeiro
+    // Agrupa apenas User Stories por iteration path, sprint atual primeiro
+    const usTotal = usOnlyItems.length;
     const grouped = {};
-    items.forEach(i => {
+    usOnlyItems.forEach(i => {
       const key = i.fields?.["System.IterationPath"] || "Sem Sprint";
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(i);
     });
     const sortedGroups = Object.keys(grouped).sort((a, b) => {
-      const aC = sprint && (a === sprint || a.endsWith("\\" + sprint));
-      const bC = sprint && (b === sprint || b.endsWith("\\" + sprint));
-      if (aC && !bC) return -1;
-      if (!aC && bC) return 1;
+      const aS = iterMap[a]?.start, bS = iterMap[b]?.start;
+      if (aS && bS) return new Date(aS) - new Date(bS);
       return a.localeCompare(b);
     });
 
@@ -509,14 +611,12 @@ function buildHTML(results) {
         const title = i.fields?.["System.Title"] || "";
         const assigned = i.fields?.["System.AssignedTo"]?.displayName || "—";
         const pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"];
-        const type = i.fields?.["System.WorkItemType"] || "";
         const iteration = groupKey.replace(/"/g, "&quot;");
         const stateClass = ["Active","In Progress","Doing"].includes(state) ? "blue"
           : ["Closed","Done","Resolved"].includes(state) ? "green"
           : ["Blocked","Impediment"].includes(state) ? "red" : "gray";
         return `
           <tr data-iteration="${iteration}">
-            <td>${type}</td>
             <td>${title}</td>
             <td><span class="badge ${stateClass}">${state}</span></td>
             <td>${pts != null ? pts + " pts" : '<span class="badge yellow">Sem estimativa</span>'}</td>
@@ -561,9 +661,9 @@ function buildHTML(results) {
           <div class="stat"><div class="stat-label">Bugs Abertos</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
         </div>
         <details>
-          <summary class="card-summary">▼ Ver todos os ${total} items</summary>
+          <summary class="card-summary">▼ Visualizar User Stories (${usTotal})</summary>
           <table>
-            <thead><tr><th>Tipo</th><th>Título</th><th>Status</th><th>Estimativa</th><th>Responsável</th></tr></thead>
+            <thead><tr><th>Título</th><th>Status</th><th>Estimativa</th><th>Responsável</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </details>
@@ -693,8 +793,10 @@ function buildHTML(results) {
   .modal-title { font-size: 18px; font-weight: 700; }
   .modal-sub { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
   .modal-actions { display: flex; gap: 8px; flex-shrink: 0; }
-  .modal-close, .modal-maximize { background: var(--bg-el); border: none; color: var(--text-muted); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 15px; line-height: 1; }
+  .modal-close, .modal-maximize, .modal-refresh { background: var(--bg-el); border: none; color: var(--text-muted); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 15px; line-height: 1; }
   .modal-maximize:hover { background: var(--bg-el2); color: var(--text-1); }
+  .modal-refresh:hover { background: var(--bg-el2); color: var(--c-blue); }
+  .modal-refresh:disabled { opacity: .5; cursor: not-allowed; }
   .modal-close:hover { background: var(--c-red-bg); color: var(--c-red2); }
   .modal-body { padding: 24px 28px; }
   .modal-loading { color: var(--text-faint); font-size: 14px; padding: 40px 0; text-align: center; }
@@ -872,9 +974,11 @@ ${cards}
     });
 
     const filtered = selected.length === 0 ? allItems : allItems.filter(i => selected.includes(i.iteration));
-    const total = filtered.length;
-    const semEst = filtered.filter(i => i.pts == null).length;
-    const semResp = filtered.filter(i => !i.assigned).length;
+    const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
+    const filteredUS = filtered.filter(i => US_TYPES.includes(i.type));
+    const total = filteredUS.length;
+    const semEst = filteredUS.filter(i => i.pts == null).length;
+    const semResp = filteredUS.filter(i => !i.assigned).length;
     const bugs = filtered.filter(i => i.type === 'Bug').length;
 
     card.querySelector('.card-total').textContent = total;
@@ -898,7 +1002,8 @@ ${cards}
     healthEl.textContent = h[0];
     healthEl.className = 'badge big card-health ' + h[1];
 
-    card.querySelector('.card-summary').textContent = '▼ Ver todos os ' + total + ' items';
+    const usCount = filtered.filter(i => ['User Story','Product Backlog Item','Requirement'].includes(i.type)).length;
+    card.querySelector('.card-summary').textContent = '▼ Visualizar User Stories (' + usCount + ')';
   }
 
   function initFilters() {
@@ -939,21 +1044,14 @@ ${cards}
   setTheme(localStorage.getItem('theme') || 'dark');
 
   // ── Detail Modal ───────────────────────────────────────────────
-  async function openDetails(btn) {
-    const card = btn.closest('.card');
-    const project = card.dataset.project;
+  let _detailProject = null;
+  let _detailSprints = [];
 
-    // Lê sprints selecionados no filtro da tela inicial
-    const selectedSprints = Array.from(
-      card.querySelectorAll('.custom-select input[type="checkbox"]:checked')
-    ).map(c => c.value);
-
-    const modal = document.getElementById('detail-modal');
-    document.getElementById('modal-title').textContent = project;
+  async function loadDetailData(project, selectedSprints) {
+    const btnRefreshDetail = document.getElementById('btnRefreshDetail');
+    if (btnRefreshDetail) { btnRefreshDetail.disabled = true; btnRefreshDetail.textContent = '⏳'; }
     document.getElementById('modal-sub').textContent = 'Carregando dados completos...';
     document.getElementById('modal-body').innerHTML = '<div class="modal-loading">⏳ Buscando todos os itens do projeto...</div>';
-    modal.classList.add('open');
-    document.body.style.overflow = 'hidden';
     try {
       const resp = await fetch('/detail?' + new URLSearchParams({ project }));
       const data = await resp.json();
@@ -968,10 +1066,33 @@ ${cards}
         : selectedSprints.length + ' sprint(s) filtrada(s) · ' + filtered.length + ' de ' + data.items.length + ' itens';
 
       document.getElementById('modal-sub').textContent = filterLabel;
-      document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints);
+      const sprintFilter = s => !selectedSprints.length || selectedSprints.includes(s.iteration);
+      const taskItems = (data.taskItems || []).filter(sprintFilter);
+      const bugItems  = (data.bugItems  || []).filter(sprintFilter);
+      const allItems  = (data.allItems  || []).filter(sprintFilter);
+      const taskCompletedWork = taskItems.reduce((s, t) => s + t.completedWork, 0);
+      const bugCompletedWork  = bugItems.reduce((s, t)  => s + t.completedWork, 0);
+      const totalBugs         = bugItems.length;
+      document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, allItems);
     } catch(e) {
       document.getElementById('modal-body').innerHTML = '<p style="color:#f87171;padding:20px">Erro: ' + e.message + '</p>';
+    } finally {
+      if (btnRefreshDetail) { btnRefreshDetail.disabled = false; btnRefreshDetail.textContent = '↻'; }
     }
+  }
+
+  async function openDetails(btn) {
+    const card = btn.closest('.card');
+    _detailProject = card.dataset.project;
+    _detailSprints = Array.from(
+      card.querySelectorAll('.custom-select input[type="checkbox"]:checked')
+    ).map(c => c.value);
+
+    const modal = document.getElementById('detail-modal');
+    document.getElementById('modal-title').textContent = _detailProject;
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    await loadDetailData(_detailProject, _detailSprints);
   }
 
   function closeDetails(e) {
@@ -1040,7 +1161,7 @@ ${cards}
       '</svg><div class="ring-pct" style="color:' + color + '">' + pct + '%</div></div>';
   }
 
-  function buildDetailHTML(items, iterMap, selectedSprints) {
+  function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, allItems) {
     const total = items.length;
     if (!total) return '<p style="color:#64748b;padding:20px">Nenhum item encontrado.</p>';
 
@@ -1051,28 +1172,40 @@ ${cards}
         '</div>'
       : '';
 
+    const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
+    const usItems  = items.filter(i => US_TYPES.includes(i.type));
+    const usTotal  = usItems.length;
     const totalPts = items.reduce((s, i) => s + (i.pts || 0), 0);
     const closed   = items.filter(i => ['Closed','Done'].includes(i.state)).length;
     const resolved = items.filter(i => i.state === 'Resolved').length;
     const active   = items.filter(i => ['Active','In Progress','Doing','Committed'].includes(i.state)).length;
     const newItems = items.filter(i => i.state === 'New').length;
-    const bugs     = items.filter(i => i.type === 'Bug').length;
-    const us       = items.filter(i => ['User Story','Product Backlog Item'].includes(i.type)).length;
+    const bugs     = totalBugs || items.filter(i => i.type === 'Bug').length;
+    const us       = usTotal;
     const noEst    = items.filter(i => i.pts == null).length;
     const noAsgn   = items.filter(i => !i.assigned).length;
     const donePts  = items.filter(i => ['Closed','Done','Resolved'].includes(i.state)).reduce((s,i)=>s+(i.pts||0),0);
-    const closedPct = total ? Math.round((closed + resolved) / total * 100) : 0;
-    const bugRate   = total ? Math.round(bugs / total * 100) : 0;
-    const estPct    = total ? Math.round((total - noEst) / total * 100) : 0;
+    const usClosed     = usItems.filter(i => ['Closed','Done','Resolved'].includes(i.state)).length;
+    const usUAT        = usItems.filter(i => i.state === 'UAT').length;
+    const uatPct       = usTotal ? Math.round(usUAT / usTotal * 100) : 0;
+    const usNoEst      = usItems.filter(i => i.pts == null).length;
+    const completedHrs = taskCompletedWork || 0;
+    const completedHrsFmt = completedHrs % 1 === 0 ? completedHrs : completedHrs.toFixed(1);
+    const bugHrs = bugCompletedWork || 0;
+    const bugHrsFmt = bugHrs % 1 === 0 ? bugHrs : bugHrs.toFixed(1);
+    const closedPct    = usTotal ? Math.round(usClosed / usTotal * 100) : 0;
+    const totalHrs     = completedHrs + bugHrs;
+    const bugRate      = totalHrs ? Math.round(bugHrs / totalHrs * 100) : 0;
+    const estPct       = usTotal ? Math.round((usTotal - usNoEst) / usTotal * 100) : 0;
 
     // By status
     const byStatus = {};
     items.forEach(i => { byStatus[i.state] = (byStatus[i.state]||0) + 1; });
     const statusEntries = Object.entries(byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v,statusColor(k)]);
 
-    // By type
+    // By type — usa allItems para incluir fechados
     const byType = {};
-    items.forEach(i => { byType[i.type] = (byType[i.type]||0)+1; });
+    (allItems.length ? allItems : items).forEach(i => { byType[i.type] = (byType[i.type]||0)+1; });
     const typeEntries = Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v,typeColor(k)]);
 
     // By assignee (top 12)
@@ -1084,31 +1217,32 @@ ${cards}
     const bySprint = {};
     items.forEach(i => {
       const k = i.iteration||'Sem Sprint';
-      if (!bySprint[k]) bySprint[k] = { total:0, pts:0, closed:0, us:0 };
+      if (!bySprint[k]) bySprint[k] = { total:0, pts:0, closed:0, us:0, usClosed:0 };
       bySprint[k].total++;
       bySprint[k].pts += i.pts||0;
       if (['Closed','Done','Resolved'].includes(i.state)) bySprint[k].closed++;
-      if (['User Story','Product Backlog Item'].includes(i.type)) bySprint[k].us++;
+      if (US_TYPES.includes(i.type)) {
+        bySprint[k].us++;
+        if (['Closed','Done','Resolved'].includes(i.state)) bySprint[k].usClosed++;
+      }
     });
 
     const sprintRows = Object.entries(bySprint).sort((a,b) => {
-      const aC = iterMap[a[0]]?.isCurrent, bC = iterMap[b[0]]?.isCurrent;
-      if (aC && !bC) return -1; if (!aC && bC) return 1;
       const aS = iterMap[a[0]]?.start, bS = iterMap[b[0]]?.start;
-      if (aS && bS) return new Date(bS) - new Date(aS);
+      if (aS && bS) return new Date(aS) - new Date(bS);
       return a[0].localeCompare(b[0]);
     }).map(([key, d]) => {
       const iter = iterMap[key]||{};
       const label = key.includes('\\\\') ? key.split('\\\\').slice(1).join(' › ') : key;
       const dateR = (iter.start && iter.end) ? fmtD(iter.start) + ' – ' + fmtD(iter.end) : '—';
-      const pct = d.total ? Math.round(d.closed/d.total*100) : 0;
+      const pct = d.us ? Math.round(d.usClosed/d.us*100) : 0;
       const isCurr = iter.isCurrent;
       return '<tr' + (isCurr?' class="is-current"':'') + '>' +
         '<td>' + label + (isCurr?' <span class="badge green" style="font-size:10px;padding:1px 6px">atual</span>':'') + '</td>' +
         '<td>' + dateR + '</td>' +
-        '<td>' + d.total + '</td>' +
+        '<td>' + d.us + '</td>' +
         '<td>' + d.pts + '</td>' +
-        '<td>' + d.closed + ' <span style="color:#475569">(' + pct + '%)</span></td>' +
+        '<td>' + d.usClosed + ' <span style="color:#475569">(' + pct + '%)</span></td>' +
         '</tr>';
     }).join('');
 
@@ -1122,27 +1256,29 @@ ${cards}
         '<div class="d-card"><div class="d-label">Pts Entregues</div><div class="d-val green">' + donePts + '</div></div>' +
         '<div class="d-card"><div class="d-label">Em Andamento</div><div class="d-val blue">' + active + '</div></div>' +
         '<div class="d-card"><div class="d-label">Novos</div><div class="d-val">' + newItems + '</div></div>' +
-        '<div class="d-card"><div class="d-label">Bugs</div><div class="d-val ' + (bugs>10?'red':bugs>5?'yellow':'') + '">' + bugs + ' <span class="d-sub">' + bugRate + '%</span></div></div>' +
         '<div class="d-card"><div class="d-label">Sem Estimativa</div><div class="d-val ' + (noEst>total*0.3?'yellow':'') + '">' + noEst + '</div></div>' +
+        '<div class="d-card"><div class="d-label">Hrs Tasks</div><div class="d-val purple">' + completedHrsFmt + 'h</div></div>' +
+        '<div class="d-card"><div class="d-label">Hrs Bugs</div><div class="d-val ' + (bugHrs>0?'red':'') + '">' + bugHrsFmt + 'h</div></div>' +
       '</div></div>' +
 
       '<div class="d-section"><div class="d-section-title">Indicadores de Saúde</div>' +
         '<div style="display:flex;gap:32px;flex-wrap:wrap">' +
-          '<div class="progress-ring">' + ring(closedPct,'#22c55e') + '<div><div class="d-label">Taxa de Conclusão</div><div class="d-val green" style="font-size:22px">' + closedPct + '%</div><div class="d-sub">' + (closed+resolved) + ' de ' + total + ' concluídos</div></div></div>' +
-          '<div class="progress-ring">' + ring(estPct,'#60a5fa') + '<div><div class="d-label">Cobertura de Estimativas</div><div class="d-val blue" style="font-size:22px">' + estPct + '%</div><div class="d-sub">' + (total-noEst) + ' de ' + total + ' estimados</div></div></div>' +
+          '<div class="progress-ring">' + ring(closedPct,'#22c55e') + '<div><div class="d-label">Taxa de Conclusão</div><div class="d-val green" style="font-size:22px">' + closedPct + '%</div><div class="d-sub">' + usClosed + ' de ' + usTotal + ' US concluídas</div></div></div>' +
+          '<div class="progress-ring">' + ring(uatPct,'#f59e0b') + '<div><div class="d-label">Em UAT</div><div class="d-val ' + (uatPct>30?'red':uatPct>15?'yellow':'') + '" style="font-size:22px;color:#f59e0b">' + uatPct + '%</div><div class="d-sub">' + usUAT + ' de ' + usTotal + ' US em validação</div></div></div>' +
           '<div class="progress-ring">' + ring(bugRate,'#ef4444') + '<div><div class="d-label">Taxa de Bugs</div><div class="d-val ' + (bugRate>20?'red':bugRate>10?'yellow':'') + '" style="font-size:22px">' + bugRate + '%</div><div class="d-sub">' + bugs + ' bugs no total</div></div></div>' +
+          '<div class="progress-ring">' + ring(estPct,'#60a5fa') + '<div><div class="d-label">Cobertura de Estimativas</div><div class="d-val blue" style="font-size:22px">' + estPct + '%</div><div class="d-sub">' + (usTotal-usNoEst) + ' de ' + usTotal + ' US estimadas</div></div></div>' +
         '</div>' +
       '</div>' +
 
       '<div class="d-cols">' +
         '<div class="d-section" style="margin:0"><div class="d-section-title">Itens por Status</div><div class="bar-list">' + barList(statusEntries, total) + '</div></div>' +
-        '<div class="d-section" style="margin:0"><div class="d-section-title">Itens por Tipo</div><div class="bar-list">' + barList(typeEntries, total) + '</div></div>' +
+        '<div class="d-section" style="margin:0"><div class="d-section-title">Itens por Tipo</div><div class="bar-list">' + barList(typeEntries, allItems.length || total) + '</div></div>' +
       '</div>' +
 
       '<div class="d-section"><div class="d-section-title">Carga por Responsável (top 12)</div><div class="bar-list">' + barList(asgnEntries, total) + '</div></div>' +
 
       '<div class="d-section"><div class="d-section-title">Distribuição por Sprint</div>' +
-        '<table class="d-table"><thead><tr><th>Sprint</th><th>Período</th><th>Itens</th><th>Story Points</th><th>Concluídos</th></tr></thead>' +
+        '<table class="d-table"><thead><tr><th>Sprint</th><th>Período</th><th>User Stories</th><th>Story Points</th><th>Concluídos</th></tr></thead>' +
         '<tbody>' + sprintRows + '</tbody></table>' +
       '</div>' +
       tlSection;
@@ -1222,6 +1358,7 @@ ${cards}
         <div class="modal-sub" id="modal-sub"></div>
       </div>
       <div class="modal-actions">
+        <button class="modal-refresh" type="button" id="btnRefreshDetail" onclick="loadDetailData(_detailProject, _detailSprints)" title="Atualizar dados">↻</button>
         <button class="modal-maximize" type="button" id="btnMaximize" onclick="toggleMaximize()" title="Maximizar">⤢</button>
         <button class="modal-close" type="button" onclick="closeDetailsBtn()">✕</button>
       </div>
@@ -1375,10 +1512,12 @@ async function main() {
   server.listen(PORT, () => {
     const serverUrl = `http://localhost:${PORT}`;
     console.log(`\n🚀 Dashboard rodando em: ${serverUrl}\n`);
-    const cmd = process.platform === "win32" ? `start ${serverUrl}`
-      : process.platform === "darwin" ? `open ${serverUrl}`
-      : `xdg-open ${serverUrl}`;
-    exec(cmd);
+    if (!process.env.NO_OPEN_BROWSER) {
+      const cmd = process.platform === "win32" ? `start ${serverUrl}`
+        : process.platform === "darwin" ? `open ${serverUrl}`
+        : `xdg-open ${serverUrl}`;
+      exec(cmd);
+    }
   });
 }
 

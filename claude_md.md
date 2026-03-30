@@ -12,18 +12,40 @@ Automatizar a rotina de validação de backlog de projetos no **Azure DevOps**, 
 
 ## 🏗️ Arquitetura
 
+### Estrutura de arquivos
+
 ```
-Node.js Script (dashboard_node.js)
+dash_azure_gestao_pessoal/
+├── server.js           ← entry point: HTTP server, rotas, renderização de templates
+├── config.js           ← loadConfig, saveConfig, getCfg, getAuth
+├── azureClient.js      ← azureGet, azurePost, rawAzureGet
+├── projectService.js   ← fetchProject, fetchProjectDetail, buildCardHTML, calcHealth
+├── public/
+│   ├── style.css       ← todo o CSS (setup + dashboard, sem duplicatas)
+│   └── app.js          ← todo o JS do browser (filtros, modal, buildDetailHTML, etc.)
+├── views/
+│   ├── dashboard.html  ← template HTML do dashboard com tokens {{ORG}}, {{CARDS}}, etc.
+│   └── setup.html      ← template HTML do setup com tokens de configuração
+└── config.json         ← credenciais (gerado automaticamente, não versionado)
+```
+
+### Fluxo de dados
+
+```
+server.js (entry point)
         │
-        ├── config.json (credenciais salvas localmente)
+        ├── config.js          → gerencia config.json (org, pat, projects)
         │
-        ├── Chama API REST do Azure DevOps (HTTPS)
-        │       ├── Projects API → lista todos os projetos acessíveis pelo PAT
-        │       ├── WIQL Query → busca IDs dos work items ativos
-        │       ├── Work Items API → busca detalhes dos items (até 100)
-        │       ├── Iterations API → busca todas as sprints com datas
-        │       │       └── Tenta "{projeto} Team" → "{projeto}" (sem usar _apis/teams)
-        │       └── Work Items API (detail) → busca até 500 items (todos os status)
+        ├── azureClient.js     → chamadas HTTPS para a API REST do Azure DevOps
+        │       ├── Projects API       → lista todos os projetos acessíveis pelo PAT
+        │       ├── WIQL Query         → busca IDs de work items ativos (state NOT IN Closed/Done/Removed)
+        │       ├── Work Items API     → detalhes dos items do dashboard principal (até 100)
+        │       ├── Iterations API     → sprints com datas (tenta "{projeto} Team" → "{projeto}")
+        │       ├── WIQL (detail)      → items ativos para indicadores de saúde (até 500)
+        │       ├── WIQL (tasks/bugs)  → todos os estados para CompletedWork e contagem total
+        │       └── WIQL (allItems)    → todos os tipos/estados para distribuição por tipo
+        │
+        ├── projectService.js  → lógica de negócio + renderização dos cards HTML
         │
         └── Servidor HTTP local (porta 3030)
                 ├── GET /                    → dashboard principal (HTML cacheado)
@@ -31,7 +53,9 @@ Node.js Script (dashboard_node.js)
                 ├── GET /settings            → tela de configurações (pré-preenchida)
                 ├── GET /api/projects        → lista projetos disponíveis para o PAT informado
                 ├── POST /setup              → salva config.json e retorna JSON {ok:true}
-                └── GET /detail?project=NAME → JSON com todos os items do projeto
+                ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, allItems, iterMap
+                ├── GET /style.css           → arquivo estático
+                └── GET /app.js             → arquivo estático
 ```
 
 ---
@@ -43,9 +67,9 @@ Node.js Script (dashboard_node.js)
 | Porta local | `3030` |
 | Arquivo de configuração | `config.json` (gerado automaticamente na primeira execução) |
 | Autenticação | PAT (Personal Access Token) |
-| Hot reload | `nodemon dashboard_node.js` |
+| Hot reload | `nodemon server.js` |
 
-As credenciais são configuradas pela **tela de setup** na primeira execução e salvas em `config.json`. Não há mais valores hardcoded no código.
+As credenciais são configuradas pela **tela de setup** na primeira execução e salvas em `config.json`. Não há valores hardcoded no código.
 
 > ℹ️ **Permissões do PAT necessárias:**
 > - `Work Items (Read)` — obrigatório para leitura de work items e backlogs
@@ -57,20 +81,22 @@ As credenciais são configuradas pela **tela de setup** na primeira execução e
 
 - **Node.js v24 LTS** — instalado via `winget install OpenJS.NodeJS.LTS`
 - **nodemon** — instalado via `npm install -g nodemon` (hot reload ao salvar)
-- Sem pacotes externos no runtime — usa apenas módulos nativos (`http`, `https`, `child_process`)
+- Sem pacotes externos no runtime — usa apenas módulos nativos (`http`, `https`, `dns`, `child_process`)
+
+> **Nota:** `dns.setDefaultResultOrder("ipv4first")` é aplicado no início do script para evitar timeout em redes sem conectividade IPv6 (o DNS do Azure DevOps retorna endereços IPv6 primeiro).
 
 ---
 
 ## 🚀 Como executar
 
 ```bash
-# Com hot reload (recomendado para desenvolvimento):
-nodemon dashboard_node.js
+# Com hot reload (recomendado para desenvolvimento — não reabre o navegador a cada reinício):
+nodemon server.js
 
-# Sem hot reload:
-node dashboard_node.js
+# Sem hot reload (abre o navegador automaticamente):
+node server.js
 
-# O navegador abre automaticamente em:
+# O servidor sobe em:
 # http://localhost:3030
 ```
 
@@ -78,46 +104,31 @@ node dashboard_node.js
 
 ## 📊 Dashboard Principal — O que é exibido
 
-Para cada projeto, o script verifica e exibe:
+Todos os indicadores do dashboard principal são calculados considerando apenas **User Stories** (tipos: `User Story`, `Product Backlog Item`, `Requirement`).
 
 | Métrica | Alerta | Crítico |
 |--------|--------|---------|
-| Items sem estimativa (Story Points) | > 30% do total | > 50% do total |
-| Items sem responsável | > 20% do total | — |
-| Bugs abertos | > 5 | > 10 |
+| US sem estimativa (Story Points) | > 30% do total de US | > 50% do total de US |
+| US sem responsável | > 20% do total de US | — |
+| Bugs abertos (todos os estados) | > 5 | > 10 |
 
 ### Status de saúde
 - 🟢 **Saudável** — backlog bem estruturado
 - 🟡 **Atenção** — pontos de melhoria identificados
 - 🔴 **Crítico** — ação imediata necessária
 
-### Tabela de work items agrupada por sprint
-- Items organizados por `System.IterationPath`
-- Sprint atual aparece primeiro, em destaque verde
-- Cabeçalho de grupo mostra nome da sprint, período e contagem
+### Seção "Visualizar User Stories"
+Cada card possui um `<details>` expansível que exibe apenas User Stories agrupadas por sprint, ordenadas cronologicamente (mais antiga primeiro). A tabela contém: Título, Status, Estimativa e Responsável.
 
 ---
 
 ## 🎨 Sistema de Temas
-
-O dashboard suporta múltiplos temas via **CSS Custom Properties** (`var(--nome)`).
 
 - **Botão ☀️/🌙** no header alterna entre tema escuro e claro
 - **Persistência no `localStorage`** — tema sobrevive a F5, auto-refresh e reabertura do browser
 - **Sem flash (FOUC)** — script inline no `<head>` aplica o tema antes da página renderizar
 - **Tema escuro** é o padrão (`:root`)
 - **Tema claro** sobrescreve via `[data-theme="light"]`
-
-### Como adicionar um novo tema
-
-1. Adicione um bloco CSS em `buildHTML`:
-```css
-[data-theme="nomeTema"] {
-  --bg-page: #...; --bg-card: #...;
-  /* ... sobrescreva as variáveis desejadas */
-}
-```
-2. Ajuste a lógica de `setTheme()` no bloco `<script>` para incluir o novo tema.
 
 ---
 
@@ -145,7 +156,7 @@ Cada card de projeto possui um dropdown customizado com:
 Ao selecionar sprints, o dashboard recalcula em tempo real:
 - Linhas da tabela (mostra/oculta por `data-iteration`)
 - Cabeçalhos de grupo
-- Stats: Total, Sem Estimativa, Sem Responsável, Bugs
+- Stats: Total US, Sem Estimativa, Sem Responsável, Bugs
 - Badge de saúde (🟢 🟡 🔴)
 
 ---
@@ -154,22 +165,41 @@ Ao selecionar sprints, o dashboard recalcula em tempo real:
 
 Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 
-- Busca **todos os items** do projeto via `/detail?project=NAME` (incluindo Closed/Done/Removed, até 500 items)
-- **Respeita os filtros de sprint ativos** na tela principal — exibe banner azul indicando quais sprints estão filtradas
-- Modal com botão **⤢ Maximizar / ⤡ Restaurar** para usar toda a área da tela
+- Busca dados via `/detail?project=NAME` com múltiplas queries ao Azure DevOps
+- **Respeita os filtros de sprint ativos** na tela principal — todos os indicadores, incluindo `taskItems`, `bugItems` e `allItems`, são filtrados por sprint no cliente antes de agregar
+- Modal com botão **↻** para atualizar os dados sem fechar o modal
+- Modal com botão **⤢ Maximizar / ⤡ Restaurar**
 - Fecha com ✕, clique fora do modal ou tecla `Escape`
 
 ### Seções do painel de detalhes
 
 | Seção | Conteúdo |
 |-------|----------|
-| Resumo Geral | Total itens, US, Story Points, Pts Entregues, Em Andamento, Novos, Bugs, Sem estimativa |
-| Indicadores de Saúde | Gráficos circulares: Taxa de Conclusão, Cobertura de Estimativas, Taxa de Bugs |
-| Itens por Status | Gráfico de barras horizontais com cores por status |
-| Itens por Tipo | Gráfico de barras: US, Bug, Task, Feature, Epic |
-| Carga por Responsável | Top 12 membros com quantidade de items |
-| Distribuição por Sprint | Tabela: Sprint, Período, Itens, Story Points, Concluídos (%) |
-| Cronograma de Sprints | Gantt visual com blocos posicionados por data, barra proporcional à qtd de US, marcador "hoje" |
+| **Resumo Geral** | Total itens, User Stories, Story Points, Pts Entregues, Em Andamento, Novos, Sem Estimativa, Hrs Tasks, Hrs Bugs |
+| **Indicadores de Saúde** | Taxa de Conclusão (US), Em UAT (US), Taxa de Bugs (hrs bugs/total hrs), Cobertura de Estimativas (US) |
+| **Itens por Status** | Barras horizontais com todos os estados (inclui fechados) |
+| **Itens por Tipo** | Barras: US, Bug, Task, Feature, Epic — inclui itens fechados |
+| **Carga por Responsável** | Top 12 membros com quantidade de items |
+| **Distribuição por Sprint** | Tabela: Sprint, Período, User Stories, Story Points, Concluídos (%) — ordenada por data crescente |
+| **Cronograma de Sprints** | Gantt visual com blocos posicionados por data, barra proporcional à qtd de US, marcador "hoje" |
+
+### Cálculo dos indicadores de saúde
+
+| Indicador | Fórmula |
+|-----------|---------|
+| Taxa de Conclusão | US com estado Closed/Done/Resolved ÷ total de US |
+| Em UAT | US com estado UAT ÷ total de US |
+| Taxa de Bugs | Hrs Bugs ÷ (Hrs Tasks + Hrs Bugs) |
+| Cobertura de Estimativas | US com Story Points ÷ total de US |
+
+### Queries ao Azure DevOps no `/detail`
+
+| Query | Filtro | Finalidade |
+|-------|--------|------------|
+| WIQL principal | State NOT IN (Closed, Done, Removed) | Items ativos para indicadores de saúde |
+| WIQL tasks | Sem filtro de estado | CompletedWork + IterationPath para Hrs Tasks |
+| WIQL bugs | Sem filtro de estado | CompletedWork + IterationPath + contagem total |
+| WIQL allItems | State <> Removed | Distribuição por tipo (inclui fechados) |
 
 ---
 
@@ -178,9 +208,9 @@ Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 | API | Endpoint | Finalidade |
 |-----|----------|------------|
 | Projects | `/_apis/projects` | Lista todos os projetos acessíveis pelo PAT |
-| WIQL | `/{project}/_apis/wit/wiql` | Consulta work items (ativos ou todos) |
+| WIQL | `/{project}/_apis/wit/wiql` | Consulta work items por critérios |
 | Work Items | `/{project}/_apis/wit/workitems?ids=...` | Detalhes dos items (máx 200/request) |
-| Iterations | `/{project}/{team}/_apis/work/teamsettings/iterations` | Todas as sprints com datas e timeFrame |
+| Iterations | `/{project}/{team}/_apis/work/teamsettings/iterations` | Sprints com datas e timeFrame |
 
 > **Nota:** A API `_apis/teams` retorna 401 com PAT sem permissão de times. O script contorna isso tentando o nome do time padrão diretamente (`{projeto} Team`).
 
@@ -191,7 +221,7 @@ Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 Clique no botão **⚙️** no header do dashboard para acessar a tela de configurações. Lá você pode:
 - Alterar a organização ou o PAT
 - Recarregar a lista de projetos disponíveis
-- Marcar/desmarcar os projetos a monitorar
+- Marcar/desmarcar os projetos a monitorar (busca com autocomplete)
 
 As alterações são salvas em `config.json` e o dashboard é atualizado automaticamente.
 
@@ -202,17 +232,25 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 | # | Decisão | Motivo |
 |---|---------|--------|
 | 1 | Artifact React → script local | CORS bloqueava chamadas diretas ao Azure DevOps |
-| 2 | Sem pacotes externos (axios, react, etc.) | Zero dependências, roda em qualquer Node.js |
-| 3 | `/refresh` retorna HTML completo | Permite atualizar conteúdo sem recarregar a página |
+| 2 | Sem pacotes externos | Zero dependências, roda em qualquer Node.js |
+| 3 | `/refresh` retorna HTML completo | Atualiza conteúdo sem recarregar a página |
 | 4 | `localStorage` para filtros | Persistência sem backend, zero custo |
-| 5 | `/detail` endpoint separado | Busca todos os status sem impactar performance do dashboard principal |
+| 5 | `/detail` endpoint separado | Busca todos os estados sem impactar performance do dashboard principal |
 | 6 | `{projeto} Team` sem usar `_apis/teams` | PAT não tem permissão de leitura de times |
-| 7 | `nodemon` para hot reload | Evita reiniciar manualmente a cada alteração |
-| 8 | CSS Custom Properties para temas | Permite trocar todo o visual com um único atributo `data-theme` no `<html>` |
+| 7 | `nodemon` com `NO_OPEN_BROWSER=1` | Evita abrir nova aba do navegador a cada hot reload |
+| 8 | CSS Custom Properties para temas | Permite trocar todo o visual com um único atributo `data-theme` |
 | 9 | Script inline no `<head>` para tema | Evita FOUC (flash do tema errado antes do JS carregar) |
-| 10 | Credenciais em `config.json` (não hardcoded) | Segurança e portabilidade — cada usuário configura suas próprias credenciais |
-| 11 | Tela de setup com teste de conexão + listagem de projetos | UX mais segura: valida PAT antes de salvar e lista projetos reais disponíveis |
-| 12 | `/api/projects` endpoint com `rawAzureGet` | Permite testar credenciais sem modificar `cfg` global — usa org/pat passados como parâmetro |
+| 10 | Credenciais em `config.json` | Segurança e portabilidade — cada usuário configura suas próprias credenciais |
+| 11 | Tela de setup com autocomplete | Valida PAT antes de salvar e lista projetos reais disponíveis |
+| 12 | `dns.setDefaultResultOrder("ipv4first")` | Azure DevOps retorna IPv6 primeiro; sem IPv6 na rede causava ETIMEDOUT |
+| 13 | Métricas baseadas apenas em User Stories | Alinhamento com a realidade do backlog — Tasks e Bugs distorcem os indicadores |
+| 14 | Queries separadas para Tasks/Bugs (sem filtro de estado) | CompletedWork e contagem total precisam incluir itens já fechados |
+| 15 | Filtragem por sprint no cliente (detail) | Evita passar parâmetros de sprint para o servidor — dados brutos com IterationPath são filtrados no JS |
+| 16 | `SELECTED_SET` para seleção de projetos no setup | Seleções persistiam ao filtrar a lista — DOM era reconstruído e perdia o estado dos checkboxes ocultos |
+| 17 | Separação em módulos (config, azureClient, projectService, server) | Arquivo único de 1500+ linhas dificultava manutenção — cada módulo tem responsabilidade clara e pode ser editado sem risco de quebrar outras partes |
+| 18 | CSS e JS do browser em `public/` servidos como arquivos estáticos | Permite syntax highlighting real no editor, sem escaping de template literal; navegador faz cache automaticamente |
+| 19 | HTML em `views/` com tokens `{{TOKEN}}` e `renderTemplate` simples | Separa estrutura de apresentação da lógica sem adicionar dependência de template engine |
+| 20 | Templates lidos uma vez no startup (`fs.readFileSync`) | Evita I/O a cada request em ambiente de desenvolvimento local |
 
 ---
 
@@ -227,4 +265,4 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 
 ---
 
-*Documentação atualizada em Março/2026*
+*Documentação atualizada em Março/2026 — Refatoração modular*

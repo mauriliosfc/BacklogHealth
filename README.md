@@ -1,15 +1,17 @@
 # Backlog Health Dashboard
 
-Dashboard para monitoramento e análise de saúde dos backlogs de projetos no **Azure DevOps**. Visualize métricas, filtre por sprint e identifique rapidamente itens sem estimativa, sem responsável ou bugs em aberto.
+Dashboard para monitoramento e análise de saúde dos backlogs de projetos no **Azure DevOps**. Visualize métricas de User Stories, filtre por sprint e identifique rapidamente itens sem estimativa, sem responsável, bugs e itens em UAT.
 
 ---
 
 ## Funcionalidades
 
-- Indicadores de saúde por projeto (Saudável / Atenção / Crítico)
-- Métricas agregadas: itens abertos, sem estimativa, sem responsável e bugs
-- Agrupamento por sprint com destaque para a sprint atual
-- Modal de detalhes com gráficos de distribuição por status, tipo e responsável
+- Indicadores de saúde por projeto (Saudável / Atenção / Crítico) baseados em User Stories
+- Métricas agregadas: US abertas, sem estimativa, sem responsável e bugs
+- Agrupamento por sprint ordenado cronologicamente
+- Seção "Visualizar User Stories" por card com tabela filtrada
+- Modal de detalhes com indicadores, gráficos de distribuição e cronograma
+- Botão de atualização de dados dentro do modal de detalhes
 - Filtros por sprint com persistência no navegador
 - Temas claro e escuro
 - Atualização automática a cada 5 minutos
@@ -63,16 +65,14 @@ Para alterar a configuração posteriormente, clique no botão ⚙️ no cabeça
 ## Executando
 
 ```bash
-# Modo desenvolvimento (com hot reload)
-nodemon dashboard_node.js
+# Modo desenvolvimento (com hot reload — não reabre o navegador a cada reinício)
+nodemon server.js
 
-# Modo produção
-node dashboard_node.js
+# Modo produção (abre o navegador automaticamente)
+node server.js
 ```
 
-O servidor sobe na porta **3030** e o navegador abre automaticamente em `http://localhost:3030`.
-
-Para encerrar, pressione `Ctrl+C`.
+O servidor sobe na porta **3030**. Para encerrar, pressione `Ctrl+C`.
 
 ---
 
@@ -80,21 +80,39 @@ Para encerrar, pressione `Ctrl+C`.
 
 ```
 BacklogHealth/
-├── dashboard_node.js   # Servidor e toda a lógica da aplicação
+├── server.js           # Entry point: HTTP server, rotas, renderização de templates
+├── config.js           # Gerenciamento de configuração (load/save/getCfg)
+├── azureClient.js      # Cliente HTTP para a API REST do Azure DevOps
+├── projectService.js   # Lógica de negócio: queries, cálculo de saúde, cards HTML
+├── public/
+│   ├── style.css       # Todo o CSS (temas claro/escuro, dashboard, setup)
+│   └── app.js          # Todo o JS do browser (filtros, modal de detalhes, gráficos)
+├── views/
+│   ├── dashboard.html  # Template HTML do dashboard
+│   └── setup.html      # Template HTML da tela de configuração
 ├── config.json         # Credenciais e projetos monitorados (gerado automaticamente, não versionado)
-├── nodemon.json        # Configuração do hot reload
+├── nodemon.json        # Configuração do hot reload (define NO_OPEN_BROWSER=1)
 └── .gitignore
 ```
 
 ---
 
-## Indicadores de Saúde
+## Indicadores de Saúde — Dashboard Principal
+
+Os cards exibem métricas baseadas exclusivamente em **User Stories**:
+
+| Métrica | Descrição |
+|---------|-----------|
+| **Total Abertos** | Quantidade de US com estado ativo |
+| **Sem Estimativa** | US sem Story Points definidos |
+| **Sem Responsável** | US sem assigned to |
+| **Bugs Abertos** | Total de bugs independente de estado |
 
 | Status | Condição |
 |--------|----------|
 | 🟢 **Saudável** | Sem alertas ativos |
-| 🟡 **Atenção** | Itens sem estimativa >30% ou sem responsável >20% ou >5 bugs abertos |
-| 🔴 **Crítico** | Itens sem estimativa >50% ou >10 bugs abertos |
+| 🟡 **Atenção** | US sem estimativa >30% ou sem responsável >20% ou >5 bugs |
+| 🔴 **Crítico** | US sem estimativa >50% ou >10 bugs |
 
 ---
 

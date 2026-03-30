@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Backlog Health — {{TITLE}}</title>
+<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="setup">
+<button class="btn-theme-top" id="btnTheme" onclick="toggleTheme()">☀️</button>
+<div class="wrap">
+  <div class="logo">📋</div>
+  <div class="pg-title">Backlog Health Dashboard</div>
+  <div class="pg-sub">{{SUBTITLE}}</div>
+  <div class="card">
+
+    <div class="info-box">
+      <h4>🔑 Permissões necessárias para o PAT</h4>
+      <ul>
+        <li><code>Work Items (Read)</code> — leitura de work items e backlogs</li>
+        <li><code>Project and Team (Read)</code> — listagem de projetos e sprints</li>
+      </ul>
+      <div class="pat-link">Gere em: Azure DevOps → User Settings → Personal Access Tokens</div>
+    </div>
+
+    <div class="err-box" id="err-box"></div>
+
+    <!-- Passo 1: Credenciais -->
+    <div class="field">
+      <label>Organização do Azure DevOps</label>
+      <input type="text" id="inp-org" placeholder="Ex: MinhaEmpresa" value="{{ORG_VALUE}}" autocomplete="off">
+      <div class="hint">Nome na URL: dev.azure.com/<strong>organização</strong></div>
+    </div>
+    <div class="field">
+      <label>Personal Access Token (PAT)</label>
+      <input type="password" id="inp-pat" placeholder="Cole seu PAT aqui" value="{{PAT_VALUE}}" autocomplete="off">
+    </div>
+    <button class="btn-test" id="btn-test" onclick="loadProjects()">🔌 Testar conexão e carregar projetos</button>
+
+    <!-- Passo 2: Seleção de projetos -->
+    <div class="step2" id="step2">
+      <hr class="divider">
+      <div class="ok-box" id="ok-box"></div>
+      <label class="proj-label">Projetos a monitorar</label>
+      <button type="button" class="proj-trigger" id="proj-trigger" onclick="toggleProjPanel()">
+        <span id="proj-trigger-text">Selecione os projetos…</span>
+        <span>▾</span>
+      </button>
+      <div class="proj-panel" id="proj-panel">
+        <div class="proj-search-wrap">
+          <input type="text" class="proj-search" id="proj-search" placeholder="🔍 Buscar projeto…" oninput="filterProjects()" autocomplete="off">
+        </div>
+        <div class="proj-list" id="proj-list"></div>
+      </div>
+      <div class="proj-count" id="proj-count"></div>
+      <button class="btn-save" id="btn-save" onclick="doSave()">💾 Salvar e abrir dashboard</button>
+    </div>
+
+    {{BACK_LINK}}
+  </div>
+</div>
+<script>
+  const PREFILL = {{SELECTED_PROJECTS_JSON}};
+
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('theme', t);
+    const btn = document.getElementById('btnTheme');
+    if (btn) { btn.textContent = t === 'dark' ? '☀️' : '🌙'; btn.title = t === 'dark' ? 'Tema claro' : 'Tema escuro'; }
+  }
+  function toggleTheme() { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+  setTheme(localStorage.getItem('theme') || 'dark');
+
+  function showErr(msg) { const el = document.getElementById('err-box'); el.textContent = '❌ ' + msg; el.style.display = 'block'; }
+  function hideErr() { document.getElementById('err-box').style.display = 'none'; }
+
+  async function loadProjects() {
+    const org = document.getElementById('inp-org').value.trim();
+    const pat = document.getElementById('inp-pat').value.trim();
+    if (!org || !pat) { showErr('Preencha a organização e o PAT antes de continuar.'); return; }
+    hideErr();
+    const btn = document.getElementById('btn-test');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Testando conexão…';
+    try {
+      const r = await fetch('/api/projects?org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat));
+      const data = await r.json();
+      if (data.error) { showErr(data.error); btn.disabled = false; btn.textContent = '🔌 Testar conexão e carregar projetos'; return; }
+      renderProjects(data.projects || []);
+      document.getElementById('ok-box').textContent = '✅ Conexão OK — ' + (data.projects || []).length + ' projeto(s) disponível(is).';
+      document.getElementById('step2').style.display = 'block';
+      btn.innerHTML = '🔄 Recarregar lista de projetos';
+      btn.disabled = false;
+    } catch(e) {
+      showErr('Falha de rede: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = '🔌 Testar conexão e carregar projetos';
+    }
+  }
+
+  let ALL_PROJECTS = [];
+  let SELECTED_SET = new Set(PREFILL);
+
+  function renderProjects(projects) {
+    ALL_PROJECTS = projects;
+    renderProjectList(projects);
+    const footer = document.getElementById('proj-panel').querySelector('.proj-footer');
+    if (!footer) {
+      const f = document.createElement('div');
+      f.className = 'proj-footer';
+      f.innerHTML = '<button type="button" onclick="clearProjs()">✕ Limpar seleção</button>';
+      document.getElementById('proj-panel').appendChild(f);
+    }
+    updateCount();
+  }
+
+  function renderProjectList(projects) {
+    const list = document.getElementById('proj-list');
+    if (!projects.length) {
+      list.innerHTML = '<div class="proj-empty">Nenhum projeto encontrado.</div>';
+      return;
+    }
+    list.innerHTML = projects.map(p => {
+      const esc = p.replace(/"/g, '&quot;');
+      const checked = SELECTED_SET.has(p) ? ' checked' : '';
+      return '<label class="proj-option"><input type="checkbox" value="' + esc + '" onchange="onProjChange(this)"' + checked + '><span>' + p + '</span></label>';
+    }).join('');
+  }
+
+  function onProjChange(cb) {
+    if (cb.checked) SELECTED_SET.add(cb.value);
+    else SELECTED_SET.delete(cb.value);
+    updateCount();
+  }
+
+  function filterProjects() {
+    const q = document.getElementById('proj-search').value.toLowerCase().trim();
+    const filtered = q ? ALL_PROJECTS.filter(p => p.toLowerCase().includes(q)) : ALL_PROJECTS;
+    renderProjectList(filtered);
+  }
+
+  function toggleProjPanel() {
+    const panel = document.getElementById('proj-panel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+      setTimeout(() => document.getElementById('proj-search')?.focus(), 50);
+    }
+  }
+
+  function updateCount() {
+    const names = [...SELECTED_SET];
+    document.getElementById('proj-trigger-text').textContent = names.length ? names.join(', ') : 'Selecione os projetos…';
+    document.getElementById('proj-count').textContent = names.length ? names.length + ' projeto(s) selecionado(s)' : '';
+  }
+
+  function clearProjs() {
+    SELECTED_SET.clear();
+    document.getElementById('proj-search').value = '';
+    filterProjects();
+    updateCount();
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#proj-trigger') && !e.target.closest('#proj-panel'))
+      document.getElementById('proj-panel')?.classList.remove('open');
+  });
+
+  async function doSave() {
+    const org = document.getElementById('inp-org').value.trim();
+    const pat = document.getElementById('inp-pat').value.trim();
+    const selected = [...SELECTED_SET];
+    if (!selected.length) { showErr('Selecione ao menos um projeto para monitorar.'); return; }
+    hideErr();
+    const btn = document.getElementById('btn-save');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Salvando…';
+    try {
+      const body = 'org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat) + '&projects=' + encodeURIComponent(selected.join(','));
+      const r = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) { location.href = '/'; return; }
+      showErr(data.error || 'Erro ao salvar configurações.');
+    } catch(e) { showErr(e.message); }
+    btn.disabled = false;
+    btn.textContent = '💾 Salvar e abrir dashboard';
+  }
+
+  {{AUTO_LOAD_SCRIPT}}
+</script>
+</body>
+</html>

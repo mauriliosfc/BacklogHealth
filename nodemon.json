@@ -1,5 +1,8 @@
 {
-  "watch": ["dashboard_node.js"],
-  "ext": "js",
-  "delay": 500
+  "watch": ["server.js", "config.js", "azureClient.js", "projectService.js", "views", "public"],
+  "ext": "js,html,css",
+  "delay": 500,
+  "env": {
+    "NO_OPEN_BROWSER": "1"
+  }
 }
