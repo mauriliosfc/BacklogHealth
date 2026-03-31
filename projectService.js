@@ -3,9 +3,16 @@ const { azureGet, azurePost } = require("./azureClient");
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function calcHealth(total, semEst, semResp, bugs) {
-  return bugs > 10 || semEst > total * 0.5 ? ["🔴 Crítico", "red"]
-    : semEst > total * 0.3 || semResp > total * 0.2 || bugs > 5 ? ["🟡 Atenção", "yellow"]
-    : ["🟢 Saudável", "green"];
+  const reasons = [];
+  if (bugs > 10) reasons.push(`${bugs} bugs abertos (crítico: >10)`);
+  else if (bugs > 5) reasons.push(`${bugs} bugs abertos (alerta: >5)`);
+  if (total > 0 && semEst > total * 0.5) reasons.push(`${Math.round(semEst / total * 100)}% das US sem estimativa (crítico: >50%)`);
+  else if (total > 0 && semEst > total * 0.3) reasons.push(`${Math.round(semEst / total * 100)}% das US sem estimativa (alerta: >30%)`);
+  if (total > 0 && semResp > total * 0.2) reasons.push(`${Math.round(semResp / total * 100)}% das US sem responsável (alerta: >20%)`);
+  const tooltip = reasons.length ? reasons.join(" · ") : "Backlog bem estruturado";
+  if (bugs > 10 || semEst > total * 0.5) return ["🔴 Crítico", "red", tooltip];
+  if (semEst > total * 0.3 || semResp > total * 0.2 || bugs > 5) return ["🟡 Atenção", "yellow", tooltip];
+  return ["🟢 Saudável", "green", tooltip];
 }
 
 function fmtDate(d) {
@@ -264,7 +271,7 @@ function buildCardHTML(results) {
             </div>
             ${sprint ? `<span class="sprint">📅 ${sprint}</span>` : ""}
           </div>
-          <span class="badge ${health[1]} big card-health">${health[0]}</span>
+          <span class="badge ${health[1]} big card-health" title="${health[2]}">${health[0]}</span>
         </div>
         <div class="filter-bar">
           <label class="filter-label">🔍 Sprint</label>
@@ -282,7 +289,7 @@ function buildCardHTML(results) {
           </div>
         </div>
         <div class="stats">
-          <div class="stat"><div class="stat-label">Total Abertos</div><div class="stat-val card-total">${total}</div></div>
+          <div class="stat"><div class="stat-label">Backlog Total</div><div class="stat-val card-total">${total}</div></div>
           <div class="stat"><div class="stat-label">Sem Estimativa</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
           <div class="stat"><div class="stat-label">Sem Responsável</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
           <div class="stat"><div class="stat-label">Bugs Abertos</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>

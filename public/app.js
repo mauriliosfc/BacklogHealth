@@ -127,12 +127,20 @@ function applyFilter(card, selected) {
   bugsEl.textContent = bugs;
   bugsEl.className = 'stat-val card-bugs' + (bugs > 3 ? ' crit' : '');
 
-  const h = bugs > 10 || semEst > total * 0.5 ? ['🔴 Crítico','red']
-    : semEst > total * 0.3 || semResp > total * 0.2 || bugs > 5 ? ['🟡 Atenção','yellow']
-    : ['🟢 Saudável','green'];
+  const hReasons = [];
+  if (bugs > 10) hReasons.push(bugs + ' bugs abertos (cr\u00edtico: >10)');
+  else if (bugs > 5) hReasons.push(bugs + ' bugs abertos (alerta: >5)');
+  if (total > 0 && semEst > total * 0.5) hReasons.push(Math.round(semEst / total * 100) + '% das US sem estimativa (cr\u00edtico: >50%)');
+  else if (total > 0 && semEst > total * 0.3) hReasons.push(Math.round(semEst / total * 100) + '% das US sem estimativa (alerta: >30%)');
+  if (total > 0 && semResp > total * 0.2) hReasons.push(Math.round(semResp / total * 100) + '% das US sem respons\u00e1vel (alerta: >20%)');
+  const hTooltip = hReasons.length ? hReasons.join(' \u00b7 ') : 'Backlog bem estruturado';
+  const h = bugs > 10 || semEst > total * 0.5 ? ['🔴 Cr\u00edtico','red']
+    : semEst > total * 0.3 || semResp > total * 0.2 || bugs > 5 ? ['🟡 Aten\u00e7\u00e3o','yellow']
+    : ['🟢 Saud\u00e1vel','green'];
   const healthEl = card.querySelector('.card-health');
   healthEl.textContent = h[0];
   healthEl.className = 'badge big card-health ' + h[1];
+  healthEl.title = hTooltip;
 
   const usCount = filtered.filter(i => ['User Story','Product Backlog Item','Requirement'].includes(i.type)).length;
   card.querySelector('.card-summary').textContent = '▼ Visualizar User Stories (' + usCount + ')';
@@ -477,3 +485,140 @@ function buildTimeline(bySprint, iterMap) {
     '</div>' +
   '</div>';
 }
+
+// ── Daily Standup Modal ───────────────────────────────────────────────────────
+
+let _dailyIndex = 0;
+let _dailySlides = [];
+
+function buildDailySlide(card) {
+  const project = card.dataset.project;
+  const items = JSON.parse(card.dataset.items);
+
+  // Sprint atual: usada apenas para filtrar a tabela de US
+  const currentOption = card.querySelector('.option-row.is-current input');
+  const currentIter = currentOption ? currentOption.value : null;
+
+  const sprintEl = card.querySelector('.sprint');
+  const sprintLabel = sprintEl ? sprintEl.textContent.trim() : 'Sem sprint definido';
+
+  // Stats: usa o mesmo filtro ativo no dashboard (localStorage), igual ao applyFilter
+  const savedFilter = localStorage.getItem('filter_' + project);
+  const activeFilter = savedFilter ? JSON.parse(savedFilter) : [];
+  const filteredForStats = activeFilter.length > 0 ? items.filter(i => activeFilter.includes(i.iteration)) : items;
+
+  const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
+  const usItems = filteredForStats.filter(i => US_TYPES.includes(i.type));
+  const total = usItems.length;
+  const semEst = usItems.filter(i => i.pts == null).length;
+  const semResp = usItems.filter(i => !i.assigned).length;
+  const bugs = filteredForStats.filter(i => i.type === 'Bug').length;
+
+  const dReasons = [];
+  if (bugs > 10) dReasons.push(bugs + ' bugs abertos (cr\u00edtico: >10)');
+  else if (bugs > 5) dReasons.push(bugs + ' bugs abertos (alerta: >5)');
+  if (total > 0 && semEst > total * 0.5) dReasons.push(Math.round(semEst / total * 100) + '% das US sem estimativa (cr\u00edtico: >50%)');
+  else if (total > 0 && semEst > total * 0.3) dReasons.push(Math.round(semEst / total * 100) + '% das US sem estimativa (alerta: >30%)');
+  if (total > 0 && semResp > total * 0.2) dReasons.push(Math.round(semResp / total * 100) + '% das US sem respons\u00e1vel (alerta: >20%)');
+  const dTooltip = dReasons.length ? dReasons.join(' \u00b7 ') : 'Backlog bem estruturado';
+  const health = bugs > 10 || semEst > total * 0.5 ? ['🔴 Cr\u00edtico', 'red']
+    : semEst > total * 0.3 || semResp > total * 0.2 || bugs > 5 ? ['🟡 Aten\u00e7\u00e3o', 'yellow']
+    : ['🟢 Saud\u00e1vel', 'green'];
+
+  // Linhas da tabela de US para a sprint atual (extrai do DOM já renderizado)
+  let tableRows = '';
+  card.querySelectorAll('tbody tr[data-iteration]').forEach(row => {
+    if (!currentIter || row.dataset.iteration === currentIter) {
+      tableRows += row.outerHTML;
+    }
+  });
+
+  const usSection = tableRows
+    ? '<div class="daily-us-title">User Stories na sprint</div>' +
+      '<div class="daily-table-wrap"><table><thead><tr><th>T\u00edtulo</th><th>Status</th><th>Estimativa</th><th>Respons\u00e1vel</th></tr></thead>' +
+      '<tbody>' + tableRows + '</tbody></table></div>'
+    : '<div class="daily-empty">Nenhuma User Story na sprint atual.</div>';
+
+  return '<div class="daily-slide">' +
+    '<div class="daily-fixed">' +
+      '<div class="daily-slide-header">' +
+        '<div class="daily-project-name">' + project + '</div>' +
+        '<span class="badge ' + health[1] + ' big" title="' + dTooltip + '">' + health[0] + '</span>' +
+      '</div>' +
+      '<div class="daily-sprint-label">' + sprintLabel + '</div>' +
+      '<div class="stats daily-stats">' +
+        '<div class="stat"><div class="stat-label">Backlog Total</div><div class="stat-val">' + total + '</div></div>' +
+        '<div class="stat"><div class="stat-label">Sem Estimativa</div><div class="stat-val ' + (semEst > 2 ? 'warn' : '') + '">' + semEst + '</div></div>' +
+        '<div class="stat"><div class="stat-label">Sem Respons\u00e1vel</div><div class="stat-val ' + (semResp > 2 ? 'warn' : '') + '">' + semResp + '</div></div>' +
+        '<div class="stat"><div class="stat-label">Bugs Abertos</div><div class="stat-val ' + (bugs > 3 ? 'crit' : '') + '">' + bugs + '</div></div>' +
+      '</div>' +
+    '</div>' +
+    usSection +
+    '</div>';
+}
+
+function openDaily() {
+  const cards = Array.from(document.querySelectorAll('#content .card[data-project]'));
+  if (!cards.length) return;
+
+  _dailySlides = cards;
+  _dailyIndex = 0;
+
+  const track = document.getElementById('daily-track');
+  track.innerHTML = _dailySlides.map(c => buildDailySlide(c)).join('');
+  track.style.transform = 'translateX(0)';
+
+  updateDailyNav();
+
+  document.getElementById('daily-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('daily-modal').focus();
+}
+
+function closeDaily() {
+  document.getElementById('daily-modal').classList.remove('open', 'maximized');
+  document.getElementById('btnDailyMax').textContent = '\u2922';
+  document.body.style.overflow = '';
+}
+
+function toggleDailyMaximize() {
+  const overlay = document.getElementById('daily-modal');
+  const btn = document.getElementById('btnDailyMax');
+  const isMax = overlay.classList.toggle('maximized');
+  btn.textContent = isMax ? '\u2921' : '\u2922';
+  btn.title = isMax ? 'Restaurar' : 'Expandir';
+}
+
+function dailyPrev() {
+  if (_dailyIndex > 0) {
+    _dailyIndex--;
+    updateDailyNav();
+  }
+}
+
+function dailyNext() {
+  if (_dailyIndex < _dailySlides.length - 1) {
+    _dailyIndex++;
+    updateDailyNav();
+  }
+}
+
+function updateDailyNav() {
+  const track = document.getElementById('daily-track');
+  track.style.transform = 'translateX(-' + (_dailyIndex * 100) + '%)';
+
+  document.getElementById('daily-counter').textContent = (_dailyIndex + 1) + ' / ' + _dailySlides.length;
+  document.getElementById('btnDailyPrev').disabled = _dailyIndex === 0;
+  document.getElementById('btnDailyNext').disabled = _dailyIndex === _dailySlides.length - 1;
+}
+
+function handleDailyKey(e) {
+  if (e.key === 'ArrowRight') dailyNext();
+  else if (e.key === 'ArrowLeft') dailyPrev();
+  else if (e.key === 'Escape') closeDaily();
+}
+
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('daily-modal').classList.contains('open')) return;
+  handleDailyKey(e);
+});
