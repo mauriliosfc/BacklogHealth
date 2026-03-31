@@ -1,5 +1,8 @@
 # Credenciais — NUNCA subir para o repositório
 config.json
 
+# Build
+dist/
+
 # Pasta interna do Claude Code
 .claude/
