@@ -31,15 +31,21 @@ async function fetchProject(project) {
   try {
     const wiql = await azurePost(
       `${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] NOT IN ('Closed','Done','Removed') ORDER BY [System.ChangedDate] DESC` }
+      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }
     );
 
-    const ids = (wiql.workItems || []).slice(0, 100).map(w => w.id);
-    if (!ids.length) return { project, items: [], sprint: null, error: null };
+    const allIds = (wiql.workItems || []).slice(0, 500).map(w => w.id);
+    if (!allIds.length) return { project, items: [], sprint: null, error: null };
 
-    const details = await azureGet(
-      `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${ids.join(",")}&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,Microsoft.VSTS.Scheduling.StoryPoints,System.IterationPath&api-version=7.0`
-    );
+    let detailsValue = [];
+    for (let i = 0; i < allIds.length; i += 200) {
+      const batch = allIds.slice(i, i + 200);
+      const page = await azureGet(
+        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,Microsoft.VSTS.Scheduling.StoryPoints,System.IterationPath&api-version=7.0`
+      );
+      detailsValue = detailsValue.concat(page.value || []);
+    }
+    const details = { value: detailsValue };
 
     let sprint = null;
     let iterMap = {};
@@ -72,7 +78,7 @@ async function fetchProjectDetail(project) {
   try {
     const wiql = await azurePost(
       `${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] NOT IN ('Closed','Done','Removed') ORDER BY [System.ChangedDate] DESC` }
+      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }
     );
     const allIds = (wiql.workItems || []).slice(0, 500).map(w => w.id);
 
@@ -178,11 +184,14 @@ function buildCardHTML(results) {
       </div>`;
 
     const US_TYPES = ["User Story", "Product Backlog Item", "Requirement"];
+    const CLOSED_STATES = ["Closed", "Done", "Resolved", "Removed"];
     const usOnlyItems = items.filter(i => US_TYPES.includes(i.fields?.["System.WorkItemType"]));
     const total = usOnlyItems.length;
-    const semEst = usOnlyItems.filter(i => i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] == null).length;
-    const semResp = usOnlyItems.filter(i => !i.fields?.["System.AssignedTo"]).length;
-    const bugs = items.filter(i => i.fields?.["System.WorkItemType"] === "Bug").length;
+    const openUS = usOnlyItems.filter(i => !CLOSED_STATES.includes(i.fields?.["System.State"]));
+    const semEst = openUS.filter(i => i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] == null).length;
+    const semResp = openUS.filter(i => !i.fields?.["System.AssignedTo"]).length;
+    const ACTIVE_STATES = ["Active", "In Progress", "New"];
+    const bugs = items.filter(i => i.fields?.["System.WorkItemType"] === "Bug" && ACTIVE_STATES.includes(i.fields?.["System.State"])).length;
     const health = calcHealth(total, semEst, semResp, bugs);
 
     const iterations = [...new Set(
@@ -208,6 +217,7 @@ function buildCardHTML(results) {
     const itemsJson = JSON.stringify(items.map(i => ({
       iteration: i.fields?.["System.IterationPath"] || "",
       type: i.fields?.["System.WorkItemType"] || "",
+      state: i.fields?.["System.State"] || "",
       pts: i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null,
       assigned: !!i.fields?.["System.AssignedTo"],
     }))).replace(/</g, "\\u003c");
@@ -289,7 +299,7 @@ function buildCardHTML(results) {
           </div>
         </div>
         <div class="stats">
-          <div class="stat"><div class="stat-label">Backlog Total</div><div class="stat-val card-total">${total}</div></div>
+          <div class="stat"><div class="stat-label">User Stories</div><div class="stat-val card-total">${total}</div></div>
           <div class="stat"><div class="stat-label">Sem Estimativa</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
           <div class="stat"><div class="stat-label">Sem Responsável</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
           <div class="stat"><div class="stat-label">Bugs Abertos</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>

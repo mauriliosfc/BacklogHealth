@@ -107,11 +107,13 @@ function applyFilter(card, selected) {
 
   const filtered = selected.length === 0 ? allItems : allItems.filter(i => selected.includes(i.iteration));
   const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
+  const CLOSED_STATES = ['Closed', 'Done', 'Resolved', 'Removed'];
   const filteredUS = filtered.filter(i => US_TYPES.includes(i.type));
   const total = filteredUS.length;
-  const semEst = filteredUS.filter(i => i.pts == null).length;
-  const semResp = filteredUS.filter(i => !i.assigned).length;
-  const bugs = filtered.filter(i => i.type === 'Bug').length;
+  const openUS = filteredUS.filter(i => !CLOSED_STATES.includes(i.state));
+  const semEst = openUS.filter(i => i.pts == null).length;
+  const semResp = openUS.filter(i => !i.assigned).length;
+  const bugs = filtered.filter(i => i.type === 'Bug' && ['Active','In Progress','New'].includes(i.state)).length;
 
   card.querySelector('.card-total').textContent = total;
 
@@ -348,9 +350,10 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const bugRate      = totalHrs ? Math.round(bugHrs / totalHrs * 100) : 0;
   const estPct       = usTotal ? Math.round((usTotal - usNoEst) / usTotal * 100) : 0;
 
-  // By status
+  // By status — apenas US
+  const US_TYPES_D = ['User Story', 'Product Backlog Item', 'Requirement'];
   const byStatus = {};
-  items.forEach(i => { byStatus[i.state] = (byStatus[i.state]||0) + 1; });
+  items.filter(i => US_TYPES_D.includes(i.type)).forEach(i => { byStatus[i.state] = (byStatus[i.state]||0) + 1; });
   const statusEntries = Object.entries(byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v,statusColor(k)]);
 
   // By type — usa allItems para incluir fechados
@@ -358,9 +361,9 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   (allItems.length ? allItems : items).forEach(i => { byType[i.type] = (byType[i.type]||0)+1; });
   const typeEntries = Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v,typeColor(k)]);
 
-  // By assignee (top 12)
+  // By assignee — apenas US
   const byAsgn = {};
-  items.forEach(i => { const n = i.assigned||'Sem responsável'; byAsgn[n]=(byAsgn[n]||0)+1; });
+  items.filter(i => US_TYPES_D.includes(i.type)).forEach(i => { const n = i.assigned||'Sem respons\u00e1vel'; byAsgn[n]=(byAsgn[n]||0)+1; });
   const asgnEntries = Object.entries(byAsgn).sort((a,b)=>b[1]-a[1]).slice(0,12).map(([k,v])=>[k,v,'#60a5fa']);
 
   // By sprint
@@ -377,22 +380,38 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
     }
   });
 
-  const sprintRows = Object.entries(bySprint).sort((a,b) => {
+  const sortedSprintEntries = Object.entries(bySprint).sort((a,b) => {
     const aS = iterMap[a[0]]?.start, bS = iterMap[b[0]]?.start;
     if (aS && bS) return new Date(aS) - new Date(bS);
     return a[0].localeCompare(b[0]);
-  }).map(([key, d]) => {
+  });
+
+  const allSprintData = JSON.stringify(sortedSprintEntries.map(([key, d]) => {
+    const iter = iterMap[key] || {};
+    return {
+      key,
+      label: key.includes('\\') ? key.split('\\').slice(1).join(' \u203a ') : key,
+      us: d.us, usClosed: d.usClosed, pts: d.pts,
+      isCurrent: !!iter.isCurrent,
+      start: iter.start || null,
+      end: iter.end || null
+    };
+  })).replace(/</g, '\\u003c').replace(/'/g, '&#39;');
+
+  const sprintRows = sortedSprintEntries.map(([key, d]) => {
     const iter = iterMap[key]||{};
     const label = key.includes('\\') ? key.split('\\').slice(1).join(' \u203a ') : key;
     const dateR = (iter.start && iter.end) ? fmtD(iter.start) + ' \u2013 ' + fmtD(iter.end) : '\u2014';
     const pct = d.us ? Math.round(d.usClosed/d.us*100) : 0;
     const isCurr = iter.isCurrent;
-    return '<tr' + (isCurr?' class="is-current"':'') + '>' +
+    const safeKey = key.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return '<tr' + (isCurr?' class="is-current"':'') + ' data-sprint-key="' + safeKey + '">' +
       '<td>' + label + (isCurr?' <span class="badge green" style="font-size:10px;padding:1px 6px">atual</span>':'') + '</td>' +
       '<td>' + dateR + '</td>' +
       '<td>' + d.us + '</td>' +
       '<td>' + d.pts + '</td>' +
       '<td>' + d.usClosed + ' <span style="color:#475569">(' + pct + '%)</span></td>' +
+      '<td><button class="btn-burndown" type="button" onclick="openBurndown(this)" title="Ver burndown">\uD83D\uDCCA</button></td>' +
       '</tr>';
   }).join('');
 
@@ -421,14 +440,12 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
     '</div>' +
 
     '<div class="d-cols">' +
-      '<div class="d-section" style="margin:0"><div class="d-section-title">Itens por Status</div><div class="bar-list">' + barList(statusEntries, total) + '</div></div>' +
-      '<div class="d-section" style="margin:0"><div class="d-section-title">Itens por Tipo</div><div class="bar-list">' + barList(typeEntries, allItems.length || total) + '</div></div>' +
+      '<div class="d-section" style="margin:0"><div class="d-section-title">US por Status</div><div class="bar-list">' + barList(statusEntries, usTotal) + '</div></div>' +
+      '<div class="d-section" style="margin:0"><div class="d-section-title">US por Respons\u00e1vel</div><div class="bar-list">' + barList(asgnEntries, usTotal) + '</div></div>' +
     '</div>' +
 
-    '<div class="d-section"><div class="d-section-title">Carga por Respons\u00e1vel (top 12)</div><div class="bar-list">' + barList(asgnEntries, total) + '</div></div>' +
-
     '<div class="d-section"><div class="d-section-title">Distribui\u00e7\u00e3o por Sprint</div>' +
-      '<table class="d-table"><thead><tr><th>Sprint</th><th>Per\u00edodo</th><th>User Stories</th><th>Story Points</th><th>Conclu\u00eddos</th></tr></thead>' +
+      '<table class="d-table" data-sprints=\'' + allSprintData + '\'><thead><tr><th>Sprint</th><th>Per\u00edodo</th><th>User Stories</th><th>Story Points</th><th>Conclu\u00eddos</th><th>A\u00e7\u00f5es</th></tr></thead>' +
       '<tbody>' + sprintRows + '</tbody></table>' +
     '</div>' +
     tlSection;
@@ -510,19 +527,22 @@ function buildDailySlide(card) {
   const currentIter = currentOption ? currentOption.value : null;
 
   const sprintEl = card.querySelector('.sprint');
-  const sprintLabel = sprintEl ? sprintEl.textContent.trim() : 'Sem sprint definido';
+  const sprintName = sprintEl ? sprintEl.textContent.trim() : 'Sem sprint definido';
+  const currentRow = card.querySelector('.option-row.is-current');
+  const sprintDate = currentRow ? (currentRow.querySelector('.option-date') || {}).textContent || '' : '';
+  const sprintLabel = sprintDate ? sprintName + '\u2002\u00b7\u2002' + sprintDate : sprintName;
 
-  // Stats: usa o mesmo filtro ativo no dashboard (localStorage), igual ao applyFilter
-  const savedFilter = localStorage.getItem('filter_' + project);
-  const activeFilter = savedFilter ? JSON.parse(savedFilter) : [];
-  const filteredForStats = activeFilter.length > 0 ? items.filter(i => activeFilter.includes(i.iteration)) : items;
+  // Stats e tabela: filtrados pela sprint atual
+  const filteredForStats = currentIter ? items.filter(i => i.iteration === currentIter) : items;
 
   const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
+  const CLOSED_STATES = ['Closed', 'Done', 'Resolved', 'Removed'];
   const usItems = filteredForStats.filter(i => US_TYPES.includes(i.type));
   const total = usItems.length;
-  const semEst = usItems.filter(i => i.pts == null).length;
-  const semResp = usItems.filter(i => !i.assigned).length;
-  const bugs = filteredForStats.filter(i => i.type === 'Bug').length;
+  const openUS = usItems.filter(i => !CLOSED_STATES.includes(i.state));
+  const semEst = openUS.filter(i => i.pts == null).length;
+  const semResp = openUS.filter(i => !i.assigned).length;
+  const bugs = filteredForStats.filter(i => i.type === 'Bug' && ['Active','In Progress','New'].includes(i.state)).length;
 
   const dReasons = [];
   if (bugs > 10) dReasons.push(bugs + ' bugs abertos (cr\u00edtico: >10)');
@@ -555,9 +575,12 @@ function buildDailySlide(card) {
         '<div class="daily-project-name">' + project + '</div>' +
         '<span class="badge ' + health[1] + ' big" title="' + dTooltip + '">' + health[0] + '</span>' +
       '</div>' +
-      '<div class="daily-sprint-label">' + sprintLabel + '</div>' +
+      '<div class="daily-sprint-row">' +
+        '<div class="daily-sprint-label">' + sprintLabel + '</div>' +
+        '<button class="btn-burndown-daily" type="button" data-project="' + project.replace(/"/g,'&quot;') + '" data-iter="' + (currentIter||'').replace(/"/g,'&quot;') + '" onclick="openBurndownFromDaily(this.dataset.project, this.dataset.iter)">\uD83D\uDCCA Burndown</button>' +
+      '</div>' +
       '<div class="stats daily-stats">' +
-        '<div class="stat"><div class="stat-label">Backlog Total</div><div class="stat-val">' + total + '</div></div>' +
+        '<div class="stat"><div class="stat-label">User Stories</div><div class="stat-val">' + total + '</div></div>' +
         '<div class="stat"><div class="stat-label">Sem Estimativa</div><div class="stat-val ' + (semEst > 2 ? 'warn' : '') + '">' + semEst + '</div></div>' +
         '<div class="stat"><div class="stat-label">Sem Respons\u00e1vel</div><div class="stat-val ' + (semResp > 2 ? 'warn' : '') + '">' + semResp + '</div></div>' +
         '<div class="stat"><div class="stat-label">Bugs Abertos</div><div class="stat-val ' + (bugs > 3 ? 'crit' : '') + '">' + bugs + '</div></div>' +
@@ -632,3 +655,212 @@ document.addEventListener('keydown', e => {
   if (!document.getElementById('daily-modal').classList.contains('open')) return;
   handleDailyKey(e);
 });
+
+// ── Burndown Modal ────────────────────────────────────────────────────────────
+
+function _showBurndownModal(allSprints, key) {
+  const sprint = allSprints.find(s => s.key === key);
+  if (!sprint) return;
+  document.getElementById('burndown-title').textContent = sprint.label;
+  document.getElementById('burndown-sub').textContent   = sprint.start && sprint.end
+    ? fmtD(sprint.start) + ' \u2013 ' + fmtD(sprint.end)
+    : '';
+  document.getElementById('burndown-body').innerHTML = buildBurndownChart(allSprints, key);
+  document.getElementById('burndown-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function openBurndown(btn) {
+  const key = btn.closest('tr').dataset.sprintKey;
+  const allSprints = JSON.parse(btn.closest('table').dataset.sprints);
+  _showBurndownModal(allSprints, key);
+}
+
+function closeBurndown() {
+  const modalEl = document.getElementById('burndown-modal');
+  modalEl.classList.remove('open', 'maximized');
+  document.getElementById('btnBurndownMax').textContent = '\u2922';
+  document.body.style.overflow = '';
+}
+
+function closeBurndownOverlay(e) {
+  if (e.target === document.getElementById('burndown-modal')) closeBurndown();
+}
+
+function toggleBurndownMaximize() {
+  const overlay = document.getElementById('burndown-modal');
+  const btn = document.getElementById('btnBurndownMax');
+  const isMax = overlay.classList.toggle('maximized');
+  btn.textContent = isMax ? '\u2921' : '\u2922';
+  btn.title = isMax ? 'Restaurar' : 'Maximizar';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('burndown-modal').classList.contains('open')) {
+    closeBurndown();
+  }
+});
+
+async function openBurndownFromDaily(project, currentIter) {
+  const modalEl = document.getElementById('burndown-modal');
+  const bodyEl  = document.getElementById('burndown-body');
+
+  document.getElementById('burndown-title').textContent = project;
+  document.getElementById('burndown-sub').textContent   = 'Carregando...';
+  bodyEl.innerHTML = '<div class="modal-loading">\u23F3 Buscando dados da sprint...</div>';
+  modalEl.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const resp = await fetch('/detail?' + new URLSearchParams({ project }));
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
+    const bySprint = {};
+    data.items.forEach(i => {
+      const k = i.iteration || 'Sem Sprint';
+      if (!bySprint[k]) bySprint[k] = { us: 0, usClosed: 0, pts: 0 };
+      bySprint[k].pts += i.pts || 0;
+      if (US_TYPES.includes(i.type)) {
+        bySprint[k].us++;
+        if (['Closed','Done','Resolved'].includes(i.state)) bySprint[k].usClosed++;
+      }
+    });
+
+    const iterMap = data.iterMap || {};
+    const allSprints = Object.entries(bySprint)
+      .sort((a, b) => {
+        const aS = iterMap[a[0]] && iterMap[a[0]].start;
+        const bS = iterMap[b[0]] && iterMap[b[0]].start;
+        if (aS && bS) return new Date(aS) - new Date(bS);
+        return a[0].localeCompare(b[0]);
+      })
+      .map(([key, d]) => {
+        const iter = iterMap[key] || {};
+        return {
+          key,
+          label: key.includes('\\') ? key.split('\\').slice(1).join(' \u203a ') : key,
+          us: d.us, usClosed: d.usClosed, pts: d.pts,
+          isCurrent: !!iter.isCurrent,
+          start: iter.start || null,
+          end: iter.end || null
+        };
+      });
+
+    const sprint = allSprints.find(s => s.key === currentIter)
+                || allSprints.find(s => s.isCurrent)
+                || allSprints[allSprints.length - 1];
+
+    if (!sprint) throw new Error('Sprint n\u00e3o encontrada');
+    _showBurndownModal(allSprints, sprint.key);
+  } catch(e) {
+    bodyEl.innerHTML = '<p style="color:#f87171;padding:20px">Erro: ' + e.message + '</p>';
+  }
+}
+
+function buildBurndownChart(allSprints, highlightKey) {
+  // Find the sprint to burn down
+  const sprint = allSprints.find(s => s.key === highlightKey);
+  if (!sprint || !sprint.start || !sprint.end) {
+    return '<p style="color:#64748b;padding:20px;text-align:center">Sem dados de per\u00edodo para esta sprint.</p>';
+  }
+
+  const start   = new Date(sprint.start);
+  const end     = new Date(sprint.end);
+  const today   = new Date();
+  const totalUs = sprint.us;
+  const donePts = sprint.usClosed;
+
+  if (totalUs === 0) {
+    return '<p style="color:#64748b;padding:20px;text-align:center">Nenhuma User Story nesta sprint.</p>';
+  }
+
+  // Build day-by-day axis
+  const days = [];
+  const d = new Date(start);
+  while (d <= end) {
+    days.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  const totalDays = days.length - 1 || 1;
+
+  // Ideal burndown: from totalUs on day 0 to 0 on last day
+  // Real progress: assume linear distribution of completed US up to today
+  const todayClamp = today < start ? start : today > end ? end : today;
+  const elapsed    = (todayClamp - start) / (1000 * 60 * 60 * 24);
+  const elapsedDays = Math.min(Math.round(elapsed), totalDays);
+
+  // SVG dimensions
+  const W = 760, H = 320, PL = 50, PR = 20, PT = 20, PB = 40;
+  const cW = W - PL - PR, cH = H - PT - PB;
+
+  function xOf(dayIdx) { return PL + (dayIdx / totalDays) * cW; }
+  function yOf(val)    { return PT + cH - (val / totalUs) * cH; }
+
+  // Ideal line points
+  const idealPts = days.map((_, i) => xOf(i) + ',' + yOf(totalUs - (totalUs * i / totalDays))).join(' ');
+
+  // Real line: linear from totalUs at start to (totalUs - donePts) at today
+  const realPts = [];
+  for (let i = 0; i <= elapsedDays; i++) {
+    const remaining = totalUs - Math.round(donePts * i / (elapsedDays || 1));
+    realPts.push(xOf(i) + ',' + yOf(remaining));
+  }
+
+  // Today marker
+  const todayX  = xOf(elapsedDays);
+  const isActive = today >= start && today <= end;
+
+  // Y-axis labels
+  const yLabels = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const v = Math.round(totalUs * f);
+    const y = yOf(v);
+    return '<text x="' + (PL - 6) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="#64748b">' + v + '</text>' +
+           '<line x1="' + PL + '" y1="' + y + '" x2="' + (W - PR) + '" y2="' + y + '" stroke="#1e293b" stroke-width="1"/>';
+  }).join('');
+
+  // X-axis labels (every ~7 days)
+  const step = Math.max(1, Math.ceil(totalDays / 8));
+  const xLabels = days.filter((_, i) => i % step === 0 || i === totalDays).map((day, _, arr) => {
+    const i = days.indexOf(day);
+    const x = xOf(i);
+    const label = day.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+    return '<text x="' + x + '" y="' + (H - PB + 18) + '" text-anchor="middle" font-size="11" fill="#64748b">' + label + '</text>';
+  }).join('');
+
+  const todayLine = isActive
+    ? '<line x1="' + todayX + '" y1="' + PT + '" x2="' + todayX + '" y2="' + (H - PB) + '" stroke="#f87171" stroke-width="1.5" stroke-dasharray="4,3"/>' +
+      '<text x="' + (todayX + 4) + '" y="' + (PT + 12) + '" font-size="10" fill="#f87171">hoje</text>'
+    : '';
+
+  const svg =
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:320px">' +
+      yLabels +
+      '<polyline points="' + idealPts + '" fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="6,4"/>' +
+      (realPts.length > 1 ? '<polyline points="' + realPts.join(' ') + '" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linejoin="round"/>' : '') +
+      todayLine +
+      xLabels +
+      '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (H - PB) + '" stroke="#334155" stroke-width="1"/>' +
+      '<line x1="' + PL + '" y1="' + (H - PB) + '" x2="' + (W - PR) + '" y2="' + (H - PB) + '" stroke="#334155" stroke-width="1"/>' +
+    '</svg>';
+
+  const remaining = totalUs - donePts;
+  const pct = Math.round(donePts / totalUs * 100);
+
+  const summary =
+    '<div style="display:flex;gap:24px;flex-wrap:wrap;padding:16px 4px 0">' +
+      '<div class="d-card"><div class="d-label">Total US</div><div class="d-val blue">' + totalUs + '</div></div>' +
+      '<div class="d-card"><div class="d-label">Conclu\u00eddas</div><div class="d-val green">' + donePts + '</div></div>' +
+      '<div class="d-card"><div class="d-label">Restantes</div><div class="d-val ' + (remaining > 0 ? 'yellow' : 'green') + '">' + remaining + '</div></div>' +
+      '<div class="d-card"><div class="d-label">Progresso</div><div class="d-val ' + (pct >= 80 ? 'green' : pct >= 50 ? 'yellow' : 'red') + '">' + pct + '%</div></div>' +
+    '</div>';
+
+  const legend =
+    '<div style="display:flex;gap:16px;padding:8px 4px;font-size:12px;color:#64748b">' +
+      '<span><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="1.5" stroke-dasharray="6,4"/></svg> Ideal</span>' +
+      '<span><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#22c55e" stroke-width="2.5"/></svg> Real</span>' +
+    '</div>';
+
+  return '<div style="padding:20px">' + summary + '<div style="margin-top:20px">' + svg + '</div>' + legend + '</div>';
+}
