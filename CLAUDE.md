@@ -16,13 +16,27 @@ Automatizar a rotina de validação de backlog de projetos no **Azure DevOps**, 
 
 ```
 dash_azure_gestao_pessoal/
-├── server.js           ← entry point: HTTP server, rotas, renderização de templates
+├── server.js           ← entry point: HTTP server, rotas, serve public/ dinamicamente
 ├── config.js           ← loadConfig, saveConfig, getCfg, getAuth
 ├── azureClient.js      ← azureGet, azurePost, rawAzureGet
-├── projectService.js   ← fetchProject, fetchProjectDetail, buildCardHTML, calcHealth
+├── projectService.js   ← fetchProject, fetchProjectDetail, buildCardHTML
+├── utils/
+│   ├── health.js       ← calcHealth (fonte única, importado por projectService)
+│   ├── paginate.js     ← paginatedItems (lotes de 200)
+│   └── iterMap.js      ← fetchIterMap (busca sprints/iterations)
 ├── public/
 │   ├── style.css       ← todo o CSS (setup + dashboard, sem duplicatas)
-│   └── app.js          ← todo o JS do browser (filtros, modais, buildDetailHTML, burndown, daily)
+│   ├── app.js          ← entry point ES Module: importa módulos, expõe window globals
+│   └── modules/
+│       ├── constants.js  ← US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES
+│       ├── health.js     ← calcHealth (browser, mesma lógica do backend)
+│       ├── utils.js      ← fmtD, buildSprintData
+│       ├── theme.js      ← setTheme, toggleTheme
+│       ├── timer.js      ← startTimer, doRefresh
+│       ├── filters.js    ← applyFilter, initFilters, toggleDropdown, toggleUS
+│       ├── detail.js     ← loadDetailData, buildDetailHTML, buildTimeline
+│       ├── daily.js      ← openDaily, buildDailySlide
+│       └── burndown.js   ← openBurndown, buildBurndownChart, openBurndownFromDaily
 ├── views/
 │   ├── dashboard.html  ← template HTML do dashboard com tokens {{ORG}}, {{CARDS}}, etc.
 │   └── setup.html      ← template HTML do setup com tokens de configuração
@@ -37,15 +51,19 @@ server.js (entry point)
         ├── config.js          → gerencia config.json (org, pat, projects)
         │
         ├── azureClient.js     → chamadas HTTPS para a API REST do Azure DevOps
-        │       ├── Projects API       → lista todos os projetos acessíveis pelo PAT
-        │       ├── WIQL Query         → busca IDs de work items (state NOT IN Done/Removed — inclui Closed)
-        │       ├── Work Items API     → detalhes dos items em lotes de 200 (até 500 itens)
-        │       ├── Iterations API     → sprints com datas (tenta "{projeto} Team" → "{projeto}")
-        │       ├── WIQL (detail)      → items para indicadores de saúde (até 500)
-        │       ├── WIQL (tasks/bugs)  → todos os estados para CompletedWork e contagem total
-        │       └── WIQL (allItems)    → todos os tipos/estados para distribuição
+        │       ├── Projects API    → lista todos os projetos acessíveis pelo PAT
+        │       ├── WIQL Query      → busca IDs de work items (state NOT IN Done/Removed)
+        │       ├── Work Items API  → detalhes em lotes de 200 (até 500 itens)
+        │       └── Iterations API  → sprints com datas (tenta "{projeto} Team" → "{projeto}")
+        │
+        ├── utils/             → utilitários compartilhados
+        │       ├── health.js  → calcHealth (thresholds de saúde)
+        │       ├── paginate.js→ paginatedItems (abstrai loop de lotes)
+        │       └── iterMap.js → fetchIterMap (abstrai fallback de team name)
         │
         ├── projectService.js  → lógica de negócio + renderização dos cards HTML
+        │       ├── fetchProject       → dashboard principal (WIQL + paginação + iterMap em paralelo)
+        │       └── fetchProjectDetail → detail modal (3 WIQLs + iterMap em paralelo, 3 paginações em paralelo)
         │
         └── Servidor HTTP local (porta 3030)
                 ├── GET /                    → dashboard principal (HTML cacheado)
@@ -53,9 +71,8 @@ server.js (entry point)
                 ├── GET /settings            → tela de configurações (pré-preenchida)
                 ├── GET /api/projects        → lista projetos disponíveis para o PAT informado
                 ├── POST /setup              → salva config.json e retorna JSON {ok:true}
-                ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, allItems, iterMap
-                ├── GET /style.css           → arquivo estático
-                └── GET /app.js             → arquivo estático
+                ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, iterMap
+                └── GET /modules/*.js        → ES modules servidos dinamicamente de public/
 ```
 
 ---
@@ -220,12 +237,13 @@ Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 
 ### Queries ao Azure DevOps no `/detail`
 
+As 3 queries WIQL + fetchIterMap rodam em paralelo. Em seguida, as 3 paginações também rodam em paralelo.
+
 | Query | Filtro | Finalidade |
 |-------|--------|------------|
 | WIQL principal | State NOT IN (Done, Removed) | Items incluindo Closed para indicadores e distribuição |
 | WIQL tasks | Sem filtro de estado | CompletedWork + IterationPath para Hrs Tasks |
 | WIQL bugs | Sem filtro de estado | CompletedWork + IterationPath + contagem total |
-| WIQL allItems | State <> Removed | Distribuição por tipo (inclui fechados) |
 
 ---
 
@@ -311,6 +329,13 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 | 28 | `data-sprints` serializado na tabela de distribuição | Permite abrir o burndown de qualquer sprint sem nova chamada ao servidor quando os dados já estão carregados no modal de detalhes |
 | 29 | `openBurndownFromDaily` faz fetch ao abrir | Daily não tem `iterMap` com datas — buscar os dados sob demanda é mais simples que pré-carregar para todos os projetos |
 | 30 | `_showBurndownModal` como helper compartilhado | `openBurndown` (tabela) e `openBurndownFromDaily` (daily) precisam da mesma lógica de exibição — centralizar evita duplicação |
+| 31 | ES Modules nativos no browser (`type="module"`) | Elimina escopo global monolítico de 866 linhas — cada módulo tem escopo próprio, zero bundler, zero dependências |
+| 32 | `app.js` como entry point que expõe `window.X` | HTML usa inline handlers (`onclick="fn()"`); ES modules têm escopo local — expor ao window mantém compatibilidade sem alterar templates |
+| 33 | `utils/` no backend (health, paginate, iterMap) | Lógica de paginação e iterMap estava duplicada em `fetchProject` e `fetchProjectDetail`; `calcHealth` estava duplicado entre servidor e cliente |
+| 34 | `buildSprintData` em `utils.js` (frontend) | Computação de `bySprint` estava duplicada em `buildDetailHTML` e `openBurndownFromDaily` — fonte única garante consistência |
+| 35 | Remoção de `allWiql`/`allItems` | Query era usada para "Itens por Tipo" que foi removido — eliminar reduz uma chamada à API por abertura do modal de detalhes |
+| 36 | Paralelização das queries no `fetchProjectDetail` | 3 WIQLs + iterMap agora rodam em paralelo; em seguida 3 paginações em paralelo — reduz tempo de carregamento proporcional ao número de queries |
+| 37 | `server.js` serve `public/` dinamicamente | Lista estática de arquivos precisaria de atualização manual a cada novo módulo — handler dinâmico resolve qualquer arquivo de `public/` sem manutenção |
 
 ---
 

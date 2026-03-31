@@ -81,13 +81,27 @@ O servidor sobe na porta **3030**. Para encerrar, pressione `Ctrl+C`.
 
 ```
 BacklogHealth/
-├── server.js           # Entry point: HTTP server, rotas, renderização de templates
+├── server.js           # Entry point: HTTP server, rotas, serve arquivos de public/ dinamicamente
 ├── config.js           # Gerenciamento de configuração (load/save/getCfg)
 ├── azureClient.js      # Cliente HTTP para a API REST do Azure DevOps
 ├── projectService.js   # Lógica de negócio: queries, cálculo de saúde, cards HTML
+├── utils/
+│   ├── health.js       # calcHealth — fonte única compartilhada com o frontend
+│   ├── paginate.js     # paginatedItems — busca em lotes de 200
+│   └── iterMap.js      # fetchIterMap — busca de sprints/iterations
 ├── public/
 │   ├── style.css       # Todo o CSS (temas claro/escuro, dashboard, setup)
-│   └── app.js          # Todo o JS do browser (filtros, modais, gráficos, daily, burndown)
+│   ├── app.js          # Entry point ES Module: importa módulos e expõe ao window
+│   └── modules/
+│       ├── constants.js  # US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES
+│       ├── health.js     # calcHealth (browser)
+│       ├── utils.js      # fmtD, buildSprintData
+│       ├── theme.js      # setTheme, toggleTheme
+│       ├── timer.js      # startTimer, doRefresh
+│       ├── filters.js    # applyFilter, initFilters, toggleDropdown, toggleUS
+│       ├── detail.js     # loadDetailData, buildDetailHTML, buildTimeline
+│       ├── daily.js      # openDaily, buildDailySlide
+│       └── burndown.js   # openBurndown, buildBurndownChart, openBurndownFromDaily
 ├── views/
 │   ├── dashboard.html  # Template HTML do dashboard
 │   └── setup.html      # Template HTML da tela de configuração
