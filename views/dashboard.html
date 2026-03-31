@@ -69,6 +69,22 @@
   </div>
 </div>
 
+<div id="burndown-modal" class="modal-overlay" style="z-index:650" onclick="closeBurndownOverlay(event)">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="burndown-title"></div>
+        <div class="modal-sub" id="burndown-sub"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-maximize" type="button" id="btnBurndownMax" onclick="toggleBurndownMaximize()" title="Maximizar">⤢</button>
+        <button class="modal-close" type="button" onclick="closeBurndown()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="burndown-body"></div>
+  </div>
+</div>
+
 <script src="/app.js"></script>
 </body>
 </html>

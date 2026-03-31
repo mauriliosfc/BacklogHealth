@@ -196,6 +196,11 @@ tr:hover td { background: var(--hover-bg); }
 .d-table td { padding: 7px 8px; border-bottom: 1px solid var(--bg-card); color: var(--text-2); }
 .d-table tr:hover td { background: var(--hover-bg); }
 .d-table tr.is-current td { color: var(--c-green); }
+.btn-burndown { background: none; border: 1px solid var(--bg-border); color: var(--text-faint); border-radius: 6px; padding: 3px 8px; font-size: 13px; cursor: pointer; transition: all .15s; }
+.btn-burndown:hover { background: var(--bg-el); color: var(--text-1); border-color: var(--bg-el2); }
+.daily-sprint-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.btn-burndown-daily { background: none; border: 1px solid var(--bg-border); color: var(--text-faint); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; transition: all .15s; flex-shrink: 0; }
+.btn-burndown-daily:hover { background: var(--bg-el); color: var(--text-1); border-color: var(--bg-el2); }
 .progress-ring { display: flex; align-items: center; gap: 16px; }
 .ring-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
 .ring-wrap svg { transform: rotate(-90deg); }
