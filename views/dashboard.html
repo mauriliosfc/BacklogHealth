@@ -13,12 +13,19 @@
     <div class="subtitle">Azure DevOps · {{ORG}}</div>
   </div>
   <div class="refresh-bar">
-    <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Tema claro">☀️</button>
-    <button class="btn-theme" onclick="location.href='/settings'" title="Configurações">⚙️</button>
-    <button class="btn-daily" id="btnDaily" onclick="openDaily()">📅 Apresentar daily</button>
-    <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()">↻ Atualizar</button>
-    <div class="timer" id="timer">Próximo refresh em 5:00</div>
-    <div class="update" id="lastUpdate">Atualizado em {{LAST_UPDATE}}</div>
+    <div class="header-utils">
+      <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Tema claro">☀️</button>
+      <button class="btn-theme" onclick="location.href='/settings'" title="Configurações">⚙️</button>
+    </div>
+    <div class="header-divider"></div>
+    <div class="header-actions">
+      <button class="btn-daily" id="btnDaily" onclick="openDaily()">📅 Apresentar daily</button>
+      <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()">↻ Atualizar</button>
+      <div class="header-meta">
+        <div class="timer" id="timer">Próximo refresh em 5:00</div>
+        <div class="update" id="lastUpdate">Atualizado em {{LAST_UPDATE}}</div>
+      </div>
+    </div>
   </div>
 </div>
 <div id="content">
