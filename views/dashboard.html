@@ -15,6 +15,7 @@
   <div class="refresh-bar">
     <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Tema claro">☀️</button>
     <button class="btn-theme" onclick="location.href='/settings'" title="Configurações">⚙️</button>
+    <button class="btn-daily" id="btnDaily" onclick="openDaily()">📅 Apresentar daily</button>
     <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()">↻ Atualizar</button>
     <div class="timer" id="timer">Próximo refresh em 5:00</div>
     <div class="update" id="lastUpdate">Atualizado em {{LAST_UPDATE}}</div>
@@ -38,6 +39,26 @@
       </div>
     </div>
     <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<div id="daily-modal" class="daily-overlay" onkeydown="handleDailyKey(event)">
+  <div class="daily-box" id="daily-box">
+    <div class="daily-head">
+      <div class="daily-head-title">📅 Daily Standup</div>
+      <div class="daily-head-actions">
+        <button class="modal-maximize" id="btnDailyMax" onclick="toggleDailyMaximize()" title="Expandir">⤢</button>
+        <button class="modal-close" onclick="closeDaily()" title="Fechar">✕</button>
+      </div>
+    </div>
+    <div class="daily-carousel-wrap">
+      <div class="daily-track" id="daily-track"></div>
+    </div>
+    <div class="daily-nav">
+      <button class="daily-nav-btn" id="btnDailyPrev" onclick="dailyPrev()">← Anterior</button>
+      <div class="daily-counter" id="daily-counter"></div>
+      <button class="daily-nav-btn" id="btnDailyNext" onclick="dailyNext()">Próximo →</button>
+    </div>
   </div>
 </div>
 
