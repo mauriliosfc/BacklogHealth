@@ -294,13 +294,19 @@ function buildCardHTML(results) {
           <div class="stat"><div class="stat-label">Sem Responsável</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
           <div class="stat"><div class="stat-label">Bugs Abertos</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
         </div>
-        <details>
-          <summary class="card-summary">▼ Visualizar User Stories (${usTotal})</summary>
-          <table>
-            <thead><tr><th>Título</th><th>Status</th><th>Estimativa</th><th>Responsável</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </details>
+        <div class="us-section">
+          <button class="btn-us-toggle card-summary" type="button" onclick="toggleUS(this)">
+            <span class="us-toggle-icon">▶</span>
+            Visualizar User Stories
+            <span class="us-toggle-count">(${usTotal})</span>
+          </button>
+          <div class="us-table" hidden>
+            <table>
+              <thead><tr><th>Título</th><th>Status</th><th>Estimativa</th><th>Responsável</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
       </div>`;
   }).join("");
 }

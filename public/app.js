@@ -143,7 +143,17 @@ function applyFilter(card, selected) {
   healthEl.title = hTooltip;
 
   const usCount = filtered.filter(i => ['User Story','Product Backlog Item','Requirement'].includes(i.type)).length;
-  card.querySelector('.card-summary').textContent = '▼ Visualizar User Stories (' + usCount + ')';
+  const summaryBtn = card.querySelector('.card-summary');
+  summaryBtn.querySelector('.us-toggle-count').textContent = '(' + usCount + ')';
+}
+
+function toggleUS(btn) {
+  const table = btn.closest('.us-section').querySelector('.us-table');
+  const icon = btn.querySelector('.us-toggle-icon');
+  const isOpen = !table.hidden;
+  table.hidden = isOpen;
+  icon.textContent = isOpen ? '\u25b6' : '\u25bc';
+  btn.classList.toggle('open', !isOpen);
 }
 
 function initFilters() {
