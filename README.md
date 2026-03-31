@@ -6,12 +6,13 @@ Dashboard para monitoramento e análise de saúde dos backlogs de projetos no **
 
 ## Funcionalidades
 
-- Indicadores de saúde por projeto (Saudável / Atenção / Crítico) baseados em User Stories
-- Métricas agregadas: US abertas, sem estimativa, sem responsável e bugs
+- Indicadores de saúde por projeto (Saudável / Atenção / Crítico) com tooltip explicando o motivo do alerta
+- Métricas agregadas: User Stories (abertas + fechadas), sem estimativa, sem responsável e bugs ativos
 - Agrupamento por sprint ordenado cronologicamente
-- Seção "Visualizar User Stories" por card com tabela filtrada
-- Modal de detalhes com indicadores, gráficos de distribuição e cronograma
-- Botão de atualização de dados dentro do modal de detalhes
+- Seção "Visualizar User Stories" por card com tabela filtrada (toggle expansível)
+- Modal de detalhes com indicadores, gráficos de distribuição, cronograma de sprints e tabela de distribuição por sprint
+- **Gráfico de burndown por sprint** — acessível via coluna "Ações" na tabela de distribuição, com linha ideal, linha real e marcador de hoje
+- **Apresentação de Daily Standup** — modal em carrossel com métricas e User Stories da sprint atual, botão de burndown integrado
 - Filtros por sprint com persistência no navegador
 - Temas claro e escuro
 - Atualização automática a cada 5 minutos
@@ -86,7 +87,7 @@ BacklogHealth/
 ├── projectService.js   # Lógica de negócio: queries, cálculo de saúde, cards HTML
 ├── public/
 │   ├── style.css       # Todo o CSS (temas claro/escuro, dashboard, setup)
-│   └── app.js          # Todo o JS do browser (filtros, modal de detalhes, gráficos)
+│   └── app.js          # Todo o JS do browser (filtros, modais, gráficos, daily, burndown)
 ├── views/
 │   ├── dashboard.html  # Template HTML do dashboard
 │   └── setup.html      # Template HTML da tela de configuração
@@ -103,16 +104,18 @@ Os cards exibem métricas baseadas exclusivamente em **User Stories**:
 
 | Métrica | Descrição |
 |---------|-----------|
-| **Total Abertos** | Quantidade de US com estado ativo |
-| **Sem Estimativa** | US sem Story Points definidos |
-| **Sem Responsável** | US sem assigned to |
-| **Bugs Abertos** | Total de bugs independente de estado |
+| **User Stories** | Total de US (abertas e fechadas) |
+| **Sem Estimativa** | US abertas sem Story Points definidos |
+| **Sem Responsável** | US abertas sem assigned to |
+| **Bugs Abertos** | Bugs com estado Active, In Progress ou New |
 
 | Status | Condição |
 |--------|----------|
 | 🟢 **Saudável** | Sem alertas ativos |
 | 🟡 **Atenção** | US sem estimativa >30% ou sem responsável >20% ou >5 bugs |
 | 🔴 **Crítico** | US sem estimativa >50% ou >10 bugs |
+
+> Passe o mouse sobre o badge de saúde para ver o motivo detalhado do alerta.
 
 ---
 

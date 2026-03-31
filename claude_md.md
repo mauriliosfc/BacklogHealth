@@ -6,7 +6,7 @@
 
 ## 🎯 Objetivo
 
-Automatizar a rotina de validação de backlog de projetos no **Azure DevOps**, eliminando a necessidade de acessar cada projeto manualmente. O resultado é um dashboard local que exibe o status de saúde de todos os projetos de forma visual e consolidada, com filtros por sprint, atualização automática e painel de detalhes por projeto.
+Automatizar a rotina de validação de backlog de projetos no **Azure DevOps**, eliminando a necessidade de acessar cada projeto manualmente. O resultado é um dashboard local que exibe o status de saúde de todos os projetos de forma visual e consolidada, com filtros por sprint, atualização automática, painel de detalhes, gráfico de burndown por sprint e apresentação de Daily Standup.
 
 ---
 
@@ -22,7 +22,7 @@ dash_azure_gestao_pessoal/
 ├── projectService.js   ← fetchProject, fetchProjectDetail, buildCardHTML, calcHealth
 ├── public/
 │   ├── style.css       ← todo o CSS (setup + dashboard, sem duplicatas)
-│   └── app.js          ← todo o JS do browser (filtros, modal, buildDetailHTML, etc.)
+│   └── app.js          ← todo o JS do browser (filtros, modais, buildDetailHTML, burndown, daily)
 ├── views/
 │   ├── dashboard.html  ← template HTML do dashboard com tokens {{ORG}}, {{CARDS}}, etc.
 │   └── setup.html      ← template HTML do setup com tokens de configuração
@@ -38,12 +38,12 @@ server.js (entry point)
         │
         ├── azureClient.js     → chamadas HTTPS para a API REST do Azure DevOps
         │       ├── Projects API       → lista todos os projetos acessíveis pelo PAT
-        │       ├── WIQL Query         → busca IDs de work items ativos (state NOT IN Closed/Done/Removed)
-        │       ├── Work Items API     → detalhes dos items do dashboard principal (até 100)
+        │       ├── WIQL Query         → busca IDs de work items (state NOT IN Done/Removed — inclui Closed)
+        │       ├── Work Items API     → detalhes dos items em lotes de 200 (até 500 itens)
         │       ├── Iterations API     → sprints com datas (tenta "{projeto} Team" → "{projeto}")
-        │       ├── WIQL (detail)      → items ativos para indicadores de saúde (até 500)
+        │       ├── WIQL (detail)      → items para indicadores de saúde (até 500)
         │       ├── WIQL (tasks/bugs)  → todos os estados para CompletedWork e contagem total
-        │       └── WIQL (allItems)    → todos os tipos/estados para distribuição por tipo
+        │       └── WIQL (allItems)    → todos os tipos/estados para distribuição
         │
         ├── projectService.js  → lógica de negócio + renderização dos cards HTML
         │
@@ -79,7 +79,7 @@ As credenciais são configuradas pela **tela de setup** na primeira execução e
 
 ## 📦 Dependências
 
-- **Node.js v24 LTS** — instalado via `winget install OpenJS.NodeJS.LTS`
+- **Node.js v18+** — instalado via `winget install OpenJS.NodeJS.LTS`
 - **nodemon** — instalado via `npm install -g nodemon` (hot reload ao salvar)
 - Sem pacotes externos no runtime — usa apenas módulos nativos (`http`, `https`, `dns`, `child_process`)
 
@@ -106,19 +106,28 @@ node server.js
 
 Todos os indicadores do dashboard principal são calculados considerando apenas **User Stories** (tipos: `User Story`, `Product Backlog Item`, `Requirement`).
 
+| Métrica | Descrição |
+|---------|-----------|
+| **User Stories** | Total de US incluindo fechadas (Closed/Done/Resolved) |
+| **Sem Estimativa** | US abertas sem Story Points |
+| **Sem Responsável** | US abertas sem Assigned To |
+| **Bugs Abertos** | Bugs com estado Active, In Progress ou New |
+
 | Métrica | Alerta | Crítico |
 |--------|--------|---------|
-| US sem estimativa (Story Points) | > 30% do total de US | > 50% do total de US |
-| US sem responsável | > 20% do total de US | — |
-| Bugs abertos (todos os estados) | > 5 | > 10 |
+| US sem estimativa (Story Points) | > 30% do total de US abertas | > 50% do total de US abertas |
+| US sem responsável | > 20% do total de US abertas | — |
+| Bugs ativos | > 5 | > 10 |
 
 ### Status de saúde
 - 🟢 **Saudável** — backlog bem estruturado
 - 🟡 **Atenção** — pontos de melhoria identificados
 - 🔴 **Crítico** — ação imediata necessária
 
+> Passe o mouse sobre o badge de saúde para ver o motivo detalhado do alerta.
+
 ### Seção "Visualizar User Stories"
-Cada card possui um `<details>` expansível que exibe apenas User Stories agrupadas por sprint, ordenadas cronologicamente (mais antiga primeiro). A tabela contém: Título, Status, Estimativa e Responsável.
+Cada card possui um botão toggle expansível que exibe apenas User Stories agrupadas por sprint, ordenadas cronologicamente (mais antiga primeiro). A tabela contém: Título, Status, Estimativa e Responsável. O contador de US é atualizado em tempo real ao filtrar por sprint.
 
 ---
 
@@ -156,8 +165,26 @@ Cada card de projeto possui um dropdown customizado com:
 Ao selecionar sprints, o dashboard recalcula em tempo real:
 - Linhas da tabela (mostra/oculta por `data-iteration`)
 - Cabeçalhos de grupo
-- Stats: Total US, Sem Estimativa, Sem Responsável, Bugs
+- Stats: User Stories, Sem Estimativa, Sem Responsável, Bugs
 - Badge de saúde (🟢 🟡 🔴)
+
+---
+
+## 📅 Apresentação de Daily Standup
+
+Acessado pelo botão **📅 Apresentar daily** no header.
+
+- Modal em carrossel — um slide por projeto monitorado
+- Cada slide exibe dados **filtrados pela sprint atual** do projeto
+- **Conteúdo por slide:**
+  - Nome do projeto + badge de saúde (com tooltip)
+  - Nome da sprint atual + período (data início – data fim)
+  - Botão **📊 Burndown** para abrir o gráfico da sprint atual
+  - Stats: User Stories, Sem Estimativa, Sem Responsável, Bugs Abertos
+  - Tabela de User Stories da sprint atual (Título, Status, Estimativa, Responsável)
+- Navegação por botões (← Anterior / Próximo →) ou teclas `←` `→`
+- Fecha com ✕ ou tecla `Escape`
+- Modal expansível (⤢ Maximizar / ⤡ Restaurar)
 
 ---
 
@@ -166,7 +193,7 @@ Ao selecionar sprints, o dashboard recalcula em tempo real:
 Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 
 - Busca dados via `/detail?project=NAME` com múltiplas queries ao Azure DevOps
-- **Respeita os filtros de sprint ativos** na tela principal — todos os indicadores, incluindo `taskItems`, `bugItems` e `allItems`, são filtrados por sprint no cliente antes de agregar
+- **Respeita os filtros de sprint ativos** na tela principal — todos os indicadores são filtrados por sprint no cliente antes de agregar
 - Modal com botão **↻** para atualizar os dados sem fechar o modal
 - Modal com botão **⤢ Maximizar / ⤡ Restaurar**
 - Fecha com ✕, clique fora do modal ou tecla `Escape`
@@ -177,10 +204,9 @@ Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 |-------|----------|
 | **Resumo Geral** | Total itens, User Stories, Story Points, Pts Entregues, Em Andamento, Novos, Sem Estimativa, Hrs Tasks, Hrs Bugs |
 | **Indicadores de Saúde** | Taxa de Conclusão (US), Em UAT (US), Taxa de Bugs (hrs bugs/total hrs), Cobertura de Estimativas (US) |
-| **Itens por Status** | Barras horizontais com todos os estados (inclui fechados) |
-| **Itens por Tipo** | Barras: US, Bug, Task, Feature, Epic — inclui itens fechados |
-| **Carga por Responsável** | Top 12 membros com quantidade de items |
-| **Distribuição por Sprint** | Tabela: Sprint, Período, User Stories, Story Points, Concluídos (%) — ordenada por data crescente |
+| **US por Status** | Barras horizontais com todos os estados — filtrado apenas por User Stories |
+| **US por Responsável** | Barras horizontais com membros da equipe — filtrado apenas por User Stories |
+| **Distribuição por Sprint** | Tabela: Sprint, Período, User Stories, Story Points, Concluídos (%), Ações (botão burndown) — ordenada por data crescente |
 | **Cronograma de Sprints** | Gantt visual com blocos posicionados por data, barra proporcional à qtd de US, marcador "hoje" |
 
 ### Cálculo dos indicadores de saúde
@@ -196,10 +222,34 @@ Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 
 | Query | Filtro | Finalidade |
 |-------|--------|------------|
-| WIQL principal | State NOT IN (Closed, Done, Removed) | Items ativos para indicadores de saúde |
+| WIQL principal | State NOT IN (Done, Removed) | Items incluindo Closed para indicadores e distribuição |
 | WIQL tasks | Sem filtro de estado | CompletedWork + IterationPath para Hrs Tasks |
 | WIQL bugs | Sem filtro de estado | CompletedWork + IterationPath + contagem total |
 | WIQL allItems | State <> Removed | Distribuição por tipo (inclui fechados) |
+
+---
+
+## 📈 Gráfico de Burndown por Sprint
+
+Acessado via botão **📊** na coluna "Ações" da tabela de Distribuição por Sprint, ou via botão **📊 Burndown** no slide da Daily Standup.
+
+- **Modal expandível** com as mesmas opções dos outros modais (maximizar, fechar, Escape)
+- **Gráfico SVG** sem dependências externas
+- **Linha ideal** (tracejada cinza): decaimento linear do total de US até zero ao longo do período
+- **Linha real** (verde): progresso de US concluídas até a data atual
+- **Marcador "hoje"** (vermelho): visível apenas quando hoje está dentro do período da sprint
+- **Cards de resumo:** Total US, Concluídas, Restantes, Progresso %
+
+### Como o burndown é calculado
+
+| Dado | Fonte |
+|------|-------|
+| Total de US | `data-sprints` serializado na tabela de distribuição |
+| US concluídas | US com estado Closed/Done/Resolved na sprint |
+| Datas da sprint | `iterMap` retornado pelo endpoint `/detail` |
+| Progresso real | Distribuição linear das US concluídas até hoje |
+
+> **Nota:** O gráfico representa o progresso de User Stories (não Story Points). A linha real é uma estimativa linear — não reflete a ordem exata em que os itens foram concluídos.
 
 ---
 
@@ -209,7 +259,7 @@ Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 |-----|----------|------------|
 | Projects | `/_apis/projects` | Lista todos os projetos acessíveis pelo PAT |
 | WIQL | `/{project}/_apis/wit/wiql` | Consulta work items por critérios |
-| Work Items | `/{project}/_apis/wit/workitems?ids=...` | Detalhes dos items (máx 200/request) |
+| Work Items | `/{project}/_apis/wit/workitems?ids=...` | Detalhes dos items em lotes de 200 (até 500) |
 | Iterations | `/{project}/{team}/_apis/work/teamsettings/iterations` | Sprints com datas e timeFrame |
 
 > **Nota:** A API `_apis/teams` retorna 401 com PAT sem permissão de times. O script contorna isso tentando o nome do time padrão diretamente (`{projeto} Team`).
@@ -247,10 +297,20 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 | 14 | Queries separadas para Tasks/Bugs (sem filtro de estado) | CompletedWork e contagem total precisam incluir itens já fechados |
 | 15 | Filtragem por sprint no cliente (detail) | Evita passar parâmetros de sprint para o servidor — dados brutos com IterationPath são filtrados no JS |
 | 16 | `SELECTED_SET` para seleção de projetos no setup | Seleções persistiam ao filtrar a lista — DOM era reconstruído e perdia o estado dos checkboxes ocultos |
-| 17 | Separação em módulos (config, azureClient, projectService, server) | Arquivo único de 1500+ linhas dificultava manutenção — cada módulo tem responsabilidade clara e pode ser editado sem risco de quebrar outras partes |
-| 18 | CSS e JS do browser em `public/` servidos como arquivos estáticos | Permite syntax highlighting real no editor, sem escaping de template literal; navegador faz cache automaticamente |
+| 17 | Separação em módulos (config, azureClient, projectService, server) | Arquivo único de 1500+ linhas dificultava manutenção — cada módulo tem responsabilidade clara |
+| 18 | CSS e JS do browser em `public/` servidos como arquivos estáticos | Permite syntax highlighting no editor; navegador faz cache automaticamente |
 | 19 | HTML em `views/` com tokens `{{TOKEN}}` e `renderTemplate` simples | Separa estrutura de apresentação da lógica sem adicionar dependência de template engine |
 | 20 | Templates lidos uma vez no startup (`fs.readFileSync`) | Evita I/O a cada request em ambiente de desenvolvimento local |
+| 21 | Incluir US Closed no total do dashboard principal | Total de US deve refletir o escopo completo do projeto, não apenas os itens abertos |
+| 22 | Paginação em lotes de 200 (até 500 itens) no `fetchProject` | Limite de 100 itens fazia US Closed excluírem US abertas do resultado quando o projeto tinha muitos itens |
+| 23 | Bugs contados apenas com estado Active/In Progress/New | Bugs fechados não representam risco ativo — incluí-los distorcia o indicador de saúde |
+| 24 | Tooltip no badge de saúde com motivo do alerta | Usuário precisava entender o motivo sem abrir os detalhes — título HTML com a lista de razões resolve sem adicionar complexidade |
+| 25 | Daily Standup como carrossel de slides | Facilita a apresentação em reuniões — um projeto por vez, navegável por teclado |
+| 26 | Daily filtra dados pela sprint atual | A daily é focada no que está acontecendo agora — mostrar todas as sprints misturaria contextos |
+| 27 | Burndown em SVG puro sem bibliotecas | Zero dependências — gerado diretamente no browser com `viewBox` e `polyline` |
+| 28 | `data-sprints` serializado na tabela de distribuição | Permite abrir o burndown de qualquer sprint sem nova chamada ao servidor quando os dados já estão carregados no modal de detalhes |
+| 29 | `openBurndownFromDaily` faz fetch ao abrir | Daily não tem `iterMap` com datas — buscar os dados sob demanda é mais simples que pré-carregar para todos os projetos |
+| 30 | `_showBurndownModal` como helper compartilhado | `openBurndown` (tabela) e `openBurndownFromDaily` (daily) precisam da mesma lógica de exibição — centralizar evita duplicação |
 
 ---
 
@@ -262,7 +322,8 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 - [ ] Integrar com **Power BI** para histórico e relatórios gerenciais
 - [ ] Adicionar filtro por responsável além do filtro por sprint
 - [ ] Adicionar histórico de saúde do backlog (comparar com semanas anteriores)
+- [ ] Burndown baseado em datas reais de conclusão (via histórico de estado do Azure DevOps)
 
 ---
 
-*Documentação atualizada em Março/2026 — Refatoração modular*
+*Documentação atualizada em Março/2026*
