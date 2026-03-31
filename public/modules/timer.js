@@ -1,0 +1,43 @@
+import { initFilters } from './filters.js';
+
+const INTERVAL = 300;
+let remaining = INTERVAL;
+let countdown;
+
+function pad(n) { return String(n).padStart(2, '0'); }
+
+export function startTimer() {
+  clearInterval(countdown);
+  remaining = INTERVAL;
+  countdown = setInterval(() => {
+    remaining--;
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    document.getElementById('timer').textContent = 'Pr\u00f3ximo refresh em ' + m + ':' + pad(s);
+    if (remaining <= 0) doRefresh();
+  }, 1000);
+}
+
+export async function doRefresh() {
+  const btn = document.getElementById('btnRefresh');
+  const content = document.getElementById('content');
+  btn.classList.add('loading');
+  btn.textContent = '\u21bb Atualizando...';
+  content.classList.add('loading');
+  document.getElementById('timer').textContent = 'Atualizando...';
+  try {
+    const resp = await fetch('/refresh');
+    const html = await resp.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    document.getElementById('content').innerHTML = doc.getElementById('content').innerHTML;
+    document.getElementById('lastUpdate').textContent = doc.getElementById('lastUpdate').textContent;
+    initFilters();
+  } catch(e) {
+    console.error('Erro ao atualizar:', e);
+  }
+  btn.classList.remove('loading');
+  btn.textContent = '\u21bb Atualizar';
+  content.classList.remove('loading');
+  startTimer();
+}

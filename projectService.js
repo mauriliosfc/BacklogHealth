@@ -1,23 +1,14 @@
 const { azureGet, azurePost } = require("./azureClient");
+const { calcHealth }    = require("./utils/health");
+const { paginatedItems } = require("./utils/paginate");
+const { fetchIterMap }  = require("./utils/iterMap");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function calcHealth(total, semEst, semResp, bugs) {
-  const reasons = [];
-  if (bugs > 10) reasons.push(`${bugs} bugs abertos (crítico: >10)`);
-  else if (bugs > 5) reasons.push(`${bugs} bugs abertos (alerta: >5)`);
-  if (total > 0 && semEst > total * 0.5) reasons.push(`${Math.round(semEst / total * 100)}% das US sem estimativa (crítico: >50%)`);
-  else if (total > 0 && semEst > total * 0.3) reasons.push(`${Math.round(semEst / total * 100)}% das US sem estimativa (alerta: >30%)`);
-  if (total > 0 && semResp > total * 0.2) reasons.push(`${Math.round(semResp / total * 100)}% das US sem responsável (alerta: >20%)`);
-  const tooltip = reasons.length ? reasons.join(" · ") : "Backlog bem estruturado";
-  if (bugs > 10 || semEst > total * 0.5) return ["🔴 Crítico", "red", tooltip];
-  if (semEst > total * 0.3 || semResp > total * 0.2 || bugs > 5) return ["🟡 Atenção", "yellow", tooltip];
-  return ["🟢 Saudável", "green", tooltip];
-}
-
 function fmtDate(d) {
   if (!d) return "";
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const date = d instanceof Date ? d : new Date(d);
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 function fmtRange(iter) {
@@ -37,38 +28,13 @@ async function fetchProject(project) {
     const allIds = (wiql.workItems || []).slice(0, 500).map(w => w.id);
     if (!allIds.length) return { project, items: [], sprint: null, error: null };
 
-    let detailsValue = [];
-    for (let i = 0; i < allIds.length; i += 200) {
-      const batch = allIds.slice(i, i + 200);
-      const page = await azureGet(
-        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,Microsoft.VSTS.Scheduling.StoryPoints,System.IterationPath&api-version=7.0`
-      );
-      detailsValue = detailsValue.concat(page.value || []);
-    }
-    const details = { value: detailsValue };
+    const fields = "System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,Microsoft.VSTS.Scheduling.StoryPoints,System.IterationPath";
+    const [detailsValue, { map: iterMap, currentSprint }] = await Promise.all([
+      paginatedItems(project, allIds, fields),
+      fetchIterMap(project),
+    ]);
 
-    let sprint = null;
-    let iterMap = {};
-    for (const teamName of [`${project} Team`, project]) {
-      try {
-        const sprintData = await azureGet(
-          `${encodeURIComponent(project)}/${encodeURIComponent(teamName)}/_apis/work/teamsettings/iterations?api-version=7.0`
-        );
-        if (sprintData.value?.length) {
-          (sprintData.value || []).forEach(it => {
-            iterMap[it.path] = {
-              start: it.attributes?.startDate ? new Date(it.attributes.startDate) : null,
-              end:   it.attributes?.finishDate ? new Date(it.attributes.finishDate) : null,
-              isCurrent: it.attributes?.timeFrame === "current",
-            };
-            if (it.attributes?.timeFrame === "current") sprint = it.name;
-          });
-          break;
-        }
-      } catch (_) {}
-    }
-
-    return { project, items: details.value || [], sprint, iterMap, error: null };
+    return { project, items: detailsValue, sprint: currentSprint, iterMap, error: null };
   } catch (e) {
     return { project, items: [], sprint: null, error: e.message };
   }
@@ -76,90 +42,45 @@ async function fetchProject(project) {
 
 async function fetchProjectDetail(project) {
   try {
-    const wiql = await azurePost(
-      `${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }
-    );
-    const allIds = (wiql.workItems || []).slice(0, 500).map(w => w.id);
-
-    let items = [];
-    for (let i = 0; i < allIds.length; i += 200) {
-      const batch = allIds.slice(i, i + 200);
-      const details = await azureGet(
-        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,Microsoft.VSTS.Scheduling.StoryPoints,Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath&api-version=7.0`
-      );
-      items = items.concat(details.value || []);
-    }
-
-    const [taskWiql, bugWiql, allWiql] = await Promise.all([
+    const [mainWiql, taskWiql, bugWiql, { map: iterMap }] = await Promise.all([
+      azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
+        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }),
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
         { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Task' ORDER BY [System.ChangedDate] DESC` }),
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
         { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Bug' ORDER BY [System.ChangedDate] DESC` }),
-      azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC` }),
+      fetchIterMap(project),
     ]);
 
+    const mainIds = (mainWiql.workItems || []).slice(0, 500).map(w => w.id);
     const taskIds = (taskWiql.workItems || []).slice(0, 500).map(w => w.id);
-    let taskItems = [];
-    for (let i = 0; i < taskIds.length; i += 200) {
-      const batch = taskIds.slice(i, i + 200);
-      const details = await azureGet(
-        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath&api-version=7.0`
-      );
-      taskItems = taskItems.concat((details.value || []).map(t => ({
-        completedWork: t.fields?.["Microsoft.VSTS.Scheduling.CompletedWork"] || 0,
-        iteration:     t.fields?.["System.IterationPath"] || "",
-      })));
-    }
+    const bugIds  = (bugWiql.workItems  || []).slice(0, 500).map(w => w.id);
 
-    const bugIds = (bugWiql.workItems || []).slice(0, 500).map(w => w.id);
-    let bugItems = [];
-    for (let i = 0; i < bugIds.length; i += 200) {
-      const batch = bugIds.slice(i, i + 200);
-      const details = await azureGet(
-        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath&api-version=7.0`
-      );
-      bugItems = bugItems.concat((details.value || []).map(t => ({
-        completedWork: t.fields?.["Microsoft.VSTS.Scheduling.CompletedWork"] || 0,
-        iteration:     t.fields?.["System.IterationPath"] || "",
-      })));
-    }
+    const mainFields = "System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,Microsoft.VSTS.Scheduling.StoryPoints,Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath";
+    const workFields = "Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath";
 
-    const allIds2 = (allWiql.workItems || []).slice(0, 500).map(w => w.id);
-    let allItems = [];
-    for (let i = 0; i < allIds2.length; i += 200) {
-      const batch = allIds2.slice(i, i + 200);
-      const details = await azureGet(
-        `${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(",")}&fields=System.WorkItemType,System.State,System.IterationPath&api-version=7.0`
-      );
-      allItems = allItems.concat((details.value || []).map(i => ({
-        type:      i.fields?.["System.WorkItemType"] || "",
-        state:     i.fields?.["System.State"] || "",
-        iteration: i.fields?.["System.IterationPath"] || "",
-      })));
-    }
+    const [rawItems, rawTaskItems, rawBugItems] = await Promise.all([
+      mainIds.length ? paginatedItems(project, mainIds, mainFields) : Promise.resolve([]),
+      taskIds.length ? paginatedItems(project, taskIds, workFields) : Promise.resolve([]),
+      bugIds.length  ? paginatedItems(project, bugIds,  workFields) : Promise.resolve([]),
+    ]);
 
-    let iterMap = {};
-    for (const teamName of [`${project} Team`, project]) {
-      try {
-        const sd = await azureGet(`${encodeURIComponent(project)}/${encodeURIComponent(teamName)}/_apis/work/teamsettings/iterations?api-version=7.0`);
-        if (sd.value?.length) {
-          sd.value.forEach(it => {
-            iterMap[it.path] = { start: it.attributes?.startDate || null, end: it.attributes?.finishDate || null, isCurrent: it.attributes?.timeFrame === "current" };
-          });
-          break;
-        }
-      } catch (_) {}
-    }
+    const taskItems = rawTaskItems.map(t => ({
+      completedWork: t.fields?.["Microsoft.VSTS.Scheduling.CompletedWork"] || 0,
+      iteration:     t.fields?.["System.IterationPath"] || "",
+    }));
+
+    const bugItems = rawBugItems.map(t => ({
+      completedWork: t.fields?.["Microsoft.VSTS.Scheduling.CompletedWork"] || 0,
+      iteration:     t.fields?.["System.IterationPath"] || "",
+    }));
 
     return {
       project,
       iterMap,
       taskItems,
       bugItems,
-      allItems,
-      items: items.map(i => ({
+      items: rawItems.map(i => ({
         state:     i.fields?.["System.State"] || "",
         type:      i.fields?.["System.WorkItemType"] || "",
         pts:       i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null,

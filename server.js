@@ -20,10 +20,6 @@ const templates = {
   setup:     fs.readFileSync(nodePath.join(VIEWS_DIR, "setup.html"),     "utf8"),
 };
 
-const staticFiles = {
-  "/style.css": { path: nodePath.join(PUBLIC_DIR, "style.css"), type: "text/css; charset=utf-8" },
-  "/app.js":    { path: nodePath.join(PUBLIC_DIR, "app.js"),    type: "application/javascript; charset=utf-8" },
-};
 
 function renderTemplate(html, vars) {
   return html.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
@@ -93,10 +89,13 @@ async function main() {
     const url = req.url;
 
     // ── Arquivos estáticos ─────────────────────────────────────────────────
-    if (staticFiles[url]) {
-      const sf = staticFiles[url];
-      res.writeHead(200, { "Content-Type": sf.type });
-      res.end(fs.readFileSync(sf.path));
+    const urlPath = url.split("?")[0];
+    const staticPath = nodePath.join(PUBLIC_DIR, urlPath);
+    if (fs.existsSync(staticPath) && fs.statSync(staticPath).isFile()) {
+      const ext = nodePath.extname(staticPath);
+      const mimeTypes = { ".css": "text/css", ".js": "application/javascript" };
+      res.writeHead(200, { "Content-Type": (mimeTypes[ext] || "text/plain") + "; charset=utf-8" });
+      res.end(fs.readFileSync(staticPath));
       return;
     }
 
