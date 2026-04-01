@@ -93,7 +93,7 @@ async function main() {
     const staticPath = nodePath.join(PUBLIC_DIR, urlPath);
     if (fs.existsSync(staticPath) && fs.statSync(staticPath).isFile()) {
       const ext = nodePath.extname(staticPath);
-      const mimeTypes = { ".css": "text/css", ".js": "application/javascript" };
+      const mimeTypes = { ".css": "text/css", ".js": "application/javascript", ".json": "application/json", ".svg": "image/svg+xml" };
       res.writeHead(200, { "Content-Type": (mimeTypes[ext] || "text/plain") + "; charset=utf-8" });
       res.end(fs.readFileSync(staticPath));
       return;
@@ -222,10 +222,18 @@ async function main() {
     const serverUrl = `http://localhost:${PORT}`;
     console.log(`\n🚀 Dashboard rodando em: ${serverUrl}\n`);
     if (!process.env.NO_OPEN_BROWSER) {
-      const cmd = process.platform === "win32" ? `start ${serverUrl}`
-        : process.platform === "darwin" ? `open ${serverUrl}`
-        : `xdg-open ${serverUrl}`;
-      exec(cmd);
+      if (process.platform === "win32") {
+        // Abre Edge em modo app (sem barra de endereços, como app nativo)
+        exec(`start msedge --app=${serverUrl} --window-size=1440,900`, err => {
+          if (err) exec(`start ${serverUrl}`); // fallback para browser padrão
+        });
+      } else if (process.platform === "darwin") {
+        exec(`open -a "Microsoft Edge" --args --app=${serverUrl}`, err => {
+          if (err) exec(`open ${serverUrl}`);
+        });
+      } else {
+        exec(`xdg-open ${serverUrl}`);
+      }
     }
   });
 }
