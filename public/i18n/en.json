@@ -114,7 +114,7 @@
   "setup_pat_link": "Generate at: Azure DevOps → User Settings → Personal Access Tokens",
   "setup_org_label": "Azure DevOps Organization",
   "setup_org_placeholder": "e.g. MyCompany",
-  "setup_org_hint": "Name in URL: dev.azure.com/organization",
+  "setup_org_hint": "e.g. MyCompany · dev.azure.com/organization · or https://company.visualstudio.com/",
   "setup_pat_label": "Personal Access Token (PAT)",
   "setup_pat_placeholder": "Paste your PAT here",
   "setup_btn_test": "🔌 Test connection and load projects",

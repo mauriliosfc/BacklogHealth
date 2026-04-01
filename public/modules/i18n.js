@@ -1,11 +1,11 @@
 const LOCALES = { pt: 'pt-BR', en: 'en-US', es: 'es-ES' };
 
-let _locale = 'pt';
+let _locale = 'en';
 let _messages = {};
 
 export async function initI18n() {
-  _locale = localStorage.getItem('lang') || 'pt';
-  if (!LOCALES[_locale]) _locale = 'pt';
+  _locale = localStorage.getItem('lang') || 'en';
+  if (!LOCALES[_locale]) _locale = 'en';
   const resp = await fetch('/i18n/' + _locale + '.json');
   _messages = await resp.json();
 }

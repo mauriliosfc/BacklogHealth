@@ -126,7 +126,7 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const newItems = items.filter(i => i.state === 'New').length;
   const bugs     = totalBugs || items.filter(i => i.type === 'Bug').length;
   const us       = usTotal;
-  const noEst    = items.filter(i => i.pts == null).length;
+  const noEst    = usItems.filter(i => i.pts == null).length;
   const donePts  = items.filter(i => ['Closed','Done','Resolved'].includes(i.state)).reduce((s,i)=>s+(i.pts||0),0);
   const usClosed     = usItems.filter(i => ['Closed','Done','Resolved'].includes(i.state)).length;
   const usUAT        = usItems.filter(i => i.state === 'UAT').length;
@@ -180,7 +180,7 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
       '<div class="d-card"><div class="d-label">' + t('d_pts_delivered') + '</div><div class="d-val green">' + donePts + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_in_progress') + '</div><div class="d-val blue">' + active + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_new') + '</div><div class="d-val">' + newItems + '</div></div>' +
-      '<div class="d-card"><div class="d-label">' + t('d_no_estimate') + '</div><div class="d-val ' + (noEst>total*0.3?'yellow':'') + '">' + noEst + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_no_estimate') + '</div><div class="d-val ' + (noEst>usTotal*0.3?'yellow':'') + '">' + noEst + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_hrs_tasks') + '</div><div class="d-val purple">' + completedHrsFmt + 'h</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_hrs_bugs') + '</div><div class="d-val ' + (bugHrs>0?'red':'') + '">' + bugHrsFmt + 'h</div></div>' +
     '</div></div>' +

@@ -4,7 +4,7 @@ const fs       = require("fs");
 const nodePath = require("path");
 dns.setDefaultResultOrder("ipv4first");
 
-const { PORT, loadConfig, saveConfig, getCfg }   = require("./config");
+const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput } = require("./config");
 const { rawAzureGet }                             = require("./azureClient");
 const { fetchProject, fetchProjectDetail, buildCardHTML } = require("./projectService");
 
@@ -37,7 +37,9 @@ function renderDashboard(results) {
 }
 
 function renderSetup(prefill = {}) {
-  const org  = (prefill.org  || "").replace(/"/g, "&quot;");
+  const orgDisplay = prefill.baseUrl && prefill.baseUrl.includes("visualstudio.com")
+    ? prefill.baseUrl
+    : (prefill.org || "");
   const pat  = (prefill.pat  || "").replace(/"/g, "&quot;");
   const isSettings = !!(prefill.org);
   const selectedProjectsJson = JSON.stringify(prefill.projects || []).replace(/</g, "\\u003c");
@@ -47,7 +49,7 @@ function renderSetup(prefill = {}) {
     SUBTITLE:               isSettings
       ? "Atualize suas credenciais e projetos monitorados"
       : "Configure suas credenciais do Azure DevOps para começar",
-    ORG_VALUE:              org,
+    ORG_VALUE:              orgDisplay.replace(/"/g, "&quot;"),
     PAT_VALUE:              pat,
     SELECTED_PROJECTS_JSON: selectedProjectsJson,
     BACK_LINK:              isSettings
@@ -109,8 +111,9 @@ async function main() {
       }
       try {
         const auth = Buffer.from(`:${qPat}`).toString("base64");
+        const { baseUrl } = parseOrgInput(qOrg);
         const result = await rawAzureGet(
-          `https://dev.azure.com/${encodeURIComponent(qOrg)}/_apis/projects?api-version=7.0&$top=200&stateFilter=wellFormed`,
+          `${baseUrl}/_apis/projects?api-version=7.0&$top=200&stateFilter=wellFormed`,
           auth
         );
         if (result.status === 401 || result.status === 203) {
@@ -142,18 +145,19 @@ async function main() {
     if (req.method === "POST" && url === "/setup") {
       const body = await readBody(req);
       const params = new URLSearchParams(body);
-      const org = params.get("org")?.trim();
+      const rawOrg = params.get("org")?.trim();
       const pat = params.get("pat")?.trim();
       const projectsRaw = params.get("projects") || "";
       const projects = projectsRaw.split(/[\n,]+/).map(p => p.trim()).filter(Boolean);
 
-      if (!org || !pat || !projects.length) {
+      if (!rawOrg || !pat || !projects.length) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Preencha todos os campos obrigatórios." }));
         return;
       }
 
-      saveConfig({ org, pat, projects });
+      const { org, baseUrl } = parseOrgInput(rawOrg);
+      saveConfig({ org, baseUrl, pat, projects });
 
       try {
         console.log("🔄 Buscando dados dos projetos configurados...");

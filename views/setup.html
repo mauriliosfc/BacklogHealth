@@ -8,7 +8,14 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body class="setup">
-<button class="btn-theme-top" id="btnTheme" onclick="toggleTheme()">☀️</button>
+<div class="setup-top-bar">
+  <div class="lang-switcher">
+    <button class="btn-lang" data-lang="pt" onclick="setLocale('pt')" title="Português">PT</button>
+    <button class="btn-lang" data-lang="en" onclick="setLocale('en')" title="English">EN</button>
+    <button class="btn-lang" data-lang="es" onclick="setLocale('es')" title="Español">ES</button>
+  </div>
+  <button class="btn-theme-top" id="btnTheme" onclick="toggleTheme()">☀️</button>
+</div>
 <div class="wrap">
   <div class="logo">📋</div>
   <div class="pg-title">Backlog Health Dashboard</div>
@@ -30,7 +37,7 @@
     <div class="field">
       <label data-i18n="setup_org_label">Organização do Azure DevOps</label>
       <input type="text" id="inp-org" data-i18n-placeholder="setup_org_placeholder" placeholder="Ex: MinhaEmpresa" value="{{ORG_VALUE}}" autocomplete="off">
-      <div class="hint" data-i18n="setup_org_hint">Nome na URL: dev.azure.com/<strong>organização</strong></div>
+      <div class="hint" data-i18n="setup_org_hint">Ex: MinhaEmpresa · dev.azure.com/<strong>organização</strong> · ou https://empresa.visualstudio.com/</div>
     </div>
     <div class="field">
       <label data-i18n="setup_pat_label">Personal Access Token (PAT)</label>
@@ -61,17 +68,32 @@
   </div>
 </div>
 <script type="module">
-  import { initI18n, applyTranslations, t, setLocale } from '/modules/i18n.js';
+  import { initI18n, applyTranslations, t, setLocale, getLocale } from '/modules/i18n.js';
   await initI18n();
   applyTranslations();
   window._t = t;
   window.setLocale = setLocale;
+  const activeLang = getLocale();
+  document.querySelectorAll('.btn-lang').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lang === activeLang);
+  });
 </script>
 <script>
   const PREFILL = {{SELECTED_PROJECTS_JSON}};
 
-  function _tr(key, fallback) {
-    return (window._t && window._t(key)) || fallback;
+  function _tr(key, fallback, vars) {
+    let msg;
+    if (window._t) {
+      const res = window._t(key, vars || {});
+      if (res !== key) msg = res; // key not found returns the key itself
+    }
+    if (!msg) {
+      msg = fallback;
+      if (vars) Object.entries(vars).forEach(([k, v]) => {
+        msg = msg.split('{{' + k + '}}').join(String(v));
+      });
+    }
+    return msg;
   }
 
   function setTheme(t) {
@@ -99,12 +121,12 @@
       const data = await r.json();
       if (data.error) { showErr(data.error); btn.disabled = false; btn.textContent = _tr('setup_btn_test', '🔌 Testar conexão e carregar projetos'); return; }
       renderProjects(data.projects || []);
-      document.getElementById('ok-box').textContent = _tr('setup_conn_ok', '✅ Conexão OK — {{count}} projeto(s) disponível(is).').replace('{{count}}', (data.projects || []).length);
+      document.getElementById('ok-box').textContent = _tr('setup_conn_ok', '✅ Conexão OK — {{count}} projeto(s) disponível(is).', { count: (data.projects || []).length });
       document.getElementById('step2').style.display = 'block';
       btn.innerHTML = _tr('setup_btn_reload', '🔄 Recarregar lista de projetos');
       btn.disabled = false;
     } catch(e) {
-      showErr(_tr('setup_err_network', 'Falha de rede: {{msg}}').replace('{{msg}}', e.message));
+      showErr(_tr('setup_err_network', 'Falha de rede: {{msg}}', { msg: e.message }));
       btn.disabled = false;
       btn.textContent = _tr('setup_btn_test', '🔌 Testar conexão e carregar projetos');
     }
@@ -164,7 +186,7 @@
     const placeholder = _tr('setup_placeholder', 'Selecione os projetos…');
     document.getElementById('proj-trigger-text').textContent = names.length ? names.join(', ') : placeholder;
     document.getElementById('proj-count').textContent = names.length
-      ? _tr('setup_count', '{{count}} projeto(s) selecionado(s)').replace('{{count}}', names.length)
+      ? _tr('setup_count', '{{count}} projeto(s) selecionado(s)', { count: names.length })
       : '';
   }
 
