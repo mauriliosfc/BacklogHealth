@@ -1,8 +1,5 @@
 {
-  "watch": ["server.js", "config.js", "azureClient.js", "projectService.js", "views", "public"],
+  "watch": ["server.js", "config.js", "azureClient.js", "projectService.js", "utils", "views", "public"],
   "ext": "js,html,css",
-  "delay": 500,
-  "env": {
-    "NO_OPEN_BROWSER": "1"
-  }
+  "delay": 500
 }

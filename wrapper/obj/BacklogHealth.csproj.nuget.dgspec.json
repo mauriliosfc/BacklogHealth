@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\maurilio.b.martins\\Documents\\DEV\\dash_azure_gestao_pessoal\\wrapper\\BacklogHealth.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\maurilio.b.martins\\Documents\\DEV\\dash_azure_gestao_pessoal\\wrapper\\BacklogHealth.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\maurilio.b.martins\\Documents\\DEV\\dash_azure_gestao_pessoal\\wrapper\\BacklogHealth.csproj",
+        "projectName": "BacklogHealth",
+        "projectPath": "C:\\Users\\maurilio.b.martins\\Documents\\DEV\\dash_azure_gestao_pessoal\\wrapper\\BacklogHealth.csproj",
+        "packagesPath": "C:\\Users\\maurilio.b.martins\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\maurilio.b.martins\\Documents\\DEV\\dash_azure_gestao_pessoal\\wrapper\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\maurilio.b.martins\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net48"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net48": {
+            "targetAlias": "net48",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net48": {
+          "targetAlias": "net48",
+          "dependencies": {
+            "Microsoft.NETFramework.ReferenceAssemblies": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.3, )",
+              "autoReferenced": true
+            },
+            "Microsoft.Web.WebView2": {
+              "target": "Package",
+              "version": "[1.0.2739.15, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.419\\RuntimeIdentifierGraph.json"
+        }
+      },
+      "runtimes": {
+        "win7-x64": {
+          "#import": []
+        }
+      }
+    }
+  }
+}

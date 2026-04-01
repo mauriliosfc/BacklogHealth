@@ -36,8 +36,3 @@ window.openBurndownFromDaily = openBurndownFromDaily;
 setTheme(localStorage.getItem('theme') || 'dark');
 initFilters();
 startTimer();
-
-// Registrar service worker para habilitar instalação como PWA
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
-}

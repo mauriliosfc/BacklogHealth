@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "u6OLSi+Wh98=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\maurilio.b.martins\\Documents\\DEV\\dash_azure_gestao_pessoal\\wrapper\\BacklogHealth.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\maurilio.b.martins\\.nuget\\packages\\microsoft.netframework.referenceassemblies\\1.0.3\\microsoft.netframework.referenceassemblies.1.0.3.nupkg.sha512",
+    "C:\\Users\\maurilio.b.martins\\.nuget\\packages\\microsoft.netframework.referenceassemblies.net48\\1.0.3\\microsoft.netframework.referenceassemblies.net48.1.0.3.nupkg.sha512",
+    "C:\\Users\\maurilio.b.martins\\.nuget\\packages\\microsoft.web.webview2\\1.0.2739.15\\microsoft.web.webview2.1.0.2739.15.nupkg.sha512"
+  ],
+  "logs": []
+}

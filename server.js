@@ -2,8 +2,6 @@ const dns      = require("dns");
 const http     = require("http");
 const fs       = require("fs");
 const nodePath = require("path");
-const { exec } = require("child_process");
-
 dns.setDefaultResultOrder("ipv4first");
 
 const { PORT, loadConfig, saveConfig, getCfg }   = require("./config");
@@ -219,22 +217,7 @@ async function main() {
   });
 
   server.listen(PORT, () => {
-    const serverUrl = `http://localhost:${PORT}`;
-    console.log(`\n🚀 Dashboard rodando em: ${serverUrl}\n`);
-    if (!process.env.NO_OPEN_BROWSER) {
-      if (process.platform === "win32") {
-        // Abre Edge em modo app (sem barra de endereços, como app nativo)
-        exec(`start msedge --app=${serverUrl} --window-size=1440,900`, err => {
-          if (err) exec(`start ${serverUrl}`); // fallback para browser padrão
-        });
-      } else if (process.platform === "darwin") {
-        exec(`open -a "Microsoft Edge" --args --app=${serverUrl}`, err => {
-          if (err) exec(`open ${serverUrl}`);
-        });
-      } else {
-        exec(`xdg-open ${serverUrl}`);
-      }
-    }
+    console.log(`\n🚀 Dashboard rodando em: http://localhost:${PORT}\n`);
   });
 }
 
