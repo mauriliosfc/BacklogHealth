@@ -14,6 +14,8 @@ Dashboard para monitoramento e análise de saúde dos backlogs de projetos no **
 - **Gráfico de burndown por sprint** — acessível via coluna "Ações" na tabela de distribuição, com linha ideal, linha real e marcador de hoje
 - **Apresentação de Daily Standup** — modal em carrossel com métricas e User Stories da sprint atual, botão de burndown integrado
 - Filtros por sprint com persistência no navegador
+- **Suporte a múltiplos idiomas** — Português, Inglês (padrão) e Espanhol, alternável pelo seletor PT/EN/ES no header
+- **Distribuição como app Windows nativo** — `BacklogHealth.exe` via wrapper WebView2, sem instalar Node.js ou browser
 - Temas claro e escuro
 - Atualização automática a cada 5 minutos
 
@@ -52,7 +54,7 @@ Na primeira execução, o dashboard abre uma tela de configuração onde você d
 
 | Campo | Descrição | Exemplo |
 |-------|-----------|---------|
-| **Organização** | Nome da sua organização no Azure DevOps | `minha-empresa` |
+| **Organização** | Nome da organização **ou** URL completa do Azure DevOps | `minha-empresa` · `https://empresa.visualstudio.com/` |
 | **PAT** | Personal Access Token gerado no Azure DevOps | `xxxxxxxxxxxxxxxxxxxx` |
 
 Após preencher, clique em **"Testar conexão e carregar projetos"**, selecione os projetos que deseja monitorar e clique em **"Salvar e abrir dashboard"**.
@@ -82,8 +84,8 @@ O servidor sobe na porta **3030**. Para encerrar, pressione `Ctrl+C`.
 ```
 BacklogHealth/
 ├── server.js           # Entry point: HTTP server, rotas, serve arquivos de public/ dinamicamente
-├── config.js           # Gerenciamento de configuração (load/save/getCfg)
-├── azureClient.js      # Cliente HTTP para a API REST do Azure DevOps
+├── config.js           # Gerenciamento de configuração + parseOrgInput (detecta formato da org)
+├── azureClient.js      # Cliente HTTP para a API REST do Azure DevOps (usa cfg.baseUrl)
 ├── projectService.js   # Lógica de negócio: queries, cálculo de saúde, cards HTML
 ├── utils/
 │   ├── health.js       # calcHealth — fonte única compartilhada com o frontend
@@ -92,21 +94,29 @@ BacklogHealth/
 ├── public/
 │   ├── style.css       # Todo o CSS (temas claro/escuro, dashboard, setup)
 │   ├── app.js          # Entry point ES Module: importa módulos e expõe ao window
+│   ├── i18n/
+│   │   ├── pt.json     # Traduções em Português
+│   │   ├── en.json     # Traduções em Inglês (padrão)
+│   │   └── es.json     # Traduções em Espanhol
 │   └── modules/
 │       ├── constants.js  # US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES
 │       ├── health.js     # calcHealth (browser)
 │       ├── utils.js      # fmtD, buildSprintData
 │       ├── theme.js      # setTheme, toggleTheme
 │       ├── timer.js      # startTimer, doRefresh
-│       ├── filters.js    # applyFilter, initFilters, toggleDropdown, toggleUS
+│       ├── filters.js    # applyFilter, initFilters, toggleDropdown, toggleUS, initHealthBadges
+│       ├── i18n.js       # initI18n, t, setLocale, getLocale, applyTranslations
 │       ├── detail.js     # loadDetailData, buildDetailHTML, buildTimeline
 │       ├── daily.js      # openDaily, buildDailySlide
 │       └── burndown.js   # openBurndown, buildBurndownChart, openBurndownFromDaily
 ├── views/
 │   ├── dashboard.html  # Template HTML do dashboard
 │   └── setup.html      # Template HTML da tela de configuração
+├── wrapper/
+│   ├── BacklogHealth.csproj  # Projeto C# WPF (.NET Framework 4.8)
+│   └── MainWindow.xaml.cs    # Inicia server.exe, aguarda porta 3030, abre WebView2
 ├── config.json         # Credenciais e projetos monitorados (gerado automaticamente, não versionado)
-├── nodemon.json        # Configuração do hot reload (define NO_OPEN_BROWSER=1)
+├── nodemon.json        # Configuração do hot reload
 └── .gitignore
 ```
 

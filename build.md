@@ -6,7 +6,7 @@
 |---|---|---|
 | Node.js | 18+ | `winget install OpenJS.NodeJS.LTS` |
 | PKG | qualquer | `npm install -g pkg` |
-| .NET SDK | 8.0+ | `winget install Microsoft.DotNet.SDK.8` |
+| .NET SDK | 8.0+ | `winget install Microsoft.DotNet.SDK.8` (o build usa .NET Framework 4.8 como target, mas o SDK 8 é necessário para compilar) |
 
 > O usuário final **não precisa** de nenhuma dessas ferramentas instaladas.
 

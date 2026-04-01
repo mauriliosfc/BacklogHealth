@@ -17,8 +17,8 @@ Automatizar a rotina de validação de backlog de projetos no **Azure DevOps**, 
 ```
 dash_azure_gestao_pessoal/
 ├── server.js           ← entry point: HTTP server, rotas, serve public/ dinamicamente
-├── config.js           ← loadConfig, saveConfig, getCfg, getAuth
-├── azureClient.js      ← azureGet, azurePost, rawAzureGet
+├── config.js           ← loadConfig, saveConfig, getCfg, getAuth, parseOrgInput
+├── azureClient.js      ← azureGet, azurePost, rawAzureGet (usa cfg.baseUrl)
 ├── projectService.js   ← fetchProject, fetchProjectDetail, buildCardHTML
 ├── utils/
 │   ├── health.js       ← calcHealth (fonte única, importado por projectService)
@@ -27,19 +27,31 @@ dash_azure_gestao_pessoal/
 ├── public/
 │   ├── style.css       ← todo o CSS (setup + dashboard, sem duplicatas)
 │   ├── app.js          ← entry point ES Module: importa módulos, expõe window globals
+│   ├── i18n/
+│   │   ├── pt.json     ← traduções em Português
+│   │   ├── en.json     ← traduções em Inglês (padrão)
+│   │   └── es.json     ← traduções em Espanhol
 │   └── modules/
 │       ├── constants.js  ← US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES
 │       ├── health.js     ← calcHealth (browser, mesma lógica do backend)
 │       ├── utils.js      ← fmtD, buildSprintData
 │       ├── theme.js      ← setTheme, toggleTheme
 │       ├── timer.js      ← startTimer, doRefresh
-│       ├── filters.js    ← applyFilter, initFilters, toggleDropdown, toggleUS
+│       ├── filters.js    ← applyFilter, initFilters, toggleDropdown, toggleUS, initHealthBadges
+│       ├── i18n.js       ← initI18n, t, setLocale, getLocale, getDateLocale, applyTranslations
 │       ├── detail.js     ← loadDetailData, buildDetailHTML, buildTimeline
 │       ├── daily.js      ← openDaily, buildDailySlide
 │       └── burndown.js   ← openBurndown, buildBurndownChart, openBurndownFromDaily
 ├── views/
 │   ├── dashboard.html  ← template HTML do dashboard com tokens {{ORG}}, {{CARDS}}, etc.
 │   └── setup.html      ← template HTML do setup com tokens de configuração
+├── wrapper/
+│   ├── BacklogHealth.csproj  ← projeto C# WPF (.NET Framework 4.8)
+│   └── MainWindow.xaml.cs    ← inicia server.exe, aguarda porta 3030, abre WebView2
+├── dist/app/           ← pasta de distribuição (não versionada)
+│   ├── BacklogHealth.exe     ← wrapper nativo Windows (~14KB)
+│   ├── server.exe            ← Node.js + app empacotados (~36MB)
+│   └── *.dll / runtimes/     ← DLLs do WebView2
 └── config.json         ← credenciais (gerado automaticamente, não versionado)
 ```
 
@@ -48,7 +60,7 @@ dash_azure_gestao_pessoal/
 ```
 server.js (entry point)
         │
-        ├── config.js          → gerencia config.json (org, pat, projects)
+        ├── config.js          → gerencia config.json (org, baseUrl, pat, projects) + parseOrgInput
         │
         ├── azureClient.js     → chamadas HTTPS para a API REST do Azure DevOps
         │       ├── Projects API    → lista todos os projetos acessíveis pelo PAT
@@ -72,7 +84,8 @@ server.js (entry point)
                 ├── GET /api/projects        → lista projetos disponíveis para o PAT informado
                 ├── POST /setup              → salva config.json e retorna JSON {ok:true}
                 ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, iterMap
-                └── GET /modules/*.js        → ES modules servidos dinamicamente de public/
+                ├── GET /modules/*.js        → ES modules servidos dinamicamente de public/
+                └── GET /i18n/*.json         → arquivos de tradução servidos de public/i18n/
 ```
 
 ---
@@ -336,12 +349,18 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 | 35 | Remoção de `allWiql`/`allItems` | Query era usada para "Itens por Tipo" que foi removido — eliminar reduz uma chamada à API por abertura do modal de detalhes |
 | 36 | Paralelização das queries no `fetchProjectDetail` | 3 WIQLs + iterMap agora rodam em paralelo; em seguida 3 paginações em paralelo — reduz tempo de carregamento proporcional ao número de queries |
 | 37 | `server.js` serve `public/` dinamicamente | Lista estática de arquivos precisaria de atualização manual a cada novo módulo — handler dinâmico resolve qualquer arquivo de `public/` sem manutenção |
+| 38 | Wrapper WebView2 (C# WPF .NET Framework 4.8) | Usuário final precisa de um `.exe` para clicar e rodar — WebView2 abre janela nativa sem instalar Node.js, .NET ou browser; .NET Framework 4.8 já vem no Windows 10/11 |
+| 39 | `server.exe` gerado via PKG | Empacota Node.js runtime + toda a aplicação em um único executável — zero instalação para o usuário final |
+| 40 | i18n com JSON por idioma + `data-i18n` + `t()` | Suporte a PT/EN/ES sem bibliotecas externas — arquivos JSON em `public/i18n/`, atributos `data-i18n` no HTML, função `t(key, vars)` em `i18n.js` compartilhado |
+| 41 | Idioma padrão: inglês (`en`) | Aplicação usada por times com usuários internacionais — inglês como padrão garante melhor acessibilidade; preferência persiste no `localStorage('lang')` |
+| 42 | `parseOrgInput` em `config.js` | Organizações com URL `xxx.visualstudio.com` (legado VSTS) têm estrutura de URL diferente de `dev.azure.com/org` — detectar e normalizar automaticamente elimina fricção na configuração |
+| 43 | `baseUrl` salvo no `config.json` | Permite que `azureClient.js` use a URL base correta sem precisar redetectar o formato a cada chamada — compatibilidade retroativa: configs sem `baseUrl` recebem `dev.azure.com/{org}` |
+| 44 | `noEst` no detalhe filtrado por `usItems` | Tasks não têm Story Points por design — contá-las em "Sem Estimativa" distorcia o indicador de cobertura de estimativas |
 
 ---
 
 ## 🛣️ Próximos passos sugeridos
 
-- [ ] Criar um `.bat` para abrir com duplo clique
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
 - [ ] Integrar com **Power BI** para histórico e relatórios gerenciais
@@ -351,4 +370,4 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 
 ---
 
-*Documentação atualizada em Março/2026*
+*Documentação atualizada em Abril/2026*
