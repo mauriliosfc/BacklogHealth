@@ -51,7 +51,7 @@ function renderSetup(prefill = {}) {
     PAT_VALUE:              pat,
     SELECTED_PROJECTS_JSON: selectedProjectsJson,
     BACK_LINK:              isSettings
-      ? '<div style="text-align:center"><a class="btn-back" href="/">← Voltar ao dashboard</a></div>'
+      ? '<div style="text-align:center"><a class="btn-back" href="/" data-i18n="setup_back">← Voltar ao dashboard</a></div>'
       : "",
     AUTO_LOAD_SCRIPT:       isSettings ? "window.addEventListener('load', loadProjects);" : "",
   });

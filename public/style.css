@@ -247,3 +247,9 @@ tr:hover td { background: var(--hover-bg); }
 .daily-nav-btn:hover:not(:disabled) { background: var(--bg-el2); }
 .daily-nav-btn:disabled { opacity: .35; cursor: not-allowed; }
 .daily-counter { font-size: 14px; color: var(--text-faint); min-width: 60px; text-align: center; font-weight: 600; }
+
+/* ── Language switcher ── */
+.lang-switcher { display: flex; gap: 2px; background: var(--bg-el); border: 1px solid var(--bg-border); border-radius: 8px; padding: 2px; height: 34px; align-items: center; }
+.btn-lang { background: transparent; border: none; color: var(--text-muted); padding: 0 8px; height: 26px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all .15s; letter-spacing: .4px; }
+.btn-lang:hover { color: var(--text-1); background: var(--bg-el2); }
+.btn-lang.active { background: var(--c-blue-bg); color: var(--c-blue); border: 1px solid var(--c-blue-bd); }

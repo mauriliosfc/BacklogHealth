@@ -1,9 +1,10 @@
-import { initFilters, toggleDropdown, onCheckChange, clearFilter, applyFilter, toggleUS } from './modules/filters.js';
+import { initFilters, toggleDropdown, onCheckChange, clearFilter, applyFilter, toggleUS, initHealthBadges } from './modules/filters.js';
 import { startTimer, doRefresh } from './modules/timer.js';
 import { setTheme, toggleTheme } from './modules/theme.js';
 import { openDetails, closeDetails, closeDetailsBtn, toggleMaximize, loadDetailData, _detailState } from './modules/detail.js';
 import { openDaily, closeDaily, toggleDailyMaximize, dailyPrev, dailyNext, handleDailyKey } from './modules/daily.js';
 import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily } from './modules/burndown.js';
+import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -31,8 +32,18 @@ window.closeBurndown     = closeBurndown;
 window.closeBurndownOverlay = closeBurndownOverlay;
 window.toggleBurndownMaximize = toggleBurndownMaximize;
 window.openBurndownFromDaily = openBurndownFromDaily;
+window.setLocale         = setLocale;
 
 // Inicialização
 setTheme(localStorage.getItem('theme') || 'dark');
+await initI18n();
+applyTranslations();
 initFilters();
+initHealthBadges();
 startTimer();
+
+// Highlight active language button
+const activeLang = getLocale();
+document.querySelectorAll('.btn-lang').forEach(btn => {
+  btn.classList.toggle('active', btn.dataset.lang === activeLang);
+});

@@ -1,5 +1,6 @@
 import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES } from './constants.js';
 import { calcHealth } from './health.js';
+import { t } from './i18n.js';
 
 let _dailyIndex = 0;
 let _dailySlides = [];
@@ -8,17 +9,15 @@ export function buildDailySlide(card) {
   const project = card.dataset.project;
   const items = JSON.parse(card.dataset.items);
 
-  // Sprint atual: usada apenas para filtrar a tabela de US
   const currentOption = card.querySelector('.option-row.is-current input');
   const currentIter = currentOption ? currentOption.value : null;
 
   const sprintEl = card.querySelector('.sprint');
-  const sprintName = sprintEl ? sprintEl.textContent.trim() : 'Sem sprint definido';
+  const sprintName = sprintEl ? sprintEl.textContent.trim() : t('daily_no_sprint');
   const currentRow = card.querySelector('.option-row.is-current');
   const sprintDate = currentRow ? (currentRow.querySelector('.option-date') || {}).textContent || '' : '';
   const sprintLabel = sprintDate ? sprintName + '\u2002\u00b7\u2002' + sprintDate : sprintName;
 
-  // Stats e tabela: filtrados pela sprint atual
   const filteredForStats = currentIter ? items.filter(i => i.iteration === currentIter) : items;
 
   const usItems = filteredForStats.filter(i => US_TYPES.includes(i.type));
@@ -30,7 +29,6 @@ export function buildDailySlide(card) {
 
   const health = calcHealth(total, semEst, semResp, bugs);
 
-  // Linhas da tabela de US para a sprint atual (extrai do DOM já renderizado)
   let tableRows = '';
   card.querySelectorAll('tbody tr[data-iteration]').forEach(row => {
     if (!currentIter || row.dataset.iteration === currentIter) {
@@ -39,10 +37,12 @@ export function buildDailySlide(card) {
   });
 
   const usSection = tableRows
-    ? '<div class="daily-us-title">User Stories na sprint</div>' +
-      '<div class="daily-table-wrap"><table><thead><tr><th>T\u00edtulo</th><th>Status</th><th>Estimativa</th><th>Respons\u00e1vel</th></tr></thead>' +
-      '<tbody>' + tableRows + '</tbody></table></div>'
-    : '<div class="daily-empty">Nenhuma User Story na sprint atual.</div>';
+    ? '<div class="daily-us-title">' + t('daily_us_title') + '</div>' +
+      '<div class="daily-table-wrap"><table><thead><tr>' +
+      '<th>' + t('th_title') + '</th><th>' + t('th_status') + '</th>' +
+      '<th>' + t('th_estimate') + '</th><th>' + t('th_assignee') + '</th>' +
+      '</tr></thead><tbody>' + tableRows + '</tbody></table></div>'
+    : '<div class="daily-empty">' + t('daily_no_us') + '</div>';
 
   return '<div class="daily-slide">' +
     '<div class="daily-fixed">' +
@@ -55,10 +55,10 @@ export function buildDailySlide(card) {
         '<button class="btn-burndown-daily" type="button" data-project="' + project.replace(/"/g,'&quot;') + '" data-iter="' + (currentIter||'').replace(/"/g,'&quot;') + '" onclick="openBurndownFromDaily(this.dataset.project, this.dataset.iter)">\uD83D\uDCCA Burndown</button>' +
       '</div>' +
       '<div class="stats daily-stats">' +
-        '<div class="stat"><div class="stat-label">User Stories</div><div class="stat-val">' + total + '</div></div>' +
-        '<div class="stat"><div class="stat-label">Sem Estimativa</div><div class="stat-val ' + (semEst > 2 ? 'warn' : '') + '">' + semEst + '</div></div>' +
-        '<div class="stat"><div class="stat-label">Sem Respons\u00e1vel</div><div class="stat-val ' + (semResp > 2 ? 'warn' : '') + '">' + semResp + '</div></div>' +
-        '<div class="stat"><div class="stat-label">Bugs Abertos</div><div class="stat-val ' + (bugs > 3 ? 'crit' : '') + '">' + bugs + '</div></div>' +
+        '<div class="stat"><div class="stat-label">' + t('stat_us') + '</div><div class="stat-val">' + total + '</div></div>' +
+        '<div class="stat"><div class="stat-label">' + t('stat_no_est') + '</div><div class="stat-val ' + (semEst > 2 ? 'warn' : '') + '">' + semEst + '</div></div>' +
+        '<div class="stat"><div class="stat-label">' + t('stat_no_resp') + '</div><div class="stat-val ' + (semResp > 2 ? 'warn' : '') + '">' + semResp + '</div></div>' +
+        '<div class="stat"><div class="stat-label">' + t('stat_bugs') + '</div><div class="stat-val ' + (bugs > 3 ? 'crit' : '') + '">' + bugs + '</div></div>' +
       '</div>' +
     '</div>' +
     usSection +
@@ -94,7 +94,7 @@ export function toggleDailyMaximize() {
   const btn = document.getElementById('btnDailyMax');
   const isMax = overlay.classList.toggle('maximized');
   btn.textContent = isMax ? '\u2921' : '\u2922';
-  btn.title = isMax ? 'Restaurar' : 'Expandir';
+  btn.title = isMax ? t('daily_restore') : t('daily_expand');
 }
 
 export function dailyPrev() {

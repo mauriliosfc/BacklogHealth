@@ -24,7 +24,11 @@
       "public/modules/filters.js",
       "public/modules/detail.js",
       "public/modules/daily.js",
-      "public/modules/burndown.js"
+      "public/modules/burndown.js",
+      "public/modules/i18n.js",
+      "public/i18n/pt.json",
+      "public/i18n/en.json",
+      "public/i18n/es.json"
     ]
   }
 }

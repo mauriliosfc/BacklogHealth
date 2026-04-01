@@ -1,12 +1,13 @@
 import { buildSprintData, fmtD } from './utils.js';
+import { t, getDateLocale } from './i18n.js';
 
 export const _detailState = { project: null, sprints: [] };
 
 export async function loadDetailData(project, selectedSprints = _detailState.sprints) {
   const btnRefreshDetail = document.getElementById('btnRefreshDetail');
   if (btnRefreshDetail) { btnRefreshDetail.disabled = true; btnRefreshDetail.textContent = '\u23f3'; }
-  document.getElementById('modal-sub').textContent = 'Carregando dados completos...';
-  document.getElementById('modal-body').innerHTML = '<div class="modal-loading">\u23f3 Buscando todos os itens do projeto...</div>';
+  document.getElementById('modal-sub').textContent = t('detail_loading');
+  document.getElementById('modal-body').innerHTML = '<div class="modal-loading">' + t('detail_fetching') + '</div>';
   try {
     const resp = await fetch('/detail?' + new URLSearchParams({ project }));
     const data = await resp.json();
@@ -17,8 +18,8 @@ export async function loadDetailData(project, selectedSprints = _detailState.spr
       : data.items;
 
     const filterLabel = selectedSprints.length === 0
-      ? 'Todos os sprints \u00b7 ' + data.items.length + ' itens'
-      : selectedSprints.length + ' sprint(s) filtrada(s) \u00b7 ' + filtered.length + ' de ' + data.items.length + ' itens';
+      ? t('detail_all', { count: data.items.length })
+      : t('detail_filtered', { sprints: selectedSprints.length, filtered: filtered.length, total: data.items.length });
 
     document.getElementById('modal-sub').textContent = filterLabel;
     const sprintFilter = s => !selectedSprints.length || selectedSprints.includes(s.iteration);
@@ -67,7 +68,7 @@ export function toggleMaximize() {
   const btn = document.getElementById('btnMaximize');
   const isMax = modal.classList.toggle('maximized');
   btn.textContent = isMax ? '\u2921' : '\u2922';
-  btn.title = isMax ? 'Restaurar' : 'Maximizar';
+  btn.title = isMax ? t('detail_restore') : t('detail_maximize');
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetailsBtn(); });
@@ -79,11 +80,6 @@ function statusColor(s) {
   if (['Removed'].includes(s)) return '#ef4444';
   if (['Blocked','Impediment'].includes(s)) return '#f87171';
   return '#64748b';
-}
-
-function typeColor(t) {
-  const m = { 'Bug':'#ef4444','User Story':'#60a5fa','Product Backlog Item':'#60a5fa','Task':'#f59e0b','Feature':'#a78bfa','Epic':'#ec4899' };
-  return m[t] || '#64748b';
 }
 
 function barList(entries, total) {
@@ -112,11 +108,11 @@ function ring(pct, color) {
 
 function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork) {
   const total = items.length;
-  if (!total) return '<p style="color:#64748b;padding:20px">Nenhum item encontrado.</p>';
+  if (!total) return '<p style="color:#64748b;padding:20px">' + t('detail_no_items') + '</p>';
 
   const filterBanner = selectedSprints && selectedSprints.length > 0
     ? '<div style="background:#1e3a5f;border:1px solid #2d5a8e;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:12px;color:#93c5fd">' +
-      '\uD83D\uDD0D Filtrado por ' + selectedSprints.length + ' sprint(s): ' +
+      t('detail_filter_banner', { count: selectedSprints.length }) + ' ' +
       selectedSprints.map(function(s) { var p = s.split('\u005c'); return '<strong>' + (p.length > 1 ? p.slice(1).join(' \u203a ') : s) + '</strong>'; }).join(', ') +
       '</div>'
     : '';
@@ -126,13 +122,11 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const usTotal  = usItems.length;
   const totalPts = items.reduce((s, i) => s + (i.pts || 0), 0);
   const closed   = items.filter(i => ['Closed','Done'].includes(i.state)).length;
-  const resolved = items.filter(i => i.state === 'Resolved').length;
   const active   = items.filter(i => ['Active','In Progress','Doing','Committed'].includes(i.state)).length;
   const newItems = items.filter(i => i.state === 'New').length;
   const bugs     = totalBugs || items.filter(i => i.type === 'Bug').length;
   const us       = usTotal;
   const noEst    = items.filter(i => i.pts == null).length;
-  const noAsgn   = items.filter(i => !i.assigned).length;
   const donePts  = items.filter(i => ['Closed','Done','Resolved'].includes(i.state)).reduce((s,i)=>s+(i.pts||0),0);
   const usClosed     = usItems.filter(i => ['Closed','Done','Resolved'].includes(i.state)).length;
   const usUAT        = usItems.filter(i => i.state === 'UAT').length;
@@ -147,18 +141,15 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const bugRate      = totalHrs ? Math.round(bugHrs / totalHrs * 100) : 0;
   const estPct       = usTotal ? Math.round((usTotal - usNoEst) / usTotal * 100) : 0;
 
-  // By status — apenas US
   const US_TYPES_D = ['User Story', 'Product Backlog Item', 'Requirement'];
   const byStatus = {};
   items.filter(i => US_TYPES_D.includes(i.type)).forEach(i => { byStatus[i.state] = (byStatus[i.state]||0) + 1; });
   const statusEntries = Object.entries(byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v,statusColor(k)]);
 
-  // By assignee — apenas US
   const byAsgn = {};
-  items.filter(i => US_TYPES_D.includes(i.type)).forEach(i => { const n = i.assigned||'Sem respons\u00e1vel'; byAsgn[n]=(byAsgn[n]||0)+1; });
+  items.filter(i => US_TYPES_D.includes(i.type)).forEach(i => { const n = i.assigned || t('no_assignee'); byAsgn[n]=(byAsgn[n]||0)+1; });
   const asgnEntries = Object.entries(byAsgn).sort((a,b)=>b[1]-a[1]).slice(0,12).map(([k,v])=>[k,v,'#60a5fa']);
 
-  // By sprint
   const { bySprint, sorted: sortedSprintEntries, sprintMeta } = buildSprintData(items, iterMap);
   const allSprintData = JSON.stringify(sprintMeta).replace(/</g, '\\u003c').replace(/'/g, '&#39;');
 
@@ -170,7 +161,7 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
     const isCurr = iter.isCurrent;
     const safeKey = key.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     return '<tr' + (isCurr?' class="is-current"':'') + ' data-sprint-key="' + safeKey + '">' +
-      '<td>' + label + (isCurr?' <span class="badge green" style="font-size:10px;padding:1px 6px">atual</span>':'') + '</td>' +
+      '<td>' + label + (isCurr?' <span class="badge green" style="font-size:10px;padding:1px 6px">' + t('badge_current') + '</span>':'') + '</td>' +
       '<td>' + dateR + '</td>' +
       '<td>' + d.us + '</td>' +
       '<td>' + d.pts + '</td>' +
@@ -181,36 +172,38 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
 
   const tlSection = buildTimeline(bySprint, iterMap);
 
-  return filterBanner + '<div class="d-section"><div class="d-section-title">Resumo Geral</div>' +
+  return filterBanner + '<div class="d-section"><div class="d-section-title">' + t('section_summary') + '</div>' +
     '<div class="d-grid">' +
-      '<div class="d-card"><div class="d-label">Total Itens</div><div class="d-val blue">' + total + '</div></div>' +
-      '<div class="d-card"><div class="d-label">User Stories</div><div class="d-val blue">' + us + '</div></div>' +
-      '<div class="d-card"><div class="d-label">Story Points</div><div class="d-val purple">' + totalPts + '</div></div>' +
-      '<div class="d-card"><div class="d-label">Pts Entregues</div><div class="d-val green">' + donePts + '</div></div>' +
-      '<div class="d-card"><div class="d-label">Em Andamento</div><div class="d-val blue">' + active + '</div></div>' +
-      '<div class="d-card"><div class="d-label">Novos</div><div class="d-val">' + newItems + '</div></div>' +
-      '<div class="d-card"><div class="d-label">Sem Estimativa</div><div class="d-val ' + (noEst>total*0.3?'yellow':'') + '">' + noEst + '</div></div>' +
-      '<div class="d-card"><div class="d-label">Hrs Tasks</div><div class="d-val purple">' + completedHrsFmt + 'h</div></div>' +
-      '<div class="d-card"><div class="d-label">Hrs Bugs</div><div class="d-val ' + (bugHrs>0?'red':'') + '">' + bugHrsFmt + 'h</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_total_items') + '</div><div class="d-val blue">' + total + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_user_stories') + '</div><div class="d-val blue">' + us + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_story_points') + '</div><div class="d-val purple">' + totalPts + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_pts_delivered') + '</div><div class="d-val green">' + donePts + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_in_progress') + '</div><div class="d-val blue">' + active + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_new') + '</div><div class="d-val">' + newItems + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_no_estimate') + '</div><div class="d-val ' + (noEst>total*0.3?'yellow':'') + '">' + noEst + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_hrs_tasks') + '</div><div class="d-val purple">' + completedHrsFmt + 'h</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_hrs_bugs') + '</div><div class="d-val ' + (bugHrs>0?'red':'') + '">' + bugHrsFmt + 'h</div></div>' +
     '</div></div>' +
 
-    '<div class="d-section"><div class="d-section-title">Indicadores de Sa\u00fade</div>' +
+    '<div class="d-section"><div class="d-section-title">' + t('section_health_ind') + '</div>' +
       '<div style="display:flex;gap:32px;flex-wrap:wrap">' +
-        '<div class="progress-ring">' + ring(closedPct,'#22c55e') + '<div><div class="d-label">Taxa de Conclus\u00e3o</div><div class="d-val green" style="font-size:22px">' + closedPct + '%</div><div class="d-sub">' + usClosed + ' de ' + usTotal + ' US conclu\u00eddas</div></div></div>' +
-        '<div class="progress-ring">' + ring(uatPct,'#f59e0b') + '<div><div class="d-label">Em UAT</div><div class="d-val ' + (uatPct>30?'red':uatPct>15?'yellow':'') + '" style="font-size:22px;color:#f59e0b">' + uatPct + '%</div><div class="d-sub">' + usUAT + ' de ' + usTotal + ' US em valida\u00e7\u00e3o</div></div></div>' +
-        '<div class="progress-ring">' + ring(bugRate,'#ef4444') + '<div><div class="d-label">Taxa de Bugs</div><div class="d-val ' + (bugRate>20?'red':bugRate>10?'yellow':'') + '" style="font-size:22px">' + bugRate + '%</div><div class="d-sub">' + bugs + ' bugs no total</div></div></div>' +
-        '<div class="progress-ring">' + ring(estPct,'#60a5fa') + '<div><div class="d-label">Cobertura de Estimativas</div><div class="d-val blue" style="font-size:22px">' + estPct + '%</div><div class="d-sub">' + (usTotal-usNoEst) + ' de ' + usTotal + ' US estimadas</div></div></div>' +
+        '<div class="progress-ring">' + ring(closedPct,'#22c55e') + '<div><div class="d-label">' + t('health_completion') + '</div><div class="d-val green" style="font-size:22px">' + closedPct + '%</div><div class="d-sub">' + t('health_us_closed', { closed: usClosed, total: usTotal }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(uatPct,'#f59e0b') + '<div><div class="d-label">' + t('health_uat') + '</div><div class="d-val ' + (uatPct>30?'red':uatPct>15?'yellow':'') + '" style="font-size:22px;color:#f59e0b">' + uatPct + '%</div><div class="d-sub">' + t('health_us_uat', { count: usUAT, total: usTotal }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(bugRate,'#ef4444') + '<div><div class="d-label">' + t('health_bug_rate') + '</div><div class="d-val ' + (bugRate>20?'red':bugRate>10?'yellow':'') + '" style="font-size:22px">' + bugRate + '%</div><div class="d-sub">' + t('health_bugs_total', { count: bugs }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(estPct,'#60a5fa') + '<div><div class="d-label">' + t('health_coverage') + '</div><div class="d-val blue" style="font-size:22px">' + estPct + '%</div><div class="d-sub">' + t('health_us_estimated', { estimated: usTotal - usNoEst, total: usTotal }) + '</div></div></div>' +
       '</div>' +
     '</div>' +
 
     '<div class="d-cols">' +
-      '<div class="d-section" style="margin:0"><div class="d-section-title">US por Status</div><div class="bar-list">' + barList(statusEntries, usTotal) + '</div></div>' +
-      '<div class="d-section" style="margin:0"><div class="d-section-title">US por Respons\u00e1vel</div><div class="bar-list">' + barList(asgnEntries, usTotal) + '</div></div>' +
+      '<div class="d-section" style="margin:0"><div class="d-section-title">' + t('section_by_status') + '</div><div class="bar-list">' + barList(statusEntries, usTotal) + '</div></div>' +
+      '<div class="d-section" style="margin:0"><div class="d-section-title">' + t('section_by_assignee') + '</div><div class="bar-list">' + barList(asgnEntries, usTotal) + '</div></div>' +
     '</div>' +
 
-    '<div class="d-section"><div class="d-section-title">Distribui\u00e7\u00e3o por Sprint</div>' +
-      '<table class="d-table" data-sprints=\'' + allSprintData + '\'><thead><tr><th>Sprint</th><th>Per\u00edodo</th><th>User Stories</th><th>Story Points</th><th>Conclu\u00eddos</th><th>A\u00e7\u00f5es</th></tr></thead>' +
-      '<tbody>' + sprintRows + '</tbody></table>' +
+    '<div class="d-section"><div class="d-section-title">' + t('section_by_sprint') + '</div>' +
+      '<table class="d-table" data-sprints=\'' + allSprintData + '\'><thead><tr>' +
+      '<th>' + t('th_sprint') + '</th><th>' + t('th_period') + '</th><th>' + t('d_user_stories') + '</th>' +
+      '<th>' + t('th_pts') + '</th><th>' + t('th_completed') + '</th><th>' + t('th_actions') + '</th>' +
+      '</tr></thead><tbody>' + sprintRows + '</tbody></table>' +
     '</div>' +
     tlSection;
 }
@@ -233,6 +226,7 @@ function buildTimeline(bySprint, iterMap) {
   const maxDate = items[items.length - 1].end;
   const totalMs  = maxDate - minDate || 1;
   const maxUS    = Math.max(...items.map(t => t.us), 1);
+  const dateLocale = getDateLocale();
 
   function pct(d) { return ((d - minDate) / totalMs * 100).toFixed(2); }
 
@@ -240,39 +234,39 @@ function buildTimeline(bySprint, iterMap) {
   const mc = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
   while (mc <= maxDate) {
     const lp = Math.max(0, parseFloat(pct(mc)));
-    if (lp <= 100) months.push('<div class="tl-month" style="left:' + lp + '%">' + mc.toLocaleDateString('pt-BR', {month:'short', year:'2-digit'}) + '</div>');
+    if (lp <= 100) months.push('<div class="tl-month" style="left:' + lp + '%">' + mc.toLocaleDateString(dateLocale, {month:'short', year:'2-digit'}) + '</div>');
     mc.setMonth(mc.getMonth() + 1);
   }
 
-  const blocks = items.map(t => {
-    const l = pct(t.start), w = ((t.end - t.start) / totalMs * 100).toFixed(2);
-    const barH = Math.max(8, Math.round(t.us / maxUS * 100));
-    const color = t.isCurrent ? '#22c55e' : t.isPast ? '#475569' : '#60a5fa';
-    const bg    = t.isCurrent ? '#22c55e18' : t.isPast ? '#1e293b' : '#1e3a5f44';
-    return '<div class="tl-block" style="left:' + l + '%;width:' + w + '%;background:' + bg + ';border-color:' + color + '55" title="' + t.label + ' | ' + fmtD(t.start.toISOString()) + ' \u2013 ' + fmtD(t.end.toISOString()) + ' | ' + t.us + ' US">' +
-      '<div class="tl-bar-inner" style="height:' + barH + '%;background:' + color + (t.isCurrent ? '' : '99') + '"></div>' +
+  const blocks = items.map(item => {
+    const l = pct(item.start), w = ((item.end - item.start) / totalMs * 100).toFixed(2);
+    const barH = Math.max(8, Math.round(item.us / maxUS * 100));
+    const color = item.isCurrent ? '#22c55e' : item.isPast ? '#475569' : '#60a5fa';
+    const bg    = item.isCurrent ? '#22c55e18' : item.isPast ? '#1e293b' : '#1e3a5f44';
+    return '<div class="tl-block" style="left:' + l + '%;width:' + w + '%;background:' + bg + ';border-color:' + color + '55" title="' + item.label + ' | ' + fmtD(item.start.toISOString()) + ' \u2013 ' + fmtD(item.end.toISOString()) + ' | ' + item.us + ' US">' +
+      '<div class="tl-bar-inner" style="height:' + barH + '%;background:' + color + (item.isCurrent ? '' : '99') + '"></div>' +
       '<div class="tl-block-foot" style="color:' + color + '">' +
-        '<div class="tl-block-name">' + t.label + (t.isCurrent ? ' \uD83D\uDCC5' : '') + '</div>' +
-        '<div class="tl-block-us">' + t.us + ' US</div>' +
+        '<div class="tl-block-name">' + item.label + (item.isCurrent ? ' \uD83D\uDCC5' : '') + '</div>' +
+        '<div class="tl-block-us">' + item.us + ' US</div>' +
       '</div>' +
     '</div>';
   }).join('');
 
   const todayPct = Math.min(100, Math.max(0, parseFloat(pct(now))));
   const todayMarker = now >= minDate && now <= maxDate
-    ? '<div class="tl-today" style="left:' + todayPct + '%"><div class="tl-today-line"></div><div class="tl-today-label">hoje</div></div>'
+    ? '<div class="tl-today" style="left:' + todayPct + '%"><div class="tl-today-line"></div><div class="tl-today-label">' + t('tl_today') + '</div></div>'
     : '';
 
-  return '<div class="d-section"><div class="d-section-title">Cronograma de Sprints</div>' +
+  return '<div class="d-section"><div class="d-section-title">' + t('section_timeline') + '</div>' +
     '<div class="tl-wrap">' +
       '<div class="tl-months">' + months.join('') + '</div>' +
       '<div class="tl-track">' + blocks + todayMarker + '</div>' +
     '</div>' +
     '<div class="tl-legend">' +
-      '<span class="tl-leg" style="color:#475569">\u25CF Encerrada</span>' +
-      '<span class="tl-leg" style="color:#60a5fa">\u25CF Futura</span>' +
-      '<span class="tl-leg" style="color:#22c55e">\u25CF Sprint atual</span>' +
-      '<span class="tl-leg" style="color:#f87171">\u2503 Hoje</span>' +
+      '<span class="tl-leg" style="color:#475569">\u25CF ' + t('tl_past') + '</span>' +
+      '<span class="tl-leg" style="color:#60a5fa">\u25CF ' + t('tl_future') + '</span>' +
+      '<span class="tl-leg" style="color:#22c55e">\u25CF ' + t('tl_current_sprint') + '</span>' +
+      '<span class="tl-leg" style="color:#f87171">\u2503 ' + t('tl_today_label') + '</span>' +
     '</div>' +
   '</div>';
 }

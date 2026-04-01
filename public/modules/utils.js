@@ -1,8 +1,9 @@
 import { US_TYPES, CLOSED_STATES } from './constants.js';
+import { getDateLocale, t } from './i18n.js';
 
 export function fmtD(s) {
   if (!s) return '';
-  return new Date(s).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(s).toLocaleDateString(getDateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 export function buildSprintData(items, iterMap) {
@@ -28,9 +29,10 @@ export function buildSprintData(items, iterMap) {
 
   const sprintMeta = sorted.map(([key, d]) => {
     const iter = iterMap[key] || {};
+    const rawLabel = key.includes('\\') ? key.split('\\').slice(1).join(' \u203a ') : key;
     return {
       key,
-      label: key.includes('\\') ? key.split('\\').slice(1).join(' \u203a ') : key,
+      label: key === 'Sem Sprint' ? t('no_sprint') : rawLabel,
       us: d.us, usClosed: d.usClosed, pts: d.pts,
       isCurrent: !!iter.isCurrent,
       start: iter.start || null,

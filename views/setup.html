@@ -16,52 +16,63 @@
   <div class="card">
 
     <div class="info-box">
-      <h4>🔑 Permissões necessárias para o PAT</h4>
+      <h4 data-i18n="setup_pat_section">🔑 Permissões necessárias para o PAT</h4>
       <ul>
         <li><code>Work Items (Read)</code> — leitura de work items e backlogs</li>
         <li><code>Project and Team (Read)</code> — listagem de projetos e sprints</li>
       </ul>
-      <div class="pat-link">Gere em: Azure DevOps → User Settings → Personal Access Tokens</div>
+      <div class="pat-link" data-i18n="setup_pat_link">Gere em: Azure DevOps → User Settings → Personal Access Tokens</div>
     </div>
 
     <div class="err-box" id="err-box"></div>
 
     <!-- Passo 1: Credenciais -->
     <div class="field">
-      <label>Organização do Azure DevOps</label>
-      <input type="text" id="inp-org" placeholder="Ex: MinhaEmpresa" value="{{ORG_VALUE}}" autocomplete="off">
-      <div class="hint">Nome na URL: dev.azure.com/<strong>organização</strong></div>
+      <label data-i18n="setup_org_label">Organização do Azure DevOps</label>
+      <input type="text" id="inp-org" data-i18n-placeholder="setup_org_placeholder" placeholder="Ex: MinhaEmpresa" value="{{ORG_VALUE}}" autocomplete="off">
+      <div class="hint" data-i18n="setup_org_hint">Nome na URL: dev.azure.com/<strong>organização</strong></div>
     </div>
     <div class="field">
-      <label>Personal Access Token (PAT)</label>
-      <input type="password" id="inp-pat" placeholder="Cole seu PAT aqui" value="{{PAT_VALUE}}" autocomplete="off">
+      <label data-i18n="setup_pat_label">Personal Access Token (PAT)</label>
+      <input type="password" id="inp-pat" data-i18n-placeholder="setup_pat_placeholder" placeholder="Cole seu PAT aqui" value="{{PAT_VALUE}}" autocomplete="off">
     </div>
-    <button class="btn-test" id="btn-test" onclick="loadProjects()">🔌 Testar conexão e carregar projetos</button>
+    <button class="btn-test" id="btn-test" onclick="loadProjects()" data-i18n="setup_btn_test">🔌 Testar conexão e carregar projetos</button>
 
     <!-- Passo 2: Seleção de projetos -->
     <div class="step2" id="step2">
       <hr class="divider">
       <div class="ok-box" id="ok-box"></div>
-      <label class="proj-label">Projetos a monitorar</label>
+      <label class="proj-label" data-i18n="setup_projects_label">Projetos a monitorar</label>
       <button type="button" class="proj-trigger" id="proj-trigger" onclick="toggleProjPanel()">
-        <span id="proj-trigger-text">Selecione os projetos…</span>
+        <span id="proj-trigger-text" data-i18n="setup_placeholder">Selecione os projetos…</span>
         <span>▾</span>
       </button>
       <div class="proj-panel" id="proj-panel">
         <div class="proj-search-wrap">
-          <input type="text" class="proj-search" id="proj-search" placeholder="🔍 Buscar projeto…" oninput="filterProjects()" autocomplete="off">
+          <input type="text" class="proj-search" id="proj-search" data-i18n-placeholder="setup_search_placeholder" placeholder="🔍 Buscar projeto…" oninput="filterProjects()" autocomplete="off">
         </div>
         <div class="proj-list" id="proj-list"></div>
       </div>
       <div class="proj-count" id="proj-count"></div>
-      <button class="btn-save" id="btn-save" onclick="doSave()">💾 Salvar e abrir dashboard</button>
+      <button class="btn-save" id="btn-save" onclick="doSave()" data-i18n="setup_btn_save">💾 Salvar e abrir dashboard</button>
     </div>
 
     {{BACK_LINK}}
   </div>
 </div>
+<script type="module">
+  import { initI18n, applyTranslations, t, setLocale } from '/modules/i18n.js';
+  await initI18n();
+  applyTranslations();
+  window._t = t;
+  window.setLocale = setLocale;
+</script>
 <script>
   const PREFILL = {{SELECTED_PROJECTS_JSON}};
+
+  function _tr(key, fallback) {
+    return (window._t && window._t(key)) || fallback;
+  }
 
   function setTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
@@ -78,24 +89,24 @@
   async function loadProjects() {
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
-    if (!org || !pat) { showErr('Preencha a organização e o PAT antes de continuar.'); return; }
+    if (!org || !pat) { showErr(_tr('setup_err_fill', 'Preencha a organização e o PAT antes de continuar.')); return; }
     hideErr();
     const btn = document.getElementById('btn-test');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Testando conexão…';
+    btn.innerHTML = '<span class="spinner"></span>' + _tr('setup_btn_testing', 'Testando conexão…');
     try {
       const r = await fetch('/api/projects?org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat));
       const data = await r.json();
-      if (data.error) { showErr(data.error); btn.disabled = false; btn.textContent = '🔌 Testar conexão e carregar projetos'; return; }
+      if (data.error) { showErr(data.error); btn.disabled = false; btn.textContent = _tr('setup_btn_test', '🔌 Testar conexão e carregar projetos'); return; }
       renderProjects(data.projects || []);
-      document.getElementById('ok-box').textContent = '✅ Conexão OK — ' + (data.projects || []).length + ' projeto(s) disponível(is).';
+      document.getElementById('ok-box').textContent = _tr('setup_conn_ok', '✅ Conexão OK — {{count}} projeto(s) disponível(is).').replace('{{count}}', (data.projects || []).length);
       document.getElementById('step2').style.display = 'block';
-      btn.innerHTML = '🔄 Recarregar lista de projetos';
+      btn.innerHTML = _tr('setup_btn_reload', '🔄 Recarregar lista de projetos');
       btn.disabled = false;
     } catch(e) {
-      showErr('Falha de rede: ' + e.message);
+      showErr(_tr('setup_err_network', 'Falha de rede: {{msg}}').replace('{{msg}}', e.message));
       btn.disabled = false;
-      btn.textContent = '🔌 Testar conexão e carregar projetos';
+      btn.textContent = _tr('setup_btn_test', '🔌 Testar conexão e carregar projetos');
     }
   }
 
@@ -109,7 +120,7 @@
     if (!footer) {
       const f = document.createElement('div');
       f.className = 'proj-footer';
-      f.innerHTML = '<button type="button" onclick="clearProjs()">✕ Limpar seleção</button>';
+      f.innerHTML = '<button type="button" onclick="clearProjs()">' + _tr('setup_clear', '✕ Limpar seleção') + '</button>';
       document.getElementById('proj-panel').appendChild(f);
     }
     updateCount();
@@ -118,7 +129,7 @@
   function renderProjectList(projects) {
     const list = document.getElementById('proj-list');
     if (!projects.length) {
-      list.innerHTML = '<div class="proj-empty">Nenhum projeto encontrado.</div>';
+      list.innerHTML = '<div class="proj-empty">' + _tr('setup_no_projects', 'Nenhum projeto encontrado.') + '</div>';
       return;
     }
     list.innerHTML = projects.map(p => {
@@ -150,8 +161,11 @@
 
   function updateCount() {
     const names = [...SELECTED_SET];
-    document.getElementById('proj-trigger-text').textContent = names.length ? names.join(', ') : 'Selecione os projetos…';
-    document.getElementById('proj-count').textContent = names.length ? names.length + ' projeto(s) selecionado(s)' : '';
+    const placeholder = _tr('setup_placeholder', 'Selecione os projetos…');
+    document.getElementById('proj-trigger-text').textContent = names.length ? names.join(', ') : placeholder;
+    document.getElementById('proj-count').textContent = names.length
+      ? _tr('setup_count', '{{count}} projeto(s) selecionado(s)').replace('{{count}}', names.length)
+      : '';
   }
 
   function clearProjs() {
@@ -170,20 +184,20 @@
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
     const selected = [...SELECTED_SET];
-    if (!selected.length) { showErr('Selecione ao menos um projeto para monitorar.'); return; }
+    if (!selected.length) { showErr(_tr('setup_err_select', 'Selecione ao menos um projeto para monitorar.')); return; }
     hideErr();
     const btn = document.getElementById('btn-save');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Salvando…';
+    btn.innerHTML = '<span class="spinner"></span>' + _tr('setup_btn_saving', 'Salvando…');
     try {
       const body = 'org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat) + '&projects=' + encodeURIComponent(selected.join(','));
       const r = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.ok) { location.href = '/'; return; }
-      showErr(data.error || 'Erro ao salvar configurações.');
+      showErr(data.error || _tr('setup_err_save', 'Erro ao salvar configurações.'));
     } catch(e) { showErr(e.message); }
     btn.disabled = false;
-    btn.textContent = '💾 Salvar e abrir dashboard';
+    btn.textContent = _tr('setup_btn_save', '💾 Salvar e abrir dashboard');
   }
 
   {{AUTO_LOAD_SCRIPT}}

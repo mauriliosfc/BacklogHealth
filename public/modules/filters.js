@@ -1,5 +1,6 @@
 import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES } from './constants.js';
 import { calcHealth } from './health.js';
+import { t } from './i18n.js';
 
 export function toggleDropdown(trigger) {
   const panel = trigger.nextElementSibling;
@@ -29,9 +30,9 @@ export function onCheckChange(checkbox) {
   const checked = Array.from(customSelect.querySelectorAll('input[type="checkbox"]:checked'));
   const selected = checked.map(c => c.value);
   const valueEl = customSelect.querySelector('.select-value');
-  if (selected.length === 0) valueEl.textContent = 'Todas as sprints';
+  if (selected.length === 0) valueEl.textContent = t('all_sprints');
   else if (selected.length === 1) valueEl.textContent = checked[0].closest('.option-row').querySelector('span').textContent;
-  else valueEl.textContent = selected.length + ' sprints selecionadas';
+  else valueEl.textContent = t('sprints_selected', { count: selected.length });
   applyFilter(card, selected);
   saveFilter(card, selected);
 }
@@ -39,7 +40,7 @@ export function onCheckChange(checkbox) {
 export function clearFilter(btn) {
   const customSelect = btn.closest('.custom-select');
   customSelect.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
-  customSelect.querySelector('.select-value').textContent = 'Todas as sprints';
+  customSelect.querySelector('.select-value').textContent = t('all_sprints');
   const card = btn.closest('.card');
   applyFilter(card, []);
   saveFilter(card, []);
@@ -122,8 +123,27 @@ export function initFilters() {
     const checked = Array.from(customSelect.querySelectorAll('input[type="checkbox"]:checked'));
     const valueEl = customSelect.querySelector('.select-value');
     if (checked.length === 1) valueEl.textContent = checked[0].closest('.option-row').querySelector('span').textContent;
-    else valueEl.textContent = checked.length + ' sprints selecionadas';
+    else valueEl.textContent = t('sprints_selected', { count: checked.length });
 
     applyFilter(card, selected);
+  });
+}
+
+export function initHealthBadges() {
+  document.querySelectorAll('.card[data-project]').forEach(card => {
+    const allItems = JSON.parse(card.dataset.items);
+    const filteredUS = allItems.filter(i => US_TYPES.includes(i.type));
+    const total = filteredUS.length;
+    const openUS = filteredUS.filter(i => !CLOSED_STATES.includes(i.state));
+    const semEst = openUS.filter(i => i.pts == null).length;
+    const semResp = openUS.filter(i => !i.assigned).length;
+    const bugs = allItems.filter(i => i.type === 'Bug' && ACTIVE_BUG_STATES.includes(i.state)).length;
+    const health = calcHealth(total, semEst, semResp, bugs);
+    const healthEl = card.querySelector('.card-health');
+    if (healthEl) {
+      healthEl.textContent = health[0];
+      healthEl.className = 'badge big card-health ' + health[1];
+      healthEl.title = health[2];
+    }
   });
 }
