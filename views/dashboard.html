@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Backlog Health Dashboard</title>
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -14,13 +15,18 @@
   </div>
   <div class="refresh-bar">
     <div class="header-utils">
+      <div class="lang-switcher">
+        <button class="btn-lang" data-lang="pt" onclick="setLocale('pt')" title="Português">PT</button>
+        <button class="btn-lang" data-lang="en" onclick="setLocale('en')" title="English">EN</button>
+        <button class="btn-lang" data-lang="es" onclick="setLocale('es')" title="Español">ES</button>
+      </div>
       <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Tema claro">☀️</button>
       <button class="btn-theme" onclick="location.href='/settings'" title="Configurações">⚙️</button>
     </div>
     <div class="header-divider"></div>
     <div class="header-actions">
-      <button class="btn-daily" id="btnDaily" onclick="openDaily()">📅 Apresentar daily</button>
-      <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()">↻ Atualizar</button>
+      <button class="btn-daily" id="btnDaily" onclick="openDaily()" data-i18n="btn_daily">📅 Apresentar daily</button>
+      <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()" data-i18n="btn_refresh">↻ Atualizar</button>
       <div class="header-meta">
         <div class="timer" id="timer">Próximo refresh em 5:00</div>
         <div class="update" id="lastUpdate">Atualizado em {{LAST_UPDATE}}</div>
@@ -40,8 +46,8 @@
         <div class="modal-sub" id="modal-sub"></div>
       </div>
       <div class="modal-actions">
-        <button class="modal-refresh" type="button" id="btnRefreshDetail" onclick="loadDetailData(_detailProject, _detailSprints)" title="Atualizar dados">↻</button>
-        <button class="modal-maximize" type="button" id="btnMaximize" onclick="toggleMaximize()" title="Maximizar">⤢</button>
+        <button class="modal-refresh" type="button" id="btnRefreshDetail" onclick="loadDetailData(_detailProject, _detailSprints)" data-i18n-title="detail_refresh_title" title="Atualizar dados">↻</button>
+        <button class="modal-maximize" type="button" id="btnMaximize" onclick="toggleMaximize()" data-i18n-title="detail_maximize" title="Maximizar">⤢</button>
         <button class="modal-close" type="button" onclick="closeDetailsBtn()">✕</button>
       </div>
     </div>
@@ -52,9 +58,9 @@
 <div id="daily-modal" class="daily-overlay" onkeydown="handleDailyKey(event)">
   <div class="daily-box" id="daily-box">
     <div class="daily-head">
-      <div class="daily-head-title">📅 Daily Standup</div>
+      <div class="daily-head-title" data-i18n="daily_title">📅 Daily Standup</div>
       <div class="daily-head-actions">
-        <button class="modal-maximize" id="btnDailyMax" onclick="toggleDailyMaximize()" title="Expandir">⤢</button>
+        <button class="modal-maximize" id="btnDailyMax" onclick="toggleDailyMaximize()" data-i18n-title="daily_expand" title="Expandir">⤢</button>
         <button class="modal-close" onclick="closeDaily()" title="Fechar">✕</button>
       </div>
     </div>
@@ -62,9 +68,9 @@
       <div class="daily-track" id="daily-track"></div>
     </div>
     <div class="daily-nav">
-      <button class="daily-nav-btn" id="btnDailyPrev" onclick="dailyPrev()">← Anterior</button>
+      <button class="daily-nav-btn" id="btnDailyPrev" onclick="dailyPrev()" data-i18n="daily_prev">← Anterior</button>
       <div class="daily-counter" id="daily-counter"></div>
-      <button class="daily-nav-btn" id="btnDailyNext" onclick="dailyNext()">Próximo →</button>
+      <button class="daily-nav-btn" id="btnDailyNext" onclick="dailyNext()" data-i18n="daily_next">Próximo →</button>
     </div>
   </div>
 </div>
@@ -77,7 +83,7 @@
         <div class="modal-sub" id="burndown-sub"></div>
       </div>
       <div class="modal-actions">
-        <button class="modal-maximize" type="button" id="btnBurndownMax" onclick="toggleBurndownMaximize()" title="Maximizar">⤢</button>
+        <button class="modal-maximize" type="button" id="btnBurndownMax" onclick="toggleBurndownMaximize()" data-i18n-title="burndown_maximize" title="Maximizar">⤢</button>
         <button class="modal-close" type="button" onclick="closeBurndown()">✕</button>
       </div>
     </div>
@@ -85,6 +91,6 @@
   </div>
 </div>
 
-<script src="/app.js"></script>
+<script type="module" src="/app.js"></script>
 </body>
 </html>

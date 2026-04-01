@@ -3,7 +3,7 @@ const { getCfg, getAuth } = require("./config");
 
 function azureGet(url, redirectCount = 0) {
   const cfg = getCfg();
-  if (!url.startsWith("http")) url = `https://dev.azure.com/${cfg.org}/${url}`;
+  if (!url.startsWith("http")) url = `${cfg.baseUrl}/${url}`;
   return new Promise((resolve, reject) => {
     const opts = { headers: { Authorization: `Basic ${getAuth()}`, "Content-Type": "application/json" } };
     https.get(url, opts, res => {
@@ -22,11 +22,12 @@ function azureGet(url, redirectCount = 0) {
 
 function azurePost(path, payload) {
   const cfg = getCfg();
+  const parsed = new URL(cfg.baseUrl);
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(payload);
     const opts = {
-      hostname: "dev.azure.com",
-      path: `/${cfg.org}/${path}`,
+      hostname: parsed.hostname,
+      path: parsed.pathname.replace(/\/$/, "") + "/" + path,
       method: "POST",
       headers: {
         Authorization: `Basic ${getAuth()}`,

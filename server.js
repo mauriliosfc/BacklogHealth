@@ -2,11 +2,9 @@ const dns      = require("dns");
 const http     = require("http");
 const fs       = require("fs");
 const nodePath = require("path");
-const { exec } = require("child_process");
-
 dns.setDefaultResultOrder("ipv4first");
 
-const { PORT, loadConfig, saveConfig, getCfg }   = require("./config");
+const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput } = require("./config");
 const { rawAzureGet }                             = require("./azureClient");
 const { fetchProject, fetchProjectDetail, buildCardHTML } = require("./projectService");
 
@@ -20,10 +18,6 @@ const templates = {
   setup:     fs.readFileSync(nodePath.join(VIEWS_DIR, "setup.html"),     "utf8"),
 };
 
-const staticFiles = {
-  "/style.css": { path: nodePath.join(PUBLIC_DIR, "style.css"), type: "text/css; charset=utf-8" },
-  "/app.js":    { path: nodePath.join(PUBLIC_DIR, "app.js"),    type: "application/javascript; charset=utf-8" },
-};
 
 function renderTemplate(html, vars) {
   return html.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
@@ -43,7 +37,9 @@ function renderDashboard(results) {
 }
 
 function renderSetup(prefill = {}) {
-  const org  = (prefill.org  || "").replace(/"/g, "&quot;");
+  const orgDisplay = prefill.baseUrl && prefill.baseUrl.includes("visualstudio.com")
+    ? prefill.baseUrl
+    : (prefill.org || "");
   const pat  = (prefill.pat  || "").replace(/"/g, "&quot;");
   const isSettings = !!(prefill.org);
   const selectedProjectsJson = JSON.stringify(prefill.projects || []).replace(/</g, "\\u003c");
@@ -53,11 +49,11 @@ function renderSetup(prefill = {}) {
     SUBTITLE:               isSettings
       ? "Atualize suas credenciais e projetos monitorados"
       : "Configure suas credenciais do Azure DevOps para começar",
-    ORG_VALUE:              org,
+    ORG_VALUE:              orgDisplay.replace(/"/g, "&quot;"),
     PAT_VALUE:              pat,
     SELECTED_PROJECTS_JSON: selectedProjectsJson,
     BACK_LINK:              isSettings
-      ? '<div style="text-align:center"><a class="btn-back" href="/">← Voltar ao dashboard</a></div>'
+      ? '<div style="text-align:center"><a class="btn-back" href="/" data-i18n="setup_back">← Voltar ao dashboard</a></div>'
       : "",
     AUTO_LOAD_SCRIPT:       isSettings ? "window.addEventListener('load', loadProjects);" : "",
   });
@@ -93,10 +89,13 @@ async function main() {
     const url = req.url;
 
     // ── Arquivos estáticos ─────────────────────────────────────────────────
-    if (staticFiles[url]) {
-      const sf = staticFiles[url];
-      res.writeHead(200, { "Content-Type": sf.type });
-      res.end(fs.readFileSync(sf.path));
+    const urlPath = url.split("?")[0];
+    const staticPath = nodePath.join(PUBLIC_DIR, urlPath);
+    if (fs.existsSync(staticPath) && fs.statSync(staticPath).isFile()) {
+      const ext = nodePath.extname(staticPath);
+      const mimeTypes = { ".css": "text/css", ".js": "application/javascript", ".json": "application/json", ".svg": "image/svg+xml" };
+      res.writeHead(200, { "Content-Type": (mimeTypes[ext] || "text/plain") + "; charset=utf-8" });
+      res.end(fs.readFileSync(staticPath));
       return;
     }
 
@@ -112,8 +111,9 @@ async function main() {
       }
       try {
         const auth = Buffer.from(`:${qPat}`).toString("base64");
+        const { baseUrl } = parseOrgInput(qOrg);
         const result = await rawAzureGet(
-          `https://dev.azure.com/${encodeURIComponent(qOrg)}/_apis/projects?api-version=7.0&$top=200&stateFilter=wellFormed`,
+          `${baseUrl}/_apis/projects?api-version=7.0&$top=200&stateFilter=wellFormed`,
           auth
         );
         if (result.status === 401 || result.status === 203) {
@@ -145,18 +145,19 @@ async function main() {
     if (req.method === "POST" && url === "/setup") {
       const body = await readBody(req);
       const params = new URLSearchParams(body);
-      const org = params.get("org")?.trim();
+      const rawOrg = params.get("org")?.trim();
       const pat = params.get("pat")?.trim();
       const projectsRaw = params.get("projects") || "";
       const projects = projectsRaw.split(/[\n,]+/).map(p => p.trim()).filter(Boolean);
 
-      if (!org || !pat || !projects.length) {
+      if (!rawOrg || !pat || !projects.length) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Preencha todos os campos obrigatórios." }));
         return;
       }
 
-      saveConfig({ org, pat, projects });
+      const { org, baseUrl } = parseOrgInput(rawOrg);
+      saveConfig({ org, baseUrl, pat, projects });
 
       try {
         console.log("🔄 Buscando dados dos projetos configurados...");
@@ -220,14 +221,7 @@ async function main() {
   });
 
   server.listen(PORT, () => {
-    const serverUrl = `http://localhost:${PORT}`;
-    console.log(`\n🚀 Dashboard rodando em: ${serverUrl}\n`);
-    if (!process.env.NO_OPEN_BROWSER) {
-      const cmd = process.platform === "win32" ? `start ${serverUrl}`
-        : process.platform === "darwin" ? `open ${serverUrl}`
-        : `xdg-open ${serverUrl}`;
-      exec(cmd);
-    }
+    console.log(`\n🚀 Dashboard rodando em: http://localhost:${PORT}\n`);
   });
 }
 
