@@ -1,8 +1,0 @@
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\runtimes\win-x64\native\WebView2Loader.dll
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\BacklogHealth.exe
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\BacklogHealth.exe.config
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\BacklogHealth.pdb
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\Microsoft.Web.WebView2.Core.dll
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\Microsoft.Web.WebView2.WinForms.dll
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\Microsoft.Web.WebView2.Wpf.dll
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\WebView2Loader.dll

@@ -1,5 +1,0 @@
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\BacklogHealth.pdb
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\Microsoft.Web.WebView2.Core.xml
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\Microsoft.Web.WebView2.Wpf.xml
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\Microsoft.Web.WebView2.WinForms.xml
-C:\Users\maurilio.b.martins\Documents\DEV\dash_azure_gestao_pessoal\dist\app\BacklogHealth.exe
