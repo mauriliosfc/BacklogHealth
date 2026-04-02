@@ -193,7 +193,7 @@ function buildCardHTML(results) {
     }).join("");
 
     return `
-      <div class="card" data-project="${project.replace(/"/g, "&quot;")}" data-items='${itemsJson}'>
+      <div class="card" data-project="${project.replace(/"/g, "&quot;")}" data-items='${itemsJson}' data-itermap='${JSON.stringify(iterMap).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}'>
         <div class="card-header">
           <div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">

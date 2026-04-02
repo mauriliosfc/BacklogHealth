@@ -241,13 +241,14 @@ function buildTimeline(bySprint, iterMap) {
   const blocks = items.map(item => {
     const l = pct(item.start), w = ((item.end - item.start) / totalMs * 100).toFixed(2);
     const barH = Math.max(8, Math.round(item.us / maxUS * 100));
-    const color = item.isCurrent ? '#22c55e' : item.isPast ? '#475569' : '#60a5fa';
-    const bg    = item.isCurrent ? '#22c55e18' : item.isPast ? '#1e293b' : '#1e3a5f44';
-    return '<div class="tl-block" style="left:' + l + '%;width:' + w + '%;background:' + bg + ';border-color:' + color + '55" title="' + item.label + ' | ' + fmtD(item.start.toISOString()) + ' \u2013 ' + fmtD(item.end.toISOString()) + ' | ' + item.us + ' US">' +
-      '<div class="tl-bar-inner" style="height:' + barH + '%;background:' + color + (item.isCurrent ? '' : '99') + '"></div>' +
-      '<div class="tl-block-foot" style="color:' + color + '">' +
+    const state = item.isCurrent ? 'current' : item.isPast ? 'past' : 'future';
+    const fmtShort = d => d.toLocaleDateString(dateLocale, { day: '2-digit', month: '2-digit' });
+    const dateRange = fmtShort(item.start) + ' \u2013 ' + fmtShort(item.end);
+    return '<div class="tl-block tl-block--' + state + '" style="left:' + l + '%;width:' + w + '%" title="' + item.label + ' | ' + fmtD(item.start.toISOString()) + ' \u2013 ' + fmtD(item.end.toISOString()) + ' | ' + item.us + ' US">' +
+      '<div class="tl-bar-inner"></div>' +
+      '<div class="tl-block-foot">' +
         '<div class="tl-block-name">' + item.label + (item.isCurrent ? ' \uD83D\uDCC5' : '') + '</div>' +
-        '<div class="tl-block-us">' + item.us + ' US</div>' +
+        '<div class="tl-block-dates">' + dateRange + '</div>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -263,10 +264,10 @@ function buildTimeline(bySprint, iterMap) {
       '<div class="tl-track">' + blocks + todayMarker + '</div>' +
     '</div>' +
     '<div class="tl-legend">' +
-      '<span class="tl-leg" style="color:#475569">\u25CF ' + t('tl_past') + '</span>' +
-      '<span class="tl-leg" style="color:#60a5fa">\u25CF ' + t('tl_future') + '</span>' +
-      '<span class="tl-leg" style="color:#22c55e">\u25CF ' + t('tl_current_sprint') + '</span>' +
-      '<span class="tl-leg" style="color:#f87171">\u2503 ' + t('tl_today_label') + '</span>' +
+      '<span class="tl-leg tl-leg--past">\u25CF ' + t('tl_past') + '</span>' +
+      '<span class="tl-leg tl-leg--future">\u25CF ' + t('tl_future') + '</span>' +
+      '<span class="tl-leg tl-leg--current">\u25CF ' + t('tl_current_sprint') + '</span>' +
+      '<span class="tl-leg tl-leg--today">\u2503 ' + t('tl_today_label') + '</span>' +
     '</div>' +
   '</div>';
 }

@@ -41,7 +41,8 @@ dash_azure_gestao_pessoal/
 │       ├── i18n.js       ← initI18n, t, setLocale, getLocale, getDateLocale, applyTranslations
 │       ├── detail.js     ← loadDetailData, buildDetailHTML, buildTimeline
 │       ├── daily.js      ← openDaily, buildDailySlide
-│       └── burndown.js   ← openBurndown, buildBurndownChart, openBurndownFromDaily
+│       ├── burndown.js   ← openBurndown, buildBurndownChart, openBurndownFromDaily
+│       └── deliveryPlan.js ← openDeliveryPlan, buildDeliveryPlan, filtros de projeto
 ├── views/
 │   ├── dashboard.html  ← template HTML do dashboard com tokens {{ORG}}, {{CARDS}}, etc.
 │   └── setup.html      ← template HTML do setup com tokens de configuração
@@ -297,6 +298,22 @@ Acessado via botão **📊** na coluna "Ações" da tabela de Distribuição por
 
 ---
 
+## 🗓️ Delivery Plan
+
+Acessado pelo botão **🗓️ Delivery Plan** no header, ao lado do botão de Daily Standup.
+
+- **Modal expandível** com maximizar, fechar e tecla `Escape`
+- **Timeline compartilhada** — todos os projetos exibidos em linhas sobrepostas no mesmo eixo de tempo
+- Cada linha exibe o nome do projeto (coluna fixa à esquerda, `position: sticky`) e os blocos de sprint posicionados proporcionalmente por data
+- **Dentro de cada bloco:** nome da sprint + datas de início/fim no formato `dd/mm` (sem ano) em segunda linha; tooltip com data completa
+- **Cores por estado** — passada (cinza), atual (verde), futura (azul); adaptadas ao tema claro/escuro via classes CSS
+- **Marcador "hoje"** como linha vertical em cada linha de projeto
+- **Filtro de projetos** — painel com checkboxes para mostrar/ocultar projetos individualmente, com "Selecionar todos" e "Limpar"
+- **Herda filtros de sprint** do dashboard principal — se um projeto tiver sprints filtradas, apenas essas sprints aparecem no Delivery Plan
+- Dados lidos do atributo `data-itermap` dos cards (sem nova chamada à API)
+
+---
+
 ## ➕ Como adicionar/remover projetos monitorados
 
 Clique no botão **⚙️** no header do dashboard para acessar a tela de configurações. Lá você pode:
@@ -356,6 +373,10 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 | 42 | `parseOrgInput` em `config.js` | Organizações com URL `xxx.visualstudio.com` (legado VSTS) têm estrutura de URL diferente de `dev.azure.com/org` — detectar e normalizar automaticamente elimina fricção na configuração |
 | 43 | `baseUrl` salvo no `config.json` | Permite que `azureClient.js` use a URL base correta sem precisar redetectar o formato a cada chamada — compatibilidade retroativa: configs sem `baseUrl` recebem `dev.azure.com/{org}` |
 | 44 | `noEst` no detalhe filtrado por `usItems` | Tasks não têm Story Points por design — contá-las em "Sem Estimativa" distorcia o indicador de cobertura de estimativas |
+| 45 | Delivery Plan como modal com timeline compartilhada | Necessidade de visualizar o cronograma de todos os projetos em uma única tela — `data-itermap` nos cards evita nova chamada à API; filtros de sprint do dashboard são herdados via `localStorage` |
+| 46 | Classes CSS para estados de sprint (`.tl-block--past/future/current`, `.dp-block--past/future/current`) | Cores hardcoded no JS não respondem ao tema — classes CSS com overrides `[data-theme="light"]` garantem contraste adequado em ambos os temas |
+| 47 | Datas de início/fim em formato curto (`dd/mm`) dentro dos blocos de sprint | Exibir dia e mês dentro do bloco ocupa pouco espaço e dispensa hover; `fmtD` mantém o ano no tooltip para referência completa |
+| 48 | Botão Refresh com ícone apenas (`↻`) | Reduz espaço no header; `title` traduzido via `data-i18n-title` mantém acessibilidade; `timer.js` atualiza o `title` durante o refresh em vez do `textContent` |
 
 ---
 
@@ -370,4 +391,4 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 
 ---
 
-*Documentação atualizada em Abril/2026*
+*Documentação atualizada em Abril/2026 — Delivery Plan, tema-aware sprint colors, datas nos blocos*

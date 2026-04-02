@@ -5,6 +5,7 @@ import { openDetails, closeDetails, closeDetailsBtn, toggleMaximize, loadDetailD
 import { openDaily, closeDaily, toggleDailyMaximize, dailyPrev, dailyNext, handleDailyKey } from './modules/daily.js';
 import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily } from './modules/burndown.js';
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
+import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDeliveryPlanMaximize, toggleDeliveryFilter, applyDeliveryFilter } from './modules/deliveryPlan.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -32,7 +33,13 @@ window.closeBurndown     = closeBurndown;
 window.closeBurndownOverlay = closeBurndownOverlay;
 window.toggleBurndownMaximize = toggleBurndownMaximize;
 window.openBurndownFromDaily = openBurndownFromDaily;
-window.setLocale         = setLocale;
+window.setLocale              = setLocale;
+window.openDeliveryPlan       = openDeliveryPlan;
+window.closeDeliveryPlan      = closeDeliveryPlan;
+window.closeDeliveryPlanOverlay = closeDeliveryPlanOverlay;
+window.toggleDeliveryPlanMaximize = toggleDeliveryPlanMaximize;
+window.toggleDeliveryFilter   = toggleDeliveryFilter;
+window.applyDeliveryFilter    = applyDeliveryFilter;
 
 // Inicialização
 setTheme(localStorage.getItem('theme') || 'dark');

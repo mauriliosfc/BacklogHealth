@@ -134,5 +134,14 @@
   "setup_err_fields": "Complete todos los campos requeridos.",
   "setup_err_save": "Error al guardar la configuración.",
   "setup_err_network": "Error de red: {{msg}}",
-  "setup_back": "← Volver al dashboard"
+  "setup_back": "← Volver al dashboard",
+
+  "dp_btn": "🗓️ Delivery Plan",
+  "dp_title": "Delivery Plan",
+  "dp_filter_btn": "Filtrar proyectos",
+  "dp_select_all": "Seleccionar todos",
+  "dp_clear_filter": "Limpiar",
+  "dp_no_data": "No hay datos de sprint disponibles.",
+  "dp_maximize": "Maximizar",
+  "dp_restore": "Restaurar"
 }

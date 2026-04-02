@@ -25,8 +25,9 @@
     </div>
     <div class="header-divider"></div>
     <div class="header-actions">
+      <button class="btn-delivery" id="btnDelivery" onclick="openDeliveryPlan()" data-i18n="dp_btn">🗓️ Delivery Plan</button>
       <button class="btn-daily" id="btnDaily" onclick="openDaily()" data-i18n="btn_daily">📅 Apresentar daily</button>
-      <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()" data-i18n="btn_refresh">↻ Atualizar</button>
+      <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()" data-i18n-title="btn_refresh" title="Atualizar">↻</button>
       <div class="header-meta">
         <div class="timer" id="timer">Próximo refresh em 5:00</div>
         <div class="update" id="lastUpdate">Atualizado em {{LAST_UPDATE}}</div>
@@ -72,6 +73,19 @@
       <div class="daily-counter" id="daily-counter"></div>
       <button class="daily-nav-btn" id="btnDailyNext" onclick="dailyNext()" data-i18n="daily_next">Próximo →</button>
     </div>
+  </div>
+</div>
+
+<div id="delivery-modal" class="modal-overlay dp-modal-overlay" onclick="closeDeliveryPlanOverlay(event)">
+  <div class="modal-box dp-modal-box">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="dp_title">Delivery Plan</div>
+      <div class="modal-actions">
+        <button class="modal-maximize" type="button" id="btnDeliveryMax" onclick="toggleDeliveryPlanMaximize()" data-i18n-title="dp_maximize" title="Maximizar">⤢</button>
+        <button class="modal-close" type="button" onclick="closeDeliveryPlan()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body dp-modal-body" id="delivery-body"></div>
   </div>
 </div>
 

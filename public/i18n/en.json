@@ -134,5 +134,14 @@
   "setup_err_fields": "Please fill in all required fields.",
   "setup_err_save": "Error saving settings.",
   "setup_err_network": "Network error: {{msg}}",
-  "setup_back": "← Back to dashboard"
+  "setup_back": "← Back to dashboard",
+
+  "dp_btn": "🗓️ Delivery Plan",
+  "dp_title": "Delivery Plan",
+  "dp_filter_btn": "Filter projects",
+  "dp_select_all": "Select all",
+  "dp_clear_filter": "Clear",
+  "dp_no_data": "No sprint data available.",
+  "dp_maximize": "Maximize",
+  "dp_restore": "Restore"
 }
