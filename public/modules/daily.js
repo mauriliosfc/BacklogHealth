@@ -1,4 +1,4 @@
-import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES } from './constants.js';
+import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes } from './constants.js';
 import { calcHealth } from './health.js';
 import { t } from './i18n.js';
 
@@ -8,6 +8,9 @@ let _dailySlides = [];
 export function buildDailySlide(card) {
   const project = card.dataset.project;
   const items = JSON.parse(card.dataset.items);
+  const workItemType = card.dataset.workitemtype || 'User Story';
+  const ITEM_TYPES = getItemTypes(workItemType);
+  const isTaskMode = workItemType === 'Task';
 
   const currentOption = card.querySelector('.option-row.is-current input');
   const currentIter = currentOption ? currentOption.value : null;
@@ -20,14 +23,17 @@ export function buildDailySlide(card) {
 
   const filteredForStats = currentIter ? items.filter(i => i.iteration === currentIter) : items;
 
-  const usItems = filteredForStats.filter(i => US_TYPES.includes(i.type));
-  const total = usItems.length;
-  const openUS = usItems.filter(i => !CLOSED_STATES.includes(i.state));
-  const semEst = openUS.filter(i => i.pts == null).length;
-  const semResp = openUS.filter(i => !i.assigned).length;
+  const mainItems = filteredForStats.filter(i => ITEM_TYPES.includes(i.type));
+  const total = mainItems.length;
+  const openItems = mainItems.filter(i => !CLOSED_STATES.includes(i.state));
+  const semEst = openItems.filter(i => i.pts == null || i.pts === 0).length;
+  const semResp = openItems.filter(i => !i.assigned).length;
   const bugs = filteredForStats.filter(i => i.type === 'Bug' && ACTIVE_BUG_STATES.includes(i.state)).length;
 
   const health = calcHealth(total, semEst, semResp, bugs);
+
+  // Labels dinâmicos
+  const itemLabel = isTaskMode ? t('stat_tasks') : t('stat_us');
 
   let tableRows = '';
   card.querySelectorAll('tbody tr[data-iteration]').forEach(row => {
@@ -55,7 +61,7 @@ export function buildDailySlide(card) {
         '<button class="btn-burndown-daily" type="button" data-project="' + project.replace(/"/g,'&quot;') + '" data-iter="' + (currentIter||'').replace(/"/g,'&quot;') + '" onclick="openBurndownFromDaily(this.dataset.project, this.dataset.iter)">\uD83D\uDCCA Burndown</button>' +
       '</div>' +
       '<div class="stats daily-stats">' +
-        '<div class="stat"><div class="stat-label">' + t('stat_us') + '</div><div class="stat-val">' + total + '</div></div>' +
+        '<div class="stat"><div class="stat-label">' + itemLabel + '</div><div class="stat-val">' + total + '</div></div>' +
         '<div class="stat"><div class="stat-label">' + t('stat_no_est') + '</div><div class="stat-val ' + (semEst > 2 ? 'warn' : '') + '">' + semEst + '</div></div>' +
         '<div class="stat"><div class="stat-label">' + t('stat_no_resp') + '</div><div class="stat-val ' + (semResp > 2 ? 'warn' : '') + '">' + semResp + '</div></div>' +
         '<div class="stat"><div class="stat-label">' + t('stat_bugs') + '</div><div class="stat-val ' + (bugs > 3 ? 'crit' : '') + '">' + bugs + '</div></div>' +

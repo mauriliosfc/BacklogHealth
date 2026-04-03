@@ -1,5 +1,6 @@
 import { buildSprintData, fmtD } from './utils.js';
 import { t, getDateLocale } from './i18n.js';
+import { getItemTypes } from './constants.js';
 
 export const _detailState = { project: null, sprints: [] };
 
@@ -28,7 +29,7 @@ export async function loadDetailData(project, selectedSprints = _detailState.spr
     const taskCompletedWork = taskItems.reduce((s, t) => s + t.completedWork, 0);
     const bugCompletedWork  = bugItems.reduce((s, t)  => s + t.completedWork, 0);
     const totalBugs         = bugItems.length;
-    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork);
+    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story');
   } catch(e) {
     document.getElementById('modal-body').innerHTML = '<p style="color:#f87171;padding:20px">Erro: ' + e.message + '</p>';
   } finally {
@@ -106,9 +107,12 @@ function ring(pct, color) {
     '</svg><div class="ring-pct" style="color:' + color + '">' + pct + '%</div></div>';
 }
 
-function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork) {
+function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story') {
   const total = items.length;
   if (!total) return '<p style="color:#64748b;padding:20px">' + t('detail_no_items') + '</p>';
+
+  const isTaskMode = workItemType === 'Task';
+  const ITEM_TYPES = getItemTypes(workItemType);
 
   const filterBanner = selectedSprints && selectedSprints.length > 0
     ? '<div style="background:#1e3a5f;border:1px solid #2d5a8e;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:12px;color:#93c5fd">' +
@@ -117,41 +121,43 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
       '</div>'
     : '';
 
-  const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
-  const usItems  = items.filter(i => US_TYPES.includes(i.type));
-  const usTotal  = usItems.length;
+  const mainItems = items.filter(i => ITEM_TYPES.includes(i.type));
+  const mainTotal = mainItems.length;
   const totalPts = items.reduce((s, i) => s + (i.pts || 0), 0);
   const closed   = items.filter(i => ['Closed','Done'].includes(i.state)).length;
   const active   = items.filter(i => ['Active','In Progress','Doing','Committed'].includes(i.state)).length;
   const newItems = items.filter(i => i.state === 'New').length;
   const bugs     = totalBugs || items.filter(i => i.type === 'Bug').length;
-  const us       = usTotal;
-  const noEst    = usItems.filter(i => i.pts == null).length;
+  const us       = mainTotal;
+  const noEst    = mainItems.filter(i => i.pts == null || i.pts === 0).length;
   const donePts  = items.filter(i => ['Closed','Done','Resolved'].includes(i.state)).reduce((s,i)=>s+(i.pts||0),0);
-  const usClosed     = usItems.filter(i => ['Closed','Done','Resolved'].includes(i.state)).length;
-  const usUAT        = usItems.filter(i => i.state === 'UAT').length;
-  const uatPct       = usTotal ? Math.round(usUAT / usTotal * 100) : 0;
-  const usNoEst      = usItems.filter(i => i.pts == null).length;
+  const mainClosed   = mainItems.filter(i => ['Closed','Done','Resolved'].includes(i.state)).length;
+  const mainUAT      = mainItems.filter(i => i.state === 'UAT').length;
+  const uatPct       = mainTotal ? Math.round(mainUAT / mainTotal * 100) : 0;
+  const mainNoEst    = mainItems.filter(i => i.pts == null || i.pts === 0).length;
   const completedHrs = taskCompletedWork || 0;
   const completedHrsFmt = completedHrs % 1 === 0 ? completedHrs : completedHrs.toFixed(1);
   const bugHrs = bugCompletedWork || 0;
   const bugHrsFmt = bugHrs % 1 === 0 ? bugHrs : bugHrs.toFixed(1);
-  const closedPct    = usTotal ? Math.round(usClosed / usTotal * 100) : 0;
+  const closedPct    = mainTotal ? Math.round(mainClosed / mainTotal * 100) : 0;
   const totalHrs     = completedHrs + bugHrs;
   const bugRate      = totalHrs ? Math.round(bugHrs / totalHrs * 100) : 0;
-  const estPct       = usTotal ? Math.round((usTotal - usNoEst) / usTotal * 100) : 0;
+  const estPct       = mainTotal ? Math.round((mainTotal - mainNoEst) / mainTotal * 100) : 0;
 
-  const US_TYPES_D = ['User Story', 'Product Backlog Item', 'Requirement'];
   const byStatus = {};
-  items.filter(i => US_TYPES_D.includes(i.type)).forEach(i => { byStatus[i.state] = (byStatus[i.state]||0) + 1; });
+  items.filter(i => ITEM_TYPES.includes(i.type)).forEach(i => { byStatus[i.state] = (byStatus[i.state]||0) + 1; });
   const statusEntries = Object.entries(byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v,statusColor(k)]);
 
   const byAsgn = {};
-  items.filter(i => US_TYPES_D.includes(i.type)).forEach(i => { const n = i.assigned || t('no_assignee'); byAsgn[n]=(byAsgn[n]||0)+1; });
+  items.filter(i => ITEM_TYPES.includes(i.type)).forEach(i => { const n = i.assigned || t('no_assignee'); byAsgn[n]=(byAsgn[n]||0)+1; });
   const asgnEntries = Object.entries(byAsgn).sort((a,b)=>b[1]-a[1]).slice(0,12).map(([k,v])=>[k,v,'#60a5fa']);
 
   const { bySprint, sorted: sortedSprintEntries, sprintMeta } = buildSprintData(items, iterMap);
   const allSprintData = JSON.stringify(sprintMeta).replace(/</g, '\\u003c').replace(/'/g, '&#39;');
+
+  // Labels dinâmicos
+  const itemLabel = isTaskMode ? t('label_tasks') : t('label_user_stories');
+  const estimateLabel = isTaskMode ? t('label_hours') : t('label_story_points');
 
   const sprintRows = sortedSprintEntries.map(([key, d]) => {
     const iter = iterMap[key]||{};
@@ -175,33 +181,33 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   return filterBanner + '<div class="d-section"><div class="d-section-title">' + t('section_summary') + '</div>' +
     '<div class="d-grid">' +
       '<div class="d-card"><div class="d-label">' + t('d_total_items') + '</div><div class="d-val blue">' + total + '</div></div>' +
-      '<div class="d-card"><div class="d-label">' + t('d_user_stories') + '</div><div class="d-val blue">' + us + '</div></div>' +
-      '<div class="d-card"><div class="d-label">' + t('d_story_points') + '</div><div class="d-val purple">' + totalPts + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + itemLabel + '</div><div class="d-val blue">' + us + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + estimateLabel + '</div><div class="d-val purple">' + totalPts + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_pts_delivered') + '</div><div class="d-val green">' + donePts + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_in_progress') + '</div><div class="d-val blue">' + active + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_new') + '</div><div class="d-val">' + newItems + '</div></div>' +
-      '<div class="d-card"><div class="d-label">' + t('d_no_estimate') + '</div><div class="d-val ' + (noEst>usTotal*0.3?'yellow':'') + '">' + noEst + '</div></div>' +
+      '<div class="d-card"><div class="d-label">' + t('d_no_estimate') + '</div><div class="d-val ' + (noEst>mainTotal*0.3?'yellow':'') + '">' + noEst + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_hrs_tasks') + '</div><div class="d-val purple">' + completedHrsFmt + 'h</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_hrs_bugs') + '</div><div class="d-val ' + (bugHrs>0?'red':'') + '">' + bugHrsFmt + 'h</div></div>' +
     '</div></div>' +
 
     '<div class="d-section"><div class="d-section-title">' + t('section_health_ind') + '</div>' +
       '<div style="display:flex;gap:32px;flex-wrap:wrap">' +
-        '<div class="progress-ring">' + ring(closedPct,'#22c55e') + '<div><div class="d-label">' + t('health_completion') + '</div><div class="d-val green" style="font-size:22px">' + closedPct + '%</div><div class="d-sub">' + t('health_us_closed', { closed: usClosed, total: usTotal }) + '</div></div></div>' +
-        '<div class="progress-ring">' + ring(uatPct,'#f59e0b') + '<div><div class="d-label">' + t('health_uat') + '</div><div class="d-val ' + (uatPct>30?'red':uatPct>15?'yellow':'') + '" style="font-size:22px;color:#f59e0b">' + uatPct + '%</div><div class="d-sub">' + t('health_us_uat', { count: usUAT, total: usTotal }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(closedPct,'#22c55e') + '<div><div class="d-label">' + t('health_completion') + '</div><div class="d-val green" style="font-size:22px">' + closedPct + '%</div><div class="d-sub">' + t('health_us_closed', { closed: mainClosed, total: mainTotal }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(uatPct,'#f59e0b') + '<div><div class="d-label">' + t('health_uat') + '</div><div class="d-val ' + (uatPct>30?'red':uatPct>15?'yellow':'') + '" style="font-size:22px;color:#f59e0b">' + uatPct + '%</div><div class="d-sub">' + t('health_us_uat', { count: mainUAT, total: mainTotal }) + '</div></div></div>' +
         '<div class="progress-ring">' + ring(bugRate,'#ef4444') + '<div><div class="d-label">' + t('health_bug_rate') + '</div><div class="d-val ' + (bugRate>20?'red':bugRate>10?'yellow':'') + '" style="font-size:22px">' + bugRate + '%</div><div class="d-sub">' + t('health_bugs_total', { count: bugs }) + '</div></div></div>' +
-        '<div class="progress-ring">' + ring(estPct,'#60a5fa') + '<div><div class="d-label">' + t('health_coverage') + '</div><div class="d-val blue" style="font-size:22px">' + estPct + '%</div><div class="d-sub">' + t('health_us_estimated', { estimated: usTotal - usNoEst, total: usTotal }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(estPct,'#60a5fa') + '<div><div class="d-label">' + t('health_coverage') + '</div><div class="d-val blue" style="font-size:22px">' + estPct + '%</div><div class="d-sub">' + t('health_us_estimated', { estimated: mainTotal - mainNoEst, total: mainTotal }) + '</div></div></div>' +
       '</div>' +
     '</div>' +
 
     '<div class="d-cols">' +
-      '<div class="d-section" style="margin:0"><div class="d-section-title">' + t('section_by_status') + '</div><div class="bar-list">' + barList(statusEntries, usTotal) + '</div></div>' +
-      '<div class="d-section" style="margin:0"><div class="d-section-title">' + t('section_by_assignee') + '</div><div class="bar-list">' + barList(asgnEntries, usTotal) + '</div></div>' +
+      '<div class="d-section" style="margin:0"><div class="d-section-title">' + t('section_by_status') + '</div><div class="bar-list">' + barList(statusEntries, mainTotal) + '</div></div>' +
+      '<div class="d-section" style="margin:0"><div class="d-section-title">' + t('section_by_assignee') + '</div><div class="bar-list">' + barList(asgnEntries, mainTotal) + '</div></div>' +
     '</div>' +
 
     '<div class="d-section"><div class="d-section-title">' + t('section_by_sprint') + '</div>' +
       '<table class="d-table" data-sprints=\'' + allSprintData + '\'><thead><tr>' +
-      '<th>' + t('th_sprint') + '</th><th>' + t('th_period') + '</th><th>' + t('d_user_stories') + '</th>' +
+      '<th>' + t('th_sprint') + '</th><th>' + t('th_period') + '</th><th>' + itemLabel + '</th>' +
       '<th>' + t('th_pts') + '</th><th>' + t('th_completed') + '</th><th>' + t('th_actions') + '</th>' +
       '</tr></thead><tbody>' + sprintRows + '</tbody></table>' +
     '</div>' +

@@ -81,6 +81,21 @@
 <script>
   const PREFILL = {{SELECTED_PROJECTS_JSON}};
 
+  // WORK_ITEM_TYPES armazena { "Project1": "User Story", "Project2": "Task" }
+  let WORK_ITEM_TYPES = {};
+  if (typeof PREFILL === 'object' && !Array.isArray(PREFILL)) {
+    WORK_ITEM_TYPES = PREFILL;
+  } else if (Array.isArray(PREFILL)) {
+    // Migração: converter array para object
+    PREFILL.forEach(p => {
+      const name = typeof p === 'string' ? p : (p.name || p);
+      WORK_ITEM_TYPES[name] = 'User Story';
+    });
+  }
+
+  let ALL_PROJECTS = [];
+  let SELECTED_SET = new Set(Object.keys(WORK_ITEM_TYPES));
+
   function _tr(key, fallback, vars) {
     let msg;
     if (window._t) {
@@ -132,9 +147,6 @@
     }
   }
 
-  let ALL_PROJECTS = [];
-  let SELECTED_SET = new Set(PREFILL);
-
   function renderProjects(projects) {
     ALL_PROJECTS = projects;
     renderProjectList(projects);
@@ -157,14 +169,31 @@
     list.innerHTML = projects.map(p => {
       const esc = p.replace(/"/g, '&quot;');
       const checked = SELECTED_SET.has(p) ? ' checked' : '';
-      return '<label class="proj-option"><input type="checkbox" value="' + esc + '" onchange="onProjChange(this)"' + checked + '><span>' + p + '</span></label>';
+      const workItemType = WORK_ITEM_TYPES[p] || 'User Story';
+      return `<label class="proj-option">
+        <input type="checkbox" value="${esc}" onchange="onProjChange(this)"${checked}>
+        <span class="proj-name">${p}</span>
+        <select class="work-item-type-select" data-project="${esc}" onchange="onTypeChange(this)">
+          <option value="User Story" ${workItemType === 'User Story' ? 'selected' : ''}>User Story</option>
+          <option value="Task" ${workItemType === 'Task' ? 'selected' : ''}>Task</option>
+        </select>
+      </label>`;
     }).join('');
   }
 
   function onProjChange(cb) {
-    if (cb.checked) SELECTED_SET.add(cb.value);
-    else SELECTED_SET.delete(cb.value);
+    if (cb.checked) {
+      SELECTED_SET.add(cb.value);
+      if (!WORK_ITEM_TYPES[cb.value]) WORK_ITEM_TYPES[cb.value] = 'User Story';
+    } else {
+      SELECTED_SET.delete(cb.value);
+    }
     updateCount();
+  }
+
+  function onTypeChange(select) {
+    const projectName = select.getAttribute('data-project');
+    WORK_ITEM_TYPES[projectName] = select.value;
   }
 
   function filterProjects() {
@@ -205,7 +234,10 @@
   async function doSave() {
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
-    const selected = [...SELECTED_SET];
+    const selected = [...SELECTED_SET].map(projectName => {
+      const workItemType = WORK_ITEM_TYPES[projectName] || 'User Story';
+      return `${projectName}:${workItemType}`;
+    });
     if (!selected.length) { showErr(_tr('setup_err_select', 'Selecione ao menos um projeto para monitorar.')); return; }
     hideErr();
     const btn = document.getElementById('btn-save');

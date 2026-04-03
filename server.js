@@ -42,7 +42,17 @@ function renderSetup(prefill = {}) {
     : (prefill.org || "");
   const pat  = (prefill.pat  || "").replace(/"/g, "&quot;");
   const isSettings = !!(prefill.org);
-  const selectedProjectsJson = JSON.stringify(prefill.projects || []).replace(/</g, "\\u003c");
+
+  // Converter projects para mapa { "ProjectName": "User Story", ... }
+  const projectsMap = {};
+  if (prefill.projects && Array.isArray(prefill.projects)) {
+    prefill.projects.forEach(p => {
+      const name = typeof p === 'string' ? p : p.name;
+      const workItemType = typeof p === 'string' ? 'User Story' : (p.workItemType || 'User Story');
+      projectsMap[name] = workItemType;
+    });
+  }
+  const selectedProjectsJson = JSON.stringify(projectsMap).replace(/</g, "\\u003c");
 
   return renderTemplate(templates.setup, {
     TITLE:                  isSettings ? "Configurações" : "Configuração inicial",
@@ -148,7 +158,18 @@ async function main() {
       const rawOrg = params.get("org")?.trim();
       const pat = params.get("pat")?.trim();
       const projectsRaw = params.get("projects") || "";
-      const projects = projectsRaw.split(/[\n,]+/).map(p => p.trim()).filter(Boolean);
+
+      // Formato esperado: "Project1:User Story,Project2:Task"
+      const projects = projectsRaw.split(/[\n,]+/)
+        .map(p => p.trim())
+        .filter(Boolean)
+        .map(p => {
+          const [name, workItemType] = p.split(':');
+          return {
+            name: name.trim(),
+            workItemType: (workItemType || 'User Story').trim()
+          };
+        });
 
       if (!rawOrg || !pat || !projects.length) {
         res.writeHead(400, { "Content-Type": "application/json" });
@@ -204,7 +225,8 @@ async function main() {
     // ── GET /detail?project=NAME ───────────────────────────────────────────
     if (url.startsWith("/detail?")) {
       const project = new URLSearchParams(url.slice(8)).get("project");
-      if (!project || !cfg.projects.includes(project)) {
+      const projectNames = cfg.projects.map(p => typeof p === 'string' ? p : p.name);
+      if (!project || !projectNames.includes(project)) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Projeto não encontrado" }));
         return;
