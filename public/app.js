@@ -6,6 +6,7 @@ import { openDaily, closeDaily, toggleDailyMaximize, dailyPrev, dailyNext, handl
 import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily } from './modules/burndown.js';
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
 import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDeliveryPlanMaximize, toggleDeliveryFilter, applyDeliveryFilter } from './modules/deliveryPlan.js';
+import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilotConnection, saveCopilotConfig, openCopilotChat, closeCopilotChat, closeCopilotChatOverlay, toggleCopilotChatMaximize, openCopilotSettings, copilotInputKeydown, sendCopilotMessage } from './modules/copilot.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -40,6 +41,18 @@ window.closeDeliveryPlanOverlay = closeDeliveryPlanOverlay;
 window.toggleDeliveryPlanMaximize = toggleDeliveryPlanMaximize;
 window.toggleDeliveryFilter   = toggleDeliveryFilter;
 window.applyDeliveryFilter    = applyDeliveryFilter;
+window.openCopilot              = openCopilot;
+window.closeCopilotConfig       = closeCopilotConfig;
+window.closeCopilotConfigOverlay = closeCopilotConfigOverlay;
+window.testCopilotConnection    = testCopilotConnection;
+window.saveCopilotConfig        = saveCopilotConfig;
+window.openCopilotChat          = openCopilotChat;
+window.closeCopilotChat         = closeCopilotChat;
+window.closeCopilotChatOverlay  = closeCopilotChatOverlay;
+window.toggleCopilotChatMaximize = toggleCopilotChatMaximize;
+window.openCopilotSettings      = openCopilotSettings;
+window.copilotInputKeydown      = copilotInputKeydown;
+window.sendCopilotMessage       = sendCopilotMessage;
 
 // Inicialização
 setTheme(localStorage.getItem('theme') || 'dark');

@@ -15,6 +15,7 @@ Dashboard para monitoramento e análise de saúde dos backlogs de projetos no **
 - **Gráfico de burndown por sprint** — acessível via coluna "Ações" na tabela de distribuição, com linha ideal, linha real e marcador de hoje
 - **Apresentação de Daily Standup** — modal em carrossel com métricas e User Stories da sprint atual, botão de burndown integrado
 - **Delivery Plan** — timeline compartilhada de todos os projetos lado a lado, com blocos de sprint posicionados por data, filtro por projeto e herança dos filtros de sprint do dashboard principal
+- **Copilot Project (IA)** — assistente de IA integrado ao dashboard com contexto rico dos projetos monitorados (ver seção abaixo)
 - Filtros por sprint com persistência no navegador
 - **Suporte a múltiplos idiomas** — Português, Inglês (padrão) e Espanhol, alternável pelo seletor PT/EN/ES no header
 - **Distribuição como app Windows nativo** — `BacklogHealth.exe` via wrapper WebView2, sem instalar Node.js ou browser
@@ -110,7 +111,10 @@ BacklogHealth/
 │       ├── i18n.js       # initI18n, t, setLocale, getLocale, applyTranslations
 │       ├── detail.js     # loadDetailData, buildDetailHTML, buildTimeline
 │       ├── daily.js      # openDaily, buildDailySlide
-│       └── burndown.js   # openBurndown, buildBurndownChart, openBurndownFromDaily
+│       ├── burndown.js   # openBurndown, buildBurndownChart, openBurndownFromDaily
+│       ├── deliveryPlan.js # openDeliveryPlan, buildDeliveryPlan, filtros de projeto
+│       └── copilot.js    # openCopilot, sendCopilotMessage, contexto rico de projetos
+├── aiClient.js           # Cliente HTTP para Azure AI Foundry, Azure OpenAI e APIs compatíveis
 ├── views/
 │   ├── dashboard.html  # Template HTML do dashboard
 │   └── setup.html      # Template HTML da tela de configuração
@@ -155,6 +159,52 @@ Os cards exibem métricas baseadas exclusivamente em **User Stories**:
 | `GET` | `/detail?project=NOME` | Detalhes completos de um projeto (JSON) |
 | `GET` | `/api/projects?org=X&pat=Y` | Lista projetos disponíveis |
 | `POST` | `/setup` | Salva configuração |
+| `GET` | `/ai/config` | Verifica se a IA está configurada |
+| `POST` | `/ai/config` | Salva credenciais da IA |
+| `POST` | `/ai/test` | Testa conexão com a IA |
+| `POST` | `/ai/context` | Retorna contexto rico dos projetos para a IA |
+| `POST` | `/ai/chat` | Envia mensagem para a IA e retorna resposta |
+
+---
+
+## Copilot Project (IA)
+
+O Copilot Project é um assistente de IA integrado ao dashboard, acessível pelo botão **🤖 Copilot** no header.
+
+### Configuração
+
+Na primeira abertura, o Copilot solicita as credenciais da IA:
+
+| Campo | Descrição | Exemplo |
+|-------|-----------|---------|
+| **Endpoint** | URL base da API | `https://sua-org.openai.azure.com/` · `https://copilot.services.ai.azure.com/api/projects/.../...` |
+| **API Key** | Chave de autenticação | `sk-...` ou chave Azure |
+| **Model / Deployment** | Nome do modelo ou deployment | `gpt-4o` · `gpt-5.4-mini` |
+| **API Version** | Versão da API (apenas Azure OpenAI) | `2024-02-01` |
+
+As credenciais são salvas localmente em `config.json` e podem ser alteradas a qualquer momento pelo botão ⚙️ dentro do chat.
+
+### Provedores suportados
+
+| Provedor | Detecção automática | Observações |
+|----------|-------------------|-------------|
+| **Azure AI Foundry** | URL contém `services.ai.azure.com` | System prompt injetado como prefixo da mensagem do usuário (restrição do agent) |
+| **Azure OpenAI** | URL contém `openai.azure.com` | Usa header `api-key`; requer `apiVersion` |
+| **OpenAI / compatível** | demais URLs | Usa header `Authorization: Bearer` |
+
+### Contexto enviado à IA
+
+Ao abrir o chat, o Copilot busca automaticamente os dados de todos os projetos monitorados via `/ai/context`, respeitando os filtros de sprint ativos no dashboard. O contexto inclui, por projeto:
+
+- **Resumo Geral** — total de itens, User Stories, Story Points, horas de tasks e bugs, bugs abertos
+- **Indicadores de Saúde** — taxa de conclusão, % em UAT, taxa de bugs, cobertura de estimativas
+- **US por Status** — distribuição de estados (New, Active, Closed, etc.)
+- **US por Responsável** — distribuição por membro da equipe (top 15)
+- **Distribuição por Sprint** — por sprint: total de US, concluídas, %, Story Points, horas
+- **Sprint Atual** — lista completa de US da sprint ativa com título, estado, pontos e responsável
+- **Itens problemáticos** — US sem estimativa, US sem responsável, bugs abertos (até 30 cada)
+
+O contexto completo é reenviado a cada mensagem para garantir que o assistente tenha acesso aos dados mesmo em provedores que não persistem o system prompt entre turnos (ex.: Azure AI Foundry agents).
 
 ---
 

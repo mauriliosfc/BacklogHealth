@@ -149,5 +149,24 @@
   "dp_clear_filter": "Limpiar",
   "dp_no_data": "No hay datos de sprint disponibles.",
   "dp_maximize": "Maximizar",
-  "dp_restore": "Restaurar"
+  "dp_restore": "Restaurar",
+
+  "ai_config_title": "Configuración de IA",
+  "ai_config_hint": "Configure las credenciales de su IA. No almacenaremos esta información en nuestra base de datos, se guarda únicamente en su dispositivo.",
+  "ai_endpoint_label": "Endpoint",
+  "ai_endpoint_hint": "URL base de la API (Azure OpenAI, compatible con OpenAI, etc.)",
+  "ai_apikey_label": "API Key",
+  "ai_model_label": "Model / Deployment",
+  "ai_model_hint": "Nombre del modelo o deployment (ej: gpt-4o, claude-opus-4-6)",
+  "ai_apiversion_label": "API Version (opcional)",
+  "ai_apiversion_hint": "Requerido solo para Azure OpenAI",
+  "ai_btn_test": "🔌 Probar conexión",
+  "ai_btn_testing": "Probando…",
+  "ai_btn_save": "💾 Guardar y abrir chat",
+  "ai_btn_saving": "Guardando…",
+  "ai_test_ok": "✅ ¡Conexión exitosa!",
+  "ai_err_fill": "Complete el endpoint, API key y model.",
+  "ai_err_generic": "Ocurrió un error. Inténtelo de nuevo.",
+  "ai_welcome": "¡Hola! Soy Copilot Project. Pregúntame sobre tu backlog, sprints o salud de proyectos.",
+  "ai_input_placeholder": "Pregunta sobre tus proyectos…"
 }

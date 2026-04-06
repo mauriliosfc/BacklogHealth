@@ -4,9 +4,10 @@ const fs       = require("fs");
 const nodePath = require("path");
 dns.setDefaultResultOrder("ipv4first");
 
-const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput } = require("./config");
+const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getAiCfg, saveAiConfig } = require("./config");
 const { rawAzureGet }                             = require("./azureClient");
 const { fetchProject, fetchProjectDetail, buildCardHTML } = require("./projectService");
+const { chatCompletion, testConnection } = require("./aiClient");
 
 // ── Template rendering ────────────────────────────────────────────────────────
 
@@ -234,6 +235,253 @@ async function main() {
       const data = await fetchProjectDetail(project);
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(data));
+      return;
+    }
+
+    // ── POST /ai/context ───────────────────────────────────────────────────
+    if (req.method === 'POST' && url === '/ai/context') {
+      const cfg = getCfg();
+      const projectNames = (cfg.projects || []).map(p => typeof p === 'string' ? p : p.name);
+      const body = await readBody(req);
+      const { filters = {} } = JSON.parse(body || '{}');
+      try {
+        const details = await Promise.all(projectNames.map(name => fetchProjectDetail(name)));
+        const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
+        const CLOSED   = ['Closed', 'Done', 'Resolved'];
+        const ACTIVE   = ['Active', 'In Progress', 'Doing', 'Committed'];
+        const r1 = v => Math.round(v * 10) / 10;
+
+        const projects = details.map(data => {
+          const { project, items, taskItems, bugItems, iterMap, workItemType } = data;
+          const isTaskMode = workItemType === 'Task';
+
+          // normaliza filtro: localStorage guarda path completo, usamos só último segmento
+          const activeFilter = (filters[project] || []).map(f => f.split('\\').pop());
+          const hasFilter    = activeFilter.length > 0;
+          const spName       = iter => (iter || '').split('\\').pop();
+          const inFilter     = sp => !hasFilter || activeFilter.includes(sp);
+
+          // filtra itens pelo sprint filter
+          const filteredItems = items.filter(i => inFilter(spName(i.iteration)));
+          const filteredTasks = taskItems.filter(t => inFilter(spName(t.iteration)));
+          const filteredBugs  = bugItems.filter(b => inFilter(spName(b.iteration)));
+
+          // itens principais (US ou Task conforme modo)
+          const ITEM_TYPES = isTaskMode ? ['Task'] : US_TYPES;
+          const mainItems  = filteredItems.filter(i => ITEM_TYPES.includes(i.type));
+          const mainTotal  = mainItems.length;
+
+          // ── Resumo Geral (igual ao detail modal) ──────────────────────────
+          const totalPts    = filteredItems.reduce((s, i) => s + (i.pts || 0), 0);
+          const donePts     = filteredItems.filter(i => CLOSED.includes(i.state)).reduce((s, i) => s + (i.pts || 0), 0);
+          const inProgress  = filteredItems.filter(i => ACTIVE.includes(i.state)).length;
+          const newCount    = filteredItems.filter(i => i.state === 'New').length;
+          const noEst       = mainItems.filter(i => !i.pts).length;
+          const taskHrs     = r1(filteredTasks.reduce((s, t) => s + (t.completedWork || 0), 0));
+          const bugHrs      = r1(filteredBugs.reduce((s, b)  => s + (b.completedWork || 0), 0));
+          const openBugsCount = items.filter(i => i.type === 'Bug' && ['Active','In Progress','New'].includes(i.state) && inFilter(spName(i.iteration))).length;
+
+          // ── Indicadores de Saúde ──────────────────────────────────────────
+          const mainClosed  = mainItems.filter(i => CLOSED.includes(i.state)).length;
+          const mainUAT     = mainItems.filter(i => i.state === 'UAT').length;
+          const mainNoEst   = mainItems.filter(i => !i.pts).length;
+          const totalHrs    = taskHrs + bugHrs;
+          const health = {
+            completionRate:    mainTotal ? Math.round(mainClosed / mainTotal * 100) : 0,
+            inUAT_pct:         mainTotal ? Math.round(mainUAT   / mainTotal * 100) : 0,
+            inUAT_count:       mainUAT,
+            bugRate_pct:       totalHrs  ? Math.round(bugHrs    / totalHrs  * 100) : 0,
+            estimateCoverage:  mainTotal ? Math.round((mainTotal - mainNoEst) / mainTotal * 100) : 0,
+          };
+
+          // ── US por Status ─────────────────────────────────────────────────
+          const byStatus = {};
+          mainItems.forEach(i => { byStatus[i.state] = (byStatus[i.state] || 0) + 1; });
+          const byStatusArr = Object.entries(byStatus).sort((a, b) => b[1] - a[1]).map(([status, count]) => ({ status, count }));
+
+          // ── US por Responsável ────────────────────────────────────────────
+          const byAssignee = {};
+          mainItems.forEach(i => { const n = i.assigned || 'Sem responsável'; byAssignee[n] = (byAssignee[n] || 0) + 1; });
+          const byAssigneeArr = Object.entries(byAssignee).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([assignee, count]) => ({ assignee, count }));
+
+          // ── Distribuição por Sprint ───────────────────────────────────────
+          const sprintMap = {};
+          filteredItems.forEach(i => {
+            const sp = spName(i.iteration) || 'Sem Sprint';
+            if (!sprintMap[sp]) sprintMap[sp] = { us: 0, usClosed: 0, pts: 0, taskHrs: 0, bugHrs: 0 };
+            if (ITEM_TYPES.includes(i.type)) {
+              sprintMap[sp].us++;
+              if (CLOSED.includes(i.state)) sprintMap[sp].usClosed++;
+            }
+            sprintMap[sp].pts += i.pts || 0;
+          });
+          filteredTasks.forEach(t => { const sp = spName(t.iteration) || 'Sem Sprint'; if (sprintMap[sp]) sprintMap[sp].taskHrs += t.completedWork || 0; });
+          filteredBugs.forEach(b  => { const sp = spName(b.iteration)  || 'Sem Sprint'; if (sprintMap[sp]) sprintMap[sp].bugHrs  += b.completedWork || 0; });
+
+          const currentEntry      = Object.entries(iterMap).find(([, v]) => v.isCurrent);
+          const currentSprintName = currentEntry?.[0] ? spName(currentEntry[0]) : null;
+
+          const sprintDistribution = Object.entries(sprintMap)
+            .map(([sprint, s]) => {
+              const meta = Object.entries(iterMap).find(([k]) => spName(k) === sprint);
+              return {
+                sprint,
+                isCurrent: meta?.[1]?.isCurrent || false,
+                start: meta?.[1]?.start || null,
+                end:   meta?.[1]?.end   || null,
+                totalUS:       s.us,
+                completedUS:   s.usClosed,
+                completionPct: s.us ? Math.round(s.usClosed / s.us * 100) : 0,
+                storyPoints:   r1(s.pts),
+                taskHrs:       r1(s.taskHrs),
+                bugHrs:        r1(s.bugHrs),
+              };
+            })
+            .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+
+          // ── Sprint atual — itens detalhados ───────────────────────────────
+          const effectiveSprint = hasFilter
+            ? (activeFilter.includes(currentSprintName) ? currentSprintName : activeFilter[activeFilter.length - 1])
+            : currentSprintName;
+          const currentSprintItems = effectiveSprint
+            ? mainItems.filter(i => spName(i.iteration) === effectiveSprint)
+                       .map(i => ({ title: i.title, state: i.state, pts: i.pts, assignee: i.assigned }))
+            : [];
+
+          // ── Itens problemáticos ───────────────────────────────────────────
+          const openMain    = mainItems.filter(i => !CLOSED.includes(i.state));
+          const noEstItems  = openMain.filter(i => !i.pts) .map(i => ({ title: i.title, sprint: spName(i.iteration), assignee: i.assigned }));
+          const noRespItems = openMain.filter(i => !i.assigned).map(i => ({ title: i.title, sprint: spName(i.iteration), pts: i.pts }));
+          const openBugs    = items.filter(i => i.type === 'Bug' && ['Active','In Progress','New'].includes(i.state) && inFilter(spName(i.iteration)))
+                                   .map(i => ({ title: i.title, state: i.state, sprint: spName(i.iteration) }));
+
+          return {
+            name: project,
+            workItemType,
+            activeSprintFilter: hasFilter ? activeFilter : null,
+            summary: {
+              totalItems:   filteredItems.length,
+              userStories:  mainTotal,
+              storyPoints:  r1(totalPts),
+              deliveredPts: r1(donePts),
+              inProgress,
+              new:          newCount,
+              noEstimate:   noEst,
+              taskHrs,
+              bugHrs,
+              openBugs:     openBugsCount,
+            },
+            healthIndicators: health,
+            byStatus:     byStatusArr,
+            byAssignee:   byAssigneeArr,
+            sprintDistribution,
+            currentSprint: effectiveSprint ? {
+              name:  effectiveSprint,
+              start: currentEntry?.[1]?.start || null,
+              end:   currentEntry?.[1]?.end   || null,
+              items: currentSprintItems,
+            } : null,
+            noEstimateItems:  noEstItems.slice(0, 30),
+            noAssigneeItems:  noRespItems.slice(0, 30),
+            openBugs:         openBugs.slice(0, 30),
+          };
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ projects }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    // ── GET /ai/config ─────────────────────────────────────────────────────
+    if (req.method === 'GET' && url === '/ai/config') {
+      const ai = getAiCfg();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ configured: !!(ai?.endpoint && ai?.apiKey && ai?.model) }));
+      return;
+    }
+
+    // ── POST /ai/config ────────────────────────────────────────────────────
+    if (req.method === 'POST' && url === '/ai/config') {
+      const body = await readBody(req);
+      const p = JSON.parse(body);
+      if (!p.endpoint || !p.apiKey || !p.model) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'endpoint, apiKey e model são obrigatórios.' }));
+        return;
+      }
+      saveAiConfig({ endpoint: p.endpoint.trim(), apiKey: p.apiKey.trim(), model: p.model.trim(), apiVersion: (p.apiVersion || '').trim() });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    // ── POST /ai/test ──────────────────────────────────────────────────────
+    if (req.method === 'POST' && url === '/ai/test') {
+      const body = await readBody(req);
+      const p = JSON.parse(body);
+      if (!p.endpoint || !p.apiKey || !p.model) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Preencha todos os campos obrigatórios.' }));
+        return;
+      }
+      try {
+        await testConnection({ endpoint: p.endpoint.trim(), apiKey: p.apiKey.trim(), model: p.model.trim(), apiVersion: (p.apiVersion || '').trim() });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    // ── POST /ai/chat ──────────────────────────────────────────────────────
+    if (req.method === 'POST' && url === '/ai/chat') {
+      const ai = getAiCfg();
+      if (!ai?.endpoint || !ai?.apiKey || !ai?.model) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'IA não configurada.' }));
+        return;
+      }
+      const body = await readBody(req);
+      const { message, history = [], context = '' } = JSON.parse(body);
+      const systemPrompt = `You are Copilot Project, an AI assistant specialized in technology project management using Agile/Scrum methodology.
+
+Your role is to help the team and project managers to:
+- Analyze backlog health and identify risks (items without estimate, without assignee, excess open bugs)
+- Monitor sprint progress and delivery capacity
+- Suggest concrete and prioritized actions to improve project health
+- Answer questions about sprints, User Stories, bugs and metrics from Azure DevOps
+- Support daily standups, retrospectives and sprint planning with data-driven insights
+
+Behavior guidelines:
+- Always respond in the same language the user writes (Portuguese, English or Spanish)
+- Be direct and objective — avoid long introductions
+- When identifying a problem, always suggest a concrete action
+- Use the dashboard data to support your answers with real numbers
+- When data is insufficient to answer, say so clearly and suggest what information would be needed
+- Do not invent data — only use what is provided in the context below
+
+Current dashboard data:
+${context || 'No project data available at this moment.'}`;
+
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...history,
+        { role: 'user', content: message }
+      ];
+      try {
+        const reply = await chatCompletion(ai, messages);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ reply }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
       return;
     }
 

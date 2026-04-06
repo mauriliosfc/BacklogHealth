@@ -83,4 +83,13 @@ function getProjectConfig(projectName) {
     : { name: found.name, workItemType: found.workItemType || 'User Story' };
 }
 
-module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig };
+function getAiCfg() {
+  return cfg.ai || null;
+}
+
+function saveAiConfig(ai) {
+  cfg.ai = ai;
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
+}
+
+module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getAiCfg, saveAiConfig };
