@@ -1,4 +1,4 @@
-import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES } from './constants.js';
+import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes } from './constants.js';
 import { calcHealth } from './health.js';
 import { t } from './i18n.js';
 
@@ -54,6 +54,9 @@ export function saveFilter(card, selected) {
 
 export function applyFilter(card, selected) {
   const allItems = JSON.parse(card.dataset.items);
+  const workItemType = card.dataset.workitemtype || 'User Story';
+  const ITEM_TYPES = getItemTypes(workItemType);
+  const isTaskMode = workItemType === 'Task';
 
   card.querySelectorAll('tbody tr[data-iteration]').forEach(row => {
     row.style.display = (selected.length === 0 || selected.includes(row.dataset.iteration)) ? '' : 'none';
@@ -66,11 +69,11 @@ export function applyFilter(card, selected) {
   });
 
   const filtered = selected.length === 0 ? allItems : allItems.filter(i => selected.includes(i.iteration));
-  const filteredUS = filtered.filter(i => US_TYPES.includes(i.type));
-  const total = filteredUS.length;
-  const openUS = filteredUS.filter(i => !CLOSED_STATES.includes(i.state));
-  const semEst = openUS.filter(i => i.pts == null).length;
-  const semResp = openUS.filter(i => !i.assigned).length;
+  const filteredItems = filtered.filter(i => ITEM_TYPES.includes(i.type));
+  const total = filteredItems.length;
+  const openItems = filteredItems.filter(i => !CLOSED_STATES.includes(i.state));
+  const semEst = openItems.filter(i => i.pts == null || i.pts === 0).length;
+  const semResp = openItems.filter(i => !i.assigned).length;
   const bugs = filtered.filter(i => i.type === 'Bug' && ACTIVE_BUG_STATES.includes(i.state)).length;
 
   card.querySelector('.card-total').textContent = total;
@@ -93,9 +96,15 @@ export function applyFilter(card, selected) {
   healthEl.className = 'badge big card-health ' + health[1];
   healthEl.title = health[2];
 
-  const usCount = filteredUS.length;
+  const itemCount = filteredItems.length;
   const summaryBtn = card.querySelector('.card-summary');
-  summaryBtn.querySelector('.us-toggle-count').textContent = '(' + usCount + ')';
+  summaryBtn.querySelector('.us-toggle-count').textContent = '(' + itemCount + ')';
+
+  // Atualizar label dinamicamente
+  const cardLabel = card.querySelector('.card-label');
+  if (cardLabel) {
+    cardLabel.textContent = isTaskMode ? t('stat_tasks') : t('stat_us');
+  }
 }
 
 export function toggleUS(btn) {
