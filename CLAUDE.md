@@ -17,7 +17,7 @@ Automatizar a rotina de validação de backlog de projetos no **Azure DevOps**, 
 ```
 dash_azure_gestao_pessoal/
 ├── server.js           ← entry point: HTTP server, rotas, serve public/ dinamicamente
-├── config.js           ← loadConfig, saveConfig, getCfg, getAuth, parseOrgInput
+├── config.js           ← loadConfig, saveConfig, getCfg, getAuth, parseOrgInput, getProjectConfig
 ├── azureClient.js      ← azureGet, azurePost, rawAzureGet (usa cfg.baseUrl)
 ├── projectService.js   ← fetchProject, fetchProjectDetail, buildCardHTML
 ├── utils/
@@ -32,7 +32,7 @@ dash_azure_gestao_pessoal/
 │   │   ├── en.json     ← traduções em Inglês (padrão)
 │   │   └── es.json     ← traduções em Espanhol
 │   └── modules/
-│       ├── constants.js  ← US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES
+│       ├── constants.js  ← US_TYPES, TASK_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes(), getEstimateField()
 │       ├── health.js     ← calcHealth (browser, mesma lógica do backend)
 │       ├── utils.js      ← fmtD, buildSprintData
 │       ├── theme.js      ← setTheme, toggleTheme
@@ -298,6 +298,23 @@ Acessado via botão **📊** na coluna "Ações" da tabela de Distribuição por
 
 ---
 
+## 🔧 Modo de item por projeto (User Story vs Task)
+
+Cada projeto pode ser configurado na tela de setup com um **tipo de item principal**:
+
+| Modo | Tipos monitorados | Campo de estimativa | Label no card |
+|------|------------------|---------------------|---------------|
+| **User Story** (padrão) | User Story, Product Backlog Item, Requirement | Story Points | "User Stories" |
+| **Task** | Task | RemainingWork (fallback: OriginalEstimate) | "Tasks" |
+
+- O `workItemType` é salvo em `config.json` por projeto e lido via `getProjectConfig()` em `config.js`
+- `projectService.js` adapta a query WIQL e os campos buscados conforme o modo
+- O card HTML recebe `data-workitemtype` para que `filters.js` e `detail.js` adaptem métricas no cliente
+- O modal de detalhes, o Daily Standup e os labels do dashboard principal exibem "Tasks" / "Horas" em vez de "User Stories" / "Story Points" quando em modo Task
+- `getItemTypes(workItemType)` e `getEstimateField(workItemType)` em `constants.js` são a fonte única dessa lógica no frontend
+
+---
+
 ## 🗓️ Delivery Plan
 
 Acessado pelo botão **🗓️ Delivery Plan** no header, ao lado do botão de Daily Standup.
@@ -377,6 +394,9 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 | 46 | Classes CSS para estados de sprint (`.tl-block--past/future/current`, `.dp-block--past/future/current`) | Cores hardcoded no JS não respondem ao tema — classes CSS com overrides `[data-theme="light"]` garantem contraste adequado em ambos os temas |
 | 47 | Datas de início/fim em formato curto (`dd/mm`) dentro dos blocos de sprint | Exibir dia e mês dentro do bloco ocupa pouco espaço e dispensa hover; `fmtD` mantém o ano no tooltip para referência completa |
 | 48 | Botão Refresh com ícone apenas (`↻`) | Reduz espaço no header; `title` traduzido via `data-i18n-title` mantém acessibilidade; `timer.js` atualiza o `title` durante o refresh em vez do `textContent` |
+| 49 | `workItemType` por projeto (`User Story` ou `Task`) | Times que trabalham com Tasks em vez de User Stories precisam de estimativas em horas (RemainingWork/OriginalEstimate) em vez de Story Points — modo configurável na tela de setup; `getItemTypes()` e `getEstimateField()` em `constants.js` centralizam a lógica |
+| 50 | `getProjectConfig()` em `config.js` | `fetchProjectDetail` precisa saber o `workItemType` do projeto ao ser chamado — buscar da config evita passar o tipo como parâmetro pela cadeia de chamadas |
+| 51 | `data-workitemtype` no card HTML | `filters.js` e `detail.js` precisam saber o modo do projeto no cliente sem nova chamada ao servidor — atributo no DOM resolve sem estado global |
 
 ---
 
@@ -391,4 +411,4 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 
 ---
 
-*Documentação atualizada em Abril/2026 — Delivery Plan, tema-aware sprint colors, datas nos blocos*
+*Documentação atualizada em Abril/2026 — Delivery Plan, tema-aware sprint colors, datas nos blocos, modo Task por projeto*

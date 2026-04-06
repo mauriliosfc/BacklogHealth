@@ -7,7 +7,8 @@ Dashboard para monitoramento e análise de saúde dos backlogs de projetos no **
 ## Funcionalidades
 
 - Indicadores de saúde por projeto (Saudável / Atenção / Crítico) com tooltip explicando o motivo do alerta
-- Métricas agregadas: User Stories (abertas + fechadas), sem estimativa, sem responsável e bugs ativos
+- **Suporte a dois modos por projeto** — *User Story* (Story Points) ou *Task* (Horas: RemainingWork / OriginalEstimate), configurável por projeto na tela de setup
+- Métricas agregadas: User Stories/Tasks (abertas + fechadas), sem estimativa, sem responsável e bugs ativos
 - Agrupamento por sprint ordenado cronologicamente
 - Seção "Visualizar User Stories" por card com tabela filtrada (toggle expansível)
 - Modal de detalhes com indicadores, gráficos de distribuição, cronograma de sprints e tabela de distribuição por sprint
