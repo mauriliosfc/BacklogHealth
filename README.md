@@ -7,16 +7,18 @@ Dashboard para monitoramento e análise de saúde dos backlogs de projetos no **
 ## Funcionalidades
 
 - Indicadores de saúde por projeto (Saudável / Atenção / Crítico) com tooltip explicando o motivo do alerta
-- Métricas agregadas: User Stories (abertas + fechadas), sem estimativa, sem responsável e bugs ativos
+- **Suporte a dois modos por projeto** — *User Story* (Story Points) ou *Task* (Horas: RemainingWork / OriginalEstimate), configurável por projeto na tela de setup
+- Métricas agregadas: User Stories/Tasks (abertas + fechadas), sem estimativa, sem responsável e bugs ativos
 - Agrupamento por sprint ordenado cronologicamente
 - Seção "Visualizar User Stories" por card com tabela filtrada (toggle expansível)
 - Modal de detalhes com indicadores, gráficos de distribuição, cronograma de sprints e tabela de distribuição por sprint
 - **Gráfico de burndown por sprint** — acessível via coluna "Ações" na tabela de distribuição, com linha ideal, linha real e marcador de hoje
 - **Apresentação de Daily Standup** — modal em carrossel com métricas e User Stories da sprint atual, botão de burndown integrado
+- **Delivery Plan** — timeline compartilhada de todos os projetos lado a lado, com blocos de sprint posicionados por data, filtro por projeto e herança dos filtros de sprint do dashboard principal
 - Filtros por sprint com persistência no navegador
 - **Suporte a múltiplos idiomas** — Português, Inglês (padrão) e Espanhol, alternável pelo seletor PT/EN/ES no header
 - **Distribuição como app Windows nativo** — `BacklogHealth.exe` via wrapper WebView2, sem instalar Node.js ou browser
-- Temas claro e escuro
+- Temas claro e escuro com cores adaptadas por tema (blocos de sprint passados usam tons suaves no tema claro)
 - Atualização automática a cada 5 minutos
 
 ---

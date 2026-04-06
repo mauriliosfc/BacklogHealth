@@ -34,6 +34,16 @@ function loadConfig() {
     if (raw.org && raw.pat && Array.isArray(raw.projects) && raw.projects.length) {
       // compatibilidade: configs sem baseUrl usam dev.azure.com
       if (!raw.baseUrl) raw.baseUrl = `https://dev.azure.com/${raw.org}`;
+
+      // Migração automática: converter string[] para object[]
+      if (raw.projects && raw.projects.length > 0) {
+        raw.projects = raw.projects.map(p =>
+          typeof p === 'string'
+            ? { name: p, workItemType: 'User Story' }
+            : { name: p.name, workItemType: p.workItemType || 'User Story' }
+        );
+      }
+
       cfg = raw;
       return true;
     }
@@ -55,4 +65,22 @@ function getCfg() {
   return cfg;
 }
 
-module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput };
+function getProjectNames() {
+  const cfg = loadConfig() ? getCfg() : { projects: [] };
+  return cfg.projects.map(p => typeof p === 'string' ? p : p.name);
+}
+
+function getProjectConfig(projectName) {
+  const cfg = getCfg();
+  if (!cfg.projects) return null;
+  const found = cfg.projects.find(p => {
+    const name = typeof p === 'string' ? p : p.name;
+    return name === projectName;
+  });
+  if (!found) return null;
+  return typeof found === 'string'
+    ? { name: found, workItemType: 'User Story' }
+    : { name: found.name, workItemType: found.workItemType || 'User Story' };
+}
+
+module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig };

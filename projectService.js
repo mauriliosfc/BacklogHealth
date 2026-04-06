@@ -18,33 +18,55 @@ function fmtRange(iter) {
 
 // ── Azure DevOps data fetchers ────────────────────────────────────────────────
 
-async function fetchProject(project) {
+async function fetchProject(projectConfig) {
+  const project = typeof projectConfig === 'string' ? projectConfig : projectConfig.name;
+  const workItemType = typeof projectConfig === 'string' ? 'User Story' : (projectConfig.workItemType || 'User Story');
+  const isTaskMode = workItemType === 'Task';
+
   try {
+    const types = isTaskMode
+      ? ['Task', 'Bug']
+      : ['User Story', 'Product Backlog Item', 'Requirement', 'Bug'];
+
     const wiql = await azurePost(
       `${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }
+      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('${types.join("','")}') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }
     );
 
     const allIds = (wiql.workItems || []).slice(0, 500).map(w => w.id);
-    if (!allIds.length) return { project, items: [], sprint: null, error: null };
+    if (!allIds.length) return { project, items: [], sprint: null, error: null, workItemType };
 
-    const fields = "System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,Microsoft.VSTS.Scheduling.StoryPoints,System.IterationPath";
+    const estimateField = isTaskMode
+      ? "Microsoft.VSTS.Scheduling.RemainingWork,Microsoft.VSTS.Scheduling.OriginalEstimate"
+      : "Microsoft.VSTS.Scheduling.StoryPoints";
+
+    const fields = `System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,${estimateField},System.IterationPath`;
     const [detailsValue, { map: iterMap, currentSprint }] = await Promise.all([
       paginatedItems(project, allIds, fields),
       fetchIterMap(project),
     ]);
 
-    return { project, items: detailsValue, sprint: currentSprint, iterMap, error: null };
+    return { project, items: detailsValue, sprint: currentSprint, iterMap, error: null, workItemType };
   } catch (e) {
-    return { project, items: [], sprint: null, error: e.message };
+    return { project, items: [], sprint: null, error: e.message, workItemType };
   }
 }
 
-async function fetchProjectDetail(project) {
+async function fetchProjectDetail(projectName) {
+  const { getProjectConfig } = require('./config.js');
+  const projectConfig = getProjectConfig(projectName) || { name: projectName, workItemType: 'User Story' };
+  const project = projectConfig.name;
+  const workItemType = projectConfig.workItemType || 'User Story';
+  const isTaskMode = workItemType === 'Task';
+
   try {
+    const types = isTaskMode
+      ? ['Task', 'Bug']
+      : ['User Story', 'Product Backlog Item', 'Requirement', 'Bug'];
+
     const [mainWiql, taskWiql, bugWiql, { map: iterMap }] = await Promise.all([
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('User Story','Bug','Task','Feature','Epic','Product Backlog Item') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }),
+        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('${types.join("','")}') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }),
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
         { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Task' ORDER BY [System.ChangedDate] DESC` }),
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
@@ -56,7 +78,11 @@ async function fetchProjectDetail(project) {
     const taskIds = (taskWiql.workItems || []).slice(0, 500).map(w => w.id);
     const bugIds  = (bugWiql.workItems  || []).slice(0, 500).map(w => w.id);
 
-    const mainFields = "System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,Microsoft.VSTS.Scheduling.StoryPoints,Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath";
+    const estimateField = isTaskMode
+      ? "Microsoft.VSTS.Scheduling.RemainingWork,Microsoft.VSTS.Scheduling.OriginalEstimate"
+      : "Microsoft.VSTS.Scheduling.StoryPoints";
+
+    const mainFields = `System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,${estimateField},Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath`;
     const workFields = "Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath";
 
     const [rawItems, rawTaskItems, rawBugItems] = await Promise.all([
@@ -80,40 +106,72 @@ async function fetchProjectDetail(project) {
       iterMap,
       taskItems,
       bugItems,
-      items: rawItems.map(i => ({
-        state:     i.fields?.["System.State"] || "",
-        type:      i.fields?.["System.WorkItemType"] || "",
-        pts:       i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null,
-        assigned:  i.fields?.["System.AssignedTo"]?.displayName || null,
-        iteration: i.fields?.["System.IterationPath"] || "",
-        title:     i.fields?.["System.Title"] || "",
-      })),
+      workItemType,
+      items: rawItems.map(i => {
+        let pts = null;
+        if (isTaskMode) {
+          pts = i.fields?.["Microsoft.VSTS.Scheduling.RemainingWork"];
+          if (pts == null || pts === 0) {
+            pts = i.fields?.["Microsoft.VSTS.Scheduling.OriginalEstimate"];
+          }
+        } else {
+          pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null;
+        }
+
+        return {
+          state:     i.fields?.["System.State"] || "",
+          type:      i.fields?.["System.WorkItemType"] || "",
+          pts,
+          assigned:  i.fields?.["System.AssignedTo"]?.displayName || null,
+          iteration: i.fields?.["System.IterationPath"] || "",
+          title:     i.fields?.["System.Title"] || "",
+        };
+      }),
     };
   } catch (e) {
-    return { project, items: [], iterMap: {}, error: e.message };
+    return { project, items: [], iterMap: {}, error: e.message, workItemType };
   }
 }
 
 // ── Card HTML builder ─────────────────────────────────────────────────────────
 
 function buildCardHTML(results) {
-  return results.map(({ project, items, sprint, iterMap = {}, error }) => {
+  return results.map(({ project, items, sprint, iterMap = {}, error, workItemType = 'User Story' }) => {
     if (error) return `
       <div class="card error">
         <h2>❌ ${project}</h2>
         <p style="color:#f87171">${error}</p>
       </div>`;
 
-    const US_TYPES = ["User Story", "Product Backlog Item", "Requirement"];
+    const isTaskMode = workItemType === 'Task';
+    const ITEM_TYPES = isTaskMode
+      ? ["Task"]
+      : ["User Story", "Product Backlog Item", "Requirement"];
     const CLOSED_STATES = ["Closed", "Done", "Resolved", "Removed"];
-    const usOnlyItems = items.filter(i => US_TYPES.includes(i.fields?.["System.WorkItemType"]));
-    const total = usOnlyItems.length;
-    const openUS = usOnlyItems.filter(i => !CLOSED_STATES.includes(i.fields?.["System.State"]));
-    const semEst = openUS.filter(i => i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] == null).length;
-    const semResp = openUS.filter(i => !i.fields?.["System.AssignedTo"]).length;
+
+    const mainItems = items.filter(i => ITEM_TYPES.includes(i.fields?.["System.WorkItemType"]));
+    const total = mainItems.length;
+    const openItems = mainItems.filter(i => !CLOSED_STATES.includes(i.fields?.["System.State"]));
+
+    // Calcular itens sem estimativa baseado no modo
+    const semEst = openItems.filter(i => {
+      if (isTaskMode) {
+        const remainingWork = i.fields?.["Microsoft.VSTS.Scheduling.RemainingWork"];
+        const originalEstimate = i.fields?.["Microsoft.VSTS.Scheduling.OriginalEstimate"];
+        return (remainingWork == null || remainingWork === 0) && (originalEstimate == null || originalEstimate === 0);
+      }
+      return i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] == null;
+    }).length;
+
+    const semResp = openItems.filter(i => !i.fields?.["System.AssignedTo"]).length;
     const ACTIVE_STATES = ["Active", "In Progress", "New"];
     const bugs = items.filter(i => i.fields?.["System.WorkItemType"] === "Bug" && ACTIVE_STATES.includes(i.fields?.["System.State"])).length;
     const health = calcHealth(total, semEst, semResp, bugs);
+
+    // Labels dinâmicos baseados no modo
+    const itemLabel = isTaskMode ? 'Tasks' : 'User Stories';
+    const itemLabelKey = isTaskMode ? 'stat_tasks' : 'stat_us';
+    const estimateLabel = isTaskMode ? 'Horas' : 'Story Points';
 
     const iterations = [...new Set(
       items.map(i => i.fields?.["System.IterationPath"]).filter(Boolean)
@@ -135,17 +193,29 @@ function buildCardHTML(results) {
         </label>`;
     }).join("");
 
-    const itemsJson = JSON.stringify(items.map(i => ({
-      iteration: i.fields?.["System.IterationPath"] || "",
-      type: i.fields?.["System.WorkItemType"] || "",
-      state: i.fields?.["System.State"] || "",
-      pts: i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null,
-      assigned: !!i.fields?.["System.AssignedTo"],
-    }))).replace(/</g, "\\u003c");
+    const itemsJson = JSON.stringify(items.map(i => {
+      let pts = null;
+      if (isTaskMode) {
+        pts = i.fields?.["Microsoft.VSTS.Scheduling.RemainingWork"];
+        if (pts == null || pts === 0) {
+          pts = i.fields?.["Microsoft.VSTS.Scheduling.OriginalEstimate"];
+        }
+      } else {
+        pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null;
+      }
 
-    const usTotal = usOnlyItems.length;
+      return {
+        iteration: i.fields?.["System.IterationPath"] || "",
+        type: i.fields?.["System.WorkItemType"] || "",
+        state: i.fields?.["System.State"] || "",
+        pts,
+        assigned: !!i.fields?.["System.AssignedTo"],
+      };
+    })).replace(/</g, "\\u003c");
+
+    const mainTotal = mainItems.length;
     const grouped = {};
-    usOnlyItems.forEach(i => {
+    mainItems.forEach(i => {
       const key = i.fields?.["System.IterationPath"] || "Sem Sprint";
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(i);
@@ -175,7 +245,20 @@ function buildCardHTML(results) {
         const state = i.fields?.["System.State"] || "?";
         const title = i.fields?.["System.Title"] || "";
         const assigned = i.fields?.["System.AssignedTo"]?.displayName || "—";
-        const pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"];
+
+        let pts = null;
+        let ptsDisplay = "";
+        if (isTaskMode) {
+          pts = i.fields?.["Microsoft.VSTS.Scheduling.RemainingWork"];
+          if (pts == null || pts === 0) {
+            pts = i.fields?.["Microsoft.VSTS.Scheduling.OriginalEstimate"];
+          }
+          ptsDisplay = pts != null ? pts + " hrs" : '<span class="badge yellow" data-i18n="badge_no_est">Sem estimativa</span>';
+        } else {
+          pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"];
+          ptsDisplay = pts != null ? pts + " pts" : '<span class="badge yellow" data-i18n="badge_no_est">Sem estimativa</span>';
+        }
+
         const iteration = groupKey.replace(/"/g, "&quot;");
         const stateClass = ["Active","In Progress","Doing"].includes(state) ? "blue"
           : ["Closed","Done","Resolved"].includes(state) ? "green"
@@ -184,7 +267,7 @@ function buildCardHTML(results) {
           <tr data-iteration="${iteration}">
             <td>${title}</td>
             <td><span class="badge ${stateClass}">${state}</span></td>
-            <td>${pts != null ? pts + " pts" : '<span class="badge yellow" data-i18n="badge_no_est">Sem estimativa</span>'}</td>
+            <td>${ptsDisplay}</td>
             <td>${assigned === "—" ? '<span class="badge red" data-i18n="badge_no_resp">Sem responsável</span>' : assigned}</td>
           </tr>`;
       }).join("");
@@ -193,7 +276,7 @@ function buildCardHTML(results) {
     }).join("");
 
     return `
-      <div class="card" data-project="${project.replace(/"/g, "&quot;")}" data-items='${itemsJson}'>
+      <div class="card" data-project="${project.replace(/"/g, "&quot;")}" data-items='${itemsJson}' data-itermap='${JSON.stringify(iterMap).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}' data-workitemtype="${workItemType}">
         <div class="card-header">
           <div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -220,7 +303,7 @@ function buildCardHTML(results) {
           </div>
         </div>
         <div class="stats">
-          <div class="stat"><div class="stat-label" data-i18n="stat_us">User Stories</div><div class="stat-val card-total">${total}</div></div>
+          <div class="stat"><div class="stat-label card-label" data-i18n="${itemLabelKey}">${itemLabel}</div><div class="stat-val card-total">${total}</div></div>
           <div class="stat"><div class="stat-label" data-i18n="stat_no_est">Sem Estimativa</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
           <div class="stat"><div class="stat-label" data-i18n="stat_no_resp">Sem Responsável</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
           <div class="stat"><div class="stat-label" data-i18n="stat_bugs">Bugs Abertos</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
@@ -228,8 +311,8 @@ function buildCardHTML(results) {
         <div class="us-section">
           <button class="btn-us-toggle card-summary" type="button" onclick="toggleUS(this)">
             <span class="us-toggle-icon">▶</span>
-            <span data-i18n="btn_view_us">Visualizar User Stories</span>
-            <span class="us-toggle-count">(${usTotal})</span>
+            <span data-i18n="btn_view_items">Visualizar ${itemLabel}</span>
+            <span class="us-toggle-count">(${mainTotal})</span>
           </button>
           <div class="us-table" hidden>
             <table>

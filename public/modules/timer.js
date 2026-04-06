@@ -24,7 +24,7 @@ export async function doRefresh() {
   const btn = document.getElementById('btnRefresh');
   const content = document.getElementById('content');
   btn.classList.add('loading');
-  btn.textContent = t('btn_refreshing');
+  btn.title = t('btn_refreshing');
   content.classList.add('loading');
   document.getElementById('timer').textContent = t('timer_updating');
   try {
@@ -40,7 +40,7 @@ export async function doRefresh() {
     console.error('Erro ao atualizar:', e);
   }
   btn.classList.remove('loading');
-  btn.textContent = t('btn_refresh');
+  btn.title = t('btn_refresh');
   content.classList.remove('loading');
   startTimer();
 }
