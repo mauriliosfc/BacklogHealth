@@ -108,6 +108,9 @@ namespace BacklogHealth
             {
                 statusText.Visibility = Visibility.Hidden;
                 webView.Visibility    = Visibility.Visible;
+                InvalidateMeasure();
+                InvalidateArrange();
+                UpdateLayout();
             };
 
             webView.Source = new Uri(ServerUrl);
