@@ -382,10 +382,10 @@ tr:hover td { background: var(--hover-bg); }
 /* ── Copilot Chat Panel (floating) ── */
 .copilot-panel { position: fixed; bottom: 24px; right: 24px; width: 380px; height: 520px; z-index: 690; display: none; flex-direction: column; border-radius: 16px; background: var(--bg-card); border: 1px solid var(--bg-border); box-shadow: 0 8px 40px rgba(0,0,0,.55); overflow: hidden; min-width: 260px; min-height: 52px; }
 .copilot-panel.open { display: flex; }
-.copilot-panel.minimized .copilot-panel-body { display: none; }
-.copilot-panel.minimized { height: auto !important; }
 .copilot-panel.maximized { top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100% !important; height: 100% !important; border-radius: 0; }
 .copilot-panel.maximized .copilot-panel-head { cursor: default; }
+.copilot-panel.minimized .copilot-panel-body { display: none; }
+.copilot-panel.minimized { height: fit-content !important; min-height: 0 !important; }
 .copilot-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: linear-gradient(90deg,#E36CD91a,#9EABF81a,#67D7F51a); border-bottom: 1px solid var(--bg-border); cursor: grab; user-select: none; flex-shrink: 0; }
 .copilot-panel-head:active { cursor: grabbing; }
 .copilot-panel-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }

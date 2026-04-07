@@ -172,6 +172,12 @@ export function closeCopilotChatOverlay() { /* no-op — painel flutuante não t
 export function toggleCopilotMinimize() {
   const panel = document.getElementById('copilot-chat-panel');
   const btn   = document.getElementById('btnCopilotChatMin');
+  // minimizar cancela o estado maximizado
+  if (panel.classList.contains('maximized')) {
+    panel.classList.remove('maximized');
+    const maxBtn = document.getElementById('btnCopilotChatMax');
+    if (maxBtn) { maxBtn.textContent = '\u2922'; maxBtn.title = t('ai_maximize'); }
+  }
   const isMin = panel.classList.toggle('minimized');
   btn.textContent = isMin ? '\u002b' : '\u2212';
   btn.title = isMin ? t('ai_restore') : t('ai_minimize');
