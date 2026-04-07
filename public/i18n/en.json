@@ -116,6 +116,10 @@
   "burndown_maximize": "Maximize",
   "burndown_restore": "Restore",
   "btn_view_sprint": "View sprint",
+  "ai_new_chat": "New conversation",
+  "ai_maximize": "Maximize",
+  "ai_minimize": "Minimize",
+  "ai_restore": "Restore",
 
   "setup_pat_section": "🔑 Required PAT permissions",
   "setup_pat_link": "Generate at: Azure DevOps → User Settings → Personal Access Tokens",

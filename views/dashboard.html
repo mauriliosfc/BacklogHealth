@@ -147,17 +147,19 @@
   </div>
 </div>
 
-<!-- Copilot Chat Modal -->
-<div id="copilot-chat-modal" class="modal-overlay copilot-chat-overlay" onclick="closeCopilotChatOverlay(event)">
-  <div class="modal-box copilot-chat-box">
-    <div class="modal-head copilot-chat-head">
-      <div class="modal-title copilot-chat-title">🤖 Copilot Project</div>
-      <div class="modal-actions">
-        <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" title="Configurações">⚙️</button>
-        <button class="modal-maximize" type="button" id="btnCopilotChatMax" onclick="toggleCopilotChatMaximize()" title="Maximizar">⤢</button>
-        <button class="modal-close" type="button" onclick="closeCopilotChat()">✕</button>
-      </div>
+<!-- Copilot Chat Panel (floating) -->
+<div id="copilot-chat-panel" class="copilot-panel">
+  <div class="copilot-panel-head" id="copilot-panel-head">
+    <div class="copilot-chat-title">🤖 Copilot Project</div>
+    <div class="modal-actions">
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" title="Configurações">⚙️</button>
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="clearCopilotChat()" data-i18n-title="ai_new_chat" title="Nova conversa">🗑</button>
+      <button class="modal-maximize" type="button" id="btnCopilotChatMax" onclick="toggleCopilotMaximize()" title="Maximizar">⤢</button>
+      <button class="modal-maximize" type="button" id="btnCopilotChatMin" onclick="toggleCopilotMinimize()" title="Minimizar">−</button>
+      <button class="modal-close" type="button" onclick="closeCopilotChat()">✕</button>
     </div>
+  </div>
+  <div class="copilot-panel-body" id="copilot-panel-body">
     <div class="copilot-chat-messages" id="copilot-chat-messages"></div>
     <div class="copilot-chat-input-wrap">
       <textarea id="copilot-input" class="copilot-input" rows="1" placeholder="Pergunte sobre seus projetos..." onkeydown="copilotInputKeydown(event)" data-i18n-placeholder="ai_input_placeholder"></textarea>

@@ -102,13 +102,25 @@ function _getConfigFormValues() {
 // ── Chat modal ────────────────────────────────────────────────────────────────
 
 export function openCopilotChat() {
+  const panel = document.getElementById('copilot-chat-panel');
+  panel.classList.remove('minimized');
+  document.getElementById('btnCopilotChatMin').textContent = '\u2212';
+
+  // só inicializa se ainda não há conversa em andamento
+  if (_history.length === 0 && !_richContext && !_contextLoading) {
+    document.getElementById('copilot-chat-messages').innerHTML = '<div class="copilot-welcome">' + t('ai_welcome') + '</div>';
+    _loadRichContext();
+  }
+
+  panel.classList.add('open');
+  document.getElementById('copilot-input').focus();
+}
+
+export function clearCopilotChat() {
   _history = [];
   _richContext = null;
-  const body = document.getElementById('copilot-chat-messages');
-  body.innerHTML = '<div class="copilot-welcome">' + t('ai_welcome') + '</div>';
-  document.getElementById('copilot-chat-modal').classList.add('open');
-  document.body.style.overflow = 'hidden';
-  document.getElementById('copilot-input').focus();
+  _contextLoading = false;
+  document.getElementById('copilot-chat-messages').innerHTML = '<div class="copilot-welcome">' + t('ai_welcome') + '</div>';
   _loadRichContext();
 }
 
@@ -148,21 +160,43 @@ async function _loadRichContext() {
 }
 
 export function closeCopilotChat() {
-  document.getElementById('copilot-chat-modal').classList.remove('open', 'maximized');
-  document.getElementById('btnCopilotChatMax').textContent = '\u2922';
-  document.body.style.overflow = '';
+  const panel = document.getElementById('copilot-chat-panel');
+  panel.classList.remove('open', 'minimized');
+  // reset posição para o canto padrão ao fechar
+  panel.style.left = ''; panel.style.top = '';
+  panel.style.right = '24px'; panel.style.bottom = '24px';
 }
 
-export function closeCopilotChatOverlay(e) {
-  if (e.target === document.getElementById('copilot-chat-modal')) closeCopilotChat();
+export function closeCopilotChatOverlay() { /* no-op — painel flutuante não tem overlay */ }
+
+export function toggleCopilotMinimize() {
+  const panel = document.getElementById('copilot-chat-panel');
+  const btn   = document.getElementById('btnCopilotChatMin');
+  // minimizar cancela o estado maximizado
+  if (panel.classList.contains('maximized')) {
+    panel.classList.remove('maximized');
+    const maxBtn = document.getElementById('btnCopilotChatMax');
+    if (maxBtn) { maxBtn.textContent = '\u2922'; maxBtn.title = t('ai_maximize'); }
+  }
+  const isMin = panel.classList.toggle('minimized');
+  btn.textContent = isMin ? '\u002b' : '\u2212';
+  btn.title = isMin ? t('ai_restore') : t('ai_minimize');
 }
 
-export function toggleCopilotChatMaximize() {
-  const modal = document.getElementById('copilot-chat-modal');
+export function toggleCopilotMaximize() {
+  const panel = document.getElementById('copilot-chat-panel');
   const btn   = document.getElementById('btnCopilotChatMax');
-  const isMax = modal.classList.toggle('maximized');
+  const isMax = panel.classList.toggle('maximized');
+  // ao maximizar, remove posição inline do drag para o CSS assumir
+  if (isMax) { panel.style.left = ''; panel.style.top = ''; }
   btn.textContent = isMax ? '\u2921' : '\u2922';
+  btn.title = isMax ? t('ai_restore') : t('ai_maximize');
+  // maximizar cancela o minimizar
+  if (isMax) panel.classList.remove('minimized');
 }
+
+// mantido para não quebrar referências antigas
+export function toggleCopilotChatMaximize() { toggleCopilotMaximize(); }
 
 export function openCopilotSettings() {
   closeCopilotChat();
@@ -356,9 +390,41 @@ function _buildContext() {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    const configModal = document.getElementById('copilot-config-modal');
-    const chatModal   = document.getElementById('copilot-chat-modal');
-    if (configModal?.classList.contains('open')) closeCopilotConfig();
-    if (chatModal?.classList.contains('open'))   closeCopilotChat();
+    if (document.getElementById('copilot-config-modal')?.classList.contains('open')) closeCopilotConfig();
+    if (document.getElementById('copilot-chat-panel')?.classList.contains('open'))   closeCopilotChat();
   }
 });
+
+// ── Drag ──────────────────────────────────────────────────────────────────────
+(function _initDrag() {
+  const panel  = document.getElementById('copilot-chat-panel');
+  const handle = document.getElementById('copilot-panel-head');
+  if (!panel || !handle) return;
+
+  handle.addEventListener('mousedown', e => {
+    if (e.target.tagName === 'BUTTON') return;
+    const rect  = panel.getBoundingClientRect();
+    const offX  = e.clientX - rect.left;
+    const offY  = e.clientY - rect.top;
+    // muda para posicionamento absoluto (left/top) durante o drag
+    panel.style.right = ''; panel.style.bottom = '';
+    panel.style.left = rect.left + 'px';
+    panel.style.top  = rect.top  + 'px';
+
+    function onMove(e) {
+      let newLeft = e.clientX - offX;
+      let newTop  = e.clientY - offY;
+      // mantém dentro da viewport
+      newLeft = Math.max(0, Math.min(newLeft, window.innerWidth  - panel.offsetWidth));
+      newTop  = Math.max(0, Math.min(newTop,  window.innerHeight - panel.offsetHeight));
+      panel.style.left = newLeft + 'px';
+      panel.style.top  = newTop  + 'px';
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',   onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onUp);
+  });
+})();
