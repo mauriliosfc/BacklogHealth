@@ -1,24 +1,35 @@
 import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes } from './constants.js';
 import { calcHealth } from './health.js';
 import { t } from './i18n.js';
+import { fmtD } from './utils.js';
 
 let _dailyIndex = 0;
 let _dailySlides = [];
 
-export function buildDailySlide(card) {
+export function buildDailySlide(card, forcedSprintKey = null) {
   const project = card.dataset.project;
   const items = JSON.parse(card.dataset.items);
   const workItemType = card.dataset.workitemtype || 'User Story';
   const ITEM_TYPES = getItemTypes(workItemType);
   const isTaskMode = workItemType === 'Task';
 
-  const currentOption = card.querySelector('.option-row.is-current input');
-  const currentIter = currentOption ? currentOption.value : null;
+  let currentIter, sprintName, sprintDate;
 
-  const sprintEl = card.querySelector('.sprint');
-  const sprintName = sprintEl ? sprintEl.textContent.trim() : t('daily_no_sprint');
-  const currentRow = card.querySelector('.option-row.is-current');
-  const sprintDate = currentRow ? (currentRow.querySelector('.option-date') || {}).textContent || '' : '';
+  if (forcedSprintKey) {
+    currentIter = forcedSprintKey;
+    sprintName = forcedSprintKey.includes('\\') ? forcedSprintKey.split('\\').pop() : forcedSprintKey;
+    const iterMap = (() => { try { return JSON.parse(card.dataset.itermap || '{}'); } catch(_) { return {}; } })();
+    const iter = iterMap[forcedSprintKey] || {};
+    sprintDate = iter.start && iter.end ? fmtD(iter.start) + ' \u2013 ' + fmtD(iter.end) : '';
+  } else {
+    const currentOption = card.querySelector('.option-row.is-current input');
+    currentIter = currentOption ? currentOption.value : null;
+    const sprintEl = card.querySelector('.sprint');
+    sprintName = sprintEl ? sprintEl.textContent.trim() : t('daily_no_sprint');
+    const currentRow = card.querySelector('.option-row.is-current');
+    sprintDate = currentRow ? (currentRow.querySelector('.option-date') || {}).textContent || '' : '';
+  }
+
   const sprintLabel = sprintDate ? sprintName + '\u2002\u00b7\u2002' + sprintDate : sprintName;
 
   const filteredForStats = currentIter ? items.filter(i => i.iteration === currentIter) : items;
@@ -84,6 +95,24 @@ export function openDaily() {
 
   updateDailyNav();
 
+  document.getElementById('daily-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('daily-modal').focus();
+}
+
+export function openDailyForSprint(projectName, sprintKey) {
+  const card = Array.from(document.querySelectorAll('#content .card[data-project]'))
+    .find(c => c.dataset.project === projectName);
+  if (!card) return;
+
+  _dailySlides = [card];
+  _dailyIndex = 0;
+
+  const track = document.getElementById('daily-track');
+  track.innerHTML = buildDailySlide(card, sprintKey);
+  track.style.transform = 'translateX(0)';
+
+  updateDailyNav();
   document.getElementById('daily-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
   document.getElementById('daily-modal').focus();

@@ -216,10 +216,10 @@ Ao selecionar sprints, o dashboard recalcula em tempo real:
 
 ## 📅 Apresentação de Daily Standup
 
-Acessado pelo botão **📅 Apresentar daily** no header.
+Acessado pelo botão **📅 Apresentar daily** no header, ou pelo botão **☰** na coluna Ações da tabela Distribuição por Sprint no modal de detalhes.
 
 - Modal em carrossel — um slide por projeto monitorado
-- Cada slide exibe dados **filtrados pela sprint atual** do projeto
+- Cada slide exibe dados **filtrados pela sprint atual** do projeto (ou pela sprint selecionada quando aberto via botão ☰)
 - **Conteúdo por slide:**
   - Nome do projeto + badge de saúde (com tooltip)
   - Nome da sprint atual + período (data início – data fim)
@@ -250,7 +250,7 @@ Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 | **Indicadores de Saúde** | Taxa de Conclusão (US), Em UAT (US), Taxa de Bugs (hrs bugs/total hrs), Cobertura de Estimativas (US) |
 | **US por Status** | Barras horizontais com todos os estados — filtrado apenas por User Stories |
 | **US por Responsável** | Barras horizontais com membros da equipe — filtrado apenas por User Stories |
-| **Distribuição por Sprint** | Tabela: Sprint, Período, User Stories, Story Points, Concluídos (%), Ações (botão burndown) — ordenada por data crescente |
+| **Distribuição por Sprint** | Tabela: Sprint, Período, User Stories, Story Points, Concluídos (%), Ações (botão burndown 📊 + botão ver sprint ☰) — ordenada por data crescente |
 | **Cronograma de Sprints** | Gantt visual com blocos posicionados por data, barra proporcional à qtd de US, marcador "hoje" |
 
 ### Cálculo dos indicadores de saúde
@@ -417,6 +417,8 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 | 56 | Filtros de sprint normalizados no servidor (`f.split('\\').pop()`) | `localStorage` armazena o caminho completo da iteration (`Projeto\\Sprint 108`); API do Azure DevOps usa o mesmo formato — comparar apenas o último segmento resolve a divergência sem alterar o formato salvo |
 | 57 | `_loadRichContext` em `copilot.js` exibe indicador de carregamento | Buscar detalhes de todos os projetos pode levar vários segundos — feedback visual imediato evita que o usuário envie mensagem antes dos dados estarem disponíveis e receba resposta genérica |
 | 58 | `_buildContext()` como fallback DOM-based | Se `/ai/context` falhar, o chat ainda funciona com dados já presentes nos `data-*` dos cards do dashboard — degradação graciosa sem bloquear o usuário |
+| 59 | Botão ☰ "Ver sprint" na tabela de Distribuição por Sprint | Permite abrir o Daily Standup de qualquer sprint diretamente do modal de detalhes, sem precisar usar o carrossel do header — abre o modal focado no projeto e sprint selecionados |
+| 60 | `buildDailySlide(card, forcedSprintKey)` com parâmetro opcional | Reutiliza toda a lógica do slide da daily com override de sprint — sem `forcedSprintKey` o comportamento original é preservado; com ele, nome/datas são lidos do `data-itermap` do card |
 
 ---
 

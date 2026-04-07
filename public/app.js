@@ -2,7 +2,7 @@ import { initFilters, toggleDropdown, onCheckChange, clearFilter, applyFilter, t
 import { startTimer, doRefresh } from './modules/timer.js';
 import { setTheme, toggleTheme } from './modules/theme.js';
 import { openDetails, closeDetails, closeDetailsBtn, toggleMaximize, loadDetailData, _detailState } from './modules/detail.js';
-import { openDaily, closeDaily, toggleDailyMaximize, dailyPrev, dailyNext, handleDailyKey } from './modules/daily.js';
+import { openDaily, closeDaily, toggleDailyMaximize, dailyPrev, dailyNext, handleDailyKey, openDailyForSprint } from './modules/daily.js';
 import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily } from './modules/burndown.js';
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
 import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDeliveryPlanMaximize, toggleDeliveryFilter, applyDeliveryFilter } from './modules/deliveryPlan.js';
@@ -24,6 +24,7 @@ window.loadDetailData    = (p, s) => loadDetailData(p !== undefined ? p : _detai
 Object.defineProperty(window, '_detailProject', { get: () => _detailState.project });
 Object.defineProperty(window, '_detailSprints',  { get: () => _detailState.sprints });
 window.openDaily         = openDaily;
+window.openDailyForSprint = openDailyForSprint;
 window.closeDaily        = closeDaily;
 window.toggleDailyMaximize = toggleDailyMaximize;
 window.dailyPrev         = dailyPrev;
