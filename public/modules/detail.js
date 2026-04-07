@@ -29,7 +29,7 @@ export async function loadDetailData(project, selectedSprints = _detailState.spr
     const taskCompletedWork = taskItems.reduce((s, t) => s + t.completedWork, 0);
     const bugCompletedWork  = bugItems.reduce((s, t)  => s + t.completedWork, 0);
     const totalBugs         = bugItems.length;
-    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story');
+    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story', project);
   } catch(e) {
     document.getElementById('modal-body').innerHTML = '<p style="color:#f87171;padding:20px">Erro: ' + e.message + '</p>';
   } finally {
@@ -107,7 +107,7 @@ function ring(pct, color) {
     '</svg><div class="ring-pct" style="color:' + color + '">' + pct + '%</div></div>';
 }
 
-function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story') {
+function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story', projectName = '') {
   const total = items.length;
   if (!total) return '<p style="color:#64748b;padding:20px">' + t('detail_no_items') + '</p>';
 
@@ -172,7 +172,10 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
       '<td>' + d.us + '</td>' +
       '<td>' + d.pts + '</td>' +
       '<td>' + d.usClosed + ' <span style="color:#475569">(' + pct + '%)</span></td>' +
-      '<td><button class="btn-burndown" type="button" onclick="openBurndown(this)" title="Ver burndown">\uD83D\uDCCA</button></td>' +
+      '<td>' +
+      '<button class="btn-burndown" type="button" onclick="openBurndown(this)" title="Ver burndown">\uD83D\uDCCA</button>' +
+      '<button class="btn-burndown" type="button" data-project="' + projectName.replace(/"/g,'&quot;') + '" data-sprint="' + safeKey + '" onclick="openDailyForSprint(this.dataset.project, this.dataset.sprint)" title="' + t('btn_view_sprint') + '">\u2630</button>' +
+      '</td>' +
       '</tr>';
   }).join('');
 

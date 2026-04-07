@@ -115,6 +115,7 @@
   "burndown_real": "Real",
   "burndown_maximize": "Maximizar",
   "burndown_restore": "Restaurar",
+  "btn_view_sprint": "Ver sprint",
 
   "setup_pat_section": "🔑 Permissões necessárias para o PAT",
   "setup_pat_link": "Gere em: Azure DevOps → User Settings → Personal Access Tokens",
