@@ -1,6 +1,6 @@
 # 📋 Backlog Health Dashboard — Documentação
 
-> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Março/2026
+> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Abril/2026
 
 ---
 
@@ -42,7 +42,9 @@ dash_azure_gestao_pessoal/
 │       ├── detail.js     ← loadDetailData, buildDetailHTML, buildTimeline
 │       ├── daily.js      ← openDaily, buildDailySlide
 │       ├── burndown.js   ← openBurndown, buildBurndownChart, openBurndownFromDaily
-│       └── deliveryPlan.js ← openDeliveryPlan, buildDeliveryPlan, filtros de projeto
+│       ├── deliveryPlan.js ← openDeliveryPlan, buildDeliveryPlan, filtros de projeto
+│       └── copilot.js    ← openCopilot, sendCopilotMessage, _loadRichContext, _buildContext (fallback DOM)
+├── aiClient.js         ← chatCompletion, testConnection (Azure AI Foundry / Azure OpenAI / OpenAI-compat)
 ├── views/
 │   ├── dashboard.html  ← template HTML do dashboard com tokens {{ORG}}, {{CARDS}}, etc.
 │   └── setup.html      ← template HTML do setup com tokens de configuração
@@ -78,6 +80,12 @@ server.js (entry point)
         │       ├── fetchProject       → dashboard principal (WIQL + paginação + iterMap em paralelo)
         │       └── fetchProjectDetail → detail modal (3 WIQLs + iterMap em paralelo, 3 paginações em paralelo)
         │
+        ├── aiClient.js        → cliente HTTP para provedores de IA
+        │       ├── buildUrl     → detecta Foundry / Azure OpenAI / genérico e constrói URL correta
+        │       ├── buildHeaders → header api-key (Azure) ou Authorization Bearer (genérico)
+        │       ├── buildBody    → injeta system prompt como prefixo no Foundry; max_tokens para outros
+        │       └── extractContent → parseia Responses API (Foundry) ou Chat Completions
+        │
         └── Servidor HTTP local (porta 3030)
                 ├── GET /                    → dashboard principal (HTML cacheado)
                 ├── GET /refresh             → rebusca dados e retorna HTML atualizado
@@ -85,6 +93,11 @@ server.js (entry point)
                 ├── GET /api/projects        → lista projetos disponíveis para o PAT informado
                 ├── POST /setup              → salva config.json e retorna JSON {ok:true}
                 ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, iterMap
+                ├── GET /ai/config           → verifica se a IA está configurada
+                ├── POST /ai/config          → salva credenciais da IA em config.json
+                ├── POST /ai/test            → testa conexão com o provedor de IA
+                ├── POST /ai/context         → retorna contexto rico dos projetos (respeita filtros de sprint)
+                ├── POST /ai/chat            → envia mensagem para a IA e retorna resposta
                 ├── GET /modules/*.js        → ES modules servidos dinamicamente de public/
                 └── GET /i18n/*.json         → arquivos de tradução servidos de public/i18n/
 ```
@@ -397,6 +410,46 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 | 49 | `workItemType` por projeto (`User Story` ou `Task`) | Times que trabalham com Tasks em vez de User Stories precisam de estimativas em horas (RemainingWork/OriginalEstimate) em vez de Story Points — modo configurável na tela de setup; `getItemTypes()` e `getEstimateField()` em `constants.js` centralizam a lógica |
 | 50 | `getProjectConfig()` em `config.js` | `fetchProjectDetail` precisa saber o `workItemType` do projeto ao ser chamado — buscar da config evita passar o tipo como parâmetro pela cadeia de chamadas |
 | 51 | `data-workitemtype` no card HTML | `filters.js` e `detail.js` precisam saber o modo do projeto no cliente sem nova chamada ao servidor — atributo no DOM resolve sem estado global |
+| 52 | `aiClient.js` separado do `server.js` | Lógica de detecção de provedor (Foundry vs Azure OpenAI vs genérico), construção de URL/headers/body e parsing de resposta ficaria grande demais inline — módulo próprio mantém `server.js` focado em roteamento |
+| 53 | Sistema prompt injetado como prefixo da mensagem do usuário (Foundry) | Azure AI Foundry agents rejeitam `instructions`, `temperature`, `model` e role `system` na Responses API — única forma de passar contexto é prefixar a última mensagem do usuário |
+| 54 | Contexto reenviado a cada mensagem (não apenas na primeira) | Foundry agents não persistem system context entre turnos de uma mesma sessão — sem reenviar, a IA perde acesso aos dados dos projetos a partir da segunda mensagem |
+| 55 | `/ai/context` computa a mesma estrutura do modal de detalhes | Usuário precisava que a IA respondesse com a mesma riqueza de dados do "Detalhes do Projeto" — reusar `fetchProjectDetail` e agregar no servidor garante consistência sem duplicar lógica |
+| 56 | Filtros de sprint normalizados no servidor (`f.split('\\').pop()`) | `localStorage` armazena o caminho completo da iteration (`Projeto\\Sprint 108`); API do Azure DevOps usa o mesmo formato — comparar apenas o último segmento resolve a divergência sem alterar o formato salvo |
+| 57 | `_loadRichContext` em `copilot.js` exibe indicador de carregamento | Buscar detalhes de todos os projetos pode levar vários segundos — feedback visual imediato evita que o usuário envie mensagem antes dos dados estarem disponíveis e receba resposta genérica |
+| 58 | `_buildContext()` como fallback DOM-based | Se `/ai/context` falhar, o chat ainda funciona com dados já presentes nos `data-*` dos cards do dashboard — degradação graciosa sem bloquear o usuário |
+
+---
+
+## 💬 Copilot Project — Arquitetura da feature de IA
+
+### Provedores suportados
+
+| Provedor | Detecção | Formato do body | Extração da resposta |
+|----------|----------|-----------------|---------------------|
+| **Azure AI Foundry** | `services.ai.azure.com` na URL | `{ input: [...] }` — system injetado como prefixo da última msg user | `json.output[].content[].text` (Responses API) |
+| **Azure OpenAI** | `openai.azure.com` na URL | `{ messages, max_tokens, temperature }` | `json.choices[0].message.content` |
+| **OpenAI / genérico** | demais URLs | idem Azure OpenAI + `model` no body | idem |
+
+### Estrutura do contexto (`/ai/context`)
+
+Por projeto, o endpoint retorna:
+
+```json
+{
+  "name": "NomeProjeto",
+  "workItemType": "User Story",
+  "activeSprintFilter": ["Sprint 108"],
+  "summary": { "totalItems": 42, "userStories": 30, "storyPoints": 120, ... },
+  "healthIndicators": { "completionRate": 70, "inUAT_pct": 5, "bugRate_pct": 12, "estimateCoverage": 90 },
+  "byStatus": [{ "status": "Active", "count": 12 }, ...],
+  "byAssignee": [{ "assignee": "Fulano", "count": 8 }, ...],
+  "sprintDistribution": [{ "sprint": "Sprint 107", "totalUS": 10, "completedUS": 10, "completionPct": 100, ... }],
+  "currentSprint": { "name": "Sprint 108", "start": "2026-03-31", "end": "2026-04-13", "items": [...] },
+  "noEstimateItems": [{ "title": "...", "sprint": "Sprint 108", "assignee": "..." }],
+  "noAssigneeItems": [...],
+  "openBugs": [...]
+}
+```
 
 ---
 
@@ -408,7 +461,8 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 - [ ] Adicionar filtro por responsável além do filtro por sprint
 - [ ] Adicionar histórico de saúde do backlog (comparar com semanas anteriores)
 - [ ] Burndown baseado em datas reais de conclusão (via histórico de estado do Azure DevOps)
+- [ ] Streaming de respostas da IA (SSE) para reduzir tempo de espera percebido
 
 ---
 
-*Documentação atualizada em Abril/2026 — Delivery Plan, tema-aware sprint colors, datas nos blocos, modo Task por projeto*
+*Documentação atualizada em Abril/2026 — Copilot Project (IA): Azure AI Foundry, Azure OpenAI e OpenAI-compat; contexto rico de projetos; markdown no chat*

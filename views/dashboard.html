@@ -25,6 +25,7 @@
     </div>
     <div class="header-divider"></div>
     <div class="header-actions">
+      <button class="btn-copilot" id="btnCopilot" onclick="openCopilot()">🤖 Copilot Project</button>
       <button class="btn-delivery" id="btnDelivery" onclick="openDeliveryPlan()" data-i18n="dp_btn">🗓️ Delivery Plan</button>
       <button class="btn-daily" id="btnDaily" onclick="openDaily()" data-i18n="btn_daily">📅 Apresentar daily</button>
       <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()" data-i18n-title="btn_refresh" title="Atualizar">↻</button>
@@ -102,6 +103,66 @@
       </div>
     </div>
     <div class="modal-body" id="burndown-body"></div>
+  </div>
+</div>
+
+<!-- Copilot Config Modal -->
+<div id="copilot-config-modal" class="modal-overlay copilot-config-overlay" onclick="closeCopilotConfigOverlay(event)">
+  <div class="modal-box copilot-config-box">
+    <div class="modal-head">
+      <div class="modal-title">🤖 Copilot Project — <span data-i18n="ai_config_title">Configuração da IA</span></div>
+      <div class="modal-actions">
+        <button class="modal-close" type="button" onclick="closeCopilotConfig()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body copilot-config-body">
+      <p class="copilot-config-hint" data-i18n="ai_config_hint">Configure as credenciais da sua IA. Os dados ficam salvos localmente em config.json.</p>
+      <div class="copilot-config-form">
+        <label>
+          <span data-i18n="ai_endpoint_label">Endpoint</span>
+          <input id="ai-endpoint" type="url" placeholder="https://minha-empresa.openai.azure.com/" autocomplete="off">
+          <small data-i18n="ai_endpoint_hint">URL base da API (Azure OpenAI, OpenAI-compatible, etc.)</small>
+        </label>
+        <label>
+          <span data-i18n="ai_apikey_label">API Key</span>
+          <input id="ai-apikey" type="password" placeholder="sk-..." autocomplete="off">
+        </label>
+        <label>
+          <span data-i18n="ai_model_label">Model / Deployment</span>
+          <input id="ai-model" type="text" placeholder="gpt-4o" autocomplete="off">
+          <small data-i18n="ai_model_hint">Nome do modelo ou deployment (ex: gpt-4o, claude-opus-4-6)</small>
+        </label>
+        <label>
+          <span data-i18n="ai_apiversion_label">API Version <span style="opacity:.5">(opcional)</span></span>
+          <input id="ai-apiversion" type="text" placeholder="2024-02-01" autocomplete="off">
+          <small data-i18n="ai_apiversion_hint">Necessário apenas para Azure OpenAI</small>
+        </label>
+      </div>
+      <div id="copilot-config-status" class="copilot-config-status"></div>
+      <div class="copilot-config-actions">
+        <button id="btnCopilotTest" type="button" onclick="testCopilotConnection()" data-i18n="ai_btn_test">🔌 Testar conexão</button>
+        <button id="btnCopilotSave" type="button" class="copilot-save-btn" onclick="saveCopilotConfig()" data-i18n="ai_btn_save">💾 Salvar e abrir chat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Copilot Chat Modal -->
+<div id="copilot-chat-modal" class="modal-overlay copilot-chat-overlay" onclick="closeCopilotChatOverlay(event)">
+  <div class="modal-box copilot-chat-box">
+    <div class="modal-head copilot-chat-head">
+      <div class="modal-title copilot-chat-title">🤖 Copilot Project</div>
+      <div class="modal-actions">
+        <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" title="Configurações">⚙️</button>
+        <button class="modal-maximize" type="button" id="btnCopilotChatMax" onclick="toggleCopilotChatMaximize()" title="Maximizar">⤢</button>
+        <button class="modal-close" type="button" onclick="closeCopilotChat()">✕</button>
+      </div>
+    </div>
+    <div class="copilot-chat-messages" id="copilot-chat-messages"></div>
+    <div class="copilot-chat-input-wrap">
+      <textarea id="copilot-input" class="copilot-input" rows="1" placeholder="Pergunte sobre seus projetos..." onkeydown="copilotInputKeydown(event)" data-i18n-placeholder="ai_input_placeholder"></textarea>
+      <button id="btnCopilotSend" class="copilot-send-btn" type="button" onclick="sendCopilotMessage()">➤</button>
+    </div>
   </div>
 </div>
 
