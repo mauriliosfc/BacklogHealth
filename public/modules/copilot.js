@@ -177,8 +177,20 @@ export function toggleCopilotMinimize() {
   btn.title = isMin ? t('ai_restore') : t('ai_minimize');
 }
 
+export function toggleCopilotMaximize() {
+  const panel = document.getElementById('copilot-chat-panel');
+  const btn   = document.getElementById('btnCopilotChatMax');
+  const isMax = panel.classList.toggle('maximized');
+  // ao maximizar, remove posição inline do drag para o CSS assumir
+  if (isMax) { panel.style.left = ''; panel.style.top = ''; }
+  btn.textContent = isMax ? '\u2921' : '\u2922';
+  btn.title = isMax ? t('ai_restore') : t('ai_maximize');
+  // maximizar cancela o minimizar
+  if (isMax) panel.classList.remove('minimized');
+}
+
 // mantido para não quebrar referências antigas
-export function toggleCopilotChatMaximize() { toggleCopilotMinimize(); }
+export function toggleCopilotChatMaximize() { toggleCopilotMaximize(); }
 
 export function openCopilotSettings() {
   closeCopilotChat();

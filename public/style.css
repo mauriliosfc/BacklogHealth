@@ -384,6 +384,8 @@ tr:hover td { background: var(--hover-bg); }
 .copilot-panel.open { display: flex; }
 .copilot-panel.minimized .copilot-panel-body { display: none; }
 .copilot-panel.minimized { height: auto !important; }
+.copilot-panel.maximized { top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100% !important; height: 100% !important; border-radius: 0; }
+.copilot-panel.maximized .copilot-panel-head { cursor: default; }
 .copilot-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: linear-gradient(90deg,#E36CD91a,#9EABF81a,#67D7F51a); border-bottom: 1px solid var(--bg-border); cursor: grab; user-select: none; flex-shrink: 0; }
 .copilot-panel-head:active { cursor: grabbing; }
 .copilot-panel-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
