@@ -21,7 +21,7 @@
         <button class="btn-lang" data-lang="es" onclick="setLocale('es')" title="Español">ES</button>
       </div>
       <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Tema claro">☀️</button>
-      <button class="btn-theme" onclick="location.href='/settings'" title="Configurações">⚙️</button>
+      <button class="btn-theme" onclick="location.href='/settings'" data-i18n-title="btn_settings" title="Configurações">⚙️</button>
     </div>
     <div class="header-divider"></div>
     <div class="header-actions">
@@ -63,7 +63,7 @@
       <div class="daily-head-title" data-i18n="daily_title">📅 Daily Standup</div>
       <div class="daily-head-actions">
         <button class="modal-maximize" id="btnDailyMax" onclick="toggleDailyMaximize()" data-i18n-title="daily_expand" title="Expandir">⤢</button>
-        <button class="modal-close" onclick="closeDaily()" title="Fechar">✕</button>
+        <button class="modal-close" onclick="closeDaily()" data-i18n-title="btn_close" title="Fechar">✕</button>
       </div>
     </div>
     <div class="daily-carousel-wrap">
@@ -152,10 +152,10 @@
   <div class="copilot-panel-head" id="copilot-panel-head">
     <div class="copilot-chat-title">🤖 Copilot Project</div>
     <div class="modal-actions">
-      <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" title="Configurações">⚙️</button>
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" data-i18n-title="btn_settings" title="Configurações">⚙️</button>
       <button class="modal-maximize copilot-settings-btn" type="button" onclick="clearCopilotChat()" data-i18n-title="ai_new_chat" title="Nova conversa">🗑</button>
-      <button class="modal-maximize" type="button" id="btnCopilotChatMax" onclick="toggleCopilotMaximize()" title="Maximizar">⤢</button>
-      <button class="modal-maximize" type="button" id="btnCopilotChatMin" onclick="toggleCopilotMinimize()" title="Minimizar">−</button>
+      <button class="modal-maximize" type="button" id="btnCopilotChatMax" onclick="toggleCopilotMaximize()" data-i18n-title="ai_maximize" title="Maximizar">⤢</button>
+      <button class="modal-maximize" type="button" id="btnCopilotChatMin" onclick="toggleCopilotMinimize()" data-i18n-title="ai_minimize" title="Minimizar">−</button>
       <button class="modal-close" type="button" onclick="closeCopilotChat()">✕</button>
     </div>
   </div>

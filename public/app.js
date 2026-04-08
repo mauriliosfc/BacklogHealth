@@ -7,6 +7,7 @@ import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximi
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
 import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDeliveryPlanMaximize, toggleDeliveryFilter, applyDeliveryFilter } from './modules/deliveryPlan.js';
 import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilotConnection, saveCopilotConfig, openCopilotChat, closeCopilotChat, closeCopilotChatOverlay, toggleCopilotChatMaximize, toggleCopilotMinimize, toggleCopilotMaximize, clearCopilotChat, openCopilotSettings, copilotInputKeydown, sendCopilotMessage } from './modules/copilot.js';
+import { applyAliases, startRename } from './modules/alias.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -57,6 +58,26 @@ window.clearCopilotChat          = clearCopilotChat;
 window.openCopilotSettings      = openCopilotSettings;
 window.copilotInputKeydown      = copilotInputKeydown;
 window.sendCopilotMessage       = sendCopilotMessage;
+window.startRename               = startRename;
+
+window.removeProject = async function(btn) {
+  const card = btn.closest('.card');
+  const project = card.dataset.project;
+  if (!confirm(`Remover "${project}" do monitoramento?`)) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/remove-project', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project }),
+    });
+    if (r.ok) card.remove();
+    else btn.disabled = false;
+  } catch(e) {
+    console.error(e);
+    btn.disabled = false;
+  }
+};
 
 // Inicialização
 setTheme(localStorage.getItem('theme') || 'dark');
@@ -64,6 +85,7 @@ await initI18n();
 applyTranslations();
 initFilters();
 initHealthBadges();
+applyAliases();
 startTimer();
 
 // Highlight active language button

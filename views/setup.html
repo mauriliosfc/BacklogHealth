@@ -81,19 +81,19 @@
 <script>
   const PREFILL = {{SELECTED_PROJECTS_JSON}};
 
-  // WORK_ITEM_TYPES armazena { "Project1": "User Story", "Project2": "Task" }
+  // WORK_ITEM_TYPES armazena { "Project1": "User Story", "Project1|Team1": "Task", ... }
+  // Key format: "ProjectName" (no team) or "ProjectName|TeamName" (with team)
   let WORK_ITEM_TYPES = {};
   if (typeof PREFILL === 'object' && !Array.isArray(PREFILL)) {
     WORK_ITEM_TYPES = PREFILL;
   } else if (Array.isArray(PREFILL)) {
-    // Migração: converter array para object
     PREFILL.forEach(p => {
       const name = typeof p === 'string' ? p : (p.name || p);
       WORK_ITEM_TYPES[name] = 'User Story';
     });
   }
 
-  let ALL_PROJECTS = [];
+  let ALL_PROJECTS = []; // [{name, teams:[]}]
   let SELECTED_SET = new Set(Object.keys(WORK_ITEM_TYPES));
 
   function _tr(key, fallback, vars) {
@@ -135,8 +135,10 @@
       const r = await fetch('/api/projects?org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat));
       const data = await r.json();
       if (data.error) { showErr(data.error); btn.disabled = false; btn.textContent = _tr('setup_btn_test', '🔌 Testar conexão e carregar projetos'); return; }
-      renderProjects(data.projects || []);
-      document.getElementById('ok-box').textContent = _tr('setup_conn_ok', '✅ Conexão OK — {{count}} projeto(s) disponível(is).', { count: (data.projects || []).length });
+      // Normalize: accept both [{name,teams}] and legacy string[]
+      const rawProjects = (data.projects || []).map(p => typeof p === 'string' ? { name: p, teams: [] } : p);
+      renderProjects(rawProjects);
+      document.getElementById('ok-box').textContent = _tr('setup_conn_ok', '✅ Conexão OK — {{count}} projeto(s) disponível(is).', { count: rawProjects.length });
       document.getElementById('step2').style.display = 'block';
       btn.innerHTML = _tr('setup_btn_reload', '🔄 Recarregar lista de projetos');
       btn.disabled = false;
@@ -160,24 +162,32 @@
     updateCount();
   }
 
+  function _projOption(key, displayName) {
+    const esc = key.replace(/"/g, '&quot;');
+    const checked = SELECTED_SET.has(key) ? ' checked' : '';
+    const workItemType = WORK_ITEM_TYPES[key] || 'User Story';
+    return `<label class="proj-option">
+      <input type="checkbox" value="${esc}" onchange="onProjChange(this)"${checked}>
+      <span class="proj-name">${displayName}</span>
+      <select class="work-item-type-select" data-project="${esc}" onchange="onTypeChange(this)">
+        <option value="User Story" ${workItemType === 'User Story' ? 'selected' : ''}>User Story</option>
+        <option value="Task" ${workItemType === 'Task' ? 'selected' : ''}>Task</option>
+      </select>
+    </label>`;
+  }
+
   function renderProjectList(projects) {
     const list = document.getElementById('proj-list');
     if (!projects.length) {
       list.innerHTML = '<div class="proj-empty">' + _tr('setup_no_projects', 'Nenhum projeto encontrado.') + '</div>';
       return;
     }
-    list.innerHTML = projects.map(p => {
-      const esc = p.replace(/"/g, '&quot;');
-      const checked = SELECTED_SET.has(p) ? ' checked' : '';
-      const workItemType = WORK_ITEM_TYPES[p] || 'User Story';
-      return `<label class="proj-option">
-        <input type="checkbox" value="${esc}" onchange="onProjChange(this)"${checked}>
-        <span class="proj-name">${p}</span>
-        <select class="work-item-type-select" data-project="${esc}" onchange="onTypeChange(this)">
-          <option value="User Story" ${workItemType === 'User Story' ? 'selected' : ''}>User Story</option>
-          <option value="Task" ${workItemType === 'Task' ? 'selected' : ''}>Task</option>
-        </select>
-      </label>`;
+    list.innerHTML = projects.flatMap(p => {
+      if (p.teams && p.teams.length > 1) {
+        // Multi-team: one entry per team, key = "ProjectName|TeamName"
+        return p.teams.map(team => _projOption(p.name + '|' + team, p.name + ' — ' + team));
+      }
+      return [_projOption(p.name, p.name)];
     }).join('');
   }
 
@@ -198,7 +208,11 @@
 
   function filterProjects() {
     const q = document.getElementById('proj-search').value.toLowerCase().trim();
-    const filtered = q ? ALL_PROJECTS.filter(p => p.toLowerCase().includes(q)) : ALL_PROJECTS;
+    const filtered = q ? ALL_PROJECTS.filter(p => {
+      if (p.name.toLowerCase().includes(q)) return true;
+      if (p.teams && p.teams.some(t => t.toLowerCase().includes(q))) return true;
+      return false;
+    }) : ALL_PROJECTS;
     renderProjectList(filtered);
   }
 
@@ -210,12 +224,17 @@
     }
   }
 
+  function _keyToDisplay(key) {
+    const idx = key.indexOf('|');
+    return idx >= 0 ? key.slice(0, idx) + ' — ' + key.slice(idx + 1) : key;
+  }
+
   function updateCount() {
-    const names = [...SELECTED_SET];
+    const keys = [...SELECTED_SET];
     const placeholder = _tr('setup_placeholder', 'Selecione os projetos…');
-    document.getElementById('proj-trigger-text').textContent = names.length ? names.join(', ') : placeholder;
-    document.getElementById('proj-count').textContent = names.length
-      ? _tr('setup_count', '{{count}} projeto(s) selecionado(s)', { count: names.length })
+    document.getElementById('proj-trigger-text').textContent = keys.length ? keys.map(_keyToDisplay).join(', ') : placeholder;
+    document.getElementById('proj-count').textContent = keys.length
+      ? _tr('setup_count', '{{count}} projeto(s) selecionado(s)', { count: keys.length })
       : '';
   }
 
@@ -234,9 +253,15 @@
   async function doSave() {
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
-    const selected = [...SELECTED_SET].map(projectName => {
-      const workItemType = WORK_ITEM_TYPES[projectName] || 'User Story';
-      return `${projectName}:${workItemType}`;
+    const selected = [...SELECTED_SET].map(key => {
+      const workItemType = WORK_ITEM_TYPES[key] || 'User Story';
+      const pipeIdx = key.indexOf('|');
+      if (pipeIdx >= 0) {
+        const name = key.slice(0, pipeIdx);
+        const team = key.slice(pipeIdx + 1);
+        return `${name}:${workItemType}:${team}`;
+      }
+      return `${key}:${workItemType}`;
     });
     if (!selected.length) { showErr(_tr('setup_err_select', 'Selecione ao menos um projeto para monitorar.')); return; }
     hideErr();

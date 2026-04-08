@@ -2,6 +2,7 @@ import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes } from './cons
 import { calcHealth } from './health.js';
 import { t } from './i18n.js';
 import { fmtD } from './utils.js';
+import { getAlias } from './alias.js';
 
 let _dailyIndex = 0;
 let _dailySlides = [];
@@ -46,12 +47,10 @@ export function buildDailySlide(card, forcedSprintKey = null) {
   // Labels dinâmicos
   const itemLabel = isTaskMode ? t('stat_tasks') : t('stat_us');
 
-  let tableRows = '';
-  card.querySelectorAll('tbody tr[data-iteration]').forEach(row => {
-    if (!currentIter || row.dataset.iteration === currentIter) {
-      tableRows += row.outerHTML;
-    }
-  });
+  const rows = Array.from(card.querySelectorAll('tbody tr[data-iteration]'))
+    .filter(row => !currentIter || row.dataset.iteration === currentIter)
+    .sort((a, b) => (parseFloat(a.dataset.order) || 999999) - (parseFloat(b.dataset.order) || 999999));
+  const tableRows = rows.map(r => r.outerHTML).join('');
 
   const usSection = tableRows
     ? '<div class="daily-us-title">' + t('daily_us_title') + '</div>' +
@@ -64,7 +63,7 @@ export function buildDailySlide(card, forcedSprintKey = null) {
   return '<div class="daily-slide">' +
     '<div class="daily-fixed">' +
       '<div class="daily-slide-header">' +
-        '<div class="daily-project-name">' + project + '</div>' +
+        '<div class="daily-project-name">' + getAlias(project) + '</div>' +
         '<span class="badge ' + health[1] + ' big" title="' + health[2] + '">' + health[0] + '</span>' +
       '</div>' +
       '<div class="daily-sprint-row">' +

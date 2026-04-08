@@ -4,7 +4,7 @@ const fs       = require("fs");
 const nodePath = require("path");
 dns.setDefaultResultOrder("ipv4first");
 
-const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getAiCfg, saveAiConfig } = require("./config");
+const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getAiCfg, saveAiConfig } = require("./config");
 const { rawAzureGet }                             = require("./azureClient");
 const { fetchProject, fetchProjectDetail, buildCardHTML } = require("./projectService");
 const { chatCompletion, testConnection } = require("./aiClient");
@@ -44,13 +44,15 @@ function renderSetup(prefill = {}) {
   const pat  = (prefill.pat  || "").replace(/"/g, "&quot;");
   const isSettings = !!(prefill.org);
 
-  // Converter projects para mapa { "ProjectName": "User Story", ... }
+  // Converter projects para mapa { "ProjectName|TeamName": "User Story", "SimpleProject": "Task", ... }
   const projectsMap = {};
   if (prefill.projects && Array.isArray(prefill.projects)) {
     prefill.projects.forEach(p => {
       const name = typeof p === 'string' ? p : p.name;
+      const team = typeof p === 'string' ? undefined : p.team;
       const workItemType = typeof p === 'string' ? 'User Story' : (p.workItemType || 'User Story');
-      projectsMap[name] = workItemType;
+      const key = team ? `${name}|${team}` : name;
+      projectsMap[key] = workItemType;
     });
   }
   const selectedProjectsJson = JSON.stringify(projectsMap).replace(/</g, "\\u003c");
@@ -142,13 +144,40 @@ async function main() {
           res.end(JSON.stringify({ error: `Erro da API Azure DevOps: HTTP ${result.status}` }));
           return;
         }
-        const projects = (result.data.value || []).map(p => p.name).sort((a, b) => a.localeCompare(b));
+        const projectNames = (result.data.value || []).map(p => p.name).sort((a, b) => a.localeCompare(b));
+        // Fetch teams for each project in parallel to detect multi-team projects
+        const projects = await Promise.all(projectNames.map(async name => {
+          try {
+            const tr = await rawAzureGet(
+              `${baseUrl}/_apis/projects/${encodeURIComponent(name)}/teams?api-version=7.0`,
+              auth
+            );
+            if (tr.status === 200 && tr.data.value && tr.data.value.length > 1) {
+              return { name, teams: tr.data.value.map(t => t.name) };
+            }
+          } catch (_) {}
+          return { name, teams: [] };
+        }));
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ projects }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Falha ao conectar com o Azure DevOps: " + (e.code || e.message) }));
       }
+      return;
+    }
+
+    // ── POST /api/remove-project ───────────────────────────────────────────
+    if (req.method === "POST" && url === "/api/remove-project") {
+      const body = await readBody(req);
+      const { project } = JSON.parse(body || '{}');
+      const cfg = getCfg();
+      cfg.projects = (cfg.projects || []).filter(p => getDisplayName(p) !== project);
+      saveConfig(cfg);
+      const results = await Promise.all(cfg.projects.map(fetchProject));
+      cachedHTML = renderDashboard(results);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
       return;
     }
 
@@ -160,15 +189,17 @@ async function main() {
       const pat = params.get("pat")?.trim();
       const projectsRaw = params.get("projects") || "";
 
-      // Formato esperado: "Project1:User Story,Project2:Task"
+      // Formato: "Project1:User Story,Project2:Task:TeamName"
       const projects = projectsRaw.split(/[\n,]+/)
         .map(p => p.trim())
         .filter(Boolean)
         .map(p => {
-          const [name, workItemType] = p.split(':');
+          const [name, workItemType, ...teamParts] = p.split(':');
+          const team = teamParts.join(':').trim() || undefined;
           return {
             name: name.trim(),
-            workItemType: (workItemType || 'User Story').trim()
+            workItemType: (workItemType || 'User Story').trim(),
+            ...(team ? { team } : {}),
           };
         });
 
@@ -226,8 +257,8 @@ async function main() {
     // ── GET /detail?project=NAME ───────────────────────────────────────────
     if (url.startsWith("/detail?")) {
       const project = new URLSearchParams(url.slice(8)).get("project");
-      const projectNames = cfg.projects.map(p => typeof p === 'string' ? p : p.name);
-      if (!project || !projectNames.includes(project)) {
+      const displayNames = cfg.projects.map(p => getDisplayName(p));
+      if (!project || !displayNames.includes(project)) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Projeto não encontrado" }));
         return;
@@ -241,11 +272,11 @@ async function main() {
     // ── POST /ai/context ───────────────────────────────────────────────────
     if (req.method === 'POST' && url === '/ai/context') {
       const cfg = getCfg();
-      const projectNames = (cfg.projects || []).map(p => typeof p === 'string' ? p : p.name);
+      const displayNames = (cfg.projects || []).map(p => getDisplayName(p));
       const body = await readBody(req);
       const { filters = {} } = JSON.parse(body || '{}');
       try {
-        const details = await Promise.all(projectNames.map(name => fetchProjectDetail(name)));
+        const details = await Promise.all(displayNames.map(id => fetchProjectDetail(id)));
         const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
         const CLOSED   = ['Closed', 'Done', 'Resolved'];
         const ACTIVE   = ['Active', 'In Progress', 'Doing', 'Committed'];

@@ -39,6 +39,10 @@
 
   "btn_daily": "📅 Daily Standup",
   "btn_refresh": "↻ Actualizar",
+  "btn_rename": "Renombrar proyecto",
+  "btn_remove_project": "Eliminar proyecto",
+  "btn_settings": "Configuración",
+  "btn_close": "Cerrar",
   "btn_refreshing": "↻ Actualizando...",
   "timer_prefix": "Próxima actualización en",
   "timer_updating": "Actualizando...",

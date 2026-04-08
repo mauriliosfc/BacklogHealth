@@ -1,6 +1,7 @@
 import { buildSprintData, fmtD } from './utils.js';
 import { t, getDateLocale } from './i18n.js';
 import { getItemTypes } from './constants.js';
+import { getAlias } from './alias.js';
 
 export const _detailState = { project: null, sprints: [] };
 
@@ -45,7 +46,7 @@ export async function openDetails(btn) {
   ).map(c => c.value);
 
   const modal = document.getElementById('detail-modal');
-  document.getElementById('modal-title').textContent = _detailState.project;
+  document.getElementById('modal-title').textContent = getAlias(_detailState.project);
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
   await loadDetailData(_detailState.project, _detailState.sprints);

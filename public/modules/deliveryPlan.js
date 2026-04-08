@@ -1,5 +1,6 @@
 import { t, getDateLocale } from './i18n.js';
 import { fmtD } from './utils.js';
+import { getAlias } from './alias.js';
 
 const LABEL_W = 160; // px — largura da coluna de label
 const MIN_PX_PER_MONTH = 90; // px mínimos por mês no eixo
@@ -10,10 +11,11 @@ export function openDeliveryPlan() {
 
   const projects = cards.map(card => {
     const name = card.dataset.project;
+    const label = getAlias(name);
     const iterMap = (() => { try { return JSON.parse(card.dataset.itermap || '{}'); } catch(_) { return {}; } })();
     const saved = localStorage.getItem('filter_' + name);
     const selectedSprints = saved ? JSON.parse(saved) : [];
-    return { name, iterMap, selectedSprints };
+    return { name, label, iterMap, selectedSprints };
   }).filter(p => Object.values(p.iterMap).some(v => v.start && v.end));
 
   document.getElementById('delivery-body').innerHTML = buildDeliveryPlan(projects);
@@ -90,7 +92,7 @@ function buildDeliveryPlan(projects) {
       if (!globalMin || s.start < globalMin) globalMin = new Date(s.start);
       if (!globalMax || s.end   > globalMax) globalMax = new Date(s.end);
     });
-    return { name: p.name, sprints };
+    return { name: p.name, label: p.label, sprints };
   }).filter(r => r.sprints.length);
 
   if (!rows.length || !globalMin || !globalMax) {
@@ -127,7 +129,7 @@ function buildDeliveryPlan(projects) {
         rows.map(r =>
           '<label class="dp-filter-item">' +
             '<input type="checkbox" value="' + r.name.replace(/"/g, '&quot;') + '" checked onchange="applyDeliveryFilter()">' +
-            '<span>' + r.name + '</span>' +
+            '<span>' + r.label + '</span>' +
           '</label>'
         ).join('') +
       '</div>' +
@@ -166,7 +168,7 @@ function buildDeliveryPlan(projects) {
       : '';
 
     return '<div class="dp-row" data-project="' + r.name.replace(/"/g, '&quot;') + '">' +
-      '<div class="dp-row-label" title="' + r.name.replace(/"/g, '&quot;') + '">' + r.name + '</div>' +
+      '<div class="dp-row-label" title="' + r.name.replace(/"/g, '&quot;') + '">' + r.label + '</div>' +
       '<div class="dp-row-track">' + blocks + todayLine + '</div>' +
     '</div>';
   }).join('');
