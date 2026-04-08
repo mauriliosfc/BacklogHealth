@@ -39,6 +39,10 @@
 
   "btn_daily": "📅 Daily Standup",
   "btn_refresh": "↻ Refresh",
+  "btn_rename": "Rename project",
+  "btn_remove_project": "Remove project",
+  "btn_settings": "Settings",
+  "btn_close": "Close",
   "btn_refreshing": "↻ Refreshing...",
   "timer_prefix": "Next refresh in",
   "timer_updating": "Refreshing...",

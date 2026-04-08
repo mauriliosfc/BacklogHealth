@@ -19,9 +19,11 @@ function fmtRange(iter) {
 // ── Azure DevOps data fetchers ────────────────────────────────────────────────
 
 async function fetchProject(projectConfig) {
-  const project = typeof projectConfig === 'string' ? projectConfig : projectConfig.name;
+  const projectName  = typeof projectConfig === 'string' ? projectConfig : projectConfig.name;
+  const team         = typeof projectConfig === 'string' ? undefined : (projectConfig.team || undefined);
+  const displayName  = team ? `${projectName} - ${team}` : projectName;
   const workItemType = typeof projectConfig === 'string' ? 'User Story' : (projectConfig.workItemType || 'User Story');
-  const isTaskMode = workItemType === 'Task';
+  const isTaskMode   = workItemType === 'Task';
 
   try {
     const types = isTaskMode
@@ -29,35 +31,42 @@ async function fetchProject(projectConfig) {
       : ['User Story', 'Product Backlog Item', 'Requirement', 'Bug'];
 
     const wiql = await azurePost(
-      `${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('${types.join("','")}') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }
+      `${encodeURIComponent(projectName)}/_apis/wit/wiql?api-version=7.0`,
+      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${projectName}' AND [System.WorkItemType] IN ('${types.join("','")}') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }
     );
 
     const allIds = (wiql.workItems || []).slice(0, 500).map(w => w.id);
-    if (!allIds.length) return { project, items: [], sprint: null, error: null, workItemType };
+    if (!allIds.length) return { project: displayName, items: [], sprint: null, error: null, workItemType };
 
     const estimateField = isTaskMode
       ? "Microsoft.VSTS.Scheduling.RemainingWork,Microsoft.VSTS.Scheduling.OriginalEstimate"
       : "Microsoft.VSTS.Scheduling.StoryPoints";
 
-    const fields = `System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,${estimateField},System.IterationPath`;
+    const fields = `System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,${estimateField},System.IterationPath,Microsoft.VSTS.Common.StackRank`;
     const [detailsValue, { map: iterMap, currentSprint }] = await Promise.all([
-      paginatedItems(project, allIds, fields),
-      fetchIterMap(project),
+      paginatedItems(projectName, allIds, fields),
+      fetchIterMap(projectName, team),
     ]);
 
-    return { project, items: detailsValue, sprint: currentSprint, iterMap, error: null, workItemType };
+    // When monitoring a specific team, restrict items to that team's sprints only
+    const items = team
+      ? detailsValue.filter(i => (i.fields?.['System.IterationPath'] || '') in iterMap)
+      : detailsValue;
+
+    return { project: displayName, items, sprint: currentSprint, iterMap, error: null, workItemType };
   } catch (e) {
-    return { project, items: [], sprint: null, error: e.message, workItemType };
+    return { project: displayName, items: [], sprint: null, error: e.message, workItemType };
   }
 }
 
-async function fetchProjectDetail(projectName) {
+async function fetchProjectDetail(identifier) {
   const { getProjectConfig } = require('./config.js');
-  const projectConfig = getProjectConfig(projectName) || { name: projectName, workItemType: 'User Story' };
-  const project = projectConfig.name;
+  const projectConfig = getProjectConfig(identifier) || { name: identifier, workItemType: 'User Story' };
+  const project      = projectConfig.name;
+  const team         = projectConfig.team || undefined;
+  const displayName  = projectConfig.displayName || identifier;
   const workItemType = projectConfig.workItemType || 'User Story';
-  const isTaskMode = workItemType === 'Task';
+  const isTaskMode   = workItemType === 'Task';
 
   try {
     const types = isTaskMode
@@ -71,7 +80,7 @@ async function fetchProjectDetail(projectName) {
         { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Task' ORDER BY [System.ChangedDate] DESC` }),
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
         { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Bug' ORDER BY [System.ChangedDate] DESC` }),
-      fetchIterMap(project),
+      fetchIterMap(project, team),
     ]);
 
     const mainIds = (mainWiql.workItems || []).slice(0, 500).map(w => w.id);
@@ -102,7 +111,7 @@ async function fetchProjectDetail(projectName) {
     }));
 
     return {
-      project,
+      project: displayName,
       iterMap,
       taskItems,
       bugItems,
@@ -129,7 +138,7 @@ async function fetchProjectDetail(projectName) {
       }),
     };
   } catch (e) {
-    return { project, items: [], iterMap: {}, error: e.message, workItemType };
+    return { project: displayName, items: [], iterMap: {}, error: e.message, workItemType };
   }
 }
 
@@ -260,11 +269,12 @@ function buildCardHTML(results) {
         }
 
         const iteration = groupKey.replace(/"/g, "&quot;");
+        const order = i.fields?.["Microsoft.VSTS.Common.StackRank"] ?? 999999;
         const stateClass = ["Active","In Progress","Doing"].includes(state) ? "blue"
           : ["Closed","Done","Resolved"].includes(state) ? "green"
           : ["Blocked","Impediment"].includes(state) ? "red" : "gray";
         return `
-          <tr data-iteration="${iteration}">
+          <tr data-iteration="${iteration}" data-order="${order}">
             <td>${title}</td>
             <td><span class="badge ${stateClass}">${state}</span></td>
             <td>${ptsDisplay}</td>
@@ -280,7 +290,9 @@ function buildCardHTML(results) {
         <div class="card-header">
           <div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <h2>${project}</h2>
+              <h2 class="card-project-title">${project}</h2>
+              <button class="btn-rename" type="button" onclick="startRename(this)" data-i18n-title="btn_rename" title="Renomear projeto">✏️</button>
+              <button class="btn-remove-project" type="button" onclick="removeProject(this)" data-i18n-title="btn_remove_project" title="Remover projeto">🗑️</button>
               <button class="btn-detail" type="button" onclick="openDetails(this)" data-i18n="btn_details">📊 Detalhes do projeto</button>
             </div>
             ${sprint ? `<span class="sprint">📅 ${sprint}</span>` : ""}
