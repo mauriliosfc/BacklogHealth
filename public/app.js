@@ -7,7 +7,7 @@ import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximi
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
 import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDeliveryPlanMaximize, toggleDeliveryFilter, applyDeliveryFilter } from './modules/deliveryPlan.js';
 import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilotConnection, saveCopilotConfig, openCopilotChat, closeCopilotChat, closeCopilotChatOverlay, toggleCopilotChatMaximize, toggleCopilotMinimize, toggleCopilotMaximize, clearCopilotChat, openCopilotSettings, copilotInputKeydown, sendCopilotMessage } from './modules/copilot.js';
-import { applyAliases, startRename } from './modules/alias.js';
+import { getAlias, applyAliases, startRename } from './modules/alias.js';
 import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 
 // Expor funções ao window para inline handlers no HTML
@@ -61,11 +61,33 @@ window.copilotInputKeydown      = copilotInputKeydown;
 window.sendCopilotMessage       = sendCopilotMessage;
 window.startRename               = startRename;
 
-window.removeProject = async function(btn) {
-  const card = btn.closest('.card');
+let _removeCard = null;
+
+window.removeProject = function(btn) {
+  _removeCard = btn.closest('.card');
+  const project = _removeCard.dataset.project;
+  const alias = getAlias(project);
+  document.getElementById('confirm-remove-name').textContent = alias;
+  document.getElementById('confirm-remove-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+};
+
+window.cancelRemoveProject = function(e) {
+  if (e && e.target !== document.getElementById('confirm-remove-modal')) return;
+  document.getElementById('confirm-remove-modal').classList.remove('open');
+  document.body.style.overflow = '';
+  _removeCard = null;
+};
+
+window.confirmRemoveProject = async function() {
+  if (!_removeCard) return;
+  const card = _removeCard;
   const project = card.dataset.project;
-  if (!confirm(`Remover "${project}" do monitoramento?`)) return;
-  btn.disabled = true;
+  const btn = card.querySelector('.btn-remove-project');
+  document.getElementById('confirm-remove-modal').classList.remove('open');
+  document.body.style.overflow = '';
+  _removeCard = null;
+  if (btn) btn.disabled = true;
   try {
     const r = await fetch('/api/remove-project', {
       method: 'POST',
@@ -73,12 +95,18 @@ window.removeProject = async function(btn) {
       body: JSON.stringify({ project }),
     });
     if (r.ok) card.remove();
-    else btn.disabled = false;
+    else if (btn) btn.disabled = false;
   } catch(e) {
     console.error(e);
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
   }
 };
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('confirm-remove-modal').classList.contains('open')) {
+    cancelRemoveProject();
+  }
+});
 
 // Inicialização
 setTheme(localStorage.getItem('theme') || 'dark');

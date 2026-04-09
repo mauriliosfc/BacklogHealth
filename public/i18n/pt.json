@@ -178,5 +178,11 @@
   "ai_err_fill": "Preencha endpoint, API key e model.",
   "ai_err_generic": "Ocorreu um erro. Tente novamente.",
   "ai_welcome": "Olá! Sou o Copilot Project. Pergunte sobre seu backlog, sprints ou saúde dos projetos.",
-  "ai_input_placeholder": "Pergunte sobre seus projetos…"
+  "ai_input_placeholder": "Pergunte sobre seus projetos…",
+
+  "confirm_remove_title": "Remover projeto",
+  "confirm_remove_msg": "Deseja remover",
+  "confirm_remove_msg2": "do monitoramento?",
+  "confirm_cancel": "Cancelar",
+  "confirm_remove_ok": "Remover"
 }
