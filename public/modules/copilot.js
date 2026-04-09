@@ -1,4 +1,5 @@
 import { t } from './i18n.js';
+import { getAlias } from './alias.js';
 
 let _history = [];
 let _richContext = null;
@@ -146,6 +147,10 @@ async function _loadRichContext() {
     });
     const data = await resp.json();
     if (data.projects) {
+      data.projects.forEach(p => {
+        const alias = getAlias(p.name);
+        if (alias !== p.name) p.alias = alias;
+      });
       _richContext = JSON.stringify(data, null, 2);
       indicator.textContent = '✅ Dados dos projetos carregados.';
       setTimeout(() => indicator.remove(), 2000);
@@ -372,8 +377,9 @@ function _buildContext() {
     const noEstimateItems = openUS.filter(i => !i.pts).map(i => ({ sprint: i.iteration.split('\\').pop() }));
     const noAssigneeItems = openUS.filter(i => !i.assigned).map(i => ({ sprint: i.iteration.split('\\').pop(), pts: i.pts }));
 
+    const alias = getAlias(name);
     return {
-      name, health, workItemType: itemType,
+      name, ...(alias !== name ? { alias } : {}), health, workItemType: itemType,
       alerts: { noEstimateCount: noEst, noAssigneeCount: noResp, openBugsCount: bugs },
       activeSprintFilter: hasFilter ? activeFilter : null,
       currentSprint: effectiveSprint
