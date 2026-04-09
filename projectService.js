@@ -290,6 +290,7 @@ function buildCardHTML(results) {
         <div class="card-header">
           <div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span class="drag-handle" data-i18n-title="btn_drag" title="Reordenar">⠿</span>
               <h2 class="card-project-title">${project}</h2>
               <button class="btn-rename" type="button" onclick="startRename(this)" data-i18n-title="btn_rename" title="Renomear projeto">✏️</button>
               <button class="btn-remove-project" type="button" onclick="removeProject(this)" data-i18n-title="btn_remove_project" title="Remover projeto">🗑️</button>

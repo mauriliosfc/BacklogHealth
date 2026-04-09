@@ -2,6 +2,7 @@ import { initFilters } from './filters.js';
 import { t } from './i18n.js';
 import { applyTranslations } from './i18n.js';
 import { applyAliases } from './alias.js';
+import { applyOrder } from './cardOrder.js';
 
 const INTERVAL = 300;
 let remaining = INTERVAL;
@@ -37,6 +38,7 @@ export async function doRefresh() {
     document.getElementById('lastUpdate').textContent = doc.getElementById('lastUpdate').textContent;
     applyTranslations();
     initFilters();
+    applyOrder();
     applyAliases();
   } catch(e) {
     console.error('Erro ao atualizar:', e);

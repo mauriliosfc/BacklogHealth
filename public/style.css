@@ -157,6 +157,11 @@ tr:hover td { background: var(--hover-bg); }
 .group-count { float: right; font-weight: 400; opacity: .7; }
 .btn-detail { background: var(--c-blue-bg); border: 1px solid var(--c-blue-bd); color: var(--c-blue); padding: 4px 12px; border-radius: 7px; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .btn-detail:hover { background: var(--c-blue-bd); color: var(--c-blue-lt); }
+.drag-handle { cursor: grab; color: var(--text-muted); font-size: 20px; opacity: 0; transition: opacity .15s; user-select: none; padding: 0 2px; line-height: 1; }
+.drag-handle:active { cursor: grabbing; }
+.card-header:hover .drag-handle { opacity: 0.35; }
+.drag-handle:hover { opacity: 0.7 !important; }
+.card.dragging { opacity: 0.35; outline: 2px dashed var(--accent); }
 .btn-rename { background: none; border: none; cursor: pointer; font-size: 13px; opacity: 0; padding: 2px 3px; border-radius: 5px; transition: opacity .15s; line-height: 1; }
 .card-header:hover .btn-rename, .btn-rename:focus { opacity: 0.5; }
 .btn-rename:hover { opacity: 1 !important; }

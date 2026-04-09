@@ -39,6 +39,7 @@
 
   "btn_daily": "📅 Daily Standup",
   "btn_refresh": "↻ Refresh",
+  "btn_drag": "Drag to reorder",
   "btn_rename": "Rename project",
   "btn_remove_project": "Remove project",
   "btn_settings": "Settings",

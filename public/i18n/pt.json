@@ -39,6 +39,7 @@
 
   "btn_daily": "📅 Apresentar daily",
   "btn_refresh": "↻ Atualizar",
+  "btn_drag": "Arrastar para reordenar",
   "btn_rename": "Renomear projeto",
   "btn_remove_project": "Remover projeto",
   "btn_settings": "Configurações",

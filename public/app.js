@@ -8,6 +8,7 @@ import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18
 import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDeliveryPlanMaximize, toggleDeliveryFilter, applyDeliveryFilter } from './modules/deliveryPlan.js';
 import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilotConnection, saveCopilotConfig, openCopilotChat, closeCopilotChat, closeCopilotChatOverlay, toggleCopilotChatMaximize, toggleCopilotMinimize, toggleCopilotMaximize, clearCopilotChat, openCopilotSettings, copilotInputKeydown, sendCopilotMessage } from './modules/copilot.js';
 import { applyAliases, startRename } from './modules/alias.js';
+import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -85,7 +86,9 @@ await initI18n();
 applyTranslations();
 initFilters();
 initHealthBadges();
+applyOrder();
 applyAliases();
+initDragOrder();
 startTimer();
 
 // Highlight active language button
