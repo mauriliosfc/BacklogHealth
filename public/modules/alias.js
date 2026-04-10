@@ -1,5 +1,25 @@
 const STORAGE_KEY = 'projectAliases';
 
+const ICON_COLORS = ['#6366f1','#8b5cf6','#ec4899','#f43f5e','#f97316','#eab308','#22c55e','#14b8a6','#06b6d4','#3b82f6'];
+
+function _iconColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return ICON_COLORS[h % ICON_COLORS.length];
+}
+
+function _initials(name) {
+  const base = name.includes(' - ') ? name.split(' - ')[0] : name;
+  return base.split(/[\s_\-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('').slice(0, 2) || '??';
+}
+
+function _updateIcon(card, displayName) {
+  const icon = card.querySelector('.card-icon');
+  if (!icon) return;
+  icon.textContent = _initials(displayName);
+  icon.style.background = _iconColor(displayName);
+}
+
 function _load() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(_) { return {}; }
 }
@@ -22,8 +42,10 @@ export function setAlias(projectName, alias) {
 export function applyAliases() {
   document.querySelectorAll('#content .card[data-project]').forEach(card => {
     const name = card.dataset.project;
+    const alias = getAlias(name);
     const h2 = card.querySelector('h2.card-project-title');
-    if (h2) h2.textContent = getAlias(name);
+    if (h2) h2.textContent = alias;
+    _updateIcon(card, alias);
   });
 }
 
@@ -52,7 +74,9 @@ export function startRename(btn) {
     done = true;
     const val = input.value.trim();
     setAlias(projectName, val || projectName);
-    h2.textContent = getAlias(projectName);
+    const newAlias = getAlias(projectName);
+    h2.textContent = newAlias;
+    _updateIcon(card, newAlias);
     h2.hidden = false;
     btn.hidden = false;
     input.remove();

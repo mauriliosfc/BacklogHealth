@@ -144,6 +144,17 @@ async function fetchProjectDetail(identifier) {
 
 // ── Card HTML builder ─────────────────────────────────────────────────────────
 
+const ICON_COLORS = ['#3b82f6','#8b5cf6','#f59e0b','#10b981','#ef4444','#06b6d4','#f97316','#ec4899','#14b8a6','#6366f1'];
+function projectIconColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return ICON_COLORS[h % ICON_COLORS.length];
+}
+function projectInitials(name) {
+  const base = name.includes(' - ') ? name.split(' - ')[0] : name;
+  return base.split(/[\s_\-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('').slice(0, 2) || '??';
+}
+
 function buildCardHTML(results) {
   return results.map(({ project, items, sprint, iterMap = {}, error, workItemType = 'User Story' }) => {
     if (error) return `
@@ -285,54 +296,120 @@ function buildCardHTML(results) {
       return header + itemRows;
     }).join("");
 
+    // ── Sprint progress bar ──────────────────────────────────────────────────
+    let progressPct = 0, barVariant = 'green', sprintLabel = sprint || '';
+    if (sprint) {
+      const curMain = mainItems.filter(i => {
+        const it = i.fields?.['System.IterationPath'] || '';
+        return it === sprint || it.endsWith('\\' + sprint);
+      });
+      const curClosed = curMain.filter(i => CLOSED_STATES.includes(i.fields?.['System.State']));
+      if (curMain.length > 0) {
+        progressPct = Math.min(Math.round(curClosed.length / curMain.length * 100), 100);
+        barVariant = progressPct >= 60 ? 'green' : progressPct >= 30 ? 'yellow' : 'red';
+      }
+    }
+    const sprintBarHtml = sprint ? `
+      <div class="sprint-bar-wrap">
+        <div class="sprint-bar-info">
+          <span class="sprint-bar-name sprint">📅 ${sprint}</span>
+          <span class="sprint-bar-pct ${barVariant}">${progressPct}% <span data-i18n="sprint_progress">Progress</span></span>
+        </div>
+        <div class="sprint-bar-track">
+          <div class="sprint-bar-fill ${barVariant}" style="width:${progressPct}%"></div>
+        </div>
+      </div>` : '';
+
+    // ── Health pill ──────────────────────────────────────────────────────────
+    const healthLabels = { green: 'Healthy', yellow: 'Attention', red: 'Critical' };
+    const healthPill = `<span class="health-pill ${health[1]} card-health" title="${health[2]}"><span class="health-dot"></span>${healthLabels[health[1]] || health[0]}</span>`;
+
+    // ── Collapsible section label ────────────────────────────────────────────
+    const sectionProblems = semEst + semResp;
+    const sectionLabel = `<span data-i18n="btn_view_items">View Items</span>`;
+    const sectionBadge = health[1] === 'red'
+      ? `<span class="badge red">${sectionProblems} <span data-i18n="us_section_required">Required</span></span>`
+      : health[1] === 'yellow'
+        ? `<span class="badge yellow">${semEst} <span data-i18n="us_section_pending">Pending</span></span>`
+        : `<span class="badge green">${openItems.length} <span data-i18n="us_section_active">Active</span></span>`;
+
+    // ── Project icon ─────────────────────────────────────────────────────────
+    const iconColor = projectIconColor(project);
+    const initials  = projectInitials(project);
+
+    // ── Footer action button ─────────────────────────────────────────────────
+    const actionBtn = health[1] === 'red'
+      ? `<button class="btn-fix-health" type="button" onclick="openDetails(this)" data-i18n="btn_fix_health">Fix Backlog Health</button>`
+      : `<button class="btn-detail btn-detail-main" type="button" onclick="openDetails(this)" data-i18n="btn_details">Project Details</button>`;
+
     return `
       <div class="card" data-project="${project.replace(/"/g, "&quot;")}" data-items='${itemsJson}' data-itermap='${JSON.stringify(iterMap).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}' data-workitemtype="${workItemType}">
+
+        <!-- header -->
         <div class="card-header">
-          <div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <span class="drag-handle" data-i18n-title="btn_drag" title="Reordenar">⠿</span>
-              <h2 class="card-project-title">${project}</h2>
-              <button class="btn-rename" type="button" onclick="startRename(this)" data-i18n-title="btn_rename" title="Renomear projeto">✏️</button>
-              <button class="btn-remove-project" type="button" onclick="removeProject(this)" data-i18n-title="btn_remove_project" title="Remover projeto">🗑️</button>
-              <button class="btn-detail" type="button" onclick="openDetails(this)" data-i18n="btn_details">📊 Detalhes do projeto</button>
+          <div class="card-header-left">
+            <div class="card-icon" style="background:${iconColor}">${initials}</div>
+            <div class="card-header-info">
+              <div class="card-name-row">
+                <span class="drag-handle" data-i18n-title="btn_drag" title="Reordenar">⠿</span>
+                <h2 class="card-project-title">${project}</h2>
+                <button class="btn-rename" type="button" onclick="startRename(this)" data-i18n-title="btn_rename" title="Renomear projeto">✏️</button>
+              </div>
             </div>
-            ${sprint ? `<span class="sprint">📅 ${sprint}</span>` : ""}
           </div>
-          <span class="badge ${health[1]} big card-health" title="${health[2]}">${health[0]}</span>
+          ${healthPill}
         </div>
+
+        <!-- stats -->
+        <div class="stats">
+          <div class="stat"><div class="stat-label card-label" data-i18n="${itemLabelKey}">${itemLabel}</div><div class="stat-val card-total">${total}</div></div>
+          <div class="stat"><div class="stat-label" data-i18n="stat_no_est">No Estimate</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
+          <div class="stat"><div class="stat-label" data-i18n="stat_no_resp">No Assignee</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
+          <div class="stat"><div class="stat-label" data-i18n="stat_bugs">Open Bugs</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
+        </div>
+
+        <!-- sprint progress -->
+        ${sprintBarHtml}
+
+        <!-- sprint filter (functional, compact) -->
         <div class="filter-bar">
           <label class="filter-label" data-i18n="filter_label">🔍 Sprint</label>
           <div class="custom-select">
             <button class="select-trigger" type="button" onclick="toggleDropdown(this)">
-              <span class="select-value" data-i18n="all_sprints">Todas as sprints</span>
+              <span class="select-value" data-i18n="all_sprints">All sprints</span>
               <span class="select-arrow">▾</span>
             </button>
             <div class="select-panel">
               <div class="select-options">${options}</div>
               <div class="select-footer">
-                <button type="button" onclick="clearFilter(this)" data-i18n="clear_filter">✕ Limpar seleção</button>
+                <button type="button" onclick="clearFilter(this)" data-i18n="clear_filter">✕ Clear</button>
               </div>
             </div>
           </div>
         </div>
-        <div class="stats">
-          <div class="stat"><div class="stat-label card-label" data-i18n="${itemLabelKey}">${itemLabel}</div><div class="stat-val card-total">${total}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_no_est">Sem Estimativa</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_no_resp">Sem Responsável</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_bugs">Bugs Abertos</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
-        </div>
+
+        <!-- collapsible US section -->
         <div class="us-section">
           <button class="btn-us-toggle card-summary" type="button" onclick="toggleUS(this)">
             <span class="us-toggle-icon">▶</span>
-            <span data-i18n="btn_view_items">Visualizar ${itemLabel}</span>
-            <span class="us-toggle-count">(${mainTotal})</span>
+            ${sectionLabel}
+            <span class="us-toggle-count">${sectionBadge}</span>
           </button>
           <div class="us-table" hidden>
             <table>
-              <thead><tr><th data-i18n="th_title">Título</th><th data-i18n="th_status">Status</th><th data-i18n="th_estimate">Estimativa</th><th data-i18n="th_assignee">Responsável</th></tr></thead>
+              <thead><tr><th data-i18n="th_title">Title</th><th data-i18n="th_status">Status</th><th data-i18n="th_estimate">Estimate</th><th data-i18n="th_assignee">Assignee</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
+        </div>
+
+        <!-- footer -->
+        <div class="card-footer">
+          <button class="btn-remove-footer" type="button" onclick="removeProject(this)" data-i18n-title="btn_remove_project" title="Remover projeto">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M1 3h10M4 3V2h4v1M2 3l.5 7.5a1 1 0 001 .5h5a1 1 0 001-.5L10 3"/></svg>
+            <span data-i18n="btn_remove_short">Remove</span>
+          </button>
+          ${actionBtn}
         </div>
       </div>`;
   }).join("");
