@@ -186,7 +186,7 @@
   "confirm_cancel": "Cancelar",
   "confirm_remove_ok": "Remover",
 
-  "setup_title": "Configurar Conectividade",
+  "setup_title": "Setup",
   "setup_security_label": "Nota de Segurança:",
   "setup_security_text": "Seu PAT é armazenado localmente em config.json apenas no seu dispositivo. Nunca é enviado para nenhum serviço externo além do Azure DevOps.",
   "setup_help_title": "Não encontrou seu projeto?",

@@ -200,10 +200,12 @@ body.dashboard-body { padding: 0; display: flex; min-height: 100vh; }
 /* ── Sidebar ── */
 :root { --sidebar-w: 210px; }
 .sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--bg-card); border-right: 1px solid var(--bg-border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; height: 100vh; z-index: 100; }
-.sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 22px 18px 20px; border-bottom: 1px solid var(--bg-border); }
+.sidebar-logo { display: flex; flex-direction: column; gap: 8px; padding: 22px 18px 20px; border-bottom: 1px solid var(--bg-border); }
+.sidebar-logo-row { display: flex; align-items: center; gap: 10px; }
 .sidebar-logo-icon { font-size: 22px; line-height: 1; }
 .sidebar-logo-name { font-size: 14px; font-weight: 700; color: var(--text-1); line-height: 1.2; }
 .sidebar-logo-sub { font-size: 9px; color: var(--text-faint); letter-spacing: 1.2px; text-transform: uppercase; margin-top: 2px; }
+.sidebar-logo-meta { font-size: 10px; color: var(--text-faint); opacity: .7; }
 .sidebar-nav { padding: 14px 10px; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .sidebar-link { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; font-size: 13px; color: var(--text-muted); text-decoration: none; cursor: pointer; transition: background .15s, color .15s; }
 .sidebar-link:hover { background: var(--bg-el); color: var(--text-1); }
@@ -218,7 +220,7 @@ body.dashboard-body { padding: 0; display: flex; min-height: 100vh; }
 .main-content { flex: 1; margin-left: var(--sidebar-w); display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; }
 
 /* ── Topbar ── */
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 28px; border-bottom: 1px solid var(--bg-border); background: var(--bg-card); flex-wrap: wrap; }
+.topbar { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 20px 28px; border-bottom: 1px solid var(--bg-border); background: var(--bg-card); flex-wrap: wrap; }
 .topbar-left {}
 .topbar-title { font-size: 22px; font-weight: 800; color: var(--text-1); line-height: 1.2; }
 .topbar-sub { font-size: 12px; color: var(--text-faint); margin-top: 3px; }
