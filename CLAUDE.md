@@ -148,6 +148,21 @@ node server.js
 # http://localhost:3030
 ```
 
+## 📦 Como gerar o executável de distribuição
+
+```bash
+# Gera dist/app/server.exe (Node.js + app empacotados, ~37MB)
+npm run build
+```
+
+A pasta `dist/app/` deve conter:
+- `server.exe` — gerado pelo PKG (`npm run build`)
+- `BacklogHealth.exe` — wrapper C# WPF, compilado via MSBuild do projeto `wrapper/BacklogHealth.csproj`
+- `*.dll` / `runtimes/` — DLLs do WebView2 (não são regeneradas, já estão na pasta)
+
+> **Importante:** o script `build` no `package.json` usa `--output dist/app/server.exe`. O wrapper C# lê `server.exe` do mesmo diretório em que está (`exeDir`), então ambos devem estar em `dist/app/`.
+> Para distribuir, zipar toda a pasta `dist/app/` — o usuário executa `BacklogHealth.exe`.
+
 ---
 
 ## 📊 Dashboard Principal — O que é exibido
@@ -491,6 +506,11 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 75 | Daily Standup e Delivery Plan abrem maximizados por padrão | Modais eram abertos em tamanho reduzido exigindo clique manual em "Maximizar" a cada uso — `classList.add('maximized')` no `open` e ícone já iniciado como ⤡ eliminam esse passo repetitivo |
 | 76 | Título "Health Intelligence" removido da topbar; meta info movida para sidebar | Topbar com título duplicava a identidade visual já presente na sidebar logo — remover libera espaço e concentra branding no sidebar; `{{SUBTITLE}}` (N projects · Org) fica visível sem ocupar área de ação |
 | 77 | `.sidebar-logo-row` como wrapper interno + `.sidebar-logo` como coluna | Sidebar logo usava `flex-row` direto — para posicionar o meta abaixo do ícone+texto precisava de nível extra sem quebrar o alinhamento horizontal do ícone com o nome |
+| 78 | `min-width: 0` em `.cards-grid > *` | CSS Grid com `1fr` não restringe o tamanho mínimo dos filhos por padrão — sem `min-width: 0` os cards transbordavam à direita no modo grid |
+| 79 | Remoção de `overflow: hidden` do `.cards-grid .card` | Adicionado para conter overflow dos cards, mas cortava o dropdown de seleção de sprint (`position: absolute`) — `min-width: 0` resolve o overflow sem afetar elementos posicionados |
+| 80 | `.select-panel` com `z-index: 400` + `.drop-up` variant | Dropdown de sprint ficava cortado pelo card vizinho e inacessível quando havia muitas sprints — z-index alto garante sobreposição; `drop-up` abre para cima quando o espaço abaixo é insuficiente |
+| 81 | Nomes de sprint exibidos com `.split("\\").pop()` | Iteration paths no Azure DevOps seguem o formato `Projeto\Time\Sprint` — exibir o caminho completo misturava o nome do time no label; `.pop()` extrai apenas o segmento final |
+| 82 | `npm run build` com `--output dist/app/server.exe` | Script anterior gerava `dist/BacklogHealth.exe` (raiz errada) — wrapper C# espera `server.exe` no mesmo diretório que ele (`dist/app/`); corrigir o output path garante que o build seja diretamente utilizável |
 
 ---
 
@@ -588,6 +608,11 @@ Por projeto, o endpoint retorna:
 - [x] Credenciais do Copilot AI persistidas — formulário pré-preenchido após restart
 - [x] Daily Standup e Delivery Plan abrem maximizados por padrão
 - [x] Topbar limpa — meta info (N projects · Org) movida para sidebar abaixo do logo
+- [x] Cards do dashboard não cortam mais à direita no modo grid (`min-width: 0`)
+- [x] Dropdown de sprint com scroll e comportamento drop-up quando espaço é insuficiente
+- [x] Nomes de sprint exibidos sem prefixo de time (`.split("\\").pop()`)
+- [x] Tela de setup com título "Setup" em todos os idiomas
+- [x] Build corrigido: `npm run build` gera `dist/app/server.exe` (path correto para o wrapper)
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
 - [ ] Integrar com **Power BI** para histórico e relatórios gerenciais
@@ -599,4 +624,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Abril/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa*
+*Documentação atualizada em Abril/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path)*
