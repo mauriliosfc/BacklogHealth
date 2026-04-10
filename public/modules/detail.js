@@ -89,7 +89,7 @@ function barList(entries, total) {
   return entries.map(([label, val, color]) => {
     const pct = Math.round(val / max * 100);
     const ofTotal = total ? Math.round(val / total * 100) : 0;
-    const short = label.includes('\\') ? label.split('\\').slice(1).join(' \u203a ') : label;
+    const short = label.includes('\\') ? label.split('\\').pop() : label;
     return '<div class="bar-row">' +
       '<div class="bar-label" title="' + label + '">' + short + '</div>' +
       '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + (color||'#60a5fa') + '"></div></div>' +
@@ -118,7 +118,7 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const filterBanner = selectedSprints && selectedSprints.length > 0
     ? '<div style="background:#1e3a5f;border:1px solid #2d5a8e;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:12px;color:#93c5fd">' +
       t('detail_filter_banner', { count: selectedSprints.length }) + ' ' +
-      selectedSprints.map(function(s) { var p = s.split('\u005c'); return '<strong>' + (p.length > 1 ? p.slice(1).join(' \u203a ') : s) + '</strong>'; }).join(', ') +
+      selectedSprints.map(function(s) { var p = s.split('\u005c'); return '<strong>' + (p.length > 1 ? p[p.length - 1] : s) + '</strong>'; }).join(', ') +
       '</div>'
     : '';
 
@@ -162,7 +162,7 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
 
   const sprintRows = sortedSprintEntries.map(([key, d]) => {
     const iter = iterMap[key]||{};
-    const label = key.includes('\\') ? key.split('\\').slice(1).join(' \u203a ') : key;
+    const label = key.includes('\\') ? key.split('\\').pop() : key;
     const dateR = (iter.start && iter.end) ? fmtD(iter.start) + ' \u2013 ' + fmtD(iter.end) : '\u2014';
     const pct = d.us ? Math.round(d.usClosed/d.us*100) : 0;
     const isCurr = iter.isCurrent;

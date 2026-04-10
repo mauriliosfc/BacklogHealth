@@ -9,6 +9,7 @@ import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDe
 import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilotConnection, saveCopilotConfig, openCopilotChat, closeCopilotChat, closeCopilotChatOverlay, toggleCopilotChatMaximize, toggleCopilotMinimize, toggleCopilotMaximize, clearCopilotChat, openCopilotSettings, copilotInputKeydown, sendCopilotMessage } from './modules/copilot.js';
 import { getAlias, applyAliases, startRename } from './modules/alias.js';
 import { applyOrder, initDragOrder } from './modules/cardOrder.js';
+import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from './modules/teamCapacity.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -60,6 +61,10 @@ window.openCopilotSettings      = openCopilotSettings;
 window.copilotInputKeydown      = copilotInputKeydown;
 window.sendCopilotMessage       = sendCopilotMessage;
 window.startRename               = startRename;
+window.openTeamCapacity  = openTeamCapacity;
+window.showDashboardView = showDashboardView;
+window.tcRefresh         = tcRefresh;
+window.tcChangeProject   = tcChangeProject;
 
 let _removeCard = null;
 
@@ -108,6 +113,30 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ── View toggle (grid / list) ────────────────────────────────────────────────
+function _applyView(mode) {
+  const content = document.getElementById('content');
+  const iconGrid = document.getElementById('iconViewGrid');
+  const iconList = document.getElementById('iconViewList');
+  if (mode === 'list') {
+    content.className = content.className.replace('cards-grid', 'cards-list');
+    if (iconGrid) iconGrid.style.display = 'none';
+    if (iconList) iconList.style.display = '';
+  } else {
+    content.className = content.className.replace('cards-list', 'cards-grid');
+    if (iconGrid) iconGrid.style.display = '';
+    if (iconList) iconList.style.display = 'none';
+  }
+}
+
+window.toggleView = function() {
+  const content = document.getElementById('content');
+  const isGrid = content.classList.contains('cards-grid');
+  const next = isGrid ? 'list' : 'grid';
+  localStorage.setItem('dashView', next);
+  _applyView(next);
+};
+
 // Inicialização
 setTheme(localStorage.getItem('theme') || 'dark');
 await initI18n();
@@ -117,7 +146,14 @@ initHealthBadges();
 applyOrder();
 applyAliases();
 initDragOrder();
+_applyView(localStorage.getItem('dashView') || 'grid');
 startTimer();
+
+// Restaura a view ativa após reload (ex: troca de idioma)
+if (localStorage.getItem('activeView') === 'tc') {
+  localStorage.removeItem('activeView');
+  openTeamCapacity();
+}
 
 // Highlight active language button
 const activeLang = getLocale();

@@ -94,9 +94,12 @@ export function openDaily() {
 
   updateDailyNav();
 
-  document.getElementById('daily-modal').classList.add('open');
+  const dailyModal = document.getElementById('daily-modal');
+  dailyModal.classList.add('open', 'maximized');
+  document.getElementById('btnDailyMax').textContent = '\u2921';
+  document.getElementById('btnDailyMax').title = t('daily_restore');
   document.body.style.overflow = 'hidden';
-  document.getElementById('daily-modal').focus();
+  dailyModal.focus();
 }
 
 export function openDailyForSprint(projectName, sprintKey) {
@@ -112,9 +115,12 @@ export function openDailyForSprint(projectName, sprintKey) {
   track.style.transform = 'translateX(0)';
 
   updateDailyNav();
-  document.getElementById('daily-modal').classList.add('open');
+  const dailyModal2 = document.getElementById('daily-modal');
+  dailyModal2.classList.add('open', 'maximized');
+  document.getElementById('btnDailyMax').textContent = '\u2921';
+  document.getElementById('btnDailyMax').title = t('daily_restore');
   document.body.style.overflow = 'hidden';
-  document.getElementById('daily-modal').focus();
+  dailyModal2.focus();
 }
 
 export function closeDaily() {

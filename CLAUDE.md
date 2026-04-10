@@ -1,6 +1,6 @@
 # 📋 Backlog Health Dashboard — Documentação
 
-> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Abril/2026 (multi-time, alias, lixeira)
+> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Abril/2026 (Team Capacity, redesign, Copilot melhorias, UX)
 
 ---
 
@@ -20,6 +20,7 @@ dash_azure_gestao_pessoal/
 ├── config.js           ← loadConfig, saveConfig, getCfg, getAuth, parseOrgInput, getProjectConfig
 ├── azureClient.js      ← azureGet, azurePost, rawAzureGet (usa cfg.baseUrl)
 ├── projectService.js   ← fetchProject, fetchProjectDetail, buildCardHTML
+├── teamCapacityService.js ← fetchTeamCapacity (tasks por dev/sprint, CompletedWork/RemainingWork)
 ├── utils/
 │   ├── health.js       ← calcHealth (fonte única, importado por projectService)
 │   ├── paginate.js     ← paginatedItems (lotes de 200)
@@ -44,6 +45,7 @@ dash_azure_gestao_pessoal/
 │       ├── burndown.js   ← openBurndown, buildBurndownChart, openBurndownFromDaily
 │       ├── deliveryPlan.js ← openDeliveryPlan, buildDeliveryPlan, filtros de projeto
 │       ├── alias.js      ← getAlias, setAlias, applyAliases, startRename (apelidos de projeto)
+│       ├── teamCapacity.js ← openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject
 │       └── copilot.js    ← openCopilot, sendCopilotMessage, _loadRichContext, _buildContext (fallback DOM)
 ├── aiClient.js         ← chatCompletion, testConnection (Azure AI Foundry / Azure OpenAI / OpenAI-compat)
 ├── views/
@@ -94,7 +96,8 @@ server.js (entry point)
                 ├── GET /api/projects        → lista projetos disponíveis para o PAT informado
                 ├── POST /setup              → salva config.json e retorna JSON {ok:true}
                 ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, iterMap
-                ├── GET /ai/config           → verifica se a IA está configurada
+                ├── GET /api/team-capacity?project=NAME → JSON com developers, sprints, CompletedWork/RemainingWork
+                ├── GET /ai/config           → retorna config completa da IA (endpoint, apiKey, model, apiVersion)
                 ├── POST /ai/config          → salva credenciais da IA em config.json
                 ├── POST /ai/test            → testa conexão com o provedor de IA
                 ├── POST /ai/context         → retorna contexto rico dos projetos (respeita filtros de sprint)
@@ -229,7 +232,7 @@ Acessado pelo botão **📅 Apresentar daily** no header, ou pelo botão **☰**
   - Tabela de User Stories da sprint atual (Título, Status, Estimativa, Responsável)
 - Navegação por botões (← Anterior / Próximo →) ou teclas `←` `→`
 - Fecha com ✕ ou tecla `Escape`
-- Modal expansível (⤢ Maximizar / ⤡ Restaurar)
+- **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
 
 ---
 
@@ -335,7 +338,7 @@ Cada projeto pode ser configurado na tela de setup com um **tipo de item princip
 
 Acessado pelo botão **🗓️ Delivery Plan** no header, ao lado do botão de Daily Standup.
 
-- **Modal expandível** com maximizar, fechar e tecla `Escape`
+- **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
 - **Timeline compartilhada** — todos os projetos exibidos em linhas sobrepostas no mesmo eixo de tempo
 - Cada linha exibe o nome do projeto (coluna fixa à esquerda, `position: sticky`) e os blocos de sprint posicionados proporcionalmente por data
 - **Dentro de cada bloco:** nome da sprint + datas de início/fim no formato `dd/mm` (sem ano) em segunda linha; tooltip com data completa
@@ -480,6 +483,61 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 67 | `applyAliases()` chamado após refresh | O refresh reconstrói `#content` do zero, perdendo os `textContent` alterados — chamar `applyAliases()` em `timer.js` após `initFilters()` garante que aliases persistam entre atualizações |
 | 68 | `POST /api/remove-project` como endpoint de remoção rápida | Remover projeto exige editar `config.json` e reconstruir cache — endpoint dedicado encapsula essa lógica e permite remoção direta do card sem abrir o setup |
 | 69 | `data-i18n-title` em todos os tooltips do dashboard | Tooltips hardcoded em português não respondem à troca de idioma — `applyTranslations()` já processa `data-i18n-title`, bastava adicionar o atributo e as keys nos JSONs |
+| 70 | Toggle grid/lista na `.cards-toolbar` acima dos cards | Botão de alternância de layout estava na topbar misturado com controles globais — movê-lo para uma barra dedicada acima dos cards torna a ação mais próxima do conteúdo que afeta |
+| 71 | Team Capacity como view alternativa no `main-content` | Tela independente sem modal evita sobrepor o dashboard — show/hide de `#tc-view` vs `#content` + `.cards-toolbar` mantém o layout da sidebar sem nova rota ou reload |
+| 72 | `style.display = 'block'` explícito no `#tc-view` | `style.display = ''` remove o inline style mas o CSS `#tc-view { display: none }` ainda vence — atribuir `'block'` garante que o elemento apareça independente da folha de estilo |
+| 73 | `localStorage['activeView']` salvo antes do `location.reload()` no `setLocale()` | Troca de idioma recarrega a página e perdia a view TC ativa — salvar antes do reload e restaurar em `app.js` após inicialização preserva o contexto do usuário |
+| 74 | `GET /ai/config` retorna credenciais completas | Endpoint retornava apenas `{ configured: bool }` — formulário de configuração abria sempre vazio, obrigando re-digitação após restart; retornar endpoint/apiKey/model/apiVersion permite pré-preenchimento |
+| 75 | Daily Standup e Delivery Plan abrem maximizados por padrão | Modais eram abertos em tamanho reduzido exigindo clique manual em "Maximizar" a cada uso — `classList.add('maximized')` no `open` e ícone já iniciado como ⤡ eliminam esse passo repetitivo |
+| 76 | Título "Health Intelligence" removido da topbar; meta info movida para sidebar | Topbar com título duplicava a identidade visual já presente na sidebar logo — remover libera espaço e concentra branding no sidebar; `{{SUBTITLE}}` (N projects · Org) fica visível sem ocupar área de ação |
+| 77 | `.sidebar-logo-row` como wrapper interno + `.sidebar-logo` como coluna | Sidebar logo usava `flex-row` direto — para posicionar o meta abaixo do ícone+texto precisava de nível extra sem quebrar o alinhamento horizontal do ícone com o nome |
+
+---
+
+## 👥 Team Capacity & Performance
+
+Acessado pelo link **Team Capacity** na sidebar. Substitui a view de cards no `main-content` sem recarregar a página.
+
+- **Vista isolada** — `#content` e `.cards-toolbar` ficam ocultos; `#tc-view` é exibido com `display: block`
+- **Seletor de projeto** no cabeçalho — persiste em `localStorage['tcProject']`
+- **Cards de squad** no topo:
+  - **Squad Capacity** — soma das capacidades configuradas por dev (em horas)
+  - **Backlog Demand** — soma de `CompletedWork + RemainingWork` de todos os devs na sprint atual
+  - **Overload Delta** — diferença Demand − Capacity (positivo = sobrecarga)
+- **Cards por desenvolvedor** listam todos que tiveram atividade de tasks nas últimas sprints:
+  - Avatar com iniciais, nome, badge de status (HEALTHY / AT RISK / NO CAPACITY)
+  - Slider (0–160h, step 4) + input numérico sincronizados bidirecionalmente via `_applyCapacityChange()`
+  - Capacidade salva em `localStorage['tc::devName::sprintName']`
+  - Stats: Capacidade, Utilização %, Lançado, Restante
+  - Gráfico de tendência das últimas N sprints (barras div, sem SVG)
+- **Retorno ao dashboard** via link Dashboard na sidebar ou `showDashboardView()`
+- **Troca de idioma** preserva a view TC — `setLocale()` salva `localStorage['activeView']` antes do reload; `app.js` restaura chamando `openTeamCapacity()` na inicialização
+
+### Cálculo das métricas
+
+| Métrica | Fórmula |
+|---------|---------|
+| Backlog Demand | Σ (CompletedWork + RemainingWork) por dev na sprint atual |
+| Utilização | CompletedWork ÷ Capacity × 100% |
+| Status HEALTHY | Utilização ≤ 100% e Capacity > 0 |
+| Status AT RISK | Utilização > 100% |
+| Status NO CAPACITY | Capacity = 0 |
+
+### Endpoint `/api/team-capacity`
+
+Retorna por projeto:
+```json
+{
+  "project": "NomeProjeto",
+  "currentSprint": "Sprint 108",
+  "recentSprints": ["Sprint 106", "Sprint 107", "Sprint 108"],
+  "developers": [{
+    "name": "Fulano",
+    "currentSprint": { "completedWork": 24, "remainingWork": 8, "taskCount": 5 },
+    "history": [{ "sprint": "Sprint 106", "completedWork": 30 }, ...]
+  }]
+}
+```
 
 ---
 
@@ -524,6 +582,12 @@ Por projeto, o endpoint retorna:
 - [x] Ordenação de US por campo `Order` (StackRank) no Daily Standup
 - [x] `classificationnodes/iterations` para cobertura de sprints em projetos multi-time
 - [x] Tooltips i18n — todos os `title` do dashboard agora respondem à troca de idioma
+- [x] Toggle grid/lista movido para toolbar acima dos cards
+- [x] Tela Team Capacity & Performance — métricas por dev, configuração de capacidade, tendência de entrega
+- [x] Copilot AI painel flutuante arrastável com minimize/maximize
+- [x] Credenciais do Copilot AI persistidas — formulário pré-preenchido após restart
+- [x] Daily Standup e Delivery Plan abrem maximizados por padrão
+- [x] Topbar limpa — meta info (N projects · Org) movida para sidebar abaixo do logo
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
 - [ ] Integrar com **Power BI** para histórico e relatórios gerenciais
@@ -531,7 +595,8 @@ Por projeto, o endpoint retorna:
 - [ ] Adicionar histórico de saúde do backlog (comparar com semanas anteriores)
 - [ ] Burndown baseado em datas reais de conclusão (via histórico de estado do Azure DevOps)
 - [ ] Streaming de respostas da IA (SSE) para reduzir tempo de espera percebido
+- [ ] Troca de idioma sem reload (templates reativos ao locale via `data-i18n` no HTML gerado dinamicamente)
 
 ---
 
-*Documentação atualizada em Abril/2026 — Multi-time, alias de projeto, remoção rápida, ordenação por Order na daily, classificationnodes para sprints, tooltips i18n*
+*Documentação atualizada em Abril/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa*

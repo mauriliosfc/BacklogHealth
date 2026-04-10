@@ -19,7 +19,9 @@ export function openDeliveryPlan() {
   }).filter(p => Object.values(p.iterMap).some(v => v.start && v.end));
 
   document.getElementById('delivery-body').innerHTML = buildDeliveryPlan(projects);
-  document.getElementById('delivery-modal').classList.add('open');
+  document.getElementById('delivery-modal').classList.add('open', 'maximized');
+  document.getElementById('btnDeliveryMax').textContent = '\u2921';
+  document.getElementById('btnDeliveryMax').title = t('dp_restore');
   document.body.style.overflow = 'hidden';
 }
 

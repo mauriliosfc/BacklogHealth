@@ -40,6 +40,11 @@ export async function doRefresh() {
     initFilters();
     applyOrder();
     applyAliases();
+    const savedView = localStorage.getItem('dashView') || 'grid';
+    const contentEl = document.getElementById('content');
+    if (savedView === 'list' && contentEl.classList.contains('cards-grid')) {
+      contentEl.classList.replace('cards-grid', 'cards-list');
+    }
   } catch(e) {
     console.error('Erro ao atualizar:', e);
   }

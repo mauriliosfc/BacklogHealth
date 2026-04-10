@@ -26,6 +26,9 @@ export function applyOrder() {
       return ai - bi;
     });
     cards.forEach(c => content.appendChild(c));
+    // Keep the empty "add project" card always last
+    const emptyCard = content.querySelector('.card-empty');
+    if (emptyCard) content.appendChild(emptyCard);
   } catch (_) {}
 }
 
@@ -72,6 +75,9 @@ export function initDragOrder() {
     }
     _dragSrc   = null;
     _fromHandle = false;
+    // Keep the empty card always last after any reorder
+    const emptyCard = content.querySelector('.card-empty');
+    if (emptyCard) content.appendChild(emptyCard);
     saveOrder();
   });
 }
