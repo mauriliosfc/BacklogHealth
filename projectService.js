@@ -198,7 +198,7 @@ function buildCardHTML(results) {
     )].sort();
 
     const options = iterations.map(it => {
-      const label = it.includes("\\") ? it.split("\\").slice(1).join(" › ") : it;
+      const label = it.includes("\\") ? it.split("\\").pop() : it;
       const isCurrent = sprint && (it === sprint || it.endsWith("\\" + sprint));
       const val = it.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
       const iter = iterMap[it] || {};
@@ -248,7 +248,7 @@ function buildCardHTML(results) {
 
     const rows = sortedGroups.map(groupKey => {
       const groupItems = grouped[groupKey];
-      const groupLabel = groupKey.includes("\\") ? groupKey.split("\\").slice(1).join(" › ") : groupKey;
+      const groupLabel = groupKey.includes("\\") ? groupKey.split("\\").pop() : groupKey;
       const isCurrent = sprint && (groupKey === sprint || groupKey.endsWith("\\" + sprint));
       const safeGroup = groupKey.replace(/"/g, "&quot;");
       const iter = iterMap[groupKey] || {};

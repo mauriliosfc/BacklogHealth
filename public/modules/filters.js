@@ -6,12 +6,21 @@ export function toggleDropdown(trigger) {
   const panel = trigger.nextElementSibling;
   const isOpen = panel.classList.contains('open');
   document.querySelectorAll('.select-panel.open').forEach(p => {
-    p.classList.remove('open');
-    p.previousElementSibling.classList.remove('open');
+    p.classList.remove('open', 'drop-up');
+    p.previousElementSibling.classList.remove('open', 'drop-up');
   });
   if (!isOpen) {
+    // Detect if there's enough space below; if not, open upward
+    const triggerRect = trigger.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+    const dropUp = spaceBelow < 340 && spaceAbove > spaceBelow;
     panel.classList.add('open');
     trigger.classList.add('open');
+    if (dropUp) {
+      panel.classList.add('drop-up');
+      trigger.classList.add('drop-up');
+    }
   }
 }
 
