@@ -168,6 +168,23 @@
   </div>
 </div>
 
+<!-- Confirm Remove Project Modal -->
+<div id="confirm-remove-modal" class="confirm-overlay" onclick="cancelRemoveProject(event)">
+  <div class="confirm-box">
+    <div class="confirm-icon">🗑️</div>
+    <div class="confirm-title" data-i18n="confirm_remove_title">Remover projeto</div>
+    <div class="confirm-msg">
+      <span data-i18n="confirm_remove_msg">Deseja remover</span>
+      <strong id="confirm-remove-name"></strong>
+      <span data-i18n="confirm_remove_msg2">do monitoramento?</span>
+    </div>
+    <div class="confirm-actions">
+      <button class="confirm-btn-cancel" type="button" onclick="cancelRemoveProject()" data-i18n="confirm_cancel">Cancelar</button>
+      <button class="confirm-btn-ok" type="button" onclick="confirmRemoveProject()" data-i18n="confirm_remove_ok">Remover</button>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="/app.js"></script>
 </body>
 </html>

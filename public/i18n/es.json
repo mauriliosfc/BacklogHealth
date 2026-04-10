@@ -39,6 +39,7 @@
 
   "btn_daily": "📅 Daily Standup",
   "btn_refresh": "↻ Actualizar",
+  "btn_drag": "Arrastrar para reordenar",
   "btn_rename": "Renombrar proyecto",
   "btn_remove_project": "Eliminar proyecto",
   "btn_settings": "Configuración",
@@ -177,5 +178,11 @@
   "ai_err_fill": "Complete el endpoint, API key y model.",
   "ai_err_generic": "Ocurrió un error. Inténtelo de nuevo.",
   "ai_welcome": "¡Hola! Soy Copilot Project. Pregúntame sobre tu backlog, sprints o salud de proyectos.",
-  "ai_input_placeholder": "Pregunta sobre tus proyectos…"
+  "ai_input_placeholder": "Pregunta sobre tus proyectos…",
+
+  "confirm_remove_title": "Eliminar proyecto",
+  "confirm_remove_msg": "¿Desea eliminar",
+  "confirm_remove_msg2": "del monitoreo?",
+  "confirm_cancel": "Cancelar",
+  "confirm_remove_ok": "Eliminar"
 }

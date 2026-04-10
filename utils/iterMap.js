@@ -49,6 +49,7 @@ async function fetchIterMap(project, team) {
 
   // No team specified (or team fetch failed): use classificationnodes — covers all teams,
   // no team-name guessing required, works with Work Items (Read) permission only.
+  let classificationMap = null;
   try {
     const data = await azureGet(
       `${encodeURIComponent(project)}/_apis/wit/classificationnodes/iterations?$depth=10&api-version=7.0`
@@ -66,31 +67,47 @@ async function fetchIterMap(project, team) {
         map[it.path] = { start: it.start, end: it.end, isCurrent };
         if (isCurrent) currentSprint = it.path.split('\\').pop();
       });
-      return { map, currentSprint };
+      if (currentSprint) return { map, currentSprint };
+      // Map is built but no current sprint found by date math (e.g. gap between sprints).
+      // Save the map and fall through to try teamsettings for an accurate currentSprint.
+      classificationMap = { map, currentSprint: null };
     }
   } catch (_) {}
 
-  // Last resort: try common team name conventions
+  // Try teamsettings/iterations with common team name conventions.
+  // Used as last resort for the map, or as a fallback for currentSprint only
+  // when classificationnodes found sprints but couldn't identify the current one by date.
   for (const teamName of [`${project} Team`, project]) {
     try {
       const sd = await azureGet(
         `${encodeURIComponent(project)}/${encodeURIComponent(teamName)}/_apis/work/teamsettings/iterations?api-version=7.0`
       );
       if (sd.value && sd.value.length) {
+        const currentEntry = sd.value.find(it => it.attributes && it.attributes.timeFrame === 'current');
+        const currentSprint = currentEntry ? currentEntry.name : null;
+        // If we already have a map from classificationnodes, just fill in the currentSprint
+        if (classificationMap) {
+          if (currentSprint) {
+            // Mark the matching entry in the existing map as current
+            Object.keys(classificationMap.map).forEach(k => {
+              classificationMap.map[k].isCurrent = k.endsWith('\\' + currentSprint) || k === currentSprint;
+            });
+          }
+          return { map: classificationMap.map, currentSprint };
+        }
         const map = {};
-        let currentSprint = null;
         sd.value.forEach(it => {
           map[it.path] = {
             start: it.attributes && it.attributes.startDate ? it.attributes.startDate : null,
             end:   it.attributes && it.attributes.finishDate ? it.attributes.finishDate : null,
             isCurrent: it.attributes && it.attributes.timeFrame === 'current',
           };
-          if (it.attributes && it.attributes.timeFrame === 'current') currentSprint = it.name;
         });
         return { map, currentSprint };
       }
     } catch (_) {}
   }
+  if (classificationMap) return classificationMap;
   return { map: {}, currentSprint: null };
 }
 

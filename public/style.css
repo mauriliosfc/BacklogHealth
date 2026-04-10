@@ -157,6 +157,11 @@ tr:hover td { background: var(--hover-bg); }
 .group-count { float: right; font-weight: 400; opacity: .7; }
 .btn-detail { background: var(--c-blue-bg); border: 1px solid var(--c-blue-bd); color: var(--c-blue); padding: 4px 12px; border-radius: 7px; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .btn-detail:hover { background: var(--c-blue-bd); color: var(--c-blue-lt); }
+.drag-handle { cursor: grab; color: var(--text-muted); font-size: 20px; opacity: 0; transition: opacity .15s; user-select: none; padding: 0 2px; line-height: 1; }
+.drag-handle:active { cursor: grabbing; }
+.card-header:hover .drag-handle { opacity: 0.35; }
+.drag-handle:hover { opacity: 0.7 !important; }
+.card.dragging { opacity: 0.35; outline: 2px dashed var(--accent); }
 .btn-rename { background: none; border: none; cursor: pointer; font-size: 13px; opacity: 0; padding: 2px 3px; border-radius: 5px; transition: opacity .15s; line-height: 1; }
 .card-header:hover .btn-rename, .btn-rename:focus { opacity: 0.5; }
 .btn-rename:hover { opacity: 1 !important; }
@@ -186,6 +191,20 @@ tr:hover td { background: var(--hover-bg); }
 .modal-refresh:disabled { opacity: .5; cursor: not-allowed; }
 .modal-close:hover { background: var(--c-red-bg); color: var(--c-red2); }
 .modal-body { padding: 24px 28px; }
+
+/* Confirm remove modal */
+.confirm-overlay { display: none; position: fixed; inset: 0; background: var(--modal-bg); z-index: 900; align-items: center; justify-content: center; }
+.confirm-overlay.open { display: flex; }
+.confirm-box { background: var(--bg-card); border: 1px solid var(--bg-border); border-radius: 16px; padding: 32px 28px 24px; max-width: 380px; width: 90%; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,.4); }
+.confirm-icon { font-size: 36px; margin-bottom: 12px; }
+.confirm-title { font-size: 17px; font-weight: 700; color: var(--text-1); margin-bottom: 10px; }
+.confirm-msg { font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+.confirm-msg strong { color: var(--text-1); display: block; margin-top: 4px; }
+.confirm-actions { display: flex; gap: 10px; justify-content: center; margin-top: 24px; }
+.confirm-btn-cancel { background: var(--bg-el); border: none; color: var(--text-1); padding: 9px 22px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+.confirm-btn-cancel:hover { background: var(--bg-el2); }
+.confirm-btn-ok { background: var(--c-red-bg); border: 1px solid var(--c-red2); color: var(--c-red2); padding: 9px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.confirm-btn-ok:hover { background: var(--c-red2); color: #fff; }
 .modal-loading { color: var(--text-faint); font-size: 14px; padding: 40px 0; text-align: center; }
 .d-section { margin-bottom: 28px; }
 .d-section-title { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--bg-border); }
