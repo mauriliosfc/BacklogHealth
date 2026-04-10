@@ -40,7 +40,7 @@ function loadConfig() {
         raw.projects = raw.projects.map(p =>
           typeof p === 'string'
             ? { name: p, workItemType: 'User Story' }
-            : { name: p.name, workItemType: p.workItemType || 'User Story' }
+            : { name: p.name, workItemType: p.workItemType || 'User Story', ...(p.team ? { team: p.team } : {}) }
         );
       }
 
@@ -70,17 +70,21 @@ function getProjectNames() {
   return cfg.projects.map(p => typeof p === 'string' ? p : p.name);
 }
 
-function getProjectConfig(projectName) {
+// Returns "ProjectName - TeamName" when a team is set, otherwise just "ProjectName"
+function getDisplayName(p) {
+  if (typeof p === 'string') return p;
+  return p.team ? `${p.name} - ${p.team}` : p.name;
+}
+
+function getProjectConfig(identifier) {
   const cfg = getCfg();
   if (!cfg.projects) return null;
-  const found = cfg.projects.find(p => {
-    const name = typeof p === 'string' ? p : p.name;
-    return name === projectName;
-  });
+  const found = cfg.projects.find(p => getDisplayName(p) === identifier);
   if (!found) return null;
-  return typeof found === 'string'
-    ? { name: found, workItemType: 'User Story' }
-    : { name: found.name, workItemType: found.workItemType || 'User Story' };
+  const name        = typeof found === 'string' ? found : found.name;
+  const workItemType = typeof found === 'string' ? 'User Story' : (found.workItemType || 'User Story');
+  const team        = typeof found === 'string' ? undefined : (found.team || undefined);
+  return { name, workItemType, team, displayName: getDisplayName(found) };
 }
 
 function getAiCfg() {
@@ -92,4 +96,4 @@ function saveAiConfig(ai) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
 }
 
-module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getAiCfg, saveAiConfig };
+module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getAiCfg, saveAiConfig };

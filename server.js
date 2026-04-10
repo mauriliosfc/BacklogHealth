@@ -4,9 +4,10 @@ const fs       = require("fs");
 const nodePath = require("path");
 dns.setDefaultResultOrder("ipv4first");
 
-const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getAiCfg, saveAiConfig } = require("./config");
+const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getAiCfg, saveAiConfig } = require("./config");
 const { rawAzureGet }                             = require("./azureClient");
 const { fetchProject, fetchProjectDetail, buildCardHTML } = require("./projectService");
+const { fetchTeamCapacity } = require("./teamCapacityService");
 const { chatCompletion, testConnection } = require("./aiClient");
 
 // ── Template rendering ────────────────────────────────────────────────────────
@@ -30,8 +31,10 @@ function renderTemplate(html, vars) {
 function renderDashboard(results) {
   const cfg = getCfg();
   const cards = buildCardHTML(results);
+  const count = results.filter(r => !r.error).length;
   return renderTemplate(templates.dashboard, {
     ORG:         cfg.org,
+    SUBTITLE:    `${count} project${count !== 1 ? 's' : ''} · ${cfg.org || 'Azure DevOps'}`,
     LAST_UPDATE: new Date().toLocaleString("pt-BR"),
     CARDS:       cards,
   });
@@ -44,13 +47,15 @@ function renderSetup(prefill = {}) {
   const pat  = (prefill.pat  || "").replace(/"/g, "&quot;");
   const isSettings = !!(prefill.org);
 
-  // Converter projects para mapa { "ProjectName": "User Story", ... }
+  // Converter projects para mapa { "ProjectName|TeamName": "User Story", "SimpleProject": "Task", ... }
   const projectsMap = {};
   if (prefill.projects && Array.isArray(prefill.projects)) {
     prefill.projects.forEach(p => {
       const name = typeof p === 'string' ? p : p.name;
+      const team = typeof p === 'string' ? undefined : p.team;
       const workItemType = typeof p === 'string' ? 'User Story' : (p.workItemType || 'User Story');
-      projectsMap[name] = workItemType;
+      const key = team ? `${name}|${team}` : name;
+      projectsMap[key] = workItemType;
     });
   }
   const selectedProjectsJson = JSON.stringify(projectsMap).replace(/</g, "\\u003c");
@@ -64,7 +69,7 @@ function renderSetup(prefill = {}) {
     PAT_VALUE:              pat,
     SELECTED_PROJECTS_JSON: selectedProjectsJson,
     BACK_LINK:              isSettings
-      ? '<div style="text-align:center"><a class="btn-back" href="/" data-i18n="setup_back">← Voltar ao dashboard</a></div>'
+      ? '<a class="su-back-link" href="/" data-i18n="setup_back">← Back to Dashboard</a>'
       : "",
     AUTO_LOAD_SCRIPT:       isSettings ? "window.addEventListener('load', loadProjects);" : "",
   });
@@ -123,32 +128,71 @@ async function main() {
       try {
         const auth = Buffer.from(`:${qPat}`).toString("base64");
         const { baseUrl } = parseOrgInput(qOrg);
-        const result = await rawAzureGet(
-          `${baseUrl}/_apis/projects?api-version=7.0&$top=200&stateFilter=wellFormed`,
-          auth
-        );
-        if (result.status === 401 || result.status === 203) {
-          res.writeHead(401, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "PAT inválido ou sem permissão. Verifique o token e as permissões necessárias." }));
-          return;
+        // Fetch all projects with $skip pagination (API defaults to 100, max $top=200)
+        const PAGE = 200;
+        let allProjectNames = [];
+        let skip = 0;
+        while (true) {
+          const result = await rawAzureGet(
+            `${baseUrl}/_apis/projects?api-version=7.0&$top=${PAGE}&$skip=${skip}&stateFilter=wellFormed`,
+            auth
+          );
+          if (skip === 0) {
+            if (result.status === 401 || result.status === 203) {
+              res.writeHead(401, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "PAT inválido ou sem permissão. Verifique o token e as permissões necessárias." }));
+              return;
+            }
+            if (result.status === 404) {
+              res.writeHead(404, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: `Organização não encontrada: "${qOrg}". Verifique o nome na URL do Azure DevOps.` }));
+              return;
+            }
+            if (result.status !== 200) {
+              res.writeHead(result.status, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: `Erro da API Azure DevOps: HTTP ${result.status}` }));
+              return;
+            }
+          }
+          const page = (result.data.value || []).map(p => p.name);
+          allProjectNames = allProjectNames.concat(page);
+          if (page.length < PAGE) break;
+          skip += PAGE;
         }
-        if (result.status === 404) {
-          res.writeHead(404, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: `Organização não encontrada: "${qOrg}". Verifique o nome na URL do Azure DevOps.` }));
-          return;
-        }
-        if (result.status !== 200) {
-          res.writeHead(result.status, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: `Erro da API Azure DevOps: HTTP ${result.status}` }));
-          return;
-        }
-        const projects = (result.data.value || []).map(p => p.name).sort((a, b) => a.localeCompare(b));
+        const projectNames = allProjectNames.sort((a, b) => a.localeCompare(b));
+        // Fetch teams for each project in parallel to detect multi-team projects
+        const projects = await Promise.all(projectNames.map(async name => {
+          try {
+            const tr = await rawAzureGet(
+              `${baseUrl}/_apis/projects/${encodeURIComponent(name)}/teams?api-version=7.0`,
+              auth
+            );
+            if (tr.status === 200 && tr.data.value && tr.data.value.length > 1) {
+              return { name, teams: tr.data.value.map(t => t.name) };
+            }
+          } catch (_) {}
+          return { name, teams: [] };
+        }));
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ projects }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Falha ao conectar com o Azure DevOps: " + (e.code || e.message) }));
       }
+      return;
+    }
+
+    // ── POST /api/remove-project ───────────────────────────────────────────
+    if (req.method === "POST" && url === "/api/remove-project") {
+      const body = await readBody(req);
+      const { project } = JSON.parse(body || '{}');
+      const cfg = getCfg();
+      cfg.projects = (cfg.projects || []).filter(p => getDisplayName(p) !== project);
+      saveConfig(cfg);
+      const results = await Promise.all(cfg.projects.map(fetchProject));
+      cachedHTML = renderDashboard(results);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
       return;
     }
 
@@ -160,15 +204,17 @@ async function main() {
       const pat = params.get("pat")?.trim();
       const projectsRaw = params.get("projects") || "";
 
-      // Formato esperado: "Project1:User Story,Project2:Task"
+      // Formato: "Project1:User Story,Project2:Task:TeamName"
       const projects = projectsRaw.split(/[\n,]+/)
         .map(p => p.trim())
         .filter(Boolean)
         .map(p => {
-          const [name, workItemType] = p.split(':');
+          const [name, workItemType, ...teamParts] = p.split(':');
+          const team = teamParts.join(':').trim() || undefined;
           return {
             name: name.trim(),
-            workItemType: (workItemType || 'User Story').trim()
+            workItemType: (workItemType || 'User Story').trim(),
+            ...(team ? { team } : {}),
           };
         });
 
@@ -223,11 +269,26 @@ async function main() {
       return;
     }
 
+    // ── GET /api/team-capacity?project=NAME ───────────────────────────────
+    if (url.startsWith('/api/team-capacity')) {
+      const qp      = new URLSearchParams(url.split('?')[1] || '');
+      const project = qp.get('project') || null;
+      try {
+        const data = await fetchTeamCapacity(project);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(data));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
     // ── GET /detail?project=NAME ───────────────────────────────────────────
     if (url.startsWith("/detail?")) {
       const project = new URLSearchParams(url.slice(8)).get("project");
-      const projectNames = cfg.projects.map(p => typeof p === 'string' ? p : p.name);
-      if (!project || !projectNames.includes(project)) {
+      const displayNames = cfg.projects.map(p => getDisplayName(p));
+      if (!project || !displayNames.includes(project)) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Projeto não encontrado" }));
         return;
@@ -241,11 +302,11 @@ async function main() {
     // ── POST /ai/context ───────────────────────────────────────────────────
     if (req.method === 'POST' && url === '/ai/context') {
       const cfg = getCfg();
-      const projectNames = (cfg.projects || []).map(p => typeof p === 'string' ? p : p.name);
+      const displayNames = (cfg.projects || []).map(p => getDisplayName(p));
       const body = await readBody(req);
       const { filters = {} } = JSON.parse(body || '{}');
       try {
-        const details = await Promise.all(projectNames.map(name => fetchProjectDetail(name)));
+        const details = await Promise.all(displayNames.map(id => fetchProjectDetail(id)));
         const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
         const CLOSED   = ['Closed', 'Done', 'Resolved'];
         const ACTIVE   = ['Active', 'In Progress', 'Doing', 'Committed'];
@@ -400,7 +461,13 @@ async function main() {
     if (req.method === 'GET' && url === '/ai/config') {
       const ai = getAiCfg();
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ configured: !!(ai?.endpoint && ai?.apiKey && ai?.model) }));
+      res.end(JSON.stringify({
+        configured:  !!(ai?.endpoint && ai?.apiKey && ai?.model),
+        endpoint:    ai?.endpoint    || '',
+        apiKey:      ai?.apiKey      || '',
+        model:       ai?.model       || '',
+        apiVersion:  ai?.apiVersion  || '',
+      }));
       return;
     }
 

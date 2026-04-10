@@ -1,6 +1,7 @@
 import { buildSprintData, fmtD } from './utils.js';
 import { t, getDateLocale } from './i18n.js';
 import { getItemTypes } from './constants.js';
+import { getAlias } from './alias.js';
 
 export const _detailState = { project: null, sprints: [] };
 
@@ -29,7 +30,7 @@ export async function loadDetailData(project, selectedSprints = _detailState.spr
     const taskCompletedWork = taskItems.reduce((s, t) => s + t.completedWork, 0);
     const bugCompletedWork  = bugItems.reduce((s, t)  => s + t.completedWork, 0);
     const totalBugs         = bugItems.length;
-    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story');
+    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story', project);
   } catch(e) {
     document.getElementById('modal-body').innerHTML = '<p style="color:#f87171;padding:20px">Erro: ' + e.message + '</p>';
   } finally {
@@ -45,7 +46,7 @@ export async function openDetails(btn) {
   ).map(c => c.value);
 
   const modal = document.getElementById('detail-modal');
-  document.getElementById('modal-title').textContent = _detailState.project;
+  document.getElementById('modal-title').textContent = getAlias(_detailState.project);
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
   await loadDetailData(_detailState.project, _detailState.sprints);
@@ -88,7 +89,7 @@ function barList(entries, total) {
   return entries.map(([label, val, color]) => {
     const pct = Math.round(val / max * 100);
     const ofTotal = total ? Math.round(val / total * 100) : 0;
-    const short = label.includes('\\') ? label.split('\\').slice(1).join(' \u203a ') : label;
+    const short = label.includes('\\') ? label.split('\\').pop() : label;
     return '<div class="bar-row">' +
       '<div class="bar-label" title="' + label + '">' + short + '</div>' +
       '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + (color||'#60a5fa') + '"></div></div>' +
@@ -107,7 +108,7 @@ function ring(pct, color) {
     '</svg><div class="ring-pct" style="color:' + color + '">' + pct + '%</div></div>';
 }
 
-function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story') {
+function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story', projectName = '') {
   const total = items.length;
   if (!total) return '<p style="color:#64748b;padding:20px">' + t('detail_no_items') + '</p>';
 
@@ -117,7 +118,7 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const filterBanner = selectedSprints && selectedSprints.length > 0
     ? '<div style="background:#1e3a5f;border:1px solid #2d5a8e;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:12px;color:#93c5fd">' +
       t('detail_filter_banner', { count: selectedSprints.length }) + ' ' +
-      selectedSprints.map(function(s) { var p = s.split('\u005c'); return '<strong>' + (p.length > 1 ? p.slice(1).join(' \u203a ') : s) + '</strong>'; }).join(', ') +
+      selectedSprints.map(function(s) { var p = s.split('\u005c'); return '<strong>' + (p.length > 1 ? p[p.length - 1] : s) + '</strong>'; }).join(', ') +
       '</div>'
     : '';
 
@@ -161,7 +162,7 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
 
   const sprintRows = sortedSprintEntries.map(([key, d]) => {
     const iter = iterMap[key]||{};
-    const label = key.includes('\\') ? key.split('\\').slice(1).join(' \u203a ') : key;
+    const label = key.includes('\\') ? key.split('\\').pop() : key;
     const dateR = (iter.start && iter.end) ? fmtD(iter.start) + ' \u2013 ' + fmtD(iter.end) : '\u2014';
     const pct = d.us ? Math.round(d.usClosed/d.us*100) : 0;
     const isCurr = iter.isCurrent;
@@ -172,7 +173,10 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
       '<td>' + d.us + '</td>' +
       '<td>' + d.pts + '</td>' +
       '<td>' + d.usClosed + ' <span style="color:#475569">(' + pct + '%)</span></td>' +
-      '<td><button class="btn-burndown" type="button" onclick="openBurndown(this)" title="Ver burndown">\uD83D\uDCCA</button></td>' +
+      '<td>' +
+      '<button class="btn-burndown" type="button" onclick="openBurndown(this)" title="Ver burndown">\uD83D\uDCCA</button>' +
+      '<button class="btn-burndown" type="button" data-project="' + projectName.replace(/"/g,'&quot;') + '" data-sprint="' + safeKey + '" onclick="openDailyForSprint(this.dataset.project, this.dataset.sprint)" title="' + t('btn_view_sprint') + '">\u2630</button>' +
+      '</td>' +
       '</tr>';
   }).join('');
 

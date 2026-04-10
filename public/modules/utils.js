@@ -29,7 +29,7 @@ export function buildSprintData(items, iterMap) {
 
   const sprintMeta = sorted.map(([key, d]) => {
     const iter = iterMap[key] || {};
-    const rawLabel = key.includes('\\') ? key.split('\\').slice(1).join(' \u203a ') : key;
+    const rawLabel = key.includes('\\') ? key.split('\\').pop() : key;
     return {
       key,
       label: key === 'Sem Sprint' ? t('no_sprint') : rawLabel,

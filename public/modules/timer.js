@@ -1,6 +1,8 @@
 import { initFilters } from './filters.js';
 import { t } from './i18n.js';
 import { applyTranslations } from './i18n.js';
+import { applyAliases } from './alias.js';
+import { applyOrder } from './cardOrder.js';
 
 const INTERVAL = 300;
 let remaining = INTERVAL;
@@ -36,6 +38,13 @@ export async function doRefresh() {
     document.getElementById('lastUpdate').textContent = doc.getElementById('lastUpdate').textContent;
     applyTranslations();
     initFilters();
+    applyOrder();
+    applyAliases();
+    const savedView = localStorage.getItem('dashView') || 'grid';
+    const contentEl = document.getElementById('content');
+    if (savedView === 'list' && contentEl.classList.contains('cards-grid')) {
+      contentEl.classList.replace('cards-grid', 'cards-list');
+    }
   } catch(e) {
     console.error('Erro ao atualizar:', e);
   }

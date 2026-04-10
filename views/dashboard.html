@@ -7,38 +7,117 @@
 <script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 <link rel="stylesheet" href="/style.css">
 </head>
-<body>
-<div class="header">
-  <div>
-    <h1>📋 Backlog Health</h1>
-    <div class="subtitle">Azure DevOps · {{ORG}}</div>
-  </div>
-  <div class="refresh-bar">
-    <div class="header-utils">
-      <div class="lang-switcher">
-        <button class="btn-lang" data-lang="pt" onclick="setLocale('pt')" title="Português">PT</button>
-        <button class="btn-lang" data-lang="en" onclick="setLocale('en')" title="English">EN</button>
-        <button class="btn-lang" data-lang="es" onclick="setLocale('es')" title="Español">ES</button>
+<body class="dashboard-body">
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-row">
+        <div class="sidebar-logo-icon">📋</div>
+        <div>
+          <div class="sidebar-logo-name">Backlog Health</div>
+          <div class="sidebar-logo-sub">DEVOPS INTELLIGENCE</div>
+        </div>
       </div>
-      <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Tema claro">☀️</button>
-      <button class="btn-theme" onclick="location.href='/settings'" title="Configurações">⚙️</button>
+      <div class="sidebar-logo-meta">{{SUBTITLE}}</div>
     </div>
-    <div class="header-divider"></div>
-    <div class="header-actions">
-      <button class="btn-copilot" id="btnCopilot" onclick="openCopilot()">🤖 Copilot Project</button>
-      <button class="btn-delivery" id="btnDelivery" onclick="openDeliveryPlan()" data-i18n="dp_btn">🗓️ Delivery Plan</button>
-      <button class="btn-daily" id="btnDaily" onclick="openDaily()" data-i18n="btn_daily">📅 Apresentar daily</button>
-      <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()" data-i18n-title="btn_refresh" title="Atualizar">↻</button>
-      <div class="header-meta">
-        <div class="timer" id="timer">Próximo refresh em 5:00</div>
-        <div class="update" id="lastUpdate">Atualizado em {{LAST_UPDATE}}</div>
+
+    <nav class="sidebar-nav">
+      <a class="sidebar-link active" id="sidebar-link-dashboard" href="#" onclick="showDashboardView();return false">
+        <span class="sidebar-link-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
+        </span>
+        Dashboard
+      </a>
+      <a class="sidebar-link" id="sidebar-link-tc" href="#" onclick="openTeamCapacity();return false">
+        <span class="sidebar-link-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4.5" r="2.5"/><circle cx="11" cy="4.5" r="2.5"/><path d="M1 13.5c0-2.2 1.8-4 4-4s4 1.8 4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M9.5 10.2c.5-.1 1-.2 1.5-.2 2.2 0 4 1.8 4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </span>
+        Team Capacity
+      </a>
+      <a class="sidebar-link" href="#" onclick="openDeliveryPlan();return false">
+        <span class="sidebar-link-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="3" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 1v4M11 1v4M1 7h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </span>
+        <span data-i18n="dp_title">Delivery Plan</span>
+      </a>
+      <a class="sidebar-link" href="#" onclick="openDaily();return false">
+        <span class="sidebar-link-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v4l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </span>
+        Daily Standup
+      </a>
+      <a class="sidebar-link" href="#" onclick="openCopilot();return false">
+        <span class="sidebar-link-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5C4.41 1.5 1.5 4.08 1.5 7.25c0 1.73.8 3.27 2.07 4.33L3 13.5l2.18-1.09A7.15 7.15 0 008 13c3.59 0 6.5-2.58 6.5-5.75S11.59 1.5 8 1.5z"/></svg>
+        </span>
+        Copilot AI
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a class="sidebar-link sidebar-link-sm" href="/settings">
+        <span class="sidebar-link-icon">⚙️</span>
+        <span data-i18n="btn_settings">Settings</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main-content">
+
+    <!-- Top bar -->
+    <div class="topbar">
+      <div class="topbar-right">
+        <div class="lang-switcher">
+          <button class="btn-lang" data-lang="pt" onclick="setLocale('pt')" title="Português">PT</button>
+          <button class="btn-lang" data-lang="en" onclick="setLocale('en')" title="English">EN</button>
+          <button class="btn-lang" data-lang="es" onclick="setLocale('es')" title="Español">ES</button>
+        </div>
+        <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Tema claro">☀️</button>
+        <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()" data-i18n-title="btn_refresh" title="Atualizar">↻</button>
+        <div class="topbar-meta">
+          <div class="timer" id="timer">…</div>
+          <div class="update" id="lastUpdate">{{LAST_UPDATE}}</div>
+        </div>
       </div>
     </div>
-  </div>
+
+    <!-- View toolbar -->
+    <div class="cards-toolbar">
+      <div class="cards-toolbar-left"></div>
+      <div class="cards-toolbar-right">
+        <button class="btn-view-toggle" id="btnViewToggle" onclick="toggleView()" title="Alternar visualização">
+          <svg id="iconViewGrid" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
+          <svg id="iconViewList" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="display:none"><rect x="1" y="2" width="14" height="2.5" rx="1.25"/><rect x="1" y="6.75" width="14" height="2.5" rx="1.25"/><rect x="1" y="11.5" width="14" height="2.5" rx="1.25"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Team Capacity view (shown instead of cards when active) -->
+    <div id="tc-view">
+      <div id="tc-body"></div>
+    </div>
+
+    <!-- Cards grid -->
+    <div id="content" class="cards-grid">
+      {{CARDS}}
+      <!-- Empty slot: add new project -->
+      <div class="card card-empty" onclick="location.href='/settings'" title="Add project">
+        <div class="card-empty-icon">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="10" fill="var(--bg-el2)"/><path d="M18 10v16M10 18h16" stroke="var(--text-faint)" stroke-width="2.5" stroke-linecap="round"/></svg>
+        </div>
+        <div class="card-empty-title" data-i18n="card_empty_title">Monitor New Project</div>
+        <div class="card-empty-sub" data-i18n="card_empty_sub">Select from Azure DevOps</div>
+      </div>
+    </div>
+
+  </main>
 </div>
-<div id="content">
-{{CARDS}}
-</div>
+
+<!-- ── Modals (unchanged) ── -->
 
 <div id="detail-modal" class="modal-overlay" onclick="closeDetails(event)">
   <div class="modal-box">
@@ -63,7 +142,7 @@
       <div class="daily-head-title" data-i18n="daily_title">📅 Daily Standup</div>
       <div class="daily-head-actions">
         <button class="modal-maximize" id="btnDailyMax" onclick="toggleDailyMaximize()" data-i18n-title="daily_expand" title="Expandir">⤢</button>
-        <button class="modal-close" onclick="closeDaily()" title="Fechar">✕</button>
+        <button class="modal-close" onclick="closeDaily()" data-i18n-title="btn_close" title="Fechar">✕</button>
       </div>
     </div>
     <div class="daily-carousel-wrap">
@@ -147,21 +226,40 @@
   </div>
 </div>
 
-<!-- Copilot Chat Modal -->
-<div id="copilot-chat-modal" class="modal-overlay copilot-chat-overlay" onclick="closeCopilotChatOverlay(event)">
-  <div class="modal-box copilot-chat-box">
-    <div class="modal-head copilot-chat-head">
-      <div class="modal-title copilot-chat-title">🤖 Copilot Project</div>
-      <div class="modal-actions">
-        <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" title="Configurações">⚙️</button>
-        <button class="modal-maximize" type="button" id="btnCopilotChatMax" onclick="toggleCopilotChatMaximize()" title="Maximizar">⤢</button>
-        <button class="modal-close" type="button" onclick="closeCopilotChat()">✕</button>
-      </div>
+<!-- Copilot Chat Panel (floating) -->
+<div id="copilot-chat-panel" class="copilot-panel">
+  <div class="copilot-panel-head" id="copilot-panel-head">
+    <div class="copilot-chat-title">🤖 Copilot Project</div>
+    <div class="modal-actions">
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" data-i18n-title="btn_settings" title="Configurações">⚙️</button>
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="clearCopilotChat()" data-i18n-title="ai_new_chat" title="Nova conversa">🗑</button>
+      <button class="modal-maximize" type="button" id="btnCopilotChatMax" onclick="toggleCopilotMaximize()" data-i18n-title="ai_maximize" title="Maximizar">⤢</button>
+      <button class="modal-maximize" type="button" id="btnCopilotChatMin" onclick="toggleCopilotMinimize()" data-i18n-title="ai_minimize" title="Minimizar">−</button>
+      <button class="modal-close" type="button" onclick="closeCopilotChat()">✕</button>
     </div>
+  </div>
+  <div class="copilot-panel-body" id="copilot-panel-body">
     <div class="copilot-chat-messages" id="copilot-chat-messages"></div>
     <div class="copilot-chat-input-wrap">
       <textarea id="copilot-input" class="copilot-input" rows="1" placeholder="Pergunte sobre seus projetos..." onkeydown="copilotInputKeydown(event)" data-i18n-placeholder="ai_input_placeholder"></textarea>
       <button id="btnCopilotSend" class="copilot-send-btn" type="button" onclick="sendCopilotMessage()">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Remove Modal -->
+<div id="confirm-remove-modal" class="confirm-overlay" onclick="cancelRemoveProject(event)">
+  <div class="confirm-box">
+    <div class="confirm-icon">🗑️</div>
+    <div class="confirm-title" data-i18n="confirm_remove_title">Remover projeto</div>
+    <div class="confirm-msg">
+      <span data-i18n="confirm_remove_msg">Deseja remover</span>
+      <strong id="confirm-remove-name"></strong>
+      <span data-i18n="confirm_remove_msg2">do monitoramento?</span>
+    </div>
+    <div class="confirm-actions">
+      <button class="confirm-btn-cancel" type="button" onclick="cancelRemoveProject()" data-i18n="confirm_cancel">Cancelar</button>
+      <button class="confirm-btn-ok" type="button" onclick="confirmRemoveProject()" data-i18n="confirm_remove_ok">Remover</button>
     </div>
   </div>
 </div>

@@ -7,66 +7,108 @@
 <script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 <link rel="stylesheet" href="/style.css">
 </head>
-<body class="setup">
-<div class="setup-top-bar">
-  <div class="lang-switcher">
-    <button class="btn-lang" data-lang="pt" onclick="setLocale('pt')" title="Português">PT</button>
-    <button class="btn-lang" data-lang="en" onclick="setLocale('en')" title="English">EN</button>
-    <button class="btn-lang" data-lang="es" onclick="setLocale('es')" title="Español">ES</button>
+<body class="setup-body">
+
+<!-- ── Top bar ── -->
+<div class="su-topbar">
+  <div class="su-topbar-logo">
+    <span class="su-topbar-emoji">📋</span>
+    <div>
+      <div class="su-topbar-name">Backlog Health</div>
+      <div class="su-topbar-sub">DEVOPS INTELLIGENCE</div>
+    </div>
   </div>
-  <button class="btn-theme-top" id="btnTheme" onclick="toggleTheme()">☀️</button>
+  <div class="su-topbar-right">
+    <div class="lang-switcher">
+      <button class="btn-lang" data-lang="pt" onclick="setLocale('pt')" title="Português">PT</button>
+      <button class="btn-lang" data-lang="en" onclick="setLocale('en')" title="English">EN</button>
+      <button class="btn-lang" data-lang="es" onclick="setLocale('es')" title="Español">ES</button>
+    </div>
+    <button class="btn-theme-top" id="btnTheme" onclick="toggleTheme()">☀️</button>
+  </div>
 </div>
-<div class="wrap">
-  <div class="logo">📋</div>
-  <div class="pg-title">Backlog Health Dashboard</div>
-  <div class="pg-sub">{{SUBTITLE}}</div>
-  <div class="card">
 
-    <div class="info-box">
-      <h4 data-i18n="setup_pat_section">🔑 Permissões necessárias para o PAT</h4>
-      <ul>
-        <li><code>Work Items (Read)</code> — leitura de work items e backlogs</li>
-        <li><code>Project and Team (Read)</code> — listagem de projetos e sprints</li>
-      </ul>
-      <div class="pat-link" data-i18n="setup_pat_link">Gere em: Azure DevOps → User Settings → Personal Access Tokens</div>
-    </div>
+<!-- ── Main layout ── -->
+<div class="su-layout">
 
-    <div class="err-box" id="err-box"></div>
+  <!-- Left: credentials form -->
+  <aside class="su-left">
+    <h1 class="su-title" data-i18n="setup_title">Setup Connectivity</h1>
+    <p class="su-subtitle">{{SUBTITLE}}</p>
 
-    <!-- Passo 1: Credenciais -->
-    <div class="field">
-      <label data-i18n="setup_org_label">Organização do Azure DevOps</label>
-      <input type="text" id="inp-org" data-i18n-placeholder="setup_org_placeholder" placeholder="Ex: MinhaEmpresa" value="{{ORG_VALUE}}" autocomplete="off">
-      <div class="hint" data-i18n="setup_org_hint">Ex: MinhaEmpresa · dev.azure.com/<strong>organização</strong> · ou https://empresa.visualstudio.com/</div>
-    </div>
-    <div class="field">
-      <label data-i18n="setup_pat_label">Personal Access Token (PAT)</label>
-      <input type="password" id="inp-pat" data-i18n-placeholder="setup_pat_placeholder" placeholder="Cole seu PAT aqui" value="{{PAT_VALUE}}" autocomplete="off">
-    </div>
-    <button class="btn-test" id="btn-test" onclick="loadProjects()" data-i18n="setup_btn_test">🔌 Testar conexão e carregar projetos</button>
+    <div class="su-form-card">
+      <div class="err-box" id="err-box"></div>
 
-    <!-- Passo 2: Seleção de projetos -->
-    <div class="step2" id="step2">
-      <hr class="divider">
-      <div class="ok-box" id="ok-box"></div>
-      <label class="proj-label" data-i18n="setup_projects_label">Projetos a monitorar</label>
-      <button type="button" class="proj-trigger" id="proj-trigger" onclick="toggleProjPanel()">
-        <span id="proj-trigger-text" data-i18n="setup_placeholder">Selecione os projetos…</span>
-        <span>▾</span>
-      </button>
-      <div class="proj-panel" id="proj-panel">
-        <div class="proj-search-wrap">
-          <input type="text" class="proj-search" id="proj-search" data-i18n-placeholder="setup_search_placeholder" placeholder="🔍 Buscar projeto…" oninput="filterProjects()" autocomplete="off">
+      <div class="su-field">
+        <label class="su-label" data-i18n="setup_org_label">ORGANIZATION NAME</label>
+        <div class="su-input-wrap">
+          <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.4"/><path d="M6 9h4M8 7v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <input type="text" id="inp-org" class="su-input" data-i18n-placeholder="setup_org_placeholder" placeholder="e.g. MyCompany" value="{{ORG_VALUE}}" autocomplete="off">
         </div>
-        <div class="proj-list" id="proj-list"></div>
+        <div class="su-hint" data-i18n="setup_org_hint">e.g. MyCompany · dev.azure.com/org · or https://company.visualstudio.com/</div>
       </div>
-      <div class="proj-count" id="proj-count"></div>
-      <button class="btn-save" id="btn-save" onclick="doSave()" data-i18n="setup_btn_save">💾 Salvar e abrir dashboard</button>
+
+      <div class="su-field">
+        <label class="su-label" data-i18n="setup_pat_label">PERSONAL ACCESS TOKEN (PAT)</label>
+        <div class="su-input-wrap">
+          <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="7" r="3.5" stroke="currentColor" stroke-width="1.4"/><path d="M8.5 9.5l5 5M11 11l1.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <input type="password" id="inp-pat" class="su-input" data-i18n-placeholder="setup_pat_placeholder" placeholder="Paste your PAT here" value="{{PAT_VALUE}}" autocomplete="off">
+        </div>
+      </div>
+
+      <button class="su-test-btn" id="btn-test" onclick="loadProjects()">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1v13M1 7.5h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.4"/></svg>
+        <span id="btn-test-label">Test Connection</span>
+      </button>
+
+      <div class="su-security-note">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1L2 3.5v4C2 10.5 4.5 13 7 13s5-2.5 5-5.5v-4L7 1z" stroke="currentColor" stroke-width="1.3"/><path d="M5 7l1.5 1.5L9.5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><strong data-i18n="setup_security_label">Security Note:</strong> <span data-i18n="setup_security_text">Your PAT is stored locally in config.json on your device only. It is never sent to any external service other than Azure DevOps.</span></div>
+      </div>
     </div>
 
-    {{BACK_LINK}}
-  </div>
+    <div class="su-actions">
+      <button class="su-save-btn" id="btn-save" onclick="doSave()" data-i18n="setup_btn_save">Save and Open Dashboard</button>
+      {{BACK_LINK}}
+    </div>
+  </aside>
+
+  <!-- Right: project & team scope -->
+  <main class="su-right">
+    <div class="su-right-header">
+      <h2 class="su-right-title" data-i18n="setup_projects_label">Project &amp; Team Scope</h2>
+      <div class="su-search-wrap">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M9.5 9.5l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <input type="text" id="proj-search" class="su-search" data-i18n-placeholder="setup_search_placeholder" placeholder="Filter projects…" oninput="filterProjects()" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="su-ok-box" id="ok-box" style="display:none"></div>
+
+    <div class="su-proj-list" id="proj-list">
+      <!-- projects rendered by JS -->
+    </div>
+
+    <!-- Help section (always visible) -->
+    <div class="su-help">
+      <svg class="su-help-icon" width="40" height="40" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="var(--text-faint)" stroke-width="1.5"/><circle cx="14" cy="20" r="2" fill="var(--text-faint)"/><circle cx="20" cy="20" r="2" fill="var(--text-faint)"/><circle cx="26" cy="20" r="2" fill="var(--text-faint)"/></svg>
+      <div class="su-help-title" data-i18n="setup_help_title">Can't find your project?</div>
+      <div class="su-help-sub" data-i18n="setup_help_sub">Ensure your Personal Access Token has the 'Project Read' and 'Work Items Read' permissions scope.</div>
+      <div class="su-pat-info">
+        <h4 data-i18n="setup_pat_section">Required PAT Permissions</h4>
+        <ul>
+          <li><code>Work Items (Read)</code></li>
+          <li><code>Project and Team (Read)</code></li>
+        </ul>
+        <div class="su-pat-link" data-i18n="setup_pat_link">Azure DevOps → User Settings → Personal Access Tokens</div>
+      </div>
+    </div>
+
+    <div class="su-count" id="proj-count"></div>
+  </main>
+
 </div>
+
 <script type="module">
   import { initI18n, applyTranslations, t, setLocale, getLocale } from '/modules/i18n.js';
   await initI18n();
@@ -81,12 +123,10 @@
 <script>
   const PREFILL = {{SELECTED_PROJECTS_JSON}};
 
-  // WORK_ITEM_TYPES armazena { "Project1": "User Story", "Project2": "Task" }
   let WORK_ITEM_TYPES = {};
   if (typeof PREFILL === 'object' && !Array.isArray(PREFILL)) {
     WORK_ITEM_TYPES = PREFILL;
   } else if (Array.isArray(PREFILL)) {
-    // Migração: converter array para object
     PREFILL.forEach(p => {
       const name = typeof p === 'string' ? p : (p.name || p);
       WORK_ITEM_TYPES[name] = 'User Story';
@@ -96,11 +136,24 @@
   let ALL_PROJECTS = [];
   let SELECTED_SET = new Set(Object.keys(WORK_ITEM_TYPES));
 
+  // ── Icon helpers (mirrors backend) ───────────────────────────────────────
+  const ICON_COLORS = ['#3b82f6','#8b5cf6','#f59e0b','#10b981','#ef4444','#06b6d4','#f97316','#ec4899','#14b8a6','#6366f1'];
+  function _iconColor(name) {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+    return ICON_COLORS[h % ICON_COLORS.length];
+  }
+  function _initials(name) {
+    const base = name.includes(' - ') ? name.split(' - ')[0] : name;
+    return base.split(/[\s_\-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('').slice(0, 2) || '??';
+  }
+
+  // ── i18n helper ──────────────────────────────────────────────────────────
   function _tr(key, fallback, vars) {
     let msg;
     if (window._t) {
       const res = window._t(key, vars || {});
-      if (res !== key) msg = res; // key not found returns the key itself
+      if (res !== key) msg = res;
     }
     if (!msg) {
       msg = fallback;
@@ -111,149 +164,275 @@
     return msg;
   }
 
+  // ── Theme ─────────────────────────────────────────────────────────────────
   function setTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
     localStorage.setItem('theme', t);
     const btn = document.getElementById('btnTheme');
-    if (btn) { btn.textContent = t === 'dark' ? '☀️' : '🌙'; btn.title = t === 'dark' ? 'Tema claro' : 'Tema escuro'; }
+    if (btn) { btn.textContent = t === 'dark' ? '☀️' : '🌙'; }
   }
   function toggleTheme() { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
   setTheme(localStorage.getItem('theme') || 'dark');
 
+  // ── Error display ─────────────────────────────────────────────────────────
   function showErr(msg) { const el = document.getElementById('err-box'); el.textContent = '❌ ' + msg; el.style.display = 'block'; }
   function hideErr() { document.getElementById('err-box').style.display = 'none'; }
 
+  // ── Load projects ─────────────────────────────────────────────────────────
   async function loadProjects() {
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
-    if (!org || !pat) { showErr(_tr('setup_err_fill', 'Preencha a organização e o PAT antes de continuar.')); return; }
+    if (!org || !pat) { showErr(_tr('setup_err_fill', 'Fill in the organization and PAT before continuing.')); return; }
     hideErr();
     const btn = document.getElementById('btn-test');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>' + _tr('setup_btn_testing', 'Testando conexão…');
+    const lbl = document.getElementById('btn-test-label');
+    lbl.textContent = _tr('setup_btn_testing', 'Testing connection…');
     try {
       const r = await fetch('/api/projects?org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat));
       const data = await r.json();
-      if (data.error) { showErr(data.error); btn.disabled = false; btn.textContent = _tr('setup_btn_test', '🔌 Testar conexão e carregar projetos'); return; }
-      renderProjects(data.projects || []);
-      document.getElementById('ok-box').textContent = _tr('setup_conn_ok', '✅ Conexão OK — {{count}} projeto(s) disponível(is).', { count: (data.projects || []).length });
-      document.getElementById('step2').style.display = 'block';
-      btn.innerHTML = _tr('setup_btn_reload', '🔄 Recarregar lista de projetos');
+      if (data.error) { showErr(data.error); btn.disabled = false; lbl.textContent = _tr('setup_btn_reload', 'Reload project list'); return; }
+      const rawProjects = (data.projects || []).map(p => typeof p === 'string' ? { name: p, teams: [] } : p);
+      ALL_PROJECTS = rawProjects;
+      renderProjectList(rawProjects);
+      const okBox = document.getElementById('ok-box');
+      okBox.textContent = _tr('setup_conn_ok', '✅ Connection OK — {{count}} project(s) available.', { count: rawProjects.length });
+      okBox.style.display = 'block';
+      lbl.textContent = _tr('setup_btn_reload', 'Reload project list');
       btn.disabled = false;
     } catch(e) {
-      showErr(_tr('setup_err_network', 'Falha de rede: {{msg}}', { msg: e.message }));
+      showErr(_tr('setup_err_network', 'Network error: {{msg}}', { msg: e.message }));
       btn.disabled = false;
-      btn.textContent = _tr('setup_btn_test', '🔌 Testar conexão e carregar projetos');
+      lbl.textContent = _tr('setup_btn_test', 'Test Connection');
     }
   }
 
-  function renderProjects(projects) {
-    ALL_PROJECTS = projects;
-    renderProjectList(projects);
-    const footer = document.getElementById('proj-panel').querySelector('.proj-footer');
-    if (!footer) {
-      const f = document.createElement('div');
-      f.className = 'proj-footer';
-      f.innerHTML = '<button type="button" onclick="clearProjs()">' + _tr('setup_clear', '✕ Limpar seleção') + '</button>';
-      document.getElementById('proj-panel').appendChild(f);
-    }
-    updateCount();
+  // ── WIT toggle HTML ───────────────────────────────────────────────────────
+  function _witToggle(key, currentType) {
+    const esc = key.replace(/"/g, '&quot;');
+    return `<div class="su-wit-wrap">
+      <div class="su-wit-label">HEALTH ITEM SELECTION</div>
+      <div class="su-wit-toggle">
+        <button type="button" class="su-wit-btn ${currentType === 'User Story' ? 'active' : ''}"
+          onclick="setWIT('${esc}','User Story',this)">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 6.5l2 2 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          User Story
+        </button>
+        <button type="button" class="su-wit-btn ${currentType === 'Task' ? 'active' : ''}"
+          onclick="setWIT('${esc}','Task',this)">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1.5" y="3" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1.5" y="6" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1.5" y="9" width="7" height="1.5" rx=".75" fill="currentColor"/></svg>
+          Task
+        </button>
+      </div>
+    </div>`;
   }
 
+  function setWIT(key, type, btn) {
+    WORK_ITEM_TYPES[key] = type;
+    const toggle = btn.closest('.su-wit-toggle');
+    toggle.querySelectorAll('.su-wit-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // ── Team row ──────────────────────────────────────────────────────────────
+  function _teamRow(projectName, team) {
+    const key = projectName + '|' + team;
+    const esc = key.replace(/"/g, '&quot;');
+    const checked = SELECTED_SET.has(key);
+    const workItemType = WORK_ITEM_TYPES[key] || 'User Story';
+    const dotColors = ['#22c55e','#60a5fa','#f59e0b','#a78bfa','#f87171','#2dd4bf'];
+    let dh = 0; for (const c of team) dh = (dh * 31 + c.charCodeAt(0)) & 0xffff;
+    const dotColor = dotColors[dh % dotColors.length];
+    return `<div class="su-team-row ${checked ? 'selected' : ''}" id="team-${esc.replace(/\|/g,'_')}">
+      <div class="su-team-main">
+        <span class="su-team-dot" style="background:${dotColor}"></span>
+        <span class="su-team-name">Squad: ${team}</span>
+        <input type="checkbox" class="su-team-cb" value="${esc}" ${checked ? 'checked' : ''} onchange="onProjChange(this)">
+      </div>
+      ${checked ? _witToggle(key, workItemType) : ''}
+    </div>`;
+  }
+
+  // ── Project row (single-team) ─────────────────────────────────────────────
+  // _isSelected: checks both plain key and any "name|team" variant in SELECTED_SET
+  function _isSelected(name) {
+    if (SELECTED_SET.has(name)) return true;
+    return [...SELECTED_SET].some(k => k.startsWith(name + '|'));
+  }
+  function _singleProjectRow(p) {
+    const key = p.name;
+    const esc = key.replace(/"/g, '&quot;');
+    const checked = _isSelected(key);
+    const workItemType = WORK_ITEM_TYPES[key] || [...SELECTED_SET].reduce((wt, k) => {
+      if (k.startsWith(key + '|') && WORK_ITEM_TYPES[k]) wt = WORK_ITEM_TYPES[k];
+      return wt;
+    }, 'User Story');
+    const color = _iconColor(p.name);
+    const initials = _initials(p.name);
+    return `<div class="su-proj-item ${checked ? 'selected' : ''}" data-key="${esc}">
+      <div class="su-proj-header su-proj-header--single">
+        <div class="su-proj-icon" style="background:${color}">${initials}</div>
+        <div class="su-proj-info">
+          <div class="su-proj-name">${p.name}</div>
+        </div>
+        <input type="checkbox" class="su-team-cb" value="${esc}" ${checked ? 'checked' : ''} onchange="onProjChange(this)">
+      </div>
+      ${checked ? _witToggle(key, workItemType) : ''}
+    </div>`;
+  }
+
+  // ── Project row (multi-team) ──────────────────────────────────────────────
+  function _multiProjectRow(p) {
+    const color = _iconColor(p.name);
+    const initials = _initials(p.name);
+    const hasSelected = p.teams.some(t => SELECTED_SET.has(p.name + '|' + t));
+    const expanded = hasSelected;
+    return `<div class="su-proj-item" data-project="${p.name.replace(/"/g,'&quot;')}">
+      <div class="su-proj-header" onclick="toggleExpand(this)">
+        <div class="su-proj-icon" style="background:${color}">${initials}</div>
+        <div class="su-proj-info">
+          <div class="su-proj-name">${p.name}</div>
+          <div class="su-proj-meta">${p.teams.length} Teams</div>
+        </div>
+        <svg class="su-proj-chevron ${expanded ? 'open' : ''}" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="su-teams-body" ${expanded ? '' : 'style="display:none"'}>
+        ${p.teams.map(team => _teamRow(p.name, team)).join('')}
+      </div>
+    </div>`;
+  }
+
+  // ── Render project list ───────────────────────────────────────────────────
   function renderProjectList(projects) {
     const list = document.getElementById('proj-list');
     if (!projects.length) {
-      list.innerHTML = '<div class="proj-empty">' + _tr('setup_no_projects', 'Nenhum projeto encontrado.') + '</div>';
+      list.innerHTML = '';
       return;
     }
-    list.innerHTML = projects.map(p => {
-      const esc = p.replace(/"/g, '&quot;');
-      const checked = SELECTED_SET.has(p) ? ' checked' : '';
-      const workItemType = WORK_ITEM_TYPES[p] || 'User Story';
-      return `<label class="proj-option">
-        <input type="checkbox" value="${esc}" onchange="onProjChange(this)"${checked}>
-        <span class="proj-name">${p}</span>
-        <select class="work-item-type-select" data-project="${esc}" onchange="onTypeChange(this)">
-          <option value="User Story" ${workItemType === 'User Story' ? 'selected' : ''}>User Story</option>
-          <option value="Task" ${workItemType === 'Task' ? 'selected' : ''}>Task</option>
-        </select>
-      </label>`;
-    }).join('');
+    // Configured projects first
+    const sorted = [...projects].sort((a, b) => {
+      const aSelected = a.teams && a.teams.length > 1
+        ? a.teams.some(t => SELECTED_SET.has(a.name + '|' + t))
+        : _isSelected(a.name);
+      const bSelected = b.teams && b.teams.length > 1
+        ? b.teams.some(t => SELECTED_SET.has(b.name + '|' + t))
+        : _isSelected(b.name);
+      return (bSelected ? 1 : 0) - (aSelected ? 1 : 0);
+    });
+    list.innerHTML = sorted.map(p =>
+      (p.teams && p.teams.length > 1) ? _multiProjectRow(p) : _singleProjectRow(p)
+    ).join('');
   }
 
+  // ── Expand/collapse project teams ─────────────────────────────────────────
+  function toggleExpand(header) {
+    const body = header.nextElementSibling;
+    const chevron = header.querySelector('.su-proj-chevron');
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    chevron.classList.toggle('open', !isOpen);
+  }
+
+  // ── Checkbox change ───────────────────────────────────────────────────────
   function onProjChange(cb) {
+    const key = cb.value;
+    const projItem = cb.closest('.su-proj-item') || cb.closest('.su-team-row');
     if (cb.checked) {
-      SELECTED_SET.add(cb.value);
-      if (!WORK_ITEM_TYPES[cb.value]) WORK_ITEM_TYPES[cb.value] = 'User Story';
+      SELECTED_SET.add(key);
+      if (!WORK_ITEM_TYPES[key]) WORK_ITEM_TYPES[key] = 'User Story';
     } else {
-      SELECTED_SET.delete(cb.value);
+      SELECTED_SET.delete(key);
     }
+    // Re-render the wit toggle and selection state for this item
+    _refreshProjItem(cb, key);
     updateCount();
   }
 
-  function onTypeChange(select) {
-    const projectName = select.getAttribute('data-project');
-    WORK_ITEM_TYPES[projectName] = select.value;
+  function _refreshProjItem(cb, key) {
+    const teamRow = cb.closest('.su-team-row');
+    if (teamRow) {
+      teamRow.classList.toggle('selected', cb.checked);
+      let wit = teamRow.querySelector('.su-wit-wrap');
+      if (cb.checked && !wit) {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = _witToggle(key, WORK_ITEM_TYPES[key] || 'User Story');
+        teamRow.appendChild(wrap.firstElementChild);
+      } else if (!cb.checked && wit) {
+        wit.remove();
+      }
+      return;
+    }
+    // Single-project item
+    const projItem = cb.closest('.su-proj-item');
+    if (projItem) {
+      projItem.classList.toggle('selected', cb.checked);
+      let wit = projItem.querySelector('.su-wit-wrap');
+      if (cb.checked && !wit) {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = _witToggle(key, WORK_ITEM_TYPES[key] || 'User Story');
+        projItem.appendChild(wrap.firstElementChild);
+      } else if (!cb.checked && wit) {
+        wit.remove();
+      }
+    }
   }
 
+  // ── Filter ────────────────────────────────────────────────────────────────
   function filterProjects() {
     const q = document.getElementById('proj-search').value.toLowerCase().trim();
-    const filtered = q ? ALL_PROJECTS.filter(p => p.toLowerCase().includes(q)) : ALL_PROJECTS;
+    const filtered = q ? ALL_PROJECTS.filter(p => {
+      if (p.name.toLowerCase().includes(q)) return true;
+      if (p.teams && p.teams.some(t => t.toLowerCase().includes(q))) return true;
+      return false;
+    }) : ALL_PROJECTS;
     renderProjectList(filtered);
   }
 
-  function toggleProjPanel() {
-    const panel = document.getElementById('proj-panel');
-    panel.classList.toggle('open');
-    if (panel.classList.contains('open')) {
-      setTimeout(() => document.getElementById('proj-search')?.focus(), 50);
-    }
+  // ── Count ─────────────────────────────────────────────────────────────────
+  function _keyToDisplay(key) {
+    const idx = key.indexOf('|');
+    return idx >= 0 ? key.slice(0, idx) + ' — ' + key.slice(idx + 1) : key;
   }
 
   function updateCount() {
-    const names = [...SELECTED_SET];
-    const placeholder = _tr('setup_placeholder', 'Selecione os projetos…');
-    document.getElementById('proj-trigger-text').textContent = names.length ? names.join(', ') : placeholder;
-    document.getElementById('proj-count').textContent = names.length
-      ? _tr('setup_count', '{{count}} projeto(s) selecionado(s)', { count: names.length })
+    const keys = [...SELECTED_SET];
+    document.getElementById('proj-count').textContent = keys.length
+      ? _tr('setup_count', '{{count}} project(s) selected', { count: keys.length })
       : '';
   }
 
-  function clearProjs() {
-    SELECTED_SET.clear();
-    document.getElementById('proj-search').value = '';
-    filterProjects();
-    updateCount();
-  }
-
-  document.addEventListener('click', e => {
-    if (!e.target.closest('#proj-trigger') && !e.target.closest('#proj-panel'))
-      document.getElementById('proj-panel')?.classList.remove('open');
-  });
-
+  // ── Save ──────────────────────────────────────────────────────────────────
   async function doSave() {
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
-    const selected = [...SELECTED_SET].map(projectName => {
-      const workItemType = WORK_ITEM_TYPES[projectName] || 'User Story';
-      return `${projectName}:${workItemType}`;
+    if (!org || !pat) { showErr(_tr('setup_err_fields', 'Fill in all required fields.')); return; }
+    const selected = [...SELECTED_SET].map(key => {
+      const workItemType = WORK_ITEM_TYPES[key] || 'User Story';
+      const pipeIdx = key.indexOf('|');
+      if (pipeIdx >= 0) {
+        const name = key.slice(0, pipeIdx);
+        const team = key.slice(pipeIdx + 1);
+        return `${name}:${workItemType}:${team}`;
+      }
+      return `${key}:${workItemType}`;
     });
-    if (!selected.length) { showErr(_tr('setup_err_select', 'Selecione ao menos um projeto para monitorar.')); return; }
+    if (!selected.length) { showErr(_tr('setup_err_select', 'Select at least one project to monitor.')); return; }
     hideErr();
     const btn = document.getElementById('btn-save');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>' + _tr('setup_btn_saving', 'Salvando…');
+    btn.innerHTML = '<span class="spinner"></span>' + _tr('setup_btn_saving', 'Saving…');
     try {
       const body = 'org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat) + '&projects=' + encodeURIComponent(selected.join(','));
       const r = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.ok) { location.href = '/'; return; }
-      showErr(data.error || _tr('setup_err_save', 'Erro ao salvar configurações.'));
+      showErr(data.error || _tr('setup_err_save', 'Error saving configuration.'));
     } catch(e) { showErr(e.message); }
     btn.disabled = false;
-    btn.textContent = _tr('setup_btn_save', '💾 Salvar e abrir dashboard');
+    btn.textContent = _tr('setup_btn_save', 'Save and Open Dashboard');
   }
 
+  updateCount();
   {{AUTO_LOAD_SCRIPT}}
 </script>
 </body>

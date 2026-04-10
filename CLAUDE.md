@@ -1,6 +1,6 @@
 # 📋 Backlog Health Dashboard — Documentação
 
-> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Abril/2026
+> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Abril/2026 (Team Capacity, redesign, Copilot melhorias, UX)
 
 ---
 
@@ -20,6 +20,7 @@ dash_azure_gestao_pessoal/
 ├── config.js           ← loadConfig, saveConfig, getCfg, getAuth, parseOrgInput, getProjectConfig
 ├── azureClient.js      ← azureGet, azurePost, rawAzureGet (usa cfg.baseUrl)
 ├── projectService.js   ← fetchProject, fetchProjectDetail, buildCardHTML
+├── teamCapacityService.js ← fetchTeamCapacity (tasks por dev/sprint, CompletedWork/RemainingWork)
 ├── utils/
 │   ├── health.js       ← calcHealth (fonte única, importado por projectService)
 │   ├── paginate.js     ← paginatedItems (lotes de 200)
@@ -43,6 +44,8 @@ dash_azure_gestao_pessoal/
 │       ├── daily.js      ← openDaily, buildDailySlide
 │       ├── burndown.js   ← openBurndown, buildBurndownChart, openBurndownFromDaily
 │       ├── deliveryPlan.js ← openDeliveryPlan, buildDeliveryPlan, filtros de projeto
+│       ├── alias.js      ← getAlias, setAlias, applyAliases, startRename (apelidos de projeto)
+│       ├── teamCapacity.js ← openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject
 │       └── copilot.js    ← openCopilot, sendCopilotMessage, _loadRichContext, _buildContext (fallback DOM)
 ├── aiClient.js         ← chatCompletion, testConnection (Azure AI Foundry / Azure OpenAI / OpenAI-compat)
 ├── views/
@@ -93,7 +96,8 @@ server.js (entry point)
                 ├── GET /api/projects        → lista projetos disponíveis para o PAT informado
                 ├── POST /setup              → salva config.json e retorna JSON {ok:true}
                 ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, iterMap
-                ├── GET /ai/config           → verifica se a IA está configurada
+                ├── GET /api/team-capacity?project=NAME → JSON com developers, sprints, CompletedWork/RemainingWork
+                ├── GET /ai/config           → retorna config completa da IA (endpoint, apiKey, model, apiVersion)
                 ├── POST /ai/config          → salva credenciais da IA em config.json
                 ├── POST /ai/test            → testa conexão com o provedor de IA
                 ├── POST /ai/context         → retorna contexto rico dos projetos (respeita filtros de sprint)
@@ -216,10 +220,10 @@ Ao selecionar sprints, o dashboard recalcula em tempo real:
 
 ## 📅 Apresentação de Daily Standup
 
-Acessado pelo botão **📅 Apresentar daily** no header.
+Acessado pelo botão **📅 Apresentar daily** no header, ou pelo botão **☰** na coluna Ações da tabela Distribuição por Sprint no modal de detalhes.
 
 - Modal em carrossel — um slide por projeto monitorado
-- Cada slide exibe dados **filtrados pela sprint atual** do projeto
+- Cada slide exibe dados **filtrados pela sprint atual** do projeto (ou pela sprint selecionada quando aberto via botão ☰)
 - **Conteúdo por slide:**
   - Nome do projeto + badge de saúde (com tooltip)
   - Nome da sprint atual + período (data início – data fim)
@@ -228,7 +232,7 @@ Acessado pelo botão **📅 Apresentar daily** no header.
   - Tabela de User Stories da sprint atual (Título, Status, Estimativa, Responsável)
 - Navegação por botões (← Anterior / Próximo →) ou teclas `←` `→`
 - Fecha com ✕ ou tecla `Escape`
-- Modal expansível (⤢ Maximizar / ⤡ Restaurar)
+- **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
 
 ---
 
@@ -250,7 +254,7 @@ Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 | **Indicadores de Saúde** | Taxa de Conclusão (US), Em UAT (US), Taxa de Bugs (hrs bugs/total hrs), Cobertura de Estimativas (US) |
 | **US por Status** | Barras horizontais com todos os estados — filtrado apenas por User Stories |
 | **US por Responsável** | Barras horizontais com membros da equipe — filtrado apenas por User Stories |
-| **Distribuição por Sprint** | Tabela: Sprint, Período, User Stories, Story Points, Concluídos (%), Ações (botão burndown) — ordenada por data crescente |
+| **Distribuição por Sprint** | Tabela: Sprint, Período, User Stories, Story Points, Concluídos (%), Ações (botão burndown 📊 + botão ver sprint ☰) — ordenada por data crescente |
 | **Cronograma de Sprints** | Gantt visual com blocos posicionados por data, barra proporcional à qtd de US, marcador "hoje" |
 
 ### Cálculo dos indicadores de saúde
@@ -303,11 +307,13 @@ Acessado via botão **📊** na coluna "Ações" da tabela de Distribuição por
 | API | Endpoint | Finalidade |
 |-----|----------|------------|
 | Projects | `/_apis/projects` | Lista todos os projetos acessíveis pelo PAT |
+| Teams | `/_apis/projects/{project}/teams` | Lista times por projeto (detecta multi-time no setup) |
 | WIQL | `/{project}/_apis/wit/wiql` | Consulta work items por critérios |
 | Work Items | `/{project}/_apis/wit/workitems?ids=...` | Detalhes dos items em lotes de 200 (até 500) |
-| Iterations | `/{project}/{team}/_apis/work/teamsettings/iterations` | Sprints com datas e timeFrame |
+| Classification Nodes | `/{project}/_apis/wit/classificationnodes/iterations?$depth=10` | Árvore completa de sprints com datas (independe de time) |
+| Team Iterations | `/{project}/{team}/_apis/work/teamsettings/iterations` | Sprints do time com `timeFrame:"current"` (usado quando time está configurado) |
 
-> **Nota:** A API `_apis/teams` retorna 401 com PAT sem permissão de times. O script contorna isso tentando o nome do time padrão diretamente (`{projeto} Team`).
+> **Nota:** O `fetchIterMap` usa a seguinte precedência: (1) endpoint de time específico se `team` estiver configurado; (2) `classificationnodes/iterations` para cobertura total; (3) fallback por convenção de nome (`{projeto} Team`).
 
 ---
 
@@ -332,7 +338,7 @@ Cada projeto pode ser configurado na tela de setup com um **tipo de item princip
 
 Acessado pelo botão **🗓️ Delivery Plan** no header, ao lado do botão de Daily Standup.
 
-- **Modal expandível** com maximizar, fechar e tecla `Escape`
+- **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
 - **Timeline compartilhada** — todos os projetos exibidos em linhas sobrepostas no mesmo eixo de tempo
 - Cada linha exibe o nome do projeto (coluna fixa à esquerda, `position: sticky`) e os blocos de sprint posicionados proporcionalmente por data
 - **Dentro de cada bloco:** nome da sprint + datas de início/fim no formato `dd/mm` (sem ano) em segunda linha; tooltip com data completa
@@ -352,6 +358,55 @@ Clique no botão **⚙️** no header do dashboard para acessar a tela de config
 - Marcar/desmarcar os projetos a monitorar (busca com autocomplete)
 
 As alterações são salvas em `config.json` e o dashboard é atualizado automaticamente.
+
+> **Remoção rápida:** cada card do dashboard tem um botão 🗑️ que remove o projeto do monitoramento diretamente, sem precisar entrar na tela de configurações.
+
+---
+
+## 👥 Monitoramento por Time (Multi-time)
+
+Projetos do Azure DevOps com **mais de um time** são expandidos automaticamente na tela de configuração: cada time aparece como uma entrada separada no formato `Projeto — Nome do Time`.
+
+- A seleção é feita por time, não por projeto — cada entrada monitora apenas as sprints e work items daquele time
+- O **display name** do projeto no dashboard é `"Projeto - Nome do Time"` (com hífen)
+- O campo `team` é salvo em `config.json` por entrada: `{ name: "AMS", team: "AMS Backend", workItemType: "User Story" }`
+- O `fetchIterMap` usa o endpoint específico do time (`teamsettings/iterations`) quando `team` está definido, garantindo `timeFrame:"current"` preciso
+- Os work items são filtrados no servidor para exibir apenas os que pertencem às sprints do time configurado
+- A identificação única usada em `data-project`, `/detail?project=` e filtros é o **display name** (`"AMS - AMS Backend"`)
+
+### Estrutura da chave no setup
+
+| Contexto | Formato da chave |
+|---|---|
+| Checkbox no DOM | `"AMS\|AMS Backend"` (pipe como separador) |
+| Enviado ao servidor (`POST /setup`) | `"AMS:User Story:AMS Backend"` |
+| Salvo em `config.json` | `{ name, workItemType, team }` |
+| Display name no dashboard | `"AMS - AMS Backend"` |
+
+---
+
+## ✏️ Apelidos de Projeto (Alias)
+
+O usuário pode customizar o nome exibido de qualquer projeto diretamente no dashboard, sem alterar a configuração do servidor.
+
+- Botão **✏️** aparece ao passar o mouse no cabeçalho do card
+- Clique abre um campo de edição inline; **Enter** salva, **Escape** cancela
+- O apelido é salvo em `localStorage['projectAliases']` como `{ "displayName": "AliasCustomizado" }`
+- Apagando o campo (texto vazio) restaura o nome original
+- O nome original é sempre preservado internamente — usado em chamadas de API, filtros, `data-project` e identificação no servidor
+- O apelido é aplicado em: **dashboard principal**, **modal de detalhes**, **Daily Standup** e **Delivery Plan**
+- `applyAliases()` é chamado na inicialização e após cada refresh automático (já que o `#content` é reconstruído)
+
+---
+
+## 🗑️ Remoção Rápida de Projeto
+
+O botão **🗑️** no cabeçalho de cada card permite remover o projeto do monitoramento sem abrir a tela de configurações.
+
+- Exibe confirmação antes de executar
+- Chama `POST /api/remove-project` com o display name do projeto
+- O servidor remove a entrada de `config.json`, reconstrói o HTML cacheado e retorna `{ ok: true }`
+- O card é removido do DOM imediatamente após confirmação do servidor
 
 ---
 
@@ -417,6 +472,72 @@ As alterações são salvas em `config.json` e o dashboard é atualizado automat
 | 56 | Filtros de sprint normalizados no servidor (`f.split('\\').pop()`) | `localStorage` armazena o caminho completo da iteration (`Projeto\\Sprint 108`); API do Azure DevOps usa o mesmo formato — comparar apenas o último segmento resolve a divergência sem alterar o formato salvo |
 | 57 | `_loadRichContext` em `copilot.js` exibe indicador de carregamento | Buscar detalhes de todos os projetos pode levar vários segundos — feedback visual imediato evita que o usuário envie mensagem antes dos dados estarem disponíveis e receba resposta genérica |
 | 58 | `_buildContext()` como fallback DOM-based | Se `/ai/context` falhar, o chat ainda funciona com dados já presentes nos `data-*` dos cards do dashboard — degradação graciosa sem bloquear o usuário |
+| 59 | Botão ☰ "Ver sprint" na tabela de Distribuição por Sprint | Permite abrir o Daily Standup de qualquer sprint diretamente do modal de detalhes, sem precisar usar o carrossel do header — abre o modal focado no projeto e sprint selecionados |
+| 60 | `buildDailySlide(card, forcedSprintKey)` com parâmetro opcional | Reutiliza toda a lógica do slide da daily com override de sprint — sem `forcedSprintKey` o comportamento original é preservado; com ele, nome/datas são lidos do `data-itermap` do card |
+| 61 | `Microsoft.VSTS.Common.StackRank` no Daily Standup | US na daily eram exibidas sem ordem definida — buscar o campo `Order` da API e adicionar `data-order` nos `<tr>` permite ordenação crescente por backlog order sem custo adicional |
+| 62 | `classificationnodes/iterations` como fonte primária do `fetchIterMap` | Projetos com múltiplos times retornavam sprints sem data pois o endpoint `teamsettings/iterations` é específico por time — `classificationnodes` retorna toda a árvore de iterations independente de time com permissão apenas de `Work Items (Read)` |
+| 63 | Monitoramento por time com campo `team` em `config.json` | Projetos com N times precisam de visibilidade isolada por time — expandir no setup como `Projeto — Time` e filtrar items por `iterMap` do time no servidor resolve sem nova API |
+| 64 | Display name como identificador único em ambiente multi-time | `name` sozinho é ambíguo quando há duas entradas do mesmo projeto — usar `"Projeto - Time"` como `data-project` e chave em `/detail?project=` garante unicidade sem alterar nomes no Azure DevOps |
+| 65 | `getDisplayName(p)` exportado de `config.js` | Cálculo do display name estava sendo duplicado em `server.js`, `projectService.js` e `config.js` — fonte única evita divergência |
+| 66 | Alias de projeto em `localStorage` via `alias.js` | Nome técnico do projeto (ex: `"AMS - AMS Backend"`) pode ser difícil de comunicar — alias no cliente preserva a chave interna e substitui apenas a camada visual sem alterar server, filtros ou API |
+| 67 | `applyAliases()` chamado após refresh | O refresh reconstrói `#content` do zero, perdendo os `textContent` alterados — chamar `applyAliases()` em `timer.js` após `initFilters()` garante que aliases persistam entre atualizações |
+| 68 | `POST /api/remove-project` como endpoint de remoção rápida | Remover projeto exige editar `config.json` e reconstruir cache — endpoint dedicado encapsula essa lógica e permite remoção direta do card sem abrir o setup |
+| 69 | `data-i18n-title` em todos os tooltips do dashboard | Tooltips hardcoded em português não respondem à troca de idioma — `applyTranslations()` já processa `data-i18n-title`, bastava adicionar o atributo e as keys nos JSONs |
+| 70 | Toggle grid/lista na `.cards-toolbar` acima dos cards | Botão de alternância de layout estava na topbar misturado com controles globais — movê-lo para uma barra dedicada acima dos cards torna a ação mais próxima do conteúdo que afeta |
+| 71 | Team Capacity como view alternativa no `main-content` | Tela independente sem modal evita sobrepor o dashboard — show/hide de `#tc-view` vs `#content` + `.cards-toolbar` mantém o layout da sidebar sem nova rota ou reload |
+| 72 | `style.display = 'block'` explícito no `#tc-view` | `style.display = ''` remove o inline style mas o CSS `#tc-view { display: none }` ainda vence — atribuir `'block'` garante que o elemento apareça independente da folha de estilo |
+| 73 | `localStorage['activeView']` salvo antes do `location.reload()` no `setLocale()` | Troca de idioma recarrega a página e perdia a view TC ativa — salvar antes do reload e restaurar em `app.js` após inicialização preserva o contexto do usuário |
+| 74 | `GET /ai/config` retorna credenciais completas | Endpoint retornava apenas `{ configured: bool }` — formulário de configuração abria sempre vazio, obrigando re-digitação após restart; retornar endpoint/apiKey/model/apiVersion permite pré-preenchimento |
+| 75 | Daily Standup e Delivery Plan abrem maximizados por padrão | Modais eram abertos em tamanho reduzido exigindo clique manual em "Maximizar" a cada uso — `classList.add('maximized')` no `open` e ícone já iniciado como ⤡ eliminam esse passo repetitivo |
+| 76 | Título "Health Intelligence" removido da topbar; meta info movida para sidebar | Topbar com título duplicava a identidade visual já presente na sidebar logo — remover libera espaço e concentra branding no sidebar; `{{SUBTITLE}}` (N projects · Org) fica visível sem ocupar área de ação |
+| 77 | `.sidebar-logo-row` como wrapper interno + `.sidebar-logo` como coluna | Sidebar logo usava `flex-row` direto — para posicionar o meta abaixo do ícone+texto precisava de nível extra sem quebrar o alinhamento horizontal do ícone com o nome |
+
+---
+
+## 👥 Team Capacity & Performance
+
+Acessado pelo link **Team Capacity** na sidebar. Substitui a view de cards no `main-content` sem recarregar a página.
+
+- **Vista isolada** — `#content` e `.cards-toolbar` ficam ocultos; `#tc-view` é exibido com `display: block`
+- **Seletor de projeto** no cabeçalho — persiste em `localStorage['tcProject']`
+- **Cards de squad** no topo:
+  - **Squad Capacity** — soma das capacidades configuradas por dev (em horas)
+  - **Backlog Demand** — soma de `CompletedWork + RemainingWork` de todos os devs na sprint atual
+  - **Overload Delta** — diferença Demand − Capacity (positivo = sobrecarga)
+- **Cards por desenvolvedor** listam todos que tiveram atividade de tasks nas últimas sprints:
+  - Avatar com iniciais, nome, badge de status (HEALTHY / AT RISK / NO CAPACITY)
+  - Slider (0–160h, step 4) + input numérico sincronizados bidirecionalmente via `_applyCapacityChange()`
+  - Capacidade salva em `localStorage['tc::devName::sprintName']`
+  - Stats: Capacidade, Utilização %, Lançado, Restante
+  - Gráfico de tendência das últimas N sprints (barras div, sem SVG)
+- **Retorno ao dashboard** via link Dashboard na sidebar ou `showDashboardView()`
+- **Troca de idioma** preserva a view TC — `setLocale()` salva `localStorage['activeView']` antes do reload; `app.js` restaura chamando `openTeamCapacity()` na inicialização
+
+### Cálculo das métricas
+
+| Métrica | Fórmula |
+|---------|---------|
+| Backlog Demand | Σ (CompletedWork + RemainingWork) por dev na sprint atual |
+| Utilização | CompletedWork ÷ Capacity × 100% |
+| Status HEALTHY | Utilização ≤ 100% e Capacity > 0 |
+| Status AT RISK | Utilização > 100% |
+| Status NO CAPACITY | Capacity = 0 |
+
+### Endpoint `/api/team-capacity`
+
+Retorna por projeto:
+```json
+{
+  "project": "NomeProjeto",
+  "currentSprint": "Sprint 108",
+  "recentSprints": ["Sprint 106", "Sprint 107", "Sprint 108"],
+  "developers": [{
+    "name": "Fulano",
+    "currentSprint": { "completedWork": 24, "remainingWork": 8, "taskCount": 5 },
+    "history": [{ "sprint": "Sprint 106", "completedWork": 30 }, ...]
+  }]
+}
+```
 
 ---
 
@@ -455,6 +576,18 @@ Por projeto, o endpoint retorna:
 
 ## 🛣️ Próximos passos sugeridos
 
+- [x] Suporte a múltiplos times por projeto — seleção individual no setup, filtro de items por time no servidor
+- [x] Alias de projeto — renomear nome exibido sem alterar configuração do servidor
+- [x] Remoção rápida de projeto via botão 🗑️ no card
+- [x] Ordenação de US por campo `Order` (StackRank) no Daily Standup
+- [x] `classificationnodes/iterations` para cobertura de sprints em projetos multi-time
+- [x] Tooltips i18n — todos os `title` do dashboard agora respondem à troca de idioma
+- [x] Toggle grid/lista movido para toolbar acima dos cards
+- [x] Tela Team Capacity & Performance — métricas por dev, configuração de capacidade, tendência de entrega
+- [x] Copilot AI painel flutuante arrastável com minimize/maximize
+- [x] Credenciais do Copilot AI persistidas — formulário pré-preenchido após restart
+- [x] Daily Standup e Delivery Plan abrem maximizados por padrão
+- [x] Topbar limpa — meta info (N projects · Org) movida para sidebar abaixo do logo
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
 - [ ] Integrar com **Power BI** para histórico e relatórios gerenciais
@@ -462,7 +595,8 @@ Por projeto, o endpoint retorna:
 - [ ] Adicionar histórico de saúde do backlog (comparar com semanas anteriores)
 - [ ] Burndown baseado em datas reais de conclusão (via histórico de estado do Azure DevOps)
 - [ ] Streaming de respostas da IA (SSE) para reduzir tempo de espera percebido
+- [ ] Troca de idioma sem reload (templates reativos ao locale via `data-i18n` no HTML gerado dinamicamente)
 
 ---
 
-*Documentação atualizada em Abril/2026 — Copilot Project (IA): Azure AI Foundry, Azure OpenAI e OpenAI-compat; contexto rico de projetos; markdown no chat*
+*Documentação atualizada em Abril/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa*
