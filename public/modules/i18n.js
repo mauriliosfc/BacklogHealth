@@ -21,6 +21,7 @@ export function t(key, vars = {}) {
 
 export function setLocale(locale) {
   localStorage.setItem('lang', locale);
+  localStorage.setItem('activeView', document.getElementById('tc-view')?.style.display === 'block' ? 'tc' : 'dashboard');
   location.reload();
 }
 
