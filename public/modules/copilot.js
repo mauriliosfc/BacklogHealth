@@ -18,6 +18,13 @@ export async function openCopilot() {
 }
 
 export function openCopilotConfig() {
+  // Pre-fill form with saved values
+  fetch('/ai/config').then(r => r.json()).then(data => {
+    if (data.endpoint)   document.getElementById('ai-endpoint').value   = data.endpoint;
+    if (data.apiKey)     document.getElementById('ai-apikey').value     = data.apiKey;
+    if (data.model)      document.getElementById('ai-model').value      = data.model;
+    if (data.apiVersion) document.getElementById('ai-apiversion').value = data.apiVersion;
+  }).catch(() => {});
   document.getElementById('copilot-config-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
 }

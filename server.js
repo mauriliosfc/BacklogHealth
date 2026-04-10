@@ -461,7 +461,13 @@ async function main() {
     if (req.method === 'GET' && url === '/ai/config') {
       const ai = getAiCfg();
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ configured: !!(ai?.endpoint && ai?.apiKey && ai?.model) }));
+      res.end(JSON.stringify({
+        configured:  !!(ai?.endpoint && ai?.apiKey && ai?.model),
+        endpoint:    ai?.endpoint    || '',
+        apiKey:      ai?.apiKey      || '',
+        model:       ai?.model       || '',
+        apiVersion:  ai?.apiVersion  || '',
+      }));
       return;
     }
 
