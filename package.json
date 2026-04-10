@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "pkg . --targets node18-win-x64 --output dist/BacklogHealth.exe --compress GZip"
+    "build": "pkg . --targets node18-win-x64 --output dist/app/server.exe --compress GZip"
   },
   "pkg": {
     "assets": [
