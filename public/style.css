@@ -269,7 +269,7 @@ h2 { font-size: 16px; font-weight: 700; }
 .health-pill.red .health-dot { background: var(--c-red2); }
 
 /* Stats row */
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
 .stat { background: var(--bg-el); border-radius: 8px; padding: 10px 12px; }
 .stat-label { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 5px; font-weight: 600; }
 .stat-val { font-size: 24px; font-weight: 700; color: var(--c-green); line-height: 1; }

@@ -6,6 +6,8 @@
   "stat_no_est": "No Estimate",
   "stat_no_resp": "No Assignee",
   "stat_bugs": "Open Bugs",
+  "stat_pts": "Story Points",
+  "stat_progress": "Progress",
   "label_tasks": "Tasks",
   "label_user_stories": "User Stories",
   "label_hours": "Hours",

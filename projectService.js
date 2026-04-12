@@ -186,6 +186,13 @@ function buildCardHTML(results) {
     const semResp = openItems.filter(i => !i.fields?.["System.AssignedTo"]).length;
     const ACTIVE_STATES = ["Active", "In Progress", "New"];
     const bugs = items.filter(i => i.fields?.["System.WorkItemType"] === "Bug" && ACTIVE_STATES.includes(i.fields?.["System.State"])).length;
+
+    const totalPts = isTaskMode ? null : mainItems.reduce((sum, i) => {
+      const pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"];
+      return sum + (pts != null ? pts : 0);
+    }, 0);
+    const closedCount = mainItems.filter(i => CLOSED_STATES.includes(i.fields?.["System.State"])).length;
+
     const health = calcHealth(total, semEst, semResp, bugs);
 
     // Labels dinâmicos baseados no modo
@@ -363,9 +370,11 @@ function buildCardHTML(results) {
         <!-- stats -->
         <div class="stats">
           <div class="stat"><div class="stat-label card-label" data-i18n="${itemLabelKey}">${itemLabel}</div><div class="stat-val card-total">${total}</div></div>
+          ${totalPts !== null ? `<div class="stat"><div class="stat-label" data-i18n="stat_pts">Story Points</div><div class="stat-val card-pts">${totalPts}</div></div>` : ''}
+          <div class="stat"><div class="stat-label" data-i18n="stat_progress">Progress</div><div class="stat-val card-progress" style="font-size:18px">${closedCount}/${total}</div></div>
+          <div class="stat"><div class="stat-label" data-i18n="stat_bugs">Open Bugs</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
           <div class="stat"><div class="stat-label" data-i18n="stat_no_est">No Estimate</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
           <div class="stat"><div class="stat-label" data-i18n="stat_no_resp">No Assignee</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_bugs">Open Bugs</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
         </div>
 
         <!-- sprint progress -->
