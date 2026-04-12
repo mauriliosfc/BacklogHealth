@@ -4,7 +4,7 @@ const fs       = require("fs");
 const nodePath = require("path");
 dns.setDefaultResultOrder("ipv4first");
 
-const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg, saveGithubConfig } = require("./config");
+const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg } = require("./config");
 const { createIssue } = require("./githubClient");
 const { rawAzureGet }                             = require("./azureClient");
 const { fetchProject, fetchProjectDetail, buildCardHTML } = require("./projectService");
@@ -550,24 +550,6 @@ ${context || 'No project data available at this moment.'}`;
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: e.message }));
       }
-      return;
-    }
-
-    // ── GET /api/feedback/config ───────────────────────────────────────────
-    if (url === '/api/feedback/config') {
-      const gh = getGithubCfg() || {};
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ token: gh.token || '', repo: gh.repo || '' }));
-      return;
-    }
-
-    // ── POST /api/feedback/config ──────────────────────────────────────────
-    if (req.method === 'POST' && url === '/api/feedback/config') {
-      const body = await readBody(req);
-      const { token, repo } = JSON.parse(body);
-      saveGithubConfig({ token: (token || '').trim(), repo: (repo || '').trim() });
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true }));
       return;
     }
 

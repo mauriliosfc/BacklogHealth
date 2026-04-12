@@ -254,5 +254,10 @@
   "fb_cfg_repo_hint": "e.g. mauriliosfc/BacklogHealth",
   "fb_cfg_save": "💾 Save Feedback Config",
   "fb_cfg_saving": "Saving…",
-  "fb_cfg_saved": "✅ Saved!"
+  "fb_cfg_saved": "✅ Saved!",
+
+  "fb_success_title": "Feedback registered",
+  "fb_success_msg": "Your feedback has been registered. You can access it by clicking the link below.",
+  "fb_success_link": "View on GitHub",
+  "fb_success_close": "Close"
 }

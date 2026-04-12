@@ -794,6 +794,10 @@ tr:hover td { background: var(--hover-bg); }
 .fb-submit-btn { background: var(--c-blue); border: none; color: #fff; padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .15s; }
 .fb-submit-btn:hover { opacity: .85; }
 .fb-submit-btn:disabled { opacity: .5; cursor: default; }
+.feedback-success-box { max-width: 420px; }
+.feedback-success-body { display: flex; flex-direction: column; gap: 16px; }
+.feedback-success-body p { font-size: 14px; color: var(--text-1); margin: 0; }
+.fb-success-link { display: inline-block; color: var(--c-blue); text-decoration: underline; font-size: 14px; font-weight: 600; word-break: break-all; }
 /* GitHub config section in setup */
 .su-github-card { border: 1px solid var(--bg-border); }
 .su-github-header { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--text-2); cursor: pointer; padding: 2px 0; user-select: none; }

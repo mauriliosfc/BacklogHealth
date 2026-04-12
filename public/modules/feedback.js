@@ -15,6 +15,22 @@ export function closeFeedbackOverlay(e) {
   if (e.target === document.getElementById('feedback-modal')) closeFeedback();
 }
 
+export function openFeedbackSuccess(url) {
+  const link = document.getElementById('fb-success-link');
+  if (link) { link.href = url || '#'; link.style.display = url ? '' : 'none'; }
+  document.getElementById('feedback-success-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+export function closeFeedbackSuccess() {
+  document.getElementById('feedback-success-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+export function closeFeedbackSuccessOverlay(e) {
+  if (e.target === document.getElementById('feedback-success-modal')) closeFeedbackSuccess();
+}
+
 function _resetForm() {
   document.getElementById('fb-type').value = 'bug';
   document.getElementById('fb-title').value = '';
@@ -53,9 +69,8 @@ export async function submitFeedback() {
     });
     const data = await r.json();
     if (data.ok) {
-      statusEl.innerHTML = t('fb_ok') + (data.url ? ` <a href="${data.url}" target="_blank" class="fb-issue-link">#issue</a>` : '');
-      statusEl.className = 'fb-status fb-success';
-      setTimeout(closeFeedback, 3000);
+      closeFeedback();
+      openFeedbackSuccess(data.url);
     } else {
       statusEl.textContent = data.error || t('fb_err_generic');
       statusEl.className = 'fb-status fb-error';
@@ -70,47 +85,3 @@ export async function submitFeedback() {
   }
 }
 
-// ── GitHub config (admin only, in settings) ───────────────────────────────────
-
-export async function loadFeedbackConfig() {
-  try {
-    const r = await fetch('/api/feedback/config');
-    const data = await r.json();
-    const tokenEl = document.getElementById('gh-token');
-    const repoEl = document.getElementById('gh-repo');
-    if (tokenEl) tokenEl.value = data.token || '';
-    if (repoEl) repoEl.value = data.repo || '';
-  } catch (_) {}
-}
-
-export async function saveFeedbackConfig() {
-  const token = (document.getElementById('gh-token')?.value || '').trim();
-  const repo = (document.getElementById('gh-repo')?.value || '').trim();
-  const statusEl = document.getElementById('gh-config-status');
-  const btn = document.getElementById('btn-gh-save');
-
-  btn.disabled = true;
-  btn.textContent = t('fb_cfg_saving');
-
-  try {
-    const r = await fetch('/api/feedback/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, repo }),
-    });
-    const data = await r.json();
-    if (data.ok) {
-      statusEl.textContent = t('fb_cfg_saved');
-      statusEl.className = 'fb-status fb-success';
-    } else {
-      statusEl.textContent = t('fb_err_generic');
-      statusEl.className = 'fb-status fb-error';
-    }
-  } catch (_) {
-    statusEl.textContent = t('fb_err_generic');
-    statusEl.className = 'fb-status fb-error';
-  }
-
-  btn.disabled = false;
-  btn.textContent = t('fb_cfg_save');
-}

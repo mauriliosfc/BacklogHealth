@@ -511,6 +511,12 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 80 | `.select-panel` com `z-index: 400` + `.drop-up` variant | Dropdown de sprint ficava cortado pelo card vizinho e inacessível quando havia muitas sprints — z-index alto garante sobreposição; `drop-up` abre para cima quando o espaço abaixo é insuficiente |
 | 81 | Nomes de sprint exibidos com `.split("\\").pop()` | Iteration paths no Azure DevOps seguem o formato `Projeto\Time\Sprint` — exibir o caminho completo misturava o nome do time no label; `.pop()` extrai apenas o segmento final |
 | 82 | `npm run build` com `--output dist/app/server.exe` | Script anterior gerava `dist/BacklogHealth.exe` (raiz errada) — wrapper C# espera `server.exe` no mesmo diretório que ele (`dist/app/`); corrigir o output path garante que o build seja diretamente utilizável |
+| 83 | Stats do card em grade 2×3: Scope row (US · SP · Progress) + Problems row (Bugs · Sem Estimativa · Sem Responsável) | Quatro stats em linha única ficavam apertados no modo grid; separar em duas linhas temáticas melhora leitura e permite adicionar Story Points e Project Progress sem sobrecarga visual |
+| 84 | Story Points somados de todos os `mainItems` (independente de sprint) | SP representa o escopo total do projeto, não apenas da sprint filtrada — coerente com o Project Progress que também usa o total do backlog |
+| 85 | Project Progress = US fechadas ÷ total de US do backlog | Diferente do burndown (por sprint), o Progress mostra o avanço geral do projeto — inclui US Closed para refletir o histórico completo |
+| 86 | Token GitHub hardcoded em `config.json`, sem UI de configuração para o usuário | Feedback vai para um repo centralizado do desenvolvedor — expor configuração ao usuário criaria risco de substituição indevida do token e complexidade desnecessária na UI |
+| 87 | Endpoint `POST /api/feedback` cria GitHub Issue com label baseado no tipo | Mapear tipo do form (bug/suggestion/help/other) para label do GitHub permite filtrar issues por categoria no repositório sem pós-processamento manual |
+| 88 | Modal de sucesso separado após criar a issue | Fechar o form e abrir um segundo modal com link clicável para o GitHub é mais limpo do que exibir uma mensagem inline e fechar automaticamente após 3s — o usuário pode navegar até a issue no próprio tempo |
 
 ---
 
@@ -613,6 +619,9 @@ Por projeto, o endpoint retorna:
 - [x] Nomes de sprint exibidos sem prefixo de time (`.split("\\").pop()`)
 - [x] Tela de setup com título "Setup" em todos os idiomas
 - [x] Build corrigido: `npm run build` gera `dist/app/server.exe` (path correto para o wrapper)
+- [x] Stats do card em grade 2×3 — Story Points e Project Progress adicionados; layout reorganizado em linha Scope + linha Problems
+- [x] Feature de Feedback — link na sidebar, formulário (tipo/título/descrição), cria GitHub Issue, modal de sucesso com link clicável
+- [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
 - [ ] Integrar com **Power BI** para histórico e relatórios gerenciais
@@ -624,4 +633,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Abril/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path)*
+*Documentação atualizada em Abril/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3 (Story Points + Project Progress), feature de Feedback via GitHub Issues*

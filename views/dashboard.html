@@ -291,6 +291,25 @@
   </div>
 </div>
 
+<!-- Feedback Success Modal -->
+<div id="feedback-success-modal" class="modal-overlay" onclick="closeFeedbackSuccessOverlay(event)">
+  <div class="modal-box feedback-success-box">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="fb_success_title">Feedback registered</div>
+      <div class="modal-actions">
+        <button class="modal-close" type="button" onclick="closeFeedbackSuccess()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body feedback-success-body">
+      <p data-i18n="fb_success_msg">Your feedback has been registered. You can access it by clicking the link below.</p>
+      <a id="fb-success-link" href="#" target="_blank" class="fb-success-link" data-i18n="fb_success_link">View on GitHub</a>
+    </div>
+    <div class="feedback-actions">
+      <button type="button" class="fb-submit-btn" onclick="closeFeedbackSuccess()" data-i18n="fb_success_close">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm Remove Modal -->
 <div id="confirm-remove-modal" class="confirm-overlay" onclick="cancelRemoveProject(event)">
   <div class="confirm-box">
