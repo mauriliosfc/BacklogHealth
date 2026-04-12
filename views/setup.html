@@ -71,6 +71,29 @@
       <button class="su-save-btn" id="btn-save" onclick="doSave()" data-i18n="setup_btn_save">Save and Open Dashboard</button>
       {{BACK_LINK}}
     </div>
+
+    <!-- GitHub Feedback Config -->
+    <div class="su-form-card su-github-card" style="margin-top:16px">
+      <div class="su-github-header" onclick="toggleGithubSection(this)">
+        <span>💬 <span data-i18n="fb_cfg_title">Feedback (GitHub Issues)</span></span>
+        <svg class="su-proj-chevron" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div id="github-config-body" style="display:none; margin-top:12px">
+        <p class="su-hint" style="margin-bottom:12px" data-i18n="fb_cfg_hint">Configure a GitHub token so users can send feedback directly to a repository issue.</p>
+        <div class="su-field">
+          <label class="su-label" data-i18n="fb_cfg_token_label">GITHUB TOKEN (PAT)</label>
+          <input type="password" id="gh-token" class="su-input" placeholder="ghp_..." autocomplete="off">
+          <div class="su-hint" data-i18n="fb_cfg_token_hint">Needs 'issues:write' permission on the target repository.</div>
+        </div>
+        <div class="su-field">
+          <label class="su-label" data-i18n="fb_cfg_repo_label">REPOSITORY</label>
+          <input type="text" id="gh-repo" class="su-input" placeholder="owner/repo" autocomplete="off">
+          <div class="su-hint" data-i18n="fb_cfg_repo_hint">e.g. mauriliosfc/BacklogHealth</div>
+        </div>
+        <div id="gh-config-status" class="fb-status" style="margin-bottom:8px"></div>
+        <button id="btn-gh-save" class="su-test-btn" type="button" onclick="doSaveGithub()" data-i18n="fb_cfg_save">💾 Save Feedback Config</button>
+      </div>
+    </div>
   </aside>
 
   <!-- Right: project & team scope -->
@@ -434,6 +457,56 @@
 
   updateCount();
   {{AUTO_LOAD_SCRIPT}}
+
+  // ── GitHub Feedback Config ────────────────────────────────────────────────
+  function toggleGithubSection(header) {
+    const body = document.getElementById('github-config-body');
+    const chevron = header.querySelector('.su-proj-chevron');
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    chevron.classList.toggle('open', !isOpen);
+  }
+
+  async function doSaveGithub() {
+    const token = (document.getElementById('gh-token').value || '').trim();
+    const repo  = (document.getElementById('gh-repo').value  || '').trim();
+    const statusEl = document.getElementById('gh-config-status');
+    const btn = document.getElementById('btn-gh-save');
+    btn.disabled = true;
+    btn.textContent = _tr('fb_cfg_saving', 'Saving…');
+    try {
+      const r = await fetch('/api/feedback/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, repo }),
+      });
+      const data = await r.json();
+      statusEl.textContent = data.ok ? _tr('fb_cfg_saved', '✅ Saved!') : _tr('fb_err_generic', 'Error. Try again.');
+      statusEl.className = 'fb-status ' + (data.ok ? 'fb-success' : 'fb-error');
+    } catch (e) {
+      statusEl.textContent = e.message;
+      statusEl.className = 'fb-status fb-error';
+    }
+    btn.disabled = false;
+    btn.textContent = _tr('fb_cfg_save', '💾 Save Feedback Config');
+  }
+
+  // Pre-load GitHub config if settings page
+  (async function() {
+    try {
+      const r = await fetch('/api/feedback/config');
+      const data = await r.json();
+      if (data.token || data.repo) {
+        document.getElementById('gh-token').value = data.token || '';
+        document.getElementById('gh-repo').value  = data.repo  || '';
+        // Auto-expand if already configured
+        const body = document.getElementById('github-config-body');
+        const chevron = document.querySelector('.su-github-header .su-proj-chevron');
+        body.style.display = 'block';
+        if (chevron) chevron.classList.add('open');
+      }
+    } catch (_) {}
+  })();
 </script>
 </body>
 </html>

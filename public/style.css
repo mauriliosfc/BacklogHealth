@@ -776,3 +776,25 @@ tr:hover td { background: var(--hover-bg); }
 .tc-bar--current { background: #38bdf8; }
 .tc-bar--zero    { background: var(--bg-el2); }
 .tc-bar-lbl { font-size: 9px; color: var(--text-faint); text-align: center; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Feedback Modal ── */
+.feedback-box { max-width: 520px; }
+.feedback-hint { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+.feedback-form { display: flex; flex-direction: column; gap: 14px; }
+.feedback-form label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.fb-select, .fb-input { background: var(--bg-el); border: 1px solid var(--bg-border); border-radius: 8px; padding: 9px 12px; font-size: 13px; color: var(--text-1); outline: none; transition: border-color .15s; width: 100%; }
+.fb-select:focus, .fb-input:focus { border-color: var(--c-blue-bd); }
+.fb-textarea { background: var(--bg-el); border: 1px solid var(--bg-border); border-radius: 8px; padding: 9px 12px; font-size: 13px; color: var(--text-1); outline: none; transition: border-color .15s; resize: vertical; width: 100%; font-family: inherit; }
+.fb-textarea:focus { border-color: var(--c-blue-bd); }
+.fb-status { min-height: 20px; font-size: 13px; margin: 14px 0 0; }
+.fb-success { color: var(--c-green); }
+.fb-error { color: var(--c-red2); }
+.fb-issue-link { color: var(--c-green); text-decoration: underline; margin-left: 4px; }
+.feedback-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
+.fb-submit-btn { background: var(--c-blue); border: none; color: #fff; padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .15s; }
+.fb-submit-btn:hover { opacity: .85; }
+.fb-submit-btn:disabled { opacity: .5; cursor: default; }
+/* GitHub config section in setup */
+.su-github-card { border: 1px solid var(--bg-border); }
+.su-github-header { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--text-2); cursor: pointer; padding: 2px 0; user-select: none; }
+.su-github-header:hover { color: var(--text-1); }

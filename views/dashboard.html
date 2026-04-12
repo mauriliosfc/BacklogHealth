@@ -58,6 +58,12 @@
     </nav>
 
     <div class="sidebar-footer">
+      <a class="sidebar-link sidebar-link-sm" href="#" onclick="openFeedback();return false">
+        <span class="sidebar-link-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2h12a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 3v-3H2a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </span>
+        <span data-i18n="fb_sidebar">Feedback</span>
+      </a>
       <a class="sidebar-link sidebar-link-sm" href="/settings">
         <span class="sidebar-link-icon">⚙️</span>
         <span data-i18n="btn_settings">Settings</span>
@@ -243,6 +249,44 @@
     <div class="copilot-chat-input-wrap">
       <textarea id="copilot-input" class="copilot-input" rows="1" placeholder="Pergunte sobre seus projetos..." onkeydown="copilotInputKeydown(event)" data-i18n-placeholder="ai_input_placeholder"></textarea>
       <button id="btnCopilotSend" class="copilot-send-btn" type="button" onclick="sendCopilotMessage()">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- Feedback Modal -->
+<div id="feedback-modal" class="modal-overlay" onclick="closeFeedbackOverlay(event)">
+  <div class="modal-box feedback-box">
+    <div class="modal-head">
+      <div class="modal-title">💬 <span data-i18n="fb_title">Feedback</span></div>
+      <div class="modal-actions">
+        <button class="modal-close" type="button" onclick="closeFeedback()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body feedback-body">
+      <p class="feedback-hint" data-i18n="fb_hint">Share suggestions, report bugs or ask for help. Your message will be sent directly to the development team.</p>
+      <div class="feedback-form">
+        <label>
+          <span data-i18n="fb_type_label">Type</span>
+          <select id="fb-type" class="fb-select">
+            <option value="bug" data-i18n="fb_type_bug">🐛 Bug Report</option>
+            <option value="suggestion" data-i18n="fb_type_suggestion">💡 Suggestion</option>
+            <option value="help" data-i18n="fb_type_help">❓ Help Request</option>
+            <option value="other" data-i18n="fb_type_other">📝 Other</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="fb_title_label">Title</span>
+          <input id="fb-title" type="text" class="fb-input" data-i18n-placeholder="fb_title_placeholder" placeholder="Brief description" autocomplete="off">
+        </label>
+        <label>
+          <span data-i18n="fb_desc_label">Description</span>
+          <textarea id="fb-desc" class="fb-textarea" rows="5" data-i18n-placeholder="fb_desc_placeholder" placeholder="Describe in detail..."></textarea>
+        </label>
+      </div>
+      <div id="fb-status" class="fb-status"></div>
+      <div class="feedback-actions">
+        <button id="fb-submit" type="button" class="fb-submit-btn" onclick="submitFeedback()" data-i18n="fb_submit">📤 Send Feedback</button>
+      </div>
     </div>
   </div>
 </div>

@@ -96,4 +96,13 @@ function saveAiConfig(ai) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
 }
 
-module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getAiCfg, saveAiConfig };
+function getGithubCfg() {
+  return cfg.github || null;
+}
+
+function saveGithubConfig(github) {
+  cfg.github = github;
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
+}
+
+module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg, saveGithubConfig };

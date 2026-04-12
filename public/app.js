@@ -10,6 +10,7 @@ import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilot
 import { getAlias, applyAliases, startRename } from './modules/alias.js';
 import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from './modules/teamCapacity.js';
+import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback } from './modules/feedback.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -65,6 +66,10 @@ window.openTeamCapacity  = openTeamCapacity;
 window.showDashboardView = showDashboardView;
 window.tcRefresh         = tcRefresh;
 window.tcChangeProject   = tcChangeProject;
+window.openFeedback          = openFeedback;
+window.closeFeedback         = closeFeedback;
+window.closeFeedbackOverlay  = closeFeedbackOverlay;
+window.submitFeedback        = submitFeedback;
 
 let _removeCard = null;
 

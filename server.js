@@ -4,7 +4,8 @@ const fs       = require("fs");
 const nodePath = require("path");
 dns.setDefaultResultOrder("ipv4first");
 
-const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getAiCfg, saveAiConfig } = require("./config");
+const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg, saveGithubConfig } = require("./config");
+const { createIssue } = require("./githubClient");
 const { rawAzureGet }                             = require("./azureClient");
 const { fetchProject, fetchProjectDetail, buildCardHTML } = require("./projectService");
 const { fetchTeamCapacity } = require("./teamCapacityService");
@@ -545,6 +546,57 @@ ${context || 'No project data available at this moment.'}`;
         const reply = await chatCompletion(ai, messages);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ reply }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    // ── GET /api/feedback/config ───────────────────────────────────────────
+    if (url === '/api/feedback/config') {
+      const gh = getGithubCfg() || {};
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ token: gh.token || '', repo: gh.repo || '' }));
+      return;
+    }
+
+    // ── POST /api/feedback/config ──────────────────────────────────────────
+    if (req.method === 'POST' && url === '/api/feedback/config') {
+      const body = await readBody(req);
+      const { token, repo } = JSON.parse(body);
+      saveGithubConfig({ token: (token || '').trim(), repo: (repo || '').trim() });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    // ── POST /api/feedback ─────────────────────────────────────────────────
+    if (req.method === 'POST' && url === '/api/feedback') {
+      const gh = getGithubCfg();
+      if (!gh?.token || !gh?.repo) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'GitHub feedback not configured. Ask the administrator to configure it in Settings.' }));
+        return;
+      }
+      const body = await readBody(req);
+      const { type, title, description } = JSON.parse(body);
+      if (!title?.trim() || !description?.trim()) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Title and description are required.' }));
+        return;
+      }
+      const labelMap = { bug: 'bug', suggestion: 'enhancement', help: 'question' };
+      const labels = labelMap[type] ? [labelMap[type]] : [];
+      const typeEmoji = { bug: '🐛', suggestion: '💡', help: '❓', other: '📝' }[type] || '📝';
+      const typeLabel = { bug: 'Bug Report', suggestion: 'Suggestion', help: 'Help Request', other: 'Other' }[type] || 'Feedback';
+      const cfg = getCfg();
+      const issueTitle = `${typeEmoji} [${typeLabel}] ${title.trim()}`;
+      const issueBody = `## ${typeEmoji} ${typeLabel}\n\n${description.trim()}\n\n---\n*Sent via **Backlog Health Dashboard** · ${new Date().toISOString().split('T')[0]} · Org: \`${cfg.org || 'N/A'}\`*`;
+      try {
+        const issue = await createIssue({ token: gh.token, repo: gh.repo, title: issueTitle, body: issueBody, labels });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, url: issue.html_url }));
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: e.message }));
