@@ -31,13 +31,13 @@ function renderTemplate(html, vars) {
 
 function renderDashboard(results) {
   const cfg = getCfg();
-  const cards = buildCardHTML(results);
   const count = results.filter(r => !r.error).length;
+  const baseUrl = cfg.baseUrl || `https://dev.azure.com/${cfg.org}`;
   return renderTemplate(templates.dashboard, {
     ORG:         cfg.org,
     SUBTITLE:    `${count} project${count !== 1 ? 's' : ''} · ${cfg.org || 'Azure DevOps'}`,
     LAST_UPDATE: new Date().toLocaleString("pt-BR"),
-    CARDS:       cards,
+    CARDS:       buildCardHTML(results, baseUrl),
   });
 }
 
@@ -226,7 +226,8 @@ async function main() {
       }
 
       const { org, baseUrl } = parseOrgInput(rawOrg);
-      saveConfig({ org, baseUrl, pat, projects });
+      const existing = getCfg();
+      saveConfig({ ...existing, org, baseUrl, pat, projects });
 
       try {
         console.log("🔄 Buscando dados dos projetos configurados...");

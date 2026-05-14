@@ -92,7 +92,7 @@ async function fetchProjectDetail(identifier) {
       : "Microsoft.VSTS.Scheduling.StoryPoints";
 
     const mainFields = `System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,${estimateField},Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath`;
-    const workFields = "Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath";
+    const workFields = "Microsoft.VSTS.Scheduling.CompletedWork,Microsoft.VSTS.Scheduling.OriginalEstimate,System.IterationPath";
 
     const [rawItems, rawTaskItems, rawBugItems] = await Promise.all([
       mainIds.length ? paginatedItems(project, mainIds, mainFields) : Promise.resolve([]),
@@ -101,8 +101,9 @@ async function fetchProjectDetail(identifier) {
     ]);
 
     const taskItems = rawTaskItems.map(t => ({
-      completedWork: t.fields?.["Microsoft.VSTS.Scheduling.CompletedWork"] || 0,
-      iteration:     t.fields?.["System.IterationPath"] || "",
+      completedWork:    t.fields?.["Microsoft.VSTS.Scheduling.CompletedWork"] || 0,
+      originalEstimate: t.fields?.["Microsoft.VSTS.Scheduling.OriginalEstimate"] || 0,
+      iteration:        t.fields?.["System.IterationPath"] || "",
     }));
 
     const bugItems = rawBugItems.map(t => ({
@@ -155,7 +156,7 @@ function projectInitials(name) {
   return base.split(/[\s_\-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('').slice(0, 2) || '??';
 }
 
-function buildCardHTML(results) {
+function buildCardHTML(results, baseUrl = '') {
   return results.map(({ project, items, sprint, iterMap = {}, error, workItemType = 'User Story' }) => {
     if (error) return `
       <div class="card error">
@@ -291,8 +292,9 @@ function buildCardHTML(results) {
         const stateClass = ["Active","In Progress","Doing"].includes(state) ? "blue"
           : ["Closed","Done","Resolved"].includes(state) ? "green"
           : ["Blocked","Impediment"].includes(state) ? "red" : "gray";
+        const wiUrl = i.id && baseUrl ? `${baseUrl}/_workitems/edit/${i.id}` : "";
         return `
-          <tr data-iteration="${iteration}" data-order="${order}">
+          <tr data-iteration="${iteration}" data-order="${order}" data-id="${i.id}" data-url="${wiUrl.replace(/"/g, "&quot;")}">
             <td>${title}</td>
             <td><span class="badge ${stateClass}">${state}</span></td>
             <td>${ptsDisplay}</td>
