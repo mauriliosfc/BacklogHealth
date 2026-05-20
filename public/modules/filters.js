@@ -99,6 +99,18 @@ export function applyFilter(card, selected) {
   bugsEl.textContent = bugs;
   bugsEl.className = 'stat-val card-bugs' + (bugs > 3 ? ' crit' : '');
 
+  const ptsEl = card.querySelector('.card-pts');
+  if (ptsEl && !isTaskMode) {
+    const totalPts = filteredItems.reduce((sum, i) => sum + (i.pts != null ? i.pts : 0), 0);
+    ptsEl.textContent = totalPts;
+  }
+
+  const progressEl = card.querySelector('.card-progress');
+  if (progressEl) {
+    const closedCount = filteredItems.filter(i => CLOSED_STATES.includes(i.state)).length;
+    progressEl.textContent = closedCount + '/' + total;
+  }
+
   const health = calcHealth(total, semEst, semResp, bugs);
   const healthEl = card.querySelector('.card-health');
   healthEl.textContent = health[0];

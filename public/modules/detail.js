@@ -5,6 +5,69 @@ import { getAlias } from './alias.js';
 
 export const _detailState = { project: null, sprints: [] };
 
+const SPRINT_COL_DEFS = [
+  { id: 'period',    key: 'th_period' },
+  { id: 'items',     key: null },
+  { id: 'pts',       key: 'th_pts' },
+  { id: 'completed', key: 'th_completed' },
+  { id: 'uat',       key: 'th_uat_pct' },
+  { id: 'actions',   key: 'th_actions' },
+];
+const LS_COL_KEY = 'sprintColVisibility';
+const LS_ORIG_EST = 'origEstOverride::';
+
+function getSavedColVisibility() {
+  try { return JSON.parse(localStorage.getItem(LS_COL_KEY) || '{}'); } catch { return {}; }
+}
+
+function applyColVisibility(table, selector, state) {
+  SPRINT_COL_DEFS.forEach(col => {
+    const visible = state[col.id] !== false;
+    table.querySelectorAll('[data-col="' + col.id + '"]').forEach(el => { el.style.display = visible ? '' : 'none'; });
+    const cb = selector.querySelector('input[data-col-toggle="' + col.id + '"]');
+    if (cb) cb.checked = visible;
+  });
+}
+
+let _colSelectorController = null;
+
+function initSprintColSelector() {
+  if (_colSelectorController) _colSelectorController.abort();
+  _colSelectorController = new AbortController();
+  const signal = _colSelectorController.signal;
+
+  const wrap = document.querySelector('.sprint-col-btn-wrap');
+  const btn = wrap && wrap.querySelector('.sprint-col-btn');
+  const dropdown = wrap && wrap.querySelector('.sprint-col-dropdown');
+  const table = document.querySelector('.d-table');
+  if (!btn || !dropdown || !table) return;
+
+  const state = getSavedColVisibility();
+  applyColVisibility(table, dropdown, state);
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const isOpen = dropdown.classList.toggle('open');
+    btn.classList.toggle('active', isOpen);
+  }, { signal });
+
+  document.addEventListener('click', e => {
+    if (wrap && !wrap.contains(e.target)) {
+      dropdown.classList.remove('open');
+      btn.classList.remove('active');
+    }
+  }, { signal });
+
+  dropdown.addEventListener('change', e => {
+    const cb = e.target.closest('input[data-col-toggle]');
+    if (!cb) return;
+    const cur = getSavedColVisibility();
+    cur[cb.dataset.colToggle] = cb.checked;
+    localStorage.setItem(LS_COL_KEY, JSON.stringify(cur));
+    applyColVisibility(table, dropdown, cur);
+  }, { signal });
+}
+
 export async function loadDetailData(project, selectedSprints = _detailState.sprints) {
   const btnRefreshDetail = document.getElementById('btnRefreshDetail');
   if (btnRefreshDetail) { btnRefreshDetail.disabled = true; btnRefreshDetail.textContent = '\u23f3'; }
@@ -28,9 +91,14 @@ export async function loadDetailData(project, selectedSprints = _detailState.spr
     const taskItems = (data.taskItems || []).filter(sprintFilter);
     const bugItems  = (data.bugItems  || []).filter(sprintFilter);
     const taskCompletedWork = taskItems.reduce((s, t) => s + t.completedWork, 0);
-    const bugCompletedWork  = bugItems.reduce((s, t)  => s + t.completedWork, 0);
+    const rawOrigEst        = taskItems.reduce((s, t) => s + t.originalEstimate, 0);
+    const savedOverride     = parseFloat(localStorage.getItem(LS_ORIG_EST + project));
+    const isOrigEstOverride = !isNaN(savedOverride) && savedOverride > 0;
+    const taskOriginalEstimate = isOrigEstOverride ? savedOverride : rawOrigEst;
+    const bugCompletedWork  = bugItems.reduce((s, t) => s + t.completedWork, 0);
     const totalBugs         = bugItems.length;
-    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story', project);
+    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story', project, taskOriginalEstimate, isOrigEstOverride);
+    initSprintColSelector();
   } catch(e) {
     document.getElementById('modal-body').innerHTML = '<p style="color:#f87171;padding:20px">Erro: ' + e.message + '</p>';
   } finally {
@@ -108,7 +176,7 @@ function ring(pct, color) {
     '</svg><div class="ring-pct" style="color:' + color + '">' + pct + '%</div></div>';
 }
 
-function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story', projectName = '') {
+function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story', projectName = '', taskOriginalEstimate = 0, isOrigEstOverride = false) {
   const total = items.length;
   if (!total) return '<p style="color:#64748b;padding:20px">' + t('detail_no_items') + '</p>';
 
@@ -144,6 +212,13 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const totalHrs     = completedHrs + bugHrs;
   const bugRate      = totalHrs ? Math.round(bugHrs / totalHrs * 100) : 0;
   const estPct       = mainTotal ? Math.round((mainTotal - mainNoEst) / mainTotal * 100) : 0;
+  const origEst      = taskOriginalEstimate || 0;
+  const origEstFmt   = origEst % 1 === 0 ? origEst : origEst.toFixed(1);
+  const savingsPct   = origEst > 0 ? Math.round((origEst - completedHrs) / origEst * 100) : null;
+  const perfRingPct  = savingsPct !== null ? Math.min(Math.abs(savingsPct), 100) : 0;
+  const perfColor    = savingsPct === null ? '#475569' : savingsPct >= 0 ? '#22c55e' : '#ef4444';
+  const perfClass    = savingsPct === null ? '' : savingsPct >= 0 ? 'green' : 'red';
+  const perfDisplay  = savingsPct === null ? '\u2014' : (savingsPct > 0 ? '+' : '') + savingsPct + '%';
 
   const byStatus = {};
   items.filter(i => ITEM_TYPES.includes(i.type)).forEach(i => { byStatus[i.state] = (byStatus[i.state]||0) + 1; });
@@ -165,15 +240,18 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
     const label = key.includes('\\') ? key.split('\\').pop() : key;
     const dateR = (iter.start && iter.end) ? fmtD(iter.start) + ' \u2013 ' + fmtD(iter.end) : '\u2014';
     const pct = d.us ? Math.round(d.usClosed/d.us*100) : 0;
+    const uatCount = d.usUAT || 0;
+    const uatPct = d.us ? Math.round(uatCount/d.us*100) : 0;
     const isCurr = iter.isCurrent;
     const safeKey = key.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     return '<tr' + (isCurr?' class="is-current"':'') + ' data-sprint-key="' + safeKey + '">' +
       '<td>' + label + (isCurr?' <span class="badge green" style="font-size:10px;padding:1px 6px">' + t('badge_current') + '</span>':'') + '</td>' +
-      '<td>' + dateR + '</td>' +
-      '<td>' + d.us + '</td>' +
-      '<td>' + d.pts + '</td>' +
-      '<td>' + d.usClosed + ' <span style="color:#475569">(' + pct + '%)</span></td>' +
-      '<td>' +
+      '<td data-col="period">' + dateR + '</td>' +
+      '<td data-col="items">' + d.us + '</td>' +
+      '<td data-col="pts">' + d.pts + '</td>' +
+      '<td data-col="completed">' + d.usClosed + ' <span style="color:#475569">(' + pct + '%)</span></td>' +
+      '<td data-col="uat">' + uatCount + (uatCount > 0 ? ' <span style="color:#475569">(' + uatPct + '%)</span>' : '') + '</td>' +
+      '<td data-col="actions">' +
       '<button class="btn-burndown" type="button" onclick="openBurndown(this)" title="Ver burndown">\uD83D\uDCCA</button>' +
       '<button class="btn-burndown" type="button" data-project="' + projectName.replace(/"/g,'&quot;') + '" data-sprint="' + safeKey + '" onclick="openDailyForSprint(this.dataset.project, this.dataset.sprint)" title="' + t('btn_view_sprint') + '">\u2630</button>' +
       '</td>' +
@@ -201,6 +279,7 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
         '<div class="progress-ring">' + ring(uatPct,'#f59e0b') + '<div><div class="d-label">' + t('health_uat') + '</div><div class="d-val ' + (uatPct>30?'red':uatPct>15?'yellow':'') + '" style="font-size:22px;color:#f59e0b">' + uatPct + '%</div><div class="d-sub">' + t('health_us_uat', { count: mainUAT, total: mainTotal }) + '</div></div></div>' +
         '<div class="progress-ring">' + ring(bugRate,'#ef4444') + '<div><div class="d-label">' + t('health_bug_rate') + '</div><div class="d-val ' + (bugRate>20?'red':bugRate>10?'yellow':'') + '" style="font-size:22px">' + bugRate + '%</div><div class="d-sub">' + t('health_bugs_total', { count: bugs }) + '</div></div></div>' +
         '<div class="progress-ring">' + ring(estPct,'#60a5fa') + '<div><div class="d-label">' + t('health_coverage') + '</div><div class="d-val blue" style="font-size:22px">' + estPct + '%</div><div class="d-sub">' + t('health_us_estimated', { estimated: mainTotal - mainNoEst, total: mainTotal }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(perfRingPct, perfColor) + '<div><div class="d-label">' + t('health_performance') + '</div><div class="d-val ' + perfClass + '" style="font-size:22px' + (savingsPct === null ? ';color:#475569' : '') + '">' + perfDisplay + '</div><div class="d-sub"><span class="orig-est-wrap" onclick="editOrigEst(\'' + projectName.replace(/'/g, "\\'") + '\')" title="' + t('orig_est_edit_title') + '">' + origEstFmt + 'h est. <span class="orig-est-icon' + (isOrigEstOverride ? ' orig-est-icon--active' : '') + '">\u270F</span></span> \u00B7 ' + completedHrsFmt + 'h log.</div></div></div>' +
       '</div>' +
     '</div>' +
 
@@ -209,13 +288,61 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
       '<div class="d-section" style="margin:0"><div class="d-section-title">' + t('section_by_assignee') + '</div><div class="bar-list">' + barList(asgnEntries, mainTotal) + '</div></div>' +
     '</div>' +
 
-    '<div class="d-section"><div class="d-section-title">' + t('section_by_sprint') + '</div>' +
+    '<div class="d-section">' +
+      '<div class="sprint-section-header">' +
+        '<div class="d-section-title">' + t('section_by_sprint') + '</div>' +
+        '<div class="sprint-col-btn-wrap">' +
+          '<button class="sprint-col-btn" title="' + t('sprint_cols_label') + '">\u229E</button>' +
+          '<div class="sprint-col-dropdown">' +
+            SPRINT_COL_DEFS.map(function(col) {
+              var lbl = col.key ? t(col.key) : itemLabel;
+              return '<label class="sprint-col-toggle"><input type="checkbox" data-col-toggle="' + col.id + '"> ' + lbl + '</label>';
+            }).join('') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
       '<table class="d-table" data-sprints=\'' + allSprintData + '\'><thead><tr>' +
-      '<th>' + t('th_sprint') + '</th><th>' + t('th_period') + '</th><th>' + itemLabel + '</th>' +
-      '<th>' + t('th_pts') + '</th><th>' + t('th_completed') + '</th><th>' + t('th_actions') + '</th>' +
+      '<th>' + t('th_sprint') + '</th>' +
+      '<th data-col="period">' + t('th_period') + '</th>' +
+      '<th data-col="items">' + itemLabel + '</th>' +
+      '<th data-col="pts">' + t('th_pts') + '</th>' +
+      '<th data-col="completed">' + t('th_completed') + '</th>' +
+      '<th data-col="uat">' + t('th_uat_pct') + '</th>' +
+      '<th data-col="actions">' + t('th_actions') + '</th>' +
       '</tr></thead><tbody>' + sprintRows + '</tbody></table>' +
     '</div>' +
     tlSection;
+}
+
+export function editOrigEst(project) {
+  const lsKey = LS_ORIG_EST + project;
+  const wrap = document.querySelector('.orig-est-wrap');
+  if (!wrap) return;
+
+  const current = localStorage.getItem(lsKey) || '';
+  wrap.outerHTML =
+    '<span class="orig-est-wrap orig-est-editing">' +
+      '<input type="number" class="orig-est-input" min="0" step="0.5" value="' + current + '" placeholder="horas">' +
+      '<button class="orig-est-btn" id="_oeSave">\u2713</button>' +
+      '<button class="orig-est-btn orig-est-btn--clear" id="_oeClear" title="' + 'Usar valor calculado' + '">\u2715</button>' +
+    '</span>';
+
+  const inp = document.querySelector('.orig-est-input');
+  if (inp) { inp.focus(); inp.select(); }
+
+  function save() {
+    const v = parseFloat(document.querySelector('.orig-est-input')?.value);
+    if (!isNaN(v) && v > 0) localStorage.setItem(lsKey, String(v));
+    else localStorage.removeItem(lsKey);
+    loadDetailData(_detailState.project, _detailState.sprints);
+  }
+  function cancel() { loadDetailData(_detailState.project, _detailState.sprints); }
+
+  const saveBtn = document.getElementById('_oeSave');
+  const clearBtn = document.getElementById('_oeClear');
+  if (saveBtn) saveBtn.onclick = save;
+  if (clearBtn) clearBtn.onclick = () => { localStorage.removeItem(lsKey); loadDetailData(_detailState.project, _detailState.sprints); };
+  if (inp) inp.onkeydown = e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); };
 }
 
 function buildTimeline(bySprint, iterMap) {

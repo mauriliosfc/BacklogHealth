@@ -148,6 +148,21 @@ node server.js
 # http://localhost:3030
 ```
 
+## 📦 Como gerar o executável de distribuição
+
+```bash
+# Gera dist/app/server.exe (Node.js + app empacotados, ~37MB)
+npm run build
+```
+
+A pasta `dist/app/` deve conter:
+- `server.exe` — gerado pelo PKG (`npm run build`)
+- `BacklogHealth.exe` — wrapper C# WPF, compilado via MSBuild do projeto `wrapper/BacklogHealth.csproj`
+- `*.dll` / `runtimes/` — DLLs do WebView2 (não são regeneradas, já estão na pasta)
+
+> **Importante:** o script `build` no `package.json` usa `--output dist/app/server.exe`. O wrapper C# lê `server.exe` do mesmo diretório em que está (`exeDir`), então ambos devem estar em `dist/app/`.
+> Para distribuir, zipar toda a pasta `dist/app/` — o usuário executa `BacklogHealth.exe`.
+
 ---
 
 ## 📊 Dashboard Principal — O que é exibido
@@ -251,10 +266,10 @@ Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 | Seção | Conteúdo |
 |-------|----------|
 | **Resumo Geral** | Total itens, User Stories, Story Points, Pts Entregues, Em Andamento, Novos, Sem Estimativa, Hrs Tasks, Hrs Bugs |
-| **Indicadores de Saúde** | Taxa de Conclusão (US), Em UAT (US), Taxa de Bugs (hrs bugs/total hrs), Cobertura de Estimativas (US) |
+| **Indicadores de Saúde** | Taxa de Conclusão (US), Em UAT (US), Taxa de Bugs (hrs bugs/total hrs), Cobertura de Estimativas (US), Esforço Economizado (tasks) |
 | **US por Status** | Barras horizontais com todos os estados — filtrado apenas por User Stories |
 | **US por Responsável** | Barras horizontais com membros da equipe — filtrado apenas por User Stories |
-| **Distribuição por Sprint** | Tabela: Sprint, Período, User Stories, Story Points, Concluídos (%), Ações (botão burndown 📊 + botão ver sprint ☰) — ordenada por data crescente |
+| **Distribuição por Sprint** | Tabela: Sprint, Período, User Stories, Story Points, Concluídos (%), Em UAT (%), Ações (botão burndown 📊 + botão ver sprint ☰) — ordenada por data crescente; seletor de colunas visíveis via dropdown com ícone ⊞ no cabeçalho da seção |
 | **Cronograma de Sprints** | Gantt visual com blocos posicionados por data, barra proporcional à qtd de US, marcador "hoje" |
 
 ### Cálculo dos indicadores de saúde
@@ -265,6 +280,7 @@ Acessado pelo botão **📊 Detalhes do projeto** em cada card.
 | Em UAT | US com estado UAT ÷ total de US |
 | Taxa de Bugs | Hrs Bugs ÷ (Hrs Tasks + Hrs Bugs) |
 | Cobertura de Estimativas | US com Story Points ÷ total de US |
+| Esforço Economizado | (OriginalEstimate − CompletedWork) ÷ OriginalEstimate × 100 — positivo = economizou horas; negativo = estourou; `—` quando sem dados |
 
 ### Queries ao Azure DevOps no `/detail`
 
@@ -491,6 +507,23 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 75 | Daily Standup e Delivery Plan abrem maximizados por padrão | Modais eram abertos em tamanho reduzido exigindo clique manual em "Maximizar" a cada uso — `classList.add('maximized')` no `open` e ícone já iniciado como ⤡ eliminam esse passo repetitivo |
 | 76 | Título "Health Intelligence" removido da topbar; meta info movida para sidebar | Topbar com título duplicava a identidade visual já presente na sidebar logo — remover libera espaço e concentra branding no sidebar; `{{SUBTITLE}}` (N projects · Org) fica visível sem ocupar área de ação |
 | 77 | `.sidebar-logo-row` como wrapper interno + `.sidebar-logo` como coluna | Sidebar logo usava `flex-row` direto — para posicionar o meta abaixo do ícone+texto precisava de nível extra sem quebrar o alinhamento horizontal do ícone com o nome |
+| 78 | `min-width: 0` em `.cards-grid > *` | CSS Grid com `1fr` não restringe o tamanho mínimo dos filhos por padrão — sem `min-width: 0` os cards transbordavam à direita no modo grid |
+| 79 | Remoção de `overflow: hidden` do `.cards-grid .card` | Adicionado para conter overflow dos cards, mas cortava o dropdown de seleção de sprint (`position: absolute`) — `min-width: 0` resolve o overflow sem afetar elementos posicionados |
+| 80 | `.select-panel` com `z-index: 400` + `.drop-up` variant | Dropdown de sprint ficava cortado pelo card vizinho e inacessível quando havia muitas sprints — z-index alto garante sobreposição; `drop-up` abre para cima quando o espaço abaixo é insuficiente |
+| 81 | Nomes de sprint exibidos com `.split("\\").pop()` | Iteration paths no Azure DevOps seguem o formato `Projeto\Time\Sprint` — exibir o caminho completo misturava o nome do time no label; `.pop()` extrai apenas o segmento final |
+| 82 | `npm run build` com `--output dist/app/server.exe` | Script anterior gerava `dist/BacklogHealth.exe` (raiz errada) — wrapper C# espera `server.exe` no mesmo diretório que ele (`dist/app/`); corrigir o output path garante que o build seja diretamente utilizável |
+| 83 | Stats do card em grade 2×3: Scope row (US · SP · Progress) + Problems row (Bugs · Sem Estimativa · Sem Responsável) | Quatro stats em linha única ficavam apertados no modo grid; separar em duas linhas temáticas melhora leitura e permite adicionar Story Points e Project Progress sem sobrecarga visual |
+| 84 | Story Points somados de todos os `mainItems` (independente de sprint) | SP representa o escopo total do projeto, não apenas da sprint filtrada — coerente com o Project Progress que também usa o total do backlog |
+| 85 | Project Progress = US fechadas ÷ total de US do backlog | Diferente do burndown (por sprint), o Progress mostra o avanço geral do projeto — inclui US Closed para refletir o histórico completo |
+| 86 | Token GitHub hardcoded em `config.json`, sem UI de configuração para o usuário | Feedback vai para um repo centralizado do desenvolvedor — expor configuração ao usuário criaria risco de substituição indevida do token e complexidade desnecessária na UI |
+| 87 | Endpoint `POST /api/feedback` cria GitHub Issue com label baseado no tipo | Mapear tipo do form (bug/suggestion/help/other) para label do GitHub permite filtrar issues por categoria no repositório sem pós-processamento manual |
+| 88 | Modal de sucesso separado após criar a issue | Fechar o form e abrir um segundo modal com link clicável para o GitHub é mais limpo do que exibir uma mensagem inline e fechar automaticamente após 3s — o usuário pode navegar até a issue no próprio tempo |
+| 89 | Coluna "Em UAT %" na tabela de Distribuição por Sprint | Visibilidade do % de US em UAT por sprint sem abrir o modal de detalhes completo — `usUAT` acumulado em `buildSprintData` junto com `usClosed`, mantendo fonte única de dados |
+| 90 | Seletor de colunas como dropdown com ícone ⊞ no cabeçalho da seção | Checkboxes inline ocupavam espaço permanente e eram visualmente poluídos — dropdown posicionado à direita do título da seção mantém a área limpa; estado persistido em `localStorage['sprintColVisibility']` |
+| 91 | `AbortController` para listeners do seletor de colunas | Cada abertura do modal de detalhes recria o HTML e registrava novos listeners no `document` para fechar o dropdown — `AbortController` descarta os listeners anteriores sem acúmulo |
+| 92 | Indicador "Esforço Economizado" em `buildDetailHTML` | `(OriginalEstimate − CompletedWork) / OriginalEstimate × 100` mede eficiência das tasks: positivo = economizou, negativo = estourou; `OriginalEstimate` adicionado ao `workFields` do `fetchProjectDetail` e mapeado em `taskItems` |
+| 93 | Override manual de `OriginalEstimate` com edição inline no anel | Azure DevOps nem sempre tem `OriginalEstimate` preenchido — campo inline no sub-texto do anel "Esforço Economizado" (clique no ícone ✏) salva override em `localStorage['origEstOverride::NomeProjeto']`; limpar volta ao valor calculado da API; ícone azul indica override ativo |
+| 94 | `POST /setup` preserva campos existentes do `config.json` via spread | `saveConfig({ org, baseUrl, pat, projects })` criava objeto do zero, descartando `ai`, `github` e qualquer outro campo já salvo — toda reconfiguração de projetos apagava as credenciais da IA; corrigido com `{ ...existing, org, baseUrl, pat, projects }` |
 
 ---
 
@@ -588,6 +621,19 @@ Por projeto, o endpoint retorna:
 - [x] Credenciais do Copilot AI persistidas — formulário pré-preenchido após restart
 - [x] Daily Standup e Delivery Plan abrem maximizados por padrão
 - [x] Topbar limpa — meta info (N projects · Org) movida para sidebar abaixo do logo
+- [x] Cards do dashboard não cortam mais à direita no modo grid (`min-width: 0`)
+- [x] Dropdown de sprint com scroll e comportamento drop-up quando espaço é insuficiente
+- [x] Nomes de sprint exibidos sem prefixo de time (`.split("\\").pop()`)
+- [x] Tela de setup com título "Setup" em todos os idiomas
+- [x] Build corrigido: `npm run build` gera `dist/app/server.exe` (path correto para o wrapper)
+- [x] Stats do card em grade 2×3 — Story Points e Project Progress adicionados; layout reorganizado em linha Scope + linha Problems
+- [x] Feature de Feedback — link na sidebar, formulário (tipo/título/descrição), cria GitHub Issue, modal de sucesso com link clicável
+- [x] Coluna "Em UAT %" na tabela de Distribuição por Sprint
+- [x] Seletor de colunas visíveis na tabela de Distribuição por Sprint (dropdown ⊞, persistido em localStorage)
+- [x] Indicador "Esforço Economizado" nos Health Indicators — `(OriginalEstimate − CompletedWork) / OriginalEstimate × 100`
+- [x] Override manual de `OriginalEstimate` via edição inline no anel de Esforço Economizado (ícone ✏, persistido em localStorage por projeto)
+- [x] Fix: credenciais do Copilot AI perdidas ao reconfigurar projetos via setup (`POST /setup` agora preserva campos `ai` e `github` do `config.json`)
+- [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
 - [ ] Integrar com **Power BI** para histórico e relatórios gerenciais
@@ -599,4 +645,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Abril/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa*
+*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3 (Story Points + Project Progress), feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual de OriginalEstimate, fix persistência de credenciais do Copilot AI após reconfiguração de projetos*

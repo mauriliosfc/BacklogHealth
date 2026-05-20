@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "pkg . --targets node18-win-x64 --output dist/BacklogHealth.exe --compress GZip"
+    "build": "pkg . --targets node18-win-x64 --output dist/app/server.exe --compress GZip"
   },
   "pkg": {
     "assets": [
@@ -31,6 +31,7 @@
       "public/modules/cardOrder.js",
       "public/modules/teamCapacity.js",
       "public/modules/copilot.js",
+      "public/modules/feedback.js",
       "public/i18n/pt.json",
       "public/i18n/en.json",
       "public/i18n/es.json"
