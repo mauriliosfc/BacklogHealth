@@ -10,13 +10,14 @@ export function buildSprintData(items, iterMap) {
   const bySprint = {};
   items.forEach(i => {
     const k = i.iteration || 'Sem Sprint';
-    if (!bySprint[k]) bySprint[k] = { total: 0, pts: 0, closed: 0, us: 0, usClosed: 0 };
+    if (!bySprint[k]) bySprint[k] = { total: 0, pts: 0, closed: 0, us: 0, usClosed: 0, usUAT: 0 };
     bySprint[k].total++;
     bySprint[k].pts += i.pts || 0;
     if (CLOSED_STATES.includes(i.state)) bySprint[k].closed++;
     if (US_TYPES.includes(i.type)) {
       bySprint[k].us++;
       if (CLOSED_STATES.includes(i.state)) bySprint[k].usClosed++;
+      if (i.state === 'UAT') bySprint[k].usUAT++;
     }
   });
 
@@ -33,7 +34,7 @@ export function buildSprintData(items, iterMap) {
     return {
       key,
       label: key === 'Sem Sprint' ? t('no_sprint') : rawLabel,
-      us: d.us, usClosed: d.usClosed, pts: d.pts,
+      us: d.us, usClosed: d.usClosed, usUAT: d.usUAT, pts: d.pts,
       isCurrent: !!iter.isCurrent,
       start: iter.start || null,
       end: iter.end || null

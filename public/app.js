@@ -1,8 +1,8 @@
 import { initFilters, toggleDropdown, onCheckChange, clearFilter, applyFilter, toggleUS, initHealthBadges } from './modules/filters.js';
 import { startTimer, doRefresh } from './modules/timer.js';
 import { setTheme, toggleTheme } from './modules/theme.js';
-import { openDetails, closeDetails, closeDetailsBtn, toggleMaximize, loadDetailData, _detailState } from './modules/detail.js';
-import { openDaily, closeDaily, toggleDailyMaximize, dailyPrev, dailyNext, handleDailyKey, openDailyForSprint } from './modules/daily.js';
+import { openDetails, closeDetails, closeDetailsBtn, toggleMaximize, loadDetailData, _detailState, editOrigEst } from './modules/detail.js';
+import { openDaily, closeDaily, toggleDailyMaximize, dailyPrev, dailyNext, handleDailyKey, openDailyForSprint, filterDailyItems } from './modules/daily.js';
 import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily } from './modules/burndown.js';
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
 import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDeliveryPlanMaximize, toggleDeliveryFilter, applyDeliveryFilter } from './modules/deliveryPlan.js';
@@ -24,6 +24,7 @@ window.closeDetails      = closeDetails;
 window.closeDetailsBtn   = closeDetailsBtn;
 window.toggleMaximize    = toggleMaximize;
 window.loadDetailData    = (p, s) => loadDetailData(p !== undefined ? p : _detailState.project, s !== undefined ? s : _detailState.sprints);
+window.editOrigEst       = editOrigEst;
 // Expose state refs for inline HTML handlers
 Object.defineProperty(window, '_detailProject', { get: () => _detailState.project });
 Object.defineProperty(window, '_detailSprints',  { get: () => _detailState.sprints });
@@ -34,6 +35,7 @@ window.toggleDailyMaximize = toggleDailyMaximize;
 window.dailyPrev         = dailyPrev;
 window.dailyNext         = dailyNext;
 window.handleDailyKey    = handleDailyKey;
+window.filterDailyItems  = filterDailyItems;
 window.openBurndown      = openBurndown;
 window.closeBurndown     = closeBurndown;
 window.closeBurndownOverlay = closeBurndownOverlay;
