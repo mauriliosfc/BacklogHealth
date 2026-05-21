@@ -573,6 +573,9 @@ tr:hover td { background: var(--hover-bg); }
 .daily-us-title { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--bg-border); }
 .daily-empty { color: var(--text-faintr); font-size: 14px; padding: 20px 0; }
 .daily-nav { display: flex; align-items: center; justify-content: center; gap: 20px; padding: 16px 24px; border-top: 1px solid var(--bg-border); flex-shrink: 0; }
+.daily-filter-input { display: block; width: 20%; margin-left: auto; background: transparent; border: none; border-bottom: 1px solid var(--bg-border); color: var(--text-1); padding: 8px 4px; font-size: 13px; outline: none; margin-bottom: 12px; }
+.daily-filter-input:focus { border-bottom-color: var(--accent); }
+.daily-filter-input::placeholder { color: var(--text-faint); }
 .daily-nav-btn { background: var(--bg-el); border: 1px solid var(--bg-el2); color: var(--text-1); padding: 9px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .15s; }
 .daily-nav-btn:hover:not(:disabled) { background: var(--bg-el2); }
 .daily-nav-btn:disabled { opacity: .35; cursor: not-allowed; }
