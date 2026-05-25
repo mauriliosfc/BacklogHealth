@@ -6,6 +6,8 @@ import { getAlias } from './alias.js';
 
 let _dailyIndex = 0;
 let _dailySlides = [];
+let _dailyBugsData = [];
+let _bugsShowAll = false;
 
 export function buildDailySlide(card, forcedSprintKey = null) {
   const project = card.dataset.project;
@@ -40,7 +42,11 @@ export function buildDailySlide(card, forcedSprintKey = null) {
   const openItems = mainItems.filter(i => !CLOSED_STATES.includes(i.state));
   const semEst = openItems.filter(i => i.pts == null || i.pts === 0).length;
   const semResp = openItems.filter(i => !i.assigned).length;
-  const bugs = filteredForStats.filter(i => i.type === 'Bug' && ACTIVE_BUG_STATES.includes(i.state)).length;
+  const sprintAllBugs = filteredForStats.filter(i => i.type === 'Bug');
+  const sprintActiveBugs = sprintAllBugs.filter(i => ACTIVE_BUG_STATES.includes(i.state));
+  const bugs = sprintActiveBugs.length;
+
+  _dailyBugsData.push({ sprintName, bugs: { all: sprintAllBugs, active: sprintActiveBugs } });
 
   const health = calcHealth(total, semEst, semResp, bugs);
 
@@ -50,12 +56,17 @@ export function buildDailySlide(card, forcedSprintKey = null) {
   const rows = Array.from(card.querySelectorAll('tbody tr[data-iteration]'))
     .filter(row => !currentIter || row.dataset.iteration === currentIter)
     .sort((a, b) => (parseFloat(a.dataset.order) || 999999) - (parseFloat(b.dataset.order) || 999999));
-  const tableRows = rows.map(r => r.outerHTML).join('');
+  const tableRows = rows.map(r => {
+    const id = r.dataset.id || '';
+    const url = r.dataset.url || '';
+    const idCell = '<td class="daily-id-cell">' + (url ? '<a href="' + url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">#' + id + '</a>' : '#' + id) + '</td>';
+    return r.outerHTML.replace(/<td/, idCell + '<td');
+  }).join('');
 
   const usSection = tableRows
     ? '<input type="search" class="daily-filter-input" placeholder="Filter..." oninput="filterDailyItems(this.value)">' +
       '<div class="daily-table-wrap"><table><thead><tr>' +
-      '<th>' + t('th_title') + '</th><th>' + t('th_status') + '</th>' +
+      '<th>ID</th><th>' + t('th_title') + '</th><th>' + t('th_status') + '</th>' +
       '<th>' + t('th_estimate') + '</th><th>' + t('th_assignee') + '</th>' +
       '</tr></thead><tbody>' + tableRows + '</tbody></table></div>'
     : '<div class="daily-empty">' + t('daily_no_us') + '</div>';
@@ -74,7 +85,7 @@ export function buildDailySlide(card, forcedSprintKey = null) {
         '<div class="stat"><div class="stat-label">' + itemLabel + '</div><div class="stat-val">' + total + '</div></div>' +
         '<div class="stat"><div class="stat-label">' + t('stat_no_est') + '</div><div class="stat-val ' + (semEst > 2 ? 'warn' : '') + '">' + semEst + '</div></div>' +
         '<div class="stat"><div class="stat-label">' + t('stat_no_resp') + '</div><div class="stat-val ' + (semResp > 2 ? 'warn' : '') + '">' + semResp + '</div></div>' +
-        '<div class="stat"><div class="stat-label">' + t('stat_bugs') + '</div><div class="stat-val ' + (bugs > 3 ? 'crit' : '') + '">' + bugs + '</div></div>' +
+        '<div class="stat stat-clickable" onclick="openDailyBugs()" title="View bugs"><div class="stat-label">' + t('stat_bugs') + '</div><div class="stat-val ' + (bugs > 3 ? 'crit' : '') + '">' + bugs + '</div></div>' +
       '</div>' +
     '</div>' +
     usSection +
@@ -87,6 +98,7 @@ export function openDaily() {
 
   _dailySlides = cards;
   _dailyIndex = 0;
+  _dailyBugsData = [];
 
   const track = document.getElementById('daily-track');
   track.innerHTML = _dailySlides.map(c => buildDailySlide(c)).join('');
@@ -109,6 +121,7 @@ export function openDailyForSprint(projectName, sprintKey) {
 
   _dailySlides = [card];
   _dailyIndex = 0;
+  _dailyBugsData = [];
 
   const track = document.getElementById('daily-track');
   track.innerHTML = buildDailySlide(card, sprintKey);
@@ -173,7 +186,56 @@ export function filterDailyItems(term) {
   });
 }
 
+function _renderDailyBugsModal(data, showAll) {
+  const list = showAll ? data.bugs.all : data.bugs.active;
+  document.getElementById('daily-bugs-title').textContent = data.sprintName + ' — Bugs';
+  const btn = document.getElementById('btnDailyBugsToggle');
+  btn.textContent = showAll ? 'Active only' : 'Show all';
+  btn.classList.toggle('active', showAll);
+
+  const rows = list.map(b => {
+    const idCell = b.url
+      ? '<a href="' + b.url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">#' + b.id + '</a>'
+      : '#' + (b.id || '—');
+    const s = b.state || '';
+    const stateClass = ['Active','In Progress','Doing','Committed'].includes(s) ? 'blue'
+      : ['Closed','Done','Resolved'].includes(s) ? 'green'
+      : ['Blocked','Impediment'].includes(s) ? 'red' : 'gray';
+    return '<tr><td class="daily-id-cell">' + idCell + '</td><td>' + (b.title || '') + '</td><td><span class="badge ' + stateClass + '">' + s + '</span></td><td>' + (b.assignedTo || '—') + '</td></tr>';
+  }).join('');
+
+  document.getElementById('daily-bugs-body').innerHTML = rows
+    ? '<div class="daily-bugs-table-wrap"><table class="daily-bugs-table"><thead><tr><th>ID</th><th>' + t('th_title') + '</th><th>' + t('th_status') + '</th><th>' + t('th_assignee') + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+    : '<div class="daily-bugs-empty">' + (showAll ? 'No bugs in this sprint.' : 'No open bugs in this sprint.') + '</div>';
+}
+
+export function openDailyBugs() {
+  const data = _dailyBugsData[_dailyIndex];
+  if (!data) return;
+  _bugsShowAll = false;
+  _renderDailyBugsModal(data, false);
+  document.getElementById('daily-bugs-modal').classList.add('open');
+}
+
+export function closeDailyBugs() {
+  document.getElementById('daily-bugs-modal').classList.remove('open');
+}
+
+export function closeDailyBugsOverlay(event) {
+  if (event.target === event.currentTarget) closeDailyBugs();
+}
+
+export function toggleDailyBugsAll() {
+  _bugsShowAll = !_bugsShowAll;
+  const data = _dailyBugsData[_dailyIndex];
+  if (data) _renderDailyBugsModal(data, _bugsShowAll);
+}
+
 export function handleDailyKey(e) {
+  if (document.getElementById('daily-bugs-modal').classList.contains('open')) {
+    if (e.key === 'Escape') closeDailyBugs();
+    return;
+  }
   if (e.key === 'ArrowRight') dailyNext();
   else if (e.key === 'ArrowLeft') dailyPrev();
   else if (e.key === 'Escape') closeDaily();

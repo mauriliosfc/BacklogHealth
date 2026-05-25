@@ -233,13 +233,17 @@ function buildCardHTML(results, baseUrl = '') {
       }
 
       return {
+        id: i.id,
+        title: i.fields?.["System.Title"] || "",
+        url: i._links?.html?.href || "",
         iteration: i.fields?.["System.IterationPath"] || "",
         type: i.fields?.["System.WorkItemType"] || "",
         state: i.fields?.["System.State"] || "",
         pts,
         assigned: !!i.fields?.["System.AssignedTo"],
+        assignedTo: i.fields?.["System.AssignedTo"]?.displayName || "",
       };
-    })).replace(/</g, "\\u003c");
+    })).replace(/</g, "\\u003c").replace(/'/g, "&#39;");
 
     const mainTotal = mainItems.length;
     const grouped = {};

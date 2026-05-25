@@ -1,6 +1,6 @@
 # 📋 Backlog Health Dashboard — Documentação
 
-> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Abril/2026 (Team Capacity, redesign, Copilot melhorias, UX)
+> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Maio/2026 (Team Capacity, redesign, Copilot melhorias, UX, modal de bugs na Daily)
 
 ---
 
@@ -244,10 +244,22 @@ Acessado pelo botão **📅 Apresentar daily** no header, ou pelo botão **☰**
   - Nome da sprint atual + período (data início – data fim)
   - Botão **📊 Burndown** para abrir o gráfico da sprint atual
   - Stats: User Stories, Sem Estimativa, Sem Responsável, Bugs Abertos
+  - Stat **Bugs Abertos é clicável** — abre modal com lista de bugs da sprint (ver seção abaixo)
   - Tabela de User Stories da sprint atual (Título, Status, Estimativa, Responsável)
 - Navegação por botões (← Anterior / Próximo →) ou teclas `←` `→`
 - Fecha com ✕ ou tecla `Escape`
 - **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
+
+### Modal de Bugs da Daily
+
+Acessado ao clicar no stat **Bugs Abertos** em qualquer slide da Daily Standup.
+
+- Modal sobreposto ao daily (z-index: 700), fecha com ✕, clique fora ou `Escape`
+- **Exibição padrão:** bugs com estado Active, In Progress ou New na sprint atual
+- **Botão "Show all"** — alterna para mostrar todos os bugs da sprint independente do status (botão fica azul quando ativo); clique novamente para voltar à visão filtrada
+- **Tabela:** ID (link clicável para o work item no Azure DevOps), Título, Status (badge colorido), Responsável
+- **Cores dos badges de status** — mesma paleta das USs: azul (Active/In Progress), verde (Closed/Done/Resolved), vermelho (Blocked/Impediment), cinza (demais)
+- Dados provêm do `data-items` do card (campos `id`, `title`, `url`, `state`, `assignedTo` adicionados ao itemsJson no `projectService.js`)
 
 ---
 
@@ -524,6 +536,9 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 92 | Indicador "Esforço Economizado" em `buildDetailHTML` | `(OriginalEstimate − CompletedWork) / OriginalEstimate × 100` mede eficiência das tasks: positivo = economizou, negativo = estourou; `OriginalEstimate` adicionado ao `workFields` do `fetchProjectDetail` e mapeado em `taskItems` |
 | 93 | Override manual de `OriginalEstimate` com edição inline no anel | Azure DevOps nem sempre tem `OriginalEstimate` preenchido — campo inline no sub-texto do anel "Esforço Economizado" (clique no ícone ✏) salva override em `localStorage['origEstOverride::NomeProjeto']`; limpar volta ao valor calculado da API; ícone azul indica override ativo |
 | 94 | `POST /setup` preserva campos existentes do `config.json` via spread | `saveConfig({ org, baseUrl, pat, projects })` criava objeto do zero, descartando `ai`, `github` e qualquer outro campo já salvo — toda reconfiguração de projetos apagava as credenciais da IA; corrigido com `{ ...existing, org, baseUrl, pat, projects }` |
+| 95 | `id`, `title`, `url`, `assignedTo` adicionados ao `itemsJson` em `projectService.js` | Modal de bugs da Daily precisava exibir nome, link e responsável de cada bug — campos inexistentes no payload mínimo original (que só tinha `type`, `state`, `iteration`, `pts`, `assigned` booleano) |
+| 96 | `itemsJson` escapa `'` com `&#39;` além de `<` | `data-items='...'` usa aspas simples como delimitador de atributo — títulos de work items com apóstrofo quebravam o JSON silenciosamente; `itermap` já fazia o mesmo escape |
+| 97 | `_dailyBugsData[]` acumulado em `buildDailySlide` e resetado em `openDaily`/`openDailyForSprint` | Modal de bugs precisa saber os bugs de cada slide sem nova chamada à API — array paralelo a `_dailySlides` preenchido em ordem durante o `.map()` garante índice correto sem prop drilling |
 
 ---
 
@@ -633,6 +648,7 @@ Por projeto, o endpoint retorna:
 - [x] Indicador "Esforço Economizado" nos Health Indicators — `(OriginalEstimate − CompletedWork) / OriginalEstimate × 100`
 - [x] Override manual de `OriginalEstimate` via edição inline no anel de Esforço Economizado (ícone ✏, persistido em localStorage por projeto)
 - [x] Fix: credenciais do Copilot AI perdidas ao reconfigurar projetos via setup (`POST /setup` agora preserva campos `ai` e `github` do `config.json`)
+- [x] Modal de bugs clicável na Daily Standup — stat "Bugs Abertos" abre lista de bugs da sprint com toggle "Show all" / "Active only" e badges de status coloridos
 - [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
@@ -645,4 +661,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3 (Story Points + Project Progress), feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual de OriginalEstimate, fix persistência de credenciais do Copilot AI após reconfiguração de projetos*
+*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3 (Story Points + Project Progress), feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual de OriginalEstimate, fix persistência de credenciais do Copilot AI após reconfiguração de projetos, modal de bugs clicável na Daily Standup*
