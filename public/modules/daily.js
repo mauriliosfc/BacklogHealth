@@ -1,13 +1,13 @@
-import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes } from './constants.js';
+import { CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes } from './constants.js';
 import { calcHealth } from './health.js';
 import { t } from './i18n.js';
 import { fmtD } from './utils.js';
 import { getAlias } from './alias.js';
+import { openItemsModal, closeItemsModal } from './itemsModal.js';
 
 let _dailyIndex = 0;
 let _dailySlides = [];
-let _dailyBugsData = [];
-let _bugsShowAll = false;
+let _slidesData = [];
 
 export function buildDailySlide(card, forcedSprintKey = null) {
   const project = card.dataset.project;
@@ -40,17 +40,18 @@ export function buildDailySlide(card, forcedSprintKey = null) {
   const mainItems = filteredForStats.filter(i => ITEM_TYPES.includes(i.type));
   const total = mainItems.length;
   const openItems = mainItems.filter(i => !CLOSED_STATES.includes(i.state));
-  const semEst = openItems.filter(i => i.pts == null || i.pts === 0).length;
-  const semResp = openItems.filter(i => !i.assigned).length;
-  const sprintAllBugs = filteredForStats.filter(i => i.type === 'Bug');
-  const sprintActiveBugs = sprintAllBugs.filter(i => ACTIVE_BUG_STATES.includes(i.state));
-  const bugs = sprintActiveBugs.length;
+  const semEstItems = openItems.filter(i => i.pts == null || i.pts === 0);
+  const semRespItems = openItems.filter(i => !i.assigned);
+  const semEst = semEstItems.length;
+  const semResp = semRespItems.length;
+  const allBugs = filteredForStats.filter(i => i.type === 'Bug');
+  const activeBugs = allBugs.filter(i => ACTIVE_BUG_STATES.includes(i.state));
+  const bugs = activeBugs.length;
 
-  _dailyBugsData.push({ sprintName, bugs: { all: sprintAllBugs, active: sprintActiveBugs } });
+  _slidesData.push({ sprintName, mainItems, semEstItems, semRespItems, activeBugs, allBugs });
 
   const health = calcHealth(total, semEst, semResp, bugs);
 
-  // Labels dinâmicos
   const itemLabel = isTaskMode ? t('stat_tasks') : t('stat_us');
 
   const rows = Array.from(card.querySelectorAll('tbody tr[data-iteration]'))
@@ -82,14 +83,45 @@ export function buildDailySlide(card, forcedSprintKey = null) {
         '<button class="btn-burndown-daily" type="button" data-project="' + project.replace(/"/g,'&quot;') + '" data-iter="' + (currentIter||'').replace(/"/g,'&quot;') + '" onclick="openBurndownFromDaily(this.dataset.project, this.dataset.iter)">\uD83D\uDCCA Burndown</button>' +
       '</div>' +
       '<div class="stats daily-stats">' +
-        '<div class="stat"><div class="stat-label">' + itemLabel + '</div><div class="stat-val">' + total + '</div></div>' +
-        '<div class="stat"><div class="stat-label">' + t('stat_no_est') + '</div><div class="stat-val ' + (semEst > 2 ? 'warn' : '') + '">' + semEst + '</div></div>' +
-        '<div class="stat"><div class="stat-label">' + t('stat_no_resp') + '</div><div class="stat-val ' + (semResp > 2 ? 'warn' : '') + '">' + semResp + '</div></div>' +
-        '<div class="stat stat-clickable" onclick="openDailyBugs()" title="View bugs"><div class="stat-label">' + t('stat_bugs') + '</div><div class="stat-val ' + (bugs > 3 ? 'crit' : '') + '">' + bugs + '</div></div>' +
+        '<div class="stat stat-clickable" onclick="openDailyStat(\'us\')" title="View items"><div class="stat-label">' + itemLabel + '</div><div class="stat-val">' + total + '</div></div>' +
+        '<div class="stat stat-clickable" onclick="openDailyStat(\'noEst\')" title="View no estimate items"><div class="stat-label">' + t('stat_no_est') + '</div><div class="stat-val ' + (semEst > 2 ? 'warn' : '') + '">' + semEst + '</div></div>' +
+        '<div class="stat stat-clickable" onclick="openDailyStat(\'noResp\')" title="View no assignee items"><div class="stat-label">' + t('stat_no_resp') + '</div><div class="stat-val ' + (semResp > 2 ? 'warn' : '') + '">' + semResp + '</div></div>' +
+        '<div class="stat stat-clickable" onclick="openDailyStat(\'bugs\')" title="View bugs"><div class="stat-label">' + t('stat_bugs') + '</div><div class="stat-val ' + (bugs > 3 ? 'crit' : '') + '">' + bugs + '</div></div>' +
       '</div>' +
     '</div>' +
     usSection +
     '</div>';
+}
+
+function _openBugsModal(data, showAll) {
+  openItemsModal({
+    title: data.sprintName + ' — Bugs',
+    items: showAll ? data.allBugs : data.activeBugs,
+    toggleBtn: {
+      label: showAll ? 'Active only' : 'Show all',
+      active: showAll,
+      onClick: () => _openBugsModal(data, !showAll),
+    },
+  });
+}
+
+export function openDailyStat(stat) {
+  const data = _slidesData[_dailyIndex];
+  if (!data) return;
+  switch (stat) {
+    case 'us':
+      openItemsModal({ title: data.sprintName + ' — ' + t('stat_us'), items: data.mainItems, showPts: true });
+      break;
+    case 'noEst':
+      openItemsModal({ title: data.sprintName + ' — ' + t('stat_no_est'), items: data.semEstItems, showPts: true });
+      break;
+    case 'noResp':
+      openItemsModal({ title: data.sprintName + ' — ' + t('stat_no_resp'), items: data.semRespItems, showPts: true });
+      break;
+    case 'bugs':
+      _openBugsModal(data, false);
+      break;
+  }
 }
 
 export function openDaily() {
@@ -98,7 +130,7 @@ export function openDaily() {
 
   _dailySlides = cards;
   _dailyIndex = 0;
-  _dailyBugsData = [];
+  _slidesData = [];
 
   const track = document.getElementById('daily-track');
   track.innerHTML = _dailySlides.map(c => buildDailySlide(c)).join('');
@@ -121,7 +153,7 @@ export function openDailyForSprint(projectName, sprintKey) {
 
   _dailySlides = [card];
   _dailyIndex = 0;
-  _dailyBugsData = [];
+  _slidesData = [];
 
   const track = document.getElementById('daily-track');
   track.innerHTML = buildDailySlide(card, sprintKey);
@@ -137,6 +169,7 @@ export function openDailyForSprint(projectName, sprintKey) {
 }
 
 export function closeDaily() {
+  closeItemsModal();
   document.getElementById('daily-modal').classList.remove('open', 'maximized');
   document.getElementById('btnDailyMax').textContent = '\u2922';
   document.body.style.overflow = '';
@@ -186,56 +219,8 @@ export function filterDailyItems(term) {
   });
 }
 
-function _renderDailyBugsModal(data, showAll) {
-  const list = showAll ? data.bugs.all : data.bugs.active;
-  document.getElementById('daily-bugs-title').textContent = data.sprintName + ' — Bugs';
-  const btn = document.getElementById('btnDailyBugsToggle');
-  btn.textContent = showAll ? 'Active only' : 'Show all';
-  btn.classList.toggle('active', showAll);
-
-  const rows = list.map(b => {
-    const idCell = b.url
-      ? '<a href="' + b.url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">#' + b.id + '</a>'
-      : '#' + (b.id || '—');
-    const s = b.state || '';
-    const stateClass = ['Active','In Progress','Doing','Committed'].includes(s) ? 'blue'
-      : ['Closed','Done','Resolved'].includes(s) ? 'green'
-      : ['Blocked','Impediment'].includes(s) ? 'red' : 'gray';
-    return '<tr><td class="daily-id-cell">' + idCell + '</td><td>' + (b.title || '') + '</td><td><span class="badge ' + stateClass + '">' + s + '</span></td><td>' + (b.assignedTo || '—') + '</td></tr>';
-  }).join('');
-
-  document.getElementById('daily-bugs-body').innerHTML = rows
-    ? '<div class="daily-bugs-table-wrap"><table class="daily-bugs-table"><thead><tr><th>ID</th><th>' + t('th_title') + '</th><th>' + t('th_status') + '</th><th>' + t('th_assignee') + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
-    : '<div class="daily-bugs-empty">' + (showAll ? 'No bugs in this sprint.' : 'No open bugs in this sprint.') + '</div>';
-}
-
-export function openDailyBugs() {
-  const data = _dailyBugsData[_dailyIndex];
-  if (!data) return;
-  _bugsShowAll = false;
-  _renderDailyBugsModal(data, false);
-  document.getElementById('daily-bugs-modal').classList.add('open');
-}
-
-export function closeDailyBugs() {
-  document.getElementById('daily-bugs-modal').classList.remove('open');
-}
-
-export function closeDailyBugsOverlay(event) {
-  if (event.target === event.currentTarget) closeDailyBugs();
-}
-
-export function toggleDailyBugsAll() {
-  _bugsShowAll = !_bugsShowAll;
-  const data = _dailyBugsData[_dailyIndex];
-  if (data) _renderDailyBugsModal(data, _bugsShowAll);
-}
-
 export function handleDailyKey(e) {
-  if (document.getElementById('daily-bugs-modal').classList.contains('open')) {
-    if (e.key === 'Escape') closeDailyBugs();
-    return;
-  }
+  if (document.getElementById('items-modal').classList.contains('open')) return;
   if (e.key === 'ArrowRight') dailyNext();
   else if (e.key === 'ArrowLeft') dailyPrev();
   else if (e.key === 'Escape') closeDaily();

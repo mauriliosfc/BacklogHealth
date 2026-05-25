@@ -250,16 +250,34 @@ Acessado pelo botão **📅 Apresentar daily** no header, ou pelo botão **☰**
 - Fecha com ✕ ou tecla `Escape`
 - **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
 
-### Modal de Bugs da Daily
+### Modal de Itens da Daily (componente reutilizável)
 
-Acessado ao clicar no stat **Bugs Abertos** em qualquer slide da Daily Standup.
+Todos os 4 stats do slide da Daily Standup são clicáveis e abrem o **Items Modal** (`#items-modal`), um componente genérico definido em `public/modules/itemsModal.js`.
+
+| Stat clicado | Itens exibidos | Coluna Pts? |
+|---|---|---|
+| **User Stories** | Todos os `mainItems` da sprint | Sim |
+| **No Estimate** | US abertas sem Story Points | Sim |
+| **No Assignee** | US abertas sem responsável | Sim |
+| **Open Bugs** | Bugs ativos (com toggle "Show all") | Não |
 
 - Modal sobreposto ao daily (z-index: 700), fecha com ✕, clique fora ou `Escape`
-- **Exibição padrão:** bugs com estado Active, In Progress ou New na sprint atual
-- **Botão "Show all"** — alterna para mostrar todos os bugs da sprint independente do status (botão fica azul quando ativo); clique novamente para voltar à visão filtrada
-- **Tabela:** ID (link clicável para o work item no Azure DevOps), Título, Status (badge colorido), Responsável
-- **Cores dos badges de status** — mesma paleta das USs: azul (Active/In Progress), verde (Closed/Done/Resolved), vermelho (Blocked/Impediment), cinza (demais)
-- Dados provêm do `data-items` do card (campos `id`, `title`, `url`, `state`, `assignedTo` adicionados ao itemsJson no `projectService.js`)
+- **Toggle button opcional** — passado via `toggleBtn: { label, active, onClick }` pelo chamador; visível apenas quando fornecido (bugs usa para alternar active/all)
+- **Tabela:** ID (link clicável), Título, Status (badge colorido), Pts (opcional), Responsável
+- **Cores dos badges** — azul (Active/In Progress), verde (Closed/Done/Resolved), vermelho (Blocked), cinza (demais)
+- Dados provêm do `data-items` do card (`id`, `title`, `url`, `state`, `assignedTo` adicionados ao itemsJson no `projectService.js`)
+
+#### API do `itemsModal.js`
+
+```js
+openItemsModal({ title, items, showPts?, toggleBtn? })
+// toggleBtn: { label: string, active: bool, onClick: fn }
+
+closeItemsModal()
+closeItemsModalOverlay(event)
+```
+
+Para usar em qualquer outro contexto, basta importar `openItemsModal` e passar os itens desejados.
 
 ---
 
@@ -538,7 +556,10 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 94 | `POST /setup` preserva campos existentes do `config.json` via spread | `saveConfig({ org, baseUrl, pat, projects })` criava objeto do zero, descartando `ai`, `github` e qualquer outro campo já salvo — toda reconfiguração de projetos apagava as credenciais da IA; corrigido com `{ ...existing, org, baseUrl, pat, projects }` |
 | 95 | `id`, `title`, `url`, `assignedTo` adicionados ao `itemsJson` em `projectService.js` | Modal de bugs da Daily precisava exibir nome, link e responsável de cada bug — campos inexistentes no payload mínimo original (que só tinha `type`, `state`, `iteration`, `pts`, `assigned` booleano) |
 | 96 | `itemsJson` escapa `'` com `&#39;` além de `<` | `data-items='...'` usa aspas simples como delimitador de atributo — títulos de work items com apóstrofo quebravam o JSON silenciosamente; `itermap` já fazia o mesmo escape |
-| 97 | `_dailyBugsData[]` acumulado em `buildDailySlide` e resetado em `openDaily`/`openDailyForSprint` | Modal de bugs precisa saber os bugs de cada slide sem nova chamada à API — array paralelo a `_dailySlides` preenchido em ordem durante o `.map()` garante índice correto sem prop drilling |
+| 97 | `_slidesData[]` acumulado em `buildDailySlide` e resetado em `openDaily`/`openDailyForSprint` | Items Modal precisa saber os dados de cada slide sem nova chamada à API — array paralelo a `_dailySlides` preenchido em ordem durante o `.map()` garante índice correto sem prop drilling |
+| 98 | `itemsModal.js` como componente genérico em vez de modal acoplado ao daily | Bugs modal foi o primeiro uso; User Stories, No Estimate e No Assignee precisavam do mesmo padrão — componente isolado com API `openItemsModal({ title, items, showPts, toggleBtn })` permite reuso em qualquer contexto futuro sem duplicar HTML/CSS/lógica |
+| 99 | `toggleBtn` como opção passada pelo chamador em vez de estado interno do modal | O toggle "Active only / Show all" é específico de bugs — torná-lo interno ao modal acoplaria a lógica de negócio ao componente; passar como `onClick` closure mantém o modal agnóstico e o chamador no controle do estado |
+| 100 | `openDailyStat(stat)` como ponto de entrada único para todos os stats clicáveis | Quatro `onclick` diferentes no HTML gerado apontariam para quatro funções no `window` — um único dispatcher com string (`'us'`, `'noEst'`, `'noResp'`, `'bugs'`) reduz a superfície da API global e facilita adicionar novos stats futuros |
 
 ---
 
@@ -648,7 +669,7 @@ Por projeto, o endpoint retorna:
 - [x] Indicador "Esforço Economizado" nos Health Indicators — `(OriginalEstimate − CompletedWork) / OriginalEstimate × 100`
 - [x] Override manual de `OriginalEstimate` via edição inline no anel de Esforço Economizado (ícone ✏, persistido em localStorage por projeto)
 - [x] Fix: credenciais do Copilot AI perdidas ao reconfigurar projetos via setup (`POST /setup` agora preserva campos `ai` e `github` do `config.json`)
-- [x] Modal de bugs clicável na Daily Standup — stat "Bugs Abertos" abre lista de bugs da sprint com toggle "Show all" / "Active only" e badges de status coloridos
+- [x] Modal de itens reutilizável (`itemsModal.js`) — todos os 4 stats da Daily (User Stories, No Estimate, No Assignee, Bugs) são clicáveis; modal genérico com API `openItemsModal({ title, items, showPts, toggleBtn })`
 - [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
@@ -661,4 +682,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3 (Story Points + Project Progress), feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual de OriginalEstimate, fix persistência de credenciais do Copilot AI após reconfiguração de projetos, modal de bugs clicável na Daily Standup*
+*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3 (Story Points + Project Progress), feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual de OriginalEstimate, fix persistência de credenciais do Copilot AI após reconfiguração de projetos, `itemsModal.js` componente reutilizável + todos os 4 stats da Daily clicáveis*
