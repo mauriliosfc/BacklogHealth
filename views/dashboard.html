@@ -328,6 +328,21 @@
   </div>
 </div>
 
+<!-- UAT Modal -->
+<div id="uat-modal" class="modal-overlay" onclick="closeUATOverlay(event)">
+  <div class="modal-box uat-modal-box">
+    <div class="modal-head">
+      <div class="modal-title">UAT — <span id="uat-modal-title"></span></div>
+      <div class="modal-actions">
+        <button class="modal-refresh" id="uat-refresh-btn" type="button" onclick="refreshUAT()" title="Refresh">↻</button>
+        <button class="modal-maximize" id="uat-modal-max" type="button" onclick="toggleUATMax()">⤢</button>
+        <button class="modal-close" type="button" onclick="closeUAT()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body uat-modal-body" id="uat-modal-body"></div>
+  </div>
+</div>
+
 <!-- Items Modal (reusable) -->
 <div id="items-modal" class="modal-overlay" style="z-index:700" onclick="closeItemsModalOverlay(event)">
   <div class="modal-box items-modal-box">

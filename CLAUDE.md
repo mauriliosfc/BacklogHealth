@@ -573,6 +573,78 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 108 | Filtro de sprint do dashboard redesenhado para match com o `itemsModal` | Trigger usa underline (`border-bottom`) em vez de caixa com borda completa; label uppercase/bold; painel com `border-radius: 8px` completo e `top: calc(100% + 6px)` — consistência visual entre todos os dropdowns da aplicação |
 | 109 | URL do work item em `itemsJson` construída a partir de `baseUrl` em vez de `_links` | `paginatedItems` usa `&fields=` na query da API — quando campos são explicitados o Azure DevOps omite `_links` da resposta; construir `${baseUrl}/_workitems/edit/${id}` diretamente garante URL válida sem custo de payload extra; padrão já usado nas linhas da tabela (`wiUrl`) |
 | 110 | Link clicável na coluna ID do `itemsModal` — `color: var(--c-blue)` | `.daily-id-cell a` (classe reutilizada do daily) tinha `color: var(--text-faint)` que deixava o link invisível; override específico `.items-modal-table .daily-id-cell a` aplica cor azul sem afetar o estilo da daily |
+| 111 | `_fetchTestPoints` com `isRecursive=true` e paginação própria | Test points ficam aninhados em suites filhas — sem `isRecursive=true` apenas o suite raiz era retornado; paginação de 1000/req com limite de 10.000 cobre projetos grandes sem risco de loop infinito |
+| 112 | Campo `testCaseReference` (não `testCase`) na Testplan API | A Testplan API v7.0 retorna `testCaseReference` com `id` e `name` do caso de teste — `testCase` estava undefined, causando nomes `"—"` no painel; descoberto via `console.log` do primeiro ponto e removido após fix |
+| 113 | Contadores dos cards independentes, barra com exclusividade mútua | Usuário quer "Em andamento" = todos os planos Active (inclusive os que têm falhas); barra precisa somar 100% — dois conjuntos de variáveis: `plansDone/Failed/WIP/NotStarted` para os cards, `barDone/Failed/WIP/NotStarted` com prioridade exclusiva para os segmentos da barra |
+| 114 | Pills com toggle para filtro de resultado dos TCs | `<select>` nativo era inconsistente com o padrão de dropdowns da app; pills permitem ativar/desativar múltiplos outcomes sem abrir dropdown — `uatFilterPlan` agora opera sobre um `Set` por plano; `uatClearPlanFilter` reseta para "todos" |
+| 115 | `#ID` como link no header do acordeão, removendo botão `↗` separado | ID numérico do plano como link discreto (cor `text-faint`) com separador `|` antes do título integra navegação ao Azure DevOps sem ocupar espaço extra no header-right; botão seta era redundante e poluía visualmente |
+| 116 | `localStorage['uatSprint::NomeProjeto']` para persistência do filtro | Padrão já adotado em outros modais (`tcProject`, `sprintColVisibility`) — chave namespaced por projeto evita colisão entre projetos distintos |
+| 117 | `testPlanCount` adicionado ao `fetchProject` via `Promise.all` | Contagem de testplans no card principal precisava de uma chamada extra à API; rodar em paralelo com `paginatedItems` e `fetchIterMap` não aumenta o tempo de carregamento; `.catch(() => null)` garante que falha na API de testplans não quebre o dashboard |
+
+---
+
+## 🧪 UAT Dashboard
+
+Acessado pelo botão **UAT** no rodapé de cada card do dashboard.
+
+- **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
+- **Filtro de Sprint** — dropdown com todas as iterations dos testplans; preferência persistida em `localStorage['uatSprint::NomeProjeto']`
+- **Card de resumo** com:
+  - Nome do projeto (alias) + sprint atual + período + dias restantes + badge de risco
+  - Percentual de conclusão (planos concluídos ÷ total) em destaque
+  - Barra de progresso segmentada (verde/vermelho/amarelo/cinza) por planos
+  - Seção **"Indicadores por Testplan"** com 4 cards: Concluídos · Em andamento · Com falha · Total
+- **Label "Testplans Detail"** separa o card de resumo da lista de planos
+- **Acordeão por testplan** — expande/colapsa com lazy-render do detalhe; scroll automático ao expandir
+  - Header: ícone pasta + `#ID` (link clicável para o Azure DevOps) + separador `|` + nome + badge de estado + contagem TCs + % + toggle
+  - Barra fina 4 cores (aprovados/falhos/bloqueados/pendentes) em TCs
+  - Detalhe: filtro de resultado por **pills** com toggle (Passou / Falhou / Bloqueado / Pendente) + botão Limpar
+  - Tabela de TCs: ID (`TC-{id}`), badge de prioridade (P1–P4), nome, tester, badge de resultado
+
+### Indicadores por Testplan — lógica de classificação
+
+| Indicador | Critério |
+|-----------|---------|
+| **Concluídos** | `passCount === totalCount && failCount === 0 && totalCount > 0` |
+| **Em andamento** | `state === 'Active'` (independente do resultado) |
+| **Com falha** | `failCount > 0` (independente do estado) |
+| **Total** | todos os planos da sprint filtrada |
+
+> Os contadores dos cards são independentes (um plano Active com falhas conta em "Em andamento" E "Com falha"). A barra de progresso usa categorias mutuamente exclusivas (prioridade: Concluído > Falho > Ativo > Não iniciado) para que os segmentos somem 100%.
+
+### Endpoint `/api/uat`
+
+```
+GET /api/uat?project=NomeProjeto
+```
+
+Retorna por projeto:
+```json
+{
+  "plans": [{
+    "id": 123,
+    "name": "Sprint 108 UAT",
+    "iteration": "Projeto\\Sprint 108",
+    "state": "Active",
+    "startDate": "2026-05-12",
+    "endDate": "2026-05-26",
+    "url": "https://dev.azure.com/org/projeto/_testPlans/execute?planId=123",
+    "passCount": 14,
+    "failCount": 2,
+    "blockedCount": 0,
+    "notExecutedCount": 5,
+    "totalCount": 21,
+    "points": [{ "id": 1, "testCaseId": 456, "name": "Login com credenciais válidas", "tester": "Fulano", "outcome": "passed", "priority": 2 }]
+  }]
+}
+```
+
+### Fluxo de dados no backend
+
+- `fetchUATPlans(identifier)` em `projectService.js` — busca todos os planos via `/_apis/testplan/plans`
+- `_fetchTestPoints(project, planId, suiteId)` — pagina test points com `isRecursive=true` (lotes de 1000, até 10.000)
+- Campo correto da API: `pt.testCaseReference` (não `pt.testCase`) para nome e ID do caso de teste
+- `testPlanCount` adicionado ao retorno de `fetchProject` para exibição no card principal (contagem de planos ativos)
 
 ---
 
@@ -690,6 +762,7 @@ Por projeto, o endpoint retorna:
 - [x] Stats Progress (closedCount/total) e Story Points removidos do card do dashboard — layout mais limpo
 - [x] Filtro de sprint do dashboard redesenhado para match visual com o filtro do `itemsModal` (underline, label uppercase, painel arredondado)
 - [x] Link clicável na coluna ID do `itemsModal` — fix na construção da URL (`baseUrl/_workitems/edit/id`) e estilo azul
+- [x] UAT Dashboard — modal por projeto com card de resumo, acordeão por testplan, filtro de sprint persistido, indicadores por plano, pills de resultado
 - [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
@@ -702,4 +775,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal*
+*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado)*

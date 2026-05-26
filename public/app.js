@@ -12,6 +12,7 @@ import { getAlias, applyAliases, startRename } from './modules/alias.js';
 import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from './modules/teamCapacity.js';
 import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback, openFeedbackSuccess, closeFeedbackSuccess, closeFeedbackSuccessOverlay } from './modules/feedback.js';
+import { openUAT, closeUAT, closeUATOverlay, toggleUATMax, refreshUAT, uatChangeSprint, uatTogglePlan, uatFilterPlan, uatClearPlanFilter } from './modules/uat.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -86,6 +87,15 @@ window.submitFeedback               = submitFeedback;
 window.openFeedbackSuccess          = openFeedbackSuccess;
 window.closeFeedbackSuccess         = closeFeedbackSuccess;
 window.closeFeedbackSuccessOverlay  = closeFeedbackSuccessOverlay;
+window.openUAT           = openUAT;
+window.closeUAT          = closeUAT;
+window.closeUATOverlay   = closeUATOverlay;
+window.toggleUATMax      = toggleUATMax;
+window.refreshUAT        = refreshUAT;
+window.uatChangeSprint   = uatChangeSprint;
+window.uatTogglePlan      = uatTogglePlan;
+window.uatFilterPlan      = uatFilterPlan;
+window.uatClearPlanFilter = uatClearPlanFilter;
 
 let _removeCard = null;
 

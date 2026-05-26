@@ -7,7 +7,7 @@ dns.setDefaultResultOrder("ipv4first");
 const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg } = require("./config");
 const { createIssue } = require("./githubClient");
 const { rawAzureGet }                             = require("./azureClient");
-const { fetchProject, fetchProjectDetail, buildCardHTML } = require("./projectService");
+const { fetchProject, fetchProjectDetail, buildCardHTML, fetchUATPlans } = require("./projectService");
 const { fetchTeamCapacity } = require("./teamCapacityService");
 const { chatCompletion, testConnection } = require("./aiClient");
 
@@ -277,6 +277,21 @@ async function main() {
       const project = qp.get('project') || null;
       try {
         const data = await fetchTeamCapacity(project);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(data));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    // ── GET /api/uat?project=NAME ─────────────────────────────────────────
+    if (url.startsWith('/api/uat')) {
+      const qp      = new URLSearchParams(url.split('?')[1] || '');
+      const project = qp.get('project');
+      try {
+        const data = await fetchUATPlans(project);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(data));
       } catch (e) {
