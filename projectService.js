@@ -238,7 +238,7 @@ function buildCardHTML(results, baseUrl = '') {
       return {
         id: i.id,
         title: i.fields?.["System.Title"] || "",
-        url: i._links?.html?.href || "",
+        url: i.id && baseUrl ? `${baseUrl}/_workitems/edit/${i.id}` : "",
         iteration: i.fields?.["System.IterationPath"] || "",
         type: i.fields?.["System.WorkItemType"] || "",
         state: i.fields?.["System.State"] || "",

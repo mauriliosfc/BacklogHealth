@@ -570,6 +570,9 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 105 | `refreshDaily()` em `daily.js` — recarrega dados do Azure sem fechar a Daily | Botão `↻` no header do daily chama `doRefresh()` (que já busca dados frescos e reconstrói `#content`), depois reconstrói os slides com os novos cards preservando o índice atual; botão fica desabilitado durante o refresh |
 | 106 | `_buildDailyTrack()` + estado `_dailyMode/_dailyForcedProject/_dailyForcedSprint` em `daily.js` | `openDaily` e `openDailyForSprint` tinham lógica de construção de slides duplicada; `_buildDailyTrack()` centraliza a construção respeitando o modo atual — necessário para `refreshDaily()` reconstruir corretamente independente de como a daily foi aberta |
 | 107 | Stats Progress (closedCount/total) e Story Points removidos do card do dashboard | Informações redundantes com a barra de percentual e o modal de detalhes — simplifica o card e melhora legibilidade; `card-pts` e `card-progress` removidos do HTML gerado e dos cálculos em `applyFilter` |
+| 108 | Filtro de sprint do dashboard redesenhado para match com o `itemsModal` | Trigger usa underline (`border-bottom`) em vez de caixa com borda completa; label uppercase/bold; painel com `border-radius: 8px` completo e `top: calc(100% + 6px)` — consistência visual entre todos os dropdowns da aplicação |
+| 109 | URL do work item em `itemsJson` construída a partir de `baseUrl` em vez de `_links` | `paginatedItems` usa `&fields=` na query da API — quando campos são explicitados o Azure DevOps omite `_links` da resposta; construir `${baseUrl}/_workitems/edit/${id}` diretamente garante URL válida sem custo de payload extra; padrão já usado nas linhas da tabela (`wiUrl`) |
+| 110 | Link clicável na coluna ID do `itemsModal` — `color: var(--c-blue)` | `.daily-id-cell a` (classe reutilizada do daily) tinha `color: var(--text-faint)` que deixava o link invisível; override específico `.items-modal-table .daily-id-cell a` aplica cor azul sem afetar o estilo da daily |
 
 ---
 
@@ -685,6 +688,8 @@ Por projeto, o endpoint retorna:
 - [x] Stats clicáveis no modal de detalhes — User Stories, Novos e Sem Estimativa do Resumo Geral abrem `itemsModal` via `openDetailStat` em `detail.js`
 - [x] Botão `↻` Refresh na Daily Standup — recarrega dados do Azure sem fechar o modal, preserva slide atual
 - [x] Stats Progress (closedCount/total) e Story Points removidos do card do dashboard — layout mais limpo
+- [x] Filtro de sprint do dashboard redesenhado para match visual com o filtro do `itemsModal` (underline, label uppercase, painel arredondado)
+- [x] Link clicável na coluna ID do `itemsModal` — fix na construção da URL (`baseUrl/_workitems/edit/id`) e estilo azul
 - [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
@@ -697,4 +702,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card*
+*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal*

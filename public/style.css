@@ -602,6 +602,8 @@ tr:hover td { background: var(--hover-bg); }
 .items-modal-table tbody tr:hover td { background: var(--bg-el); }
 .items-modal-table td:nth-child(1) { white-space: nowrap; }
 .items-modal-table td:nth-child(2) { color: var(--text-1); }
+.items-modal-table .daily-id-cell a { color: var(--c-blue); font-size: 12px; text-decoration: none; }
+.items-modal-table .daily-id-cell a:hover { text-decoration: underline; }
 .items-modal-empty { padding: 32px 28px; color: var(--text-faint); font-size: 14px; }
 /* filter bar */
 .items-filter-bar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 8px 28px; border-bottom: 1px solid var(--bg-border); flex-shrink: 0; }
