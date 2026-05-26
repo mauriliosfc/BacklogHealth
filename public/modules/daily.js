@@ -4,10 +4,14 @@ import { t } from './i18n.js';
 import { fmtD } from './utils.js';
 import { getAlias } from './alias.js';
 import { openItemsModal, closeItemsModal } from './itemsModal.js';
+import { doRefresh } from './timer.js';
 
 let _dailyIndex = 0;
 let _dailySlides = [];
 let _slidesData = [];
+let _dailyMode = 'all'; // 'all' | 'sprint'
+let _dailyForcedProject = null;
+let _dailyForcedSprint = null;
 
 export function buildDailySlide(card, forcedSprintKey = null) {
   const project = card.dataset.project;
@@ -93,18 +97,6 @@ export function buildDailySlide(card, forcedSprintKey = null) {
     '</div>';
 }
 
-function _openBugsModal(data, showAll) {
-  openItemsModal({
-    title: data.sprintName + ' — Bugs',
-    items: showAll ? data.allBugs : data.activeBugs,
-    toggleBtn: {
-      label: showAll ? 'Active only' : 'Show all',
-      active: showAll,
-      onClick: () => _openBugsModal(data, !showAll),
-    },
-  });
-}
-
 export function openDailyStat(stat) {
   const data = _slidesData[_dailyIndex];
   if (!data) return;
@@ -119,22 +111,34 @@ export function openDailyStat(stat) {
       openItemsModal({ title: data.sprintName + ' — ' + t('stat_no_resp'), items: data.semRespItems, showPts: true });
       break;
     case 'bugs':
-      _openBugsModal(data, false);
+      openItemsModal({ title: data.sprintName + ' — ' + t('stat_bugs'), items: data.allBugs, defaultFilters: [...ACTIVE_BUG_STATES] });
       break;
   }
 }
 
-export function openDaily() {
-  const cards = Array.from(document.querySelectorAll('#content .card[data-project]'));
-  if (!cards.length) return;
-
-  _dailySlides = cards;
-  _dailyIndex = 0;
+function _buildDailyTrack() {
   _slidesData = [];
-
   const track = document.getElementById('daily-track');
-  track.innerHTML = _dailySlides.map(c => buildDailySlide(c)).join('');
-  track.style.transform = 'translateX(0)';
+  if (_dailyMode === 'sprint') {
+    const card = Array.from(document.querySelectorAll('#content .card[data-project]'))
+      .find(c => c.dataset.project === _dailyForcedProject);
+    _dailySlides = card ? [card] : [];
+    track.innerHTML = card ? buildDailySlide(card, _dailyForcedSprint) : '';
+  } else {
+    _dailySlides = Array.from(document.querySelectorAll('#content .card[data-project]'));
+    track.innerHTML = _dailySlides.map(c => buildDailySlide(c)).join('');
+  }
+  track.style.transform = 'translateX(-' + (_dailyIndex * 100) + '%)';
+}
+
+export function openDaily() {
+  _dailyMode = 'all';
+  _dailyForcedProject = null;
+  _dailyForcedSprint = null;
+  _dailyIndex = 0;
+
+  _buildDailyTrack();
+  if (!_dailySlides.length) return;
 
   updateDailyNav();
 
@@ -147,17 +151,13 @@ export function openDaily() {
 }
 
 export function openDailyForSprint(projectName, sprintKey) {
-  const card = Array.from(document.querySelectorAll('#content .card[data-project]'))
-    .find(c => c.dataset.project === projectName);
-  if (!card) return;
-
-  _dailySlides = [card];
+  _dailyMode = 'sprint';
+  _dailyForcedProject = projectName;
+  _dailyForcedSprint = sprintKey;
   _dailyIndex = 0;
-  _slidesData = [];
 
-  const track = document.getElementById('daily-track');
-  track.innerHTML = buildDailySlide(card, sprintKey);
-  track.style.transform = 'translateX(0)';
+  _buildDailyTrack();
+  if (!_dailySlides.length) return;
 
   updateDailyNav();
   const dailyModal2 = document.getElementById('daily-modal');
@@ -166,6 +166,16 @@ export function openDailyForSprint(projectName, sprintKey) {
   document.getElementById('btnDailyMax').title = t('daily_restore');
   document.body.style.overflow = 'hidden';
   dailyModal2.focus();
+}
+
+export async function refreshDaily() {
+  const btn = document.getElementById('btnDailyRefresh');
+  if (btn) btn.disabled = true;
+  await doRefresh();
+  _dailyIndex = Math.min(_dailyIndex, Math.max(0, _dailySlides.length - 1));
+  _buildDailyTrack();
+  updateDailyNav();
+  if (btn) btn.disabled = false;
 }
 
 export function closeDaily() {

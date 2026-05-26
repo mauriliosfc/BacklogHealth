@@ -60,7 +60,7 @@ async function fetchProject(projectConfig) {
 }
 
 async function fetchProjectDetail(identifier) {
-  const { getProjectConfig } = require('./config.js');
+  const { getProjectConfig, getCfg } = require('./config.js');
   const projectConfig = getProjectConfig(identifier) || { name: identifier, workItemType: 'User Story' };
   const project      = projectConfig.name;
   const team         = projectConfig.team || undefined;
@@ -128,7 +128,10 @@ async function fetchProjectDetail(identifier) {
           pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null;
         }
 
+        const baseUrl = getCfg().baseUrl || '';
         return {
+          id:        i.id,
+          url:       i.id && baseUrl ? `${baseUrl}/_workitems/edit/${i.id}` : "",
           state:     i.fields?.["System.State"] || "",
           type:      i.fields?.["System.WorkItemType"] || "",
           pts,
@@ -375,12 +378,10 @@ function buildCardHTML(results, baseUrl = '') {
 
         <!-- stats -->
         <div class="stats">
-          <div class="stat"><div class="stat-label card-label" data-i18n="${itemLabelKey}">${itemLabel}</div><div class="stat-val card-total">${total}</div></div>
-          ${totalPts !== null ? `<div class="stat"><div class="stat-label" data-i18n="stat_pts">Story Points</div><div class="stat-val card-pts">${totalPts}</div></div>` : ''}
-          <div class="stat"><div class="stat-label" data-i18n="stat_progress">Progress</div><div class="stat-val card-progress" style="font-size:18px">${closedCount}/${total}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_bugs">Open Bugs</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_no_est">No Estimate</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_no_resp">No Assignee</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
+          <div class="stat stat-clickable" onclick="openCardStat(this,'us')"><div class="stat-label card-label" data-i18n="${itemLabelKey}">${itemLabel}</div><div class="stat-val card-total">${total}</div></div>
+          <div class="stat stat-clickable" onclick="openCardStat(this,'bugs')"><div class="stat-label" data-i18n="stat_bugs">Open Bugs</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
+          <div class="stat stat-clickable" onclick="openCardStat(this,'noEst')"><div class="stat-label" data-i18n="stat_no_est">No Estimate</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
+          <div class="stat stat-clickable" onclick="openCardStat(this,'noResp')"><div class="stat-label" data-i18n="stat_no_resp">No Assignee</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
         </div>
 
         <!-- sprint progress -->

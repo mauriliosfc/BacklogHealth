@@ -2,8 +2,10 @@ import { buildSprintData, fmtD } from './utils.js';
 import { t, getDateLocale } from './i18n.js';
 import { getItemTypes } from './constants.js';
 import { getAlias } from './alias.js';
+import { openItemsModal } from './itemsModal.js';
 
 export const _detailState = { project: null, sprints: [] };
+let _ctx = { filtered: [], workItemType: 'User Story' };
 
 const SPRINT_COL_DEFS = [
   { id: 'period',    key: 'th_period' },
@@ -97,6 +99,7 @@ export async function loadDetailData(project, selectedSprints = _detailState.spr
     const taskOriginalEstimate = isOrigEstOverride ? savedOverride : rawOrigEst;
     const bugCompletedWork  = bugItems.reduce((s, t) => s + t.completedWork, 0);
     const totalBugs         = bugItems.length;
+    _ctx = { filtered, workItemType: data.workItemType || 'User Story' };
     document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story', project, taskOriginalEstimate, isOrigEstOverride);
     initSprintColSelector();
   } catch(e) {
@@ -141,7 +144,12 @@ export function toggleMaximize() {
   btn.title = isMax ? t('detail_restore') : t('detail_maximize');
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetailsBtn(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('items-modal').classList.contains('open')) return;
+    closeDetailsBtn();
+  }
+});
 
 function statusColor(s) {
   if (['Active','In Progress','Doing','Committed'].includes(s)) return '#60a5fa';
@@ -263,12 +271,12 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   return filterBanner + '<div class="d-section"><div class="d-section-title">' + t('section_summary') + '</div>' +
     '<div class="d-grid">' +
       '<div class="d-card"><div class="d-label">' + t('d_total_items') + '</div><div class="d-val blue">' + total + '</div></div>' +
-      '<div class="d-card"><div class="d-label">' + itemLabel + '</div><div class="d-val blue">' + us + '</div></div>' +
+      '<div class="d-card d-card-clickable" onclick="openDetailStat(\'us\')" title="View items"><div class="d-label">' + itemLabel + '</div><div class="d-val blue">' + us + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + estimateLabel + '</div><div class="d-val purple">' + totalPts + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_pts_delivered') + '</div><div class="d-val green">' + donePts + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_in_progress') + '</div><div class="d-val blue">' + active + '</div></div>' +
-      '<div class="d-card"><div class="d-label">' + t('d_new') + '</div><div class="d-val">' + newItems + '</div></div>' +
-      '<div class="d-card"><div class="d-label">' + t('d_no_estimate') + '</div><div class="d-val ' + (noEst>mainTotal*0.3?'yellow':'') + '">' + noEst + '</div></div>' +
+      '<div class="d-card d-card-clickable" onclick="openDetailStat(\'new\')" title="View new items"><div class="d-label">' + t('d_new') + '</div><div class="d-val">' + newItems + '</div></div>' +
+      '<div class="d-card d-card-clickable" onclick="openDetailStat(\'noEst\')" title="View no estimate items"><div class="d-label">' + t('d_no_estimate') + '</div><div class="d-val ' + (noEst>mainTotal*0.3?'yellow':'') + '">' + noEst + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_hrs_tasks') + '</div><div class="d-val purple">' + completedHrsFmt + 'h</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_hrs_bugs') + '</div><div class="d-val ' + (bugHrs>0?'red':'') + '">' + bugHrsFmt + 'h</div></div>' +
     '</div></div>' +
@@ -312,6 +320,24 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
       '</tr></thead><tbody>' + sprintRows + '</tbody></table>' +
     '</div>' +
     tlSection;
+}
+
+export function openDetailStat(stat) {
+  const { filtered, workItemType } = _ctx;
+  if (!filtered.length) return;
+  const ITEM_TYPES = getItemTypes(workItemType);
+  const mainItems = filtered.filter(i => ITEM_TYPES.includes(i.type));
+  switch (stat) {
+    case 'us':
+      openItemsModal({ title: t('label_user_stories'), items: mainItems, showPts: true });
+      break;
+    case 'new':
+      openItemsModal({ title: t('d_new'), items: filtered.filter(i => i.state === 'New'), showPts: true });
+      break;
+    case 'noEst':
+      openItemsModal({ title: t('d_no_estimate'), items: mainItems.filter(i => i.pts == null || i.pts === 0), showPts: true });
+      break;
+  }
 }
 
 export function editOrigEst(project) {

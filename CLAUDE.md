@@ -1,6 +1,6 @@
 # 📋 Backlog Health Dashboard — Documentação
 
-> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Maio/2026 (Team Capacity, redesign, Copilot melhorias, UX, modal de bugs na Daily)
+> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Maio/2026 (Team Capacity, redesign, Copilot melhorias, UX, itemsModal reutilizável, stats clicáveis dashboard/detail/daily, filtro de status, refresh na Daily)
 
 ---
 
@@ -259,10 +259,10 @@ Todos os 4 stats do slide da Daily Standup são clicáveis e abrem o **Items Mod
 | **User Stories** | Todos os `mainItems` da sprint | Sim |
 | **No Estimate** | US abertas sem Story Points | Sim |
 | **No Assignee** | US abertas sem responsável | Sim |
-| **Open Bugs** | Bugs ativos (com toggle "Show all") | Não |
+| **Open Bugs** | Todos os bugs (filtro inicial: Active/In Progress/New) | Não |
 
 - Modal sobreposto ao daily (z-index: 700), fecha com ✕, clique fora ou `Escape`
-- **Toggle button opcional** — passado via `toggleBtn: { label, active, onClick }` pelo chamador; visível apenas quando fornecido (bugs usa para alternar active/all)
+- **Filtro de status** — dropdown com checkboxes por estado; pre-selecionado via `defaultFilters`; para bugs os estados ativos são pré-selecionados mas o usuário pode remover o filtro para ver todos
 - **Tabela:** ID (link clicável), Título, Status (badge colorido), Pts (opcional), Responsável
 - **Cores dos badges** — azul (Active/In Progress), verde (Closed/Done/Resolved), vermelho (Blocked), cinza (demais)
 - Dados provêm do `data-items` do card (`id`, `title`, `url`, `state`, `assignedTo` adicionados ao itemsJson no `projectService.js`)
@@ -270,11 +270,14 @@ Todos os 4 stats do slide da Daily Standup são clicáveis e abrem o **Items Mod
 #### API do `itemsModal.js`
 
 ```js
-openItemsModal({ title, items, showPts?, toggleBtn? })
-// toggleBtn: { label: string, active: bool, onClick: fn }
+openItemsModal({ title, items, showPts?, defaultFilters? })
+// defaultFilters: string[] — estados pré-selecionados no filtro de status (ex: ACTIVE_BUG_STATES)
 
 closeItemsModal()
 closeItemsModalOverlay(event)
+toggleItemsFilterDropdown()   // abre/fecha o dropdown de filtro de status
+toggleItemsFilter(state)      // marca/desmarca um estado no filtro
+clearItemsFilter()            // limpa todos os filtros de status
 ```
 
 Para usar em qualquer outro contexto, basta importar `openItemsModal` e passar os itens desejados.
@@ -557,9 +560,16 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 95 | `id`, `title`, `url`, `assignedTo` adicionados ao `itemsJson` em `projectService.js` | Modal de bugs da Daily precisava exibir nome, link e responsável de cada bug — campos inexistentes no payload mínimo original (que só tinha `type`, `state`, `iteration`, `pts`, `assigned` booleano) |
 | 96 | `itemsJson` escapa `'` com `&#39;` além de `<` | `data-items='...'` usa aspas simples como delimitador de atributo — títulos de work items com apóstrofo quebravam o JSON silenciosamente; `itermap` já fazia o mesmo escape |
 | 97 | `_slidesData[]` acumulado em `buildDailySlide` e resetado em `openDaily`/`openDailyForSprint` | Items Modal precisa saber os dados de cada slide sem nova chamada à API — array paralelo a `_dailySlides` preenchido em ordem durante o `.map()` garante índice correto sem prop drilling |
-| 98 | `itemsModal.js` como componente genérico em vez de modal acoplado ao daily | Bugs modal foi o primeiro uso; User Stories, No Estimate e No Assignee precisavam do mesmo padrão — componente isolado com API `openItemsModal({ title, items, showPts, toggleBtn })` permite reuso em qualquer contexto futuro sem duplicar HTML/CSS/lógica |
-| 99 | `toggleBtn` como opção passada pelo chamador em vez de estado interno do modal | O toggle "Active only / Show all" é específico de bugs — torná-lo interno ao modal acoplaria a lógica de negócio ao componente; passar como `onClick` closure mantém o modal agnóstico e o chamador no controle do estado |
+| 98 | `itemsModal.js` como componente genérico em vez de modal acoplado ao daily | Bugs modal foi o primeiro uso; User Stories, No Estimate e No Assignee precisavam do mesmo padrão — componente isolado com API `openItemsModal({ title, items, showPts, defaultFilters })` permite reuso em qualquer contexto futuro sem duplicar HTML/CSS/lógica |
+| 99 | `defaultFilters` em vez de `toggleBtn` no `itemsModal` | O toggle "Active only / Show all" foi substituído por um filtro de status genérico com checkboxes — mais flexível e consistente com o padrão de outros dropdowns da aplicação; `defaultFilters: string[]` pré-seleciona estados sem acoplar lógica de negócio ao modal |
 | 100 | `openDailyStat(stat)` como ponto de entrada único para todos os stats clicáveis | Quatro `onclick` diferentes no HTML gerado apontariam para quatro funções no `window` — um único dispatcher com string (`'us'`, `'noEst'`, `'noResp'`, `'bugs'`) reduz a superfície da API global e facilita adicionar novos stats futuros |
+| 101 | Filtro de status com dropdown de checkboxes no `itemsModal.js` | Substituiu o toggle binário "Active only / Show all" — dropdown com todos os estados presentes nos itens permite qualquer combinação de filtros sem novo código por chamador; `defaultFilters` pré-seleciona os estados relevantes (ex: bugs ativos) |
+| 102 | Fix: listener global do `filters.js` fechava o dropdown do `itemsModal` imediatamente | `filters.js` tem `document.addEventListener('click', ...)` que fecha todos `.select-panel.open` quando o clique não está dentro de `.custom-select`; o container do items modal usa `.items-filter-select` (sem `.custom-select`) — adicionada verificação `!e.target.closest('.items-filter-select')` para excluí-lo do fechamento automático |
+| 103 | `openCardStat(statEl, stat)` em `filters.js` para stats clicáveis no dashboard principal | Todos os 4 stats do card (User Stories, Bugs, No Estimate, No Assignee) agora abrem o `itemsModal`; a função lê `data-items` do card, aplica o filtro de sprint ativo do `localStorage` e computa o subconjunto correto — centralizado em `filters.js` pois já tem acesso a `getItemTypes`, `CLOSED_STATES` e `ACTIVE_BUG_STATES` |
+| 104 | `openDetailStat(stat)` e `_ctx` em `detail.js` para stats clicáveis no modal de detalhes | Cards do Resumo Geral (User Stories, Novos, Sem Estimativa) no modal de detalhes agora abrem o `itemsModal`; `_ctx` armazena `{ filtered, workItemType }` após `loadDetailData` para que `openDetailStat` acesse os itens já filtrados por sprint sem nova chamada à API |
+| 105 | `refreshDaily()` em `daily.js` — recarrega dados do Azure sem fechar a Daily | Botão `↻` no header do daily chama `doRefresh()` (que já busca dados frescos e reconstrói `#content`), depois reconstrói os slides com os novos cards preservando o índice atual; botão fica desabilitado durante o refresh |
+| 106 | `_buildDailyTrack()` + estado `_dailyMode/_dailyForcedProject/_dailyForcedSprint` em `daily.js` | `openDaily` e `openDailyForSprint` tinham lógica de construção de slides duplicada; `_buildDailyTrack()` centraliza a construção respeitando o modo atual — necessário para `refreshDaily()` reconstruir corretamente independente de como a daily foi aberta |
+| 107 | Stats Progress (closedCount/total) e Story Points removidos do card do dashboard | Informações redundantes com a barra de percentual e o modal de detalhes — simplifica o card e melhora legibilidade; `card-pts` e `card-progress` removidos do HTML gerado e dos cálculos em `applyFilter` |
 
 ---
 
@@ -669,7 +679,12 @@ Por projeto, o endpoint retorna:
 - [x] Indicador "Esforço Economizado" nos Health Indicators — `(OriginalEstimate − CompletedWork) / OriginalEstimate × 100`
 - [x] Override manual de `OriginalEstimate` via edição inline no anel de Esforço Economizado (ícone ✏, persistido em localStorage por projeto)
 - [x] Fix: credenciais do Copilot AI perdidas ao reconfigurar projetos via setup (`POST /setup` agora preserva campos `ai` e `github` do `config.json`)
-- [x] Modal de itens reutilizável (`itemsModal.js`) — todos os 4 stats da Daily (User Stories, No Estimate, No Assignee, Bugs) são clicáveis; modal genérico com API `openItemsModal({ title, items, showPts, toggleBtn })`
+- [x] Modal de itens reutilizável (`itemsModal.js`) — todos os 4 stats da Daily (User Stories, No Estimate, No Assignee, Bugs) são clicáveis; modal genérico com API `openItemsModal({ title, items, showPts, defaultFilters })`
+- [x] Filtro de status com dropdown de checkboxes no `itemsModal` — substitui toggle binário; `defaultFilters` pré-seleciona estados relevantes
+- [x] Stats clicáveis no dashboard principal — todos os 4 stats do card abrem `itemsModal` via `openCardStat` em `filters.js`
+- [x] Stats clicáveis no modal de detalhes — User Stories, Novos e Sem Estimativa do Resumo Geral abrem `itemsModal` via `openDetailStat` em `detail.js`
+- [x] Botão `↻` Refresh na Daily Standup — recarrega dados do Azure sem fechar o modal, preserva slide atual
+- [x] Stats Progress (closedCount/total) e Story Points removidos do card do dashboard — layout mais limpo
 - [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
@@ -682,4 +697,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3 (Story Points + Project Progress), feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual de OriginalEstimate, fix persistência de credenciais do Copilot AI após reconfiguração de projetos, `itemsModal.js` componente reutilizável + todos os 4 stats da Daily clicáveis*
+*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card*

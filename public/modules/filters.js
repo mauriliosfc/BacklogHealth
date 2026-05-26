@@ -1,6 +1,7 @@
 import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes } from './constants.js';
 import { calcHealth } from './health.js';
 import { t } from './i18n.js';
+import { openItemsModal } from './itemsModal.js';
 
 export function toggleDropdown(trigger) {
   const panel = trigger.nextElementSibling;
@@ -25,7 +26,7 @@ export function toggleDropdown(trigger) {
 }
 
 document.addEventListener('click', e => {
-  if (!e.target.closest('.custom-select')) {
+  if (!e.target.closest('.custom-select') && !e.target.closest('.items-filter-select')) {
     document.querySelectorAll('.select-panel.open').forEach(p => {
       p.classList.remove('open');
       p.previousElementSibling.classList.remove('open');
@@ -126,6 +127,42 @@ export function applyFilter(card, selected) {
   if (cardLabel) {
     cardLabel.textContent = isTaskMode ? t('stat_tasks') : t('stat_us');
   }
+}
+
+export function openCardStat(statEl, stat) {
+  const card = statEl.closest('.card');
+  const allItems = JSON.parse(card.dataset.items);
+  const workItemType = card.dataset.workitemtype || 'User Story';
+  const ITEM_TYPES = getItemTypes(workItemType);
+  const project = card.dataset.project;
+
+  const selected = JSON.parse(localStorage.getItem('filter_' + project) || '[]');
+  const filtered = selected.length === 0 ? allItems : allItems.filter(i => selected.includes(i.iteration));
+
+  const mainItems = filtered.filter(i => ITEM_TYPES.includes(i.type));
+  const openItems = mainItems.filter(i => !CLOSED_STATES.includes(i.state));
+
+  let title, items, showPts = false, defaultFilters = null;
+
+  if (stat === 'us') {
+    title = t(workItemType === 'Task' ? 'stat_tasks' : 'stat_us');
+    items = mainItems;
+    showPts = true;
+  } else if (stat === 'noEst') {
+    title = t('stat_no_est');
+    items = openItems.filter(i => i.pts == null || i.pts === 0);
+    showPts = true;
+  } else if (stat === 'noResp') {
+    title = t('stat_no_resp');
+    items = openItems.filter(i => !i.assigned);
+    showPts = true;
+  } else if (stat === 'bugs') {
+    title = t('stat_bugs');
+    items = filtered.filter(i => i.type === 'Bug');
+    defaultFilters = [...ACTIVE_BUG_STATES];
+  }
+
+  openItemsModal({ title, items, showPts, defaultFilters });
 }
 
 export function toggleUS(btn) {

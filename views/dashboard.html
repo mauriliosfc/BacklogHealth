@@ -147,6 +147,7 @@
     <div class="daily-head">
       <div class="daily-head-title" data-i18n="daily_title">📅 Daily Standup</div>
       <div class="daily-head-actions">
+        <button class="modal-refresh" id="btnDailyRefresh" onclick="refreshDaily()" title="Refresh">↻</button>
         <button class="modal-maximize" id="btnDailyMax" onclick="toggleDailyMaximize()" data-i18n-title="daily_expand" title="Expandir">⤢</button>
         <button class="modal-close" onclick="closeDaily()" data-i18n-title="btn_close" title="Fechar">✕</button>
       </div>
@@ -333,10 +334,11 @@
     <div class="modal-head">
       <div class="modal-title" id="items-modal-title"></div>
       <div class="modal-actions">
-        <button class="btn-items-toggle" id="items-modal-toggle" type="button" style="display:none"></button>
+        <button class="modal-maximize" id="items-modal-max" type="button" onclick="toggleItemsModalMax()">&#x2922;</button>
         <button class="modal-close" type="button" onclick="closeItemsModal()">✕</button>
       </div>
     </div>
+    <div id="items-modal-filters"></div>
     <div class="modal-body items-modal-body" id="items-modal-body"></div>
   </div>
 </div>
