@@ -53,7 +53,7 @@ export function buildDailySlide(card, forcedSprintKey = null) {
   const tableRows = rows.map(r => r.outerHTML).join('');
 
   const usSection = tableRows
-    ? '<div class="daily-us-title">' + t('daily_us_title') + '</div>' +
+    ? '<input type="search" class="daily-filter-input" placeholder="Filter..." oninput="filterDailyItems(this.value)">' +
       '<div class="daily-table-wrap"><table><thead><tr>' +
       '<th>' + t('th_title') + '</th><th>' + t('th_status') + '</th>' +
       '<th>' + t('th_estimate') + '</th><th>' + t('th_assignee') + '</th>' +
@@ -158,6 +158,19 @@ function updateDailyNav() {
   document.getElementById('daily-counter').textContent = (_dailyIndex + 1) + ' / ' + _dailySlides.length;
   document.getElementById('btnDailyPrev').disabled = _dailyIndex === 0;
   document.getElementById('btnDailyNext').disabled = _dailyIndex === _dailySlides.length - 1;
+
+  const filterEl = document.querySelector('#daily-track .daily-slide:nth-child(' + (_dailyIndex + 1) + ') .daily-filter-input');
+  if (filterEl) { filterEl.value = ''; filterDailyItems(''); }
+}
+
+export function filterDailyItems(term) {
+  const slides = document.querySelectorAll('#daily-track .daily-slide');
+  const slide = slides[_dailyIndex];
+  if (!slide) return;
+  const q = term.trim().toLowerCase();
+  slide.querySelectorAll('tbody tr').forEach(row => {
+    row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
 }
 
 export function handleDailyKey(e) {
