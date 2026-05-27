@@ -327,6 +327,20 @@
   </div>
 </div>
 
+<!-- Daily Bugs Modal -->
+<div id="daily-bugs-modal" class="modal-overlay" style="z-index:700" onclick="closeDailyBugsOverlay(event)">
+  <div class="modal-box daily-bugs-box">
+    <div class="modal-head">
+      <div class="modal-title" id="daily-bugs-title"></div>
+      <div class="modal-actions">
+        <button class="btn-bugs-toggle" id="btnDailyBugsToggle" type="button" onclick="toggleDailyBugsAll()">Show all</button>
+        <button class="modal-close" type="button" onclick="closeDailyBugs()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body daily-bugs-body" id="daily-bugs-body"></div>
+  </div>
+</div>
+
 <script type="module" src="/app.js"></script>
 </body>
 </html>
