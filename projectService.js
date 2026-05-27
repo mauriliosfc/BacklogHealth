@@ -43,24 +43,26 @@ async function fetchProject(projectConfig) {
       : "Microsoft.VSTS.Scheduling.StoryPoints";
 
     const fields = `System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,${estimateField},System.IterationPath,Microsoft.VSTS.Common.StackRank`;
-    const [detailsValue, { map: iterMap, currentSprint }] = await Promise.all([
+    const [detailsValue, { map: iterMap, currentSprint }, planData] = await Promise.all([
       paginatedItems(projectName, allIds, fields),
       fetchIterMap(projectName, team),
+      azureGet(`${encodeURIComponent(projectName)}/_apis/testplan/plans?api-version=7.0`).catch(() => null),
     ]);
+    const testPlanCount = planData ? (planData.count || (planData.value || []).length) : 0;
 
     // When monitoring a specific team, restrict items to that team's sprints only
     const items = team
       ? detailsValue.filter(i => (i.fields?.['System.IterationPath'] || '') in iterMap)
       : detailsValue;
 
-    return { project: displayName, items, sprint: currentSprint, iterMap, error: null, workItemType };
+    return { project: displayName, items, sprint: currentSprint, iterMap, error: null, workItemType, testPlanCount };
   } catch (e) {
     return { project: displayName, items: [], sprint: null, error: e.message, workItemType };
   }
 }
 
 async function fetchProjectDetail(identifier) {
-  const { getProjectConfig } = require('./config.js');
+  const { getProjectConfig, getCfg } = require('./config.js');
   const projectConfig = getProjectConfig(identifier) || { name: identifier, workItemType: 'User Story' };
   const project      = projectConfig.name;
   const team         = projectConfig.team || undefined;
@@ -128,7 +130,10 @@ async function fetchProjectDetail(identifier) {
           pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null;
         }
 
+        const baseUrl = getCfg().baseUrl || '';
         return {
+          id:        i.id,
+          url:       i.id && baseUrl ? `${baseUrl}/_workitems/edit/${i.id}` : "",
           state:     i.fields?.["System.State"] || "",
           type:      i.fields?.["System.WorkItemType"] || "",
           pts,
@@ -157,7 +162,7 @@ function projectInitials(name) {
 }
 
 function buildCardHTML(results, baseUrl = '') {
-  return results.map(({ project, items, sprint, iterMap = {}, error, workItemType = 'User Story' }) => {
+  return results.map(({ project, items, sprint, iterMap = {}, error, workItemType = 'User Story', testPlanCount = 0 }) => {
     if (error) return `
       <div class="card error">
         <h2>❌ ${project}</h2>
@@ -235,7 +240,7 @@ function buildCardHTML(results, baseUrl = '') {
       return {
         id: i.id,
         title: i.fields?.["System.Title"] || "",
-        url: i._links?.html?.href || "",
+        url: i.id && baseUrl ? `${baseUrl}/_workitems/edit/${i.id}` : "",
         iteration: i.fields?.["System.IterationPath"] || "",
         type: i.fields?.["System.WorkItemType"] || "",
         state: i.fields?.["System.State"] || "",
@@ -375,12 +380,10 @@ function buildCardHTML(results, baseUrl = '') {
 
         <!-- stats -->
         <div class="stats">
-          <div class="stat"><div class="stat-label card-label" data-i18n="${itemLabelKey}">${itemLabel}</div><div class="stat-val card-total">${total}</div></div>
-          ${totalPts !== null ? `<div class="stat"><div class="stat-label" data-i18n="stat_pts">Story Points</div><div class="stat-val card-pts">${totalPts}</div></div>` : ''}
-          <div class="stat"><div class="stat-label" data-i18n="stat_progress">Progress</div><div class="stat-val card-progress" style="font-size:18px">${closedCount}/${total}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_bugs">Open Bugs</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_no_est">No Estimate</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_no_resp">No Assignee</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
+          <div class="stat stat-clickable" onclick="openCardStat(this,'us')"><div class="stat-label card-label" data-i18n="${itemLabelKey}">${itemLabel}</div><div class="stat-val card-total">${total}</div></div>
+          <div class="stat stat-clickable" onclick="openCardStat(this,'bugs')"><div class="stat-label" data-i18n="stat_bugs">Open Bugs</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
+          <div class="stat stat-clickable" onclick="openCardStat(this,'noEst')"><div class="stat-label" data-i18n="stat_no_est">No Estimate</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
+          <div class="stat stat-clickable" onclick="openCardStat(this,'noResp')"><div class="stat-label" data-i18n="stat_no_resp">No Assignee</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
         </div>
 
         <!-- sprint progress -->
@@ -424,10 +427,83 @@ function buildCardHTML(results, baseUrl = '') {
             <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M1 3h10M4 3V2h4v1M2 3l.5 7.5a1 1 0 001 .5h5a1 1 0 001-.5L10 3"/></svg>
             <span data-i18n="btn_remove_short">Remove</span>
           </button>
-          ${actionBtn}
+          <div class="card-footer-actions">
+            <button class="btn-detail" type="button" onclick="openUAT(this)" data-i18n="btn_uat">UAT</button>
+            ${actionBtn}
+          </div>
         </div>
       </div>`;
   }).join("");
 }
 
-module.exports = { fetchProject, fetchProjectDetail, buildCardHTML, calcHealth, fmtDate };
+async function _fetchTestPoints(project, planId, suiteId) {
+  let allPoints = [], skip = 0;
+  const top = 1000;
+  while (true) {
+    let data;
+    try {
+      data = await azureGet(
+        `${encodeURIComponent(project)}/_apis/testplan/Plans/${planId}/Suites/${suiteId}/TestPoint?isRecursive=true&$top=${top}&$skip=${skip}&api-version=7.0`
+      );
+    } catch (_) { break; }
+    const pts = data.value || [];
+    allPoints = allPoints.concat(pts);
+    if (pts.length < top) break;
+    skip += top;
+    if (skip > 10000) break;
+  }
+
+  return allPoints;
+}
+
+async function fetchUATPlans(identifier) {
+  const { getProjectConfig, getCfg } = require('./config.js');
+  const projectConfig = getProjectConfig(identifier) || { name: identifier };
+  const project  = projectConfig.name;
+  const baseUrl  = getCfg().baseUrl || '';
+  const data     = await azureGet(`${encodeURIComponent(project)}/_apis/testplan/plans?api-version=7.0`);
+  const plans = await Promise.all((data.value || []).map(async p => {
+    let passCount = 0, failCount = 0, blockedCount = 0, notExecutedCount = 0, points = [];
+    const rootSuiteId = p.rootSuite && p.rootSuite.id;
+    if (rootSuiteId) {
+      try {
+        const raw = await _fetchTestPoints(project, p.id, rootSuiteId);
+        points = raw.map(pt => {
+          const outcome = ((pt.results && pt.results.outcome) || pt.outcome || '').toLowerCase();
+          if      (outcome === 'passed')  passCount++;
+          else if (outcome === 'failed')  failCount++;
+          else if (outcome === 'blocked') blockedCount++;
+          else                            notExecutedCount++;
+          const tcRef = pt.testCaseReference || pt.testCase || {};
+          return {
+            id:         pt.id,
+            testCaseId: tcRef.id || null,
+            name:       tcRef.name || '',
+            tester:     (pt.tester  && pt.tester.displayName) || '',
+            outcome,
+            priority:   typeof pt.priority === 'number' ? pt.priority : 0,
+          };
+        });
+      } catch (_) {}
+    }
+    const totalCount = passCount + failCount + blockedCount + notExecutedCount;
+    return {
+      id:              p.id,
+      name:            p.name || '',
+      iteration:       p.iteration || '',
+      state:           p.state || '',
+      startDate:       p.startDate || null,
+      endDate:         p.endDate   || null,
+      url:             p.id ? `${baseUrl}/${encodeURIComponent(project)}/_testPlans/execute?planId=${p.id}` : '',
+      passCount,
+      failCount,
+      blockedCount,
+      notExecutedCount,
+      totalCount,
+      points,
+    };
+  }));
+  return { plans };
+}
+
+module.exports = { fetchProject, fetchProjectDetail, buildCardHTML, calcHealth, fmtDate, fetchUATPlans };

@@ -147,6 +147,7 @@
     <div class="daily-head">
       <div class="daily-head-title" data-i18n="daily_title">📅 Daily Standup</div>
       <div class="daily-head-actions">
+        <button class="modal-refresh" id="btnDailyRefresh" onclick="refreshDaily()" title="Refresh">↻</button>
         <button class="modal-maximize" id="btnDailyMax" onclick="toggleDailyMaximize()" data-i18n-title="daily_expand" title="Expandir">⤢</button>
         <button class="modal-close" onclick="closeDaily()" data-i18n-title="btn_close" title="Fechar">✕</button>
       </div>
@@ -327,17 +328,33 @@
   </div>
 </div>
 
-<!-- Daily Bugs Modal -->
-<div id="daily-bugs-modal" class="modal-overlay" style="z-index:700" onclick="closeDailyBugsOverlay(event)">
-  <div class="modal-box daily-bugs-box">
+<!-- UAT Modal -->
+<div id="uat-modal" class="modal-overlay" onclick="closeUATOverlay(event)">
+  <div class="modal-box uat-modal-box">
     <div class="modal-head">
-      <div class="modal-title" id="daily-bugs-title"></div>
+      <div class="modal-title">UAT — <span id="uat-modal-title"></span></div>
       <div class="modal-actions">
-        <button class="btn-bugs-toggle" id="btnDailyBugsToggle" type="button" onclick="toggleDailyBugsAll()">Show all</button>
-        <button class="modal-close" type="button" onclick="closeDailyBugs()">✕</button>
+        <button class="modal-refresh" id="uat-refresh-btn" type="button" onclick="refreshUAT()" title="Refresh">↻</button>
+        <button class="modal-maximize" id="uat-modal-max" type="button" onclick="toggleUATMax()">⤢</button>
+        <button class="modal-close" type="button" onclick="closeUAT()">✕</button>
       </div>
     </div>
-    <div class="modal-body daily-bugs-body" id="daily-bugs-body"></div>
+    <div class="modal-body uat-modal-body" id="uat-modal-body"></div>
+  </div>
+</div>
+
+<!-- Items Modal (reusable) -->
+<div id="items-modal" class="modal-overlay" style="z-index:700" onclick="closeItemsModalOverlay(event)">
+  <div class="modal-box items-modal-box">
+    <div class="modal-head">
+      <div class="modal-title" id="items-modal-title"></div>
+      <div class="modal-actions">
+        <button class="modal-maximize" id="items-modal-max" type="button" onclick="toggleItemsModalMax()">&#x2922;</button>
+        <button class="modal-close" type="button" onclick="closeItemsModal()">✕</button>
+      </div>
+    </div>
+    <div id="items-modal-filters"></div>
+    <div class="modal-body items-modal-body" id="items-modal-body"></div>
   </div>
 </div>
 

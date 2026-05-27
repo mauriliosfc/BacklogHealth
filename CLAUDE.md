@@ -1,6 +1,6 @@
 # 📋 Backlog Health Dashboard — Documentação
 
-> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Maio/2026 (Team Capacity, redesign, Copilot melhorias, UX, modal de bugs na Daily)
+> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Maio/2026 (Team Capacity, redesign, Copilot melhorias, UX, itemsModal reutilizável, stats clicáveis dashboard/detail/daily, filtro de status, refresh na Daily)
 
 ---
 
@@ -250,16 +250,37 @@ Acessado pelo botão **📅 Apresentar daily** no header, ou pelo botão **☰**
 - Fecha com ✕ ou tecla `Escape`
 - **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
 
-### Modal de Bugs da Daily
+### Modal de Itens da Daily (componente reutilizável)
 
-Acessado ao clicar no stat **Bugs Abertos** em qualquer slide da Daily Standup.
+Todos os 4 stats do slide da Daily Standup são clicáveis e abrem o **Items Modal** (`#items-modal`), um componente genérico definido em `public/modules/itemsModal.js`.
+
+| Stat clicado | Itens exibidos | Coluna Pts? |
+|---|---|---|
+| **User Stories** | Todos os `mainItems` da sprint | Sim |
+| **No Estimate** | US abertas sem Story Points | Sim |
+| **No Assignee** | US abertas sem responsável | Sim |
+| **Open Bugs** | Todos os bugs (filtro inicial: Active/In Progress/New) | Não |
 
 - Modal sobreposto ao daily (z-index: 700), fecha com ✕, clique fora ou `Escape`
-- **Exibição padrão:** bugs com estado Active, In Progress ou New na sprint atual
-- **Botão "Show all"** — alterna para mostrar todos os bugs da sprint independente do status (botão fica azul quando ativo); clique novamente para voltar à visão filtrada
-- **Tabela:** ID (link clicável para o work item no Azure DevOps), Título, Status (badge colorido), Responsável
-- **Cores dos badges de status** — mesma paleta das USs: azul (Active/In Progress), verde (Closed/Done/Resolved), vermelho (Blocked/Impediment), cinza (demais)
-- Dados provêm do `data-items` do card (campos `id`, `title`, `url`, `state`, `assignedTo` adicionados ao itemsJson no `projectService.js`)
+- **Filtro de status** — dropdown com checkboxes por estado; pre-selecionado via `defaultFilters`; para bugs os estados ativos são pré-selecionados mas o usuário pode remover o filtro para ver todos
+- **Tabela:** ID (link clicável), Título, Status (badge colorido), Pts (opcional), Responsável
+- **Cores dos badges** — azul (Active/In Progress), verde (Closed/Done/Resolved), vermelho (Blocked), cinza (demais)
+- Dados provêm do `data-items` do card (`id`, `title`, `url`, `state`, `assignedTo` adicionados ao itemsJson no `projectService.js`)
+
+#### API do `itemsModal.js`
+
+```js
+openItemsModal({ title, items, showPts?, defaultFilters? })
+// defaultFilters: string[] — estados pré-selecionados no filtro de status (ex: ACTIVE_BUG_STATES)
+
+closeItemsModal()
+closeItemsModalOverlay(event)
+toggleItemsFilterDropdown()   // abre/fecha o dropdown de filtro de status
+toggleItemsFilter(state)      // marca/desmarca um estado no filtro
+clearItemsFilter()            // limpa todos os filtros de status
+```
+
+Para usar em qualquer outro contexto, basta importar `openItemsModal` e passar os itens desejados.
 
 ---
 
@@ -538,7 +559,92 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 94 | `POST /setup` preserva campos existentes do `config.json` via spread | `saveConfig({ org, baseUrl, pat, projects })` criava objeto do zero, descartando `ai`, `github` e qualquer outro campo já salvo — toda reconfiguração de projetos apagava as credenciais da IA; corrigido com `{ ...existing, org, baseUrl, pat, projects }` |
 | 95 | `id`, `title`, `url`, `assignedTo` adicionados ao `itemsJson` em `projectService.js` | Modal de bugs da Daily precisava exibir nome, link e responsável de cada bug — campos inexistentes no payload mínimo original (que só tinha `type`, `state`, `iteration`, `pts`, `assigned` booleano) |
 | 96 | `itemsJson` escapa `'` com `&#39;` além de `<` | `data-items='...'` usa aspas simples como delimitador de atributo — títulos de work items com apóstrofo quebravam o JSON silenciosamente; `itermap` já fazia o mesmo escape |
-| 97 | `_dailyBugsData[]` acumulado em `buildDailySlide` e resetado em `openDaily`/`openDailyForSprint` | Modal de bugs precisa saber os bugs de cada slide sem nova chamada à API — array paralelo a `_dailySlides` preenchido em ordem durante o `.map()` garante índice correto sem prop drilling |
+| 97 | `_slidesData[]` acumulado em `buildDailySlide` e resetado em `openDaily`/`openDailyForSprint` | Items Modal precisa saber os dados de cada slide sem nova chamada à API — array paralelo a `_dailySlides` preenchido em ordem durante o `.map()` garante índice correto sem prop drilling |
+| 98 | `itemsModal.js` como componente genérico em vez de modal acoplado ao daily | Bugs modal foi o primeiro uso; User Stories, No Estimate e No Assignee precisavam do mesmo padrão — componente isolado com API `openItemsModal({ title, items, showPts, defaultFilters })` permite reuso em qualquer contexto futuro sem duplicar HTML/CSS/lógica |
+| 99 | `defaultFilters` em vez de `toggleBtn` no `itemsModal` | O toggle "Active only / Show all" foi substituído por um filtro de status genérico com checkboxes — mais flexível e consistente com o padrão de outros dropdowns da aplicação; `defaultFilters: string[]` pré-seleciona estados sem acoplar lógica de negócio ao modal |
+| 100 | `openDailyStat(stat)` como ponto de entrada único para todos os stats clicáveis | Quatro `onclick` diferentes no HTML gerado apontariam para quatro funções no `window` — um único dispatcher com string (`'us'`, `'noEst'`, `'noResp'`, `'bugs'`) reduz a superfície da API global e facilita adicionar novos stats futuros |
+| 101 | Filtro de status com dropdown de checkboxes no `itemsModal.js` | Substituiu o toggle binário "Active only / Show all" — dropdown com todos os estados presentes nos itens permite qualquer combinação de filtros sem novo código por chamador; `defaultFilters` pré-seleciona os estados relevantes (ex: bugs ativos) |
+| 102 | Fix: listener global do `filters.js` fechava o dropdown do `itemsModal` imediatamente | `filters.js` tem `document.addEventListener('click', ...)` que fecha todos `.select-panel.open` quando o clique não está dentro de `.custom-select`; o container do items modal usa `.items-filter-select` (sem `.custom-select`) — adicionada verificação `!e.target.closest('.items-filter-select')` para excluí-lo do fechamento automático |
+| 103 | `openCardStat(statEl, stat)` em `filters.js` para stats clicáveis no dashboard principal | Todos os 4 stats do card (User Stories, Bugs, No Estimate, No Assignee) agora abrem o `itemsModal`; a função lê `data-items` do card, aplica o filtro de sprint ativo do `localStorage` e computa o subconjunto correto — centralizado em `filters.js` pois já tem acesso a `getItemTypes`, `CLOSED_STATES` e `ACTIVE_BUG_STATES` |
+| 104 | `openDetailStat(stat)` e `_ctx` em `detail.js` para stats clicáveis no modal de detalhes | Cards do Resumo Geral (User Stories, Novos, Sem Estimativa) no modal de detalhes agora abrem o `itemsModal`; `_ctx` armazena `{ filtered, workItemType }` após `loadDetailData` para que `openDetailStat` acesse os itens já filtrados por sprint sem nova chamada à API |
+| 105 | `refreshDaily()` em `daily.js` — recarrega dados do Azure sem fechar a Daily | Botão `↻` no header do daily chama `doRefresh()` (que já busca dados frescos e reconstrói `#content`), depois reconstrói os slides com os novos cards preservando o índice atual; botão fica desabilitado durante o refresh |
+| 106 | `_buildDailyTrack()` + estado `_dailyMode/_dailyForcedProject/_dailyForcedSprint` em `daily.js` | `openDaily` e `openDailyForSprint` tinham lógica de construção de slides duplicada; `_buildDailyTrack()` centraliza a construção respeitando o modo atual — necessário para `refreshDaily()` reconstruir corretamente independente de como a daily foi aberta |
+| 107 | Stats Progress (closedCount/total) e Story Points removidos do card do dashboard | Informações redundantes com a barra de percentual e o modal de detalhes — simplifica o card e melhora legibilidade; `card-pts` e `card-progress` removidos do HTML gerado e dos cálculos em `applyFilter` |
+| 108 | Filtro de sprint do dashboard redesenhado para match com o `itemsModal` | Trigger usa underline (`border-bottom`) em vez de caixa com borda completa; label uppercase/bold; painel com `border-radius: 8px` completo e `top: calc(100% + 6px)` — consistência visual entre todos os dropdowns da aplicação |
+| 109 | URL do work item em `itemsJson` construída a partir de `baseUrl` em vez de `_links` | `paginatedItems` usa `&fields=` na query da API — quando campos são explicitados o Azure DevOps omite `_links` da resposta; construir `${baseUrl}/_workitems/edit/${id}` diretamente garante URL válida sem custo de payload extra; padrão já usado nas linhas da tabela (`wiUrl`) |
+| 110 | Link clicável na coluna ID do `itemsModal` — `color: var(--c-blue)` | `.daily-id-cell a` (classe reutilizada do daily) tinha `color: var(--text-faint)` que deixava o link invisível; override específico `.items-modal-table .daily-id-cell a` aplica cor azul sem afetar o estilo da daily |
+| 111 | `_fetchTestPoints` com `isRecursive=true` e paginação própria | Test points ficam aninhados em suites filhas — sem `isRecursive=true` apenas o suite raiz era retornado; paginação de 1000/req com limite de 10.000 cobre projetos grandes sem risco de loop infinito |
+| 112 | Campo `testCaseReference` (não `testCase`) na Testplan API | A Testplan API v7.0 retorna `testCaseReference` com `id` e `name` do caso de teste — `testCase` estava undefined, causando nomes `"—"` no painel; descoberto via `console.log` do primeiro ponto e removido após fix |
+| 113 | Contadores dos cards independentes, barra com exclusividade mútua | Usuário quer "Em andamento" = todos os planos Active (inclusive os que têm falhas); barra precisa somar 100% — dois conjuntos de variáveis: `plansDone/Failed/WIP/NotStarted` para os cards, `barDone/Failed/WIP/NotStarted` com prioridade exclusiva para os segmentos da barra |
+| 114 | Pills com toggle para filtro de resultado dos TCs | `<select>` nativo era inconsistente com o padrão de dropdowns da app; pills permitem ativar/desativar múltiplos outcomes sem abrir dropdown — `uatFilterPlan` agora opera sobre um `Set` por plano; `uatClearPlanFilter` reseta para "todos" |
+| 115 | `#ID` como link no header do acordeão, removendo botão `↗` separado | ID numérico do plano como link discreto (cor `text-faint`) com separador `|` antes do título integra navegação ao Azure DevOps sem ocupar espaço extra no header-right; botão seta era redundante e poluía visualmente |
+| 116 | `localStorage['uatSprint::NomeProjeto']` para persistência do filtro | Padrão já adotado em outros modais (`tcProject`, `sprintColVisibility`) — chave namespaced por projeto evita colisão entre projetos distintos |
+| 117 | `testPlanCount` adicionado ao `fetchProject` via `Promise.all` | Contagem de testplans no card principal precisava de uma chamada extra à API; rodar em paralelo com `paginatedItems` e `fetchIterMap` não aumenta o tempo de carregamento; `.catch(() => null)` garante que falha na API de testplans não quebre o dashboard |
+
+---
+
+## 🧪 UAT Dashboard
+
+Acessado pelo botão **UAT** no rodapé de cada card do dashboard.
+
+- **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
+- **Filtro de Sprint** — dropdown com todas as iterations dos testplans; preferência persistida em `localStorage['uatSprint::NomeProjeto']`
+- **Card de resumo** com:
+  - Nome do projeto (alias) + sprint atual + período + dias restantes + badge de risco
+  - Percentual de conclusão (planos concluídos ÷ total) em destaque
+  - Barra de progresso segmentada (verde/vermelho/amarelo/cinza) por planos
+  - Seção **"Indicadores por Testplan"** com 4 cards: Concluídos · Em andamento · Com falha · Total
+- **Label "Testplans Detail"** separa o card de resumo da lista de planos
+- **Acordeão por testplan** — expande/colapsa com lazy-render do detalhe; scroll automático ao expandir
+  - Header: ícone pasta + `#ID` (link clicável para o Azure DevOps) + separador `|` + nome + badge de estado + contagem TCs + % + toggle
+  - Barra fina 4 cores (aprovados/falhos/bloqueados/pendentes) em TCs
+  - Detalhe: filtro de resultado por **pills** com toggle (Passou / Falhou / Bloqueado / Pendente) + botão Limpar
+  - Tabela de TCs: ID (`TC-{id}`), badge de prioridade (P1–P4), nome, tester, badge de resultado
+
+### Indicadores por Testplan — lógica de classificação
+
+| Indicador | Critério |
+|-----------|---------|
+| **Concluídos** | `passCount === totalCount && failCount === 0 && totalCount > 0` |
+| **Em andamento** | `state === 'Active'` (independente do resultado) |
+| **Com falha** | `failCount > 0` (independente do estado) |
+| **Total** | todos os planos da sprint filtrada |
+
+> Os contadores dos cards são independentes (um plano Active com falhas conta em "Em andamento" E "Com falha"). A barra de progresso usa categorias mutuamente exclusivas (prioridade: Concluído > Falho > Ativo > Não iniciado) para que os segmentos somem 100%.
+
+### Endpoint `/api/uat`
+
+```
+GET /api/uat?project=NomeProjeto
+```
+
+Retorna por projeto:
+```json
+{
+  "plans": [{
+    "id": 123,
+    "name": "Sprint 108 UAT",
+    "iteration": "Projeto\\Sprint 108",
+    "state": "Active",
+    "startDate": "2026-05-12",
+    "endDate": "2026-05-26",
+    "url": "https://dev.azure.com/org/projeto/_testPlans/execute?planId=123",
+    "passCount": 14,
+    "failCount": 2,
+    "blockedCount": 0,
+    "notExecutedCount": 5,
+    "totalCount": 21,
+    "points": [{ "id": 1, "testCaseId": 456, "name": "Login com credenciais válidas", "tester": "Fulano", "outcome": "passed", "priority": 2 }]
+  }]
+}
+```
+
+### Fluxo de dados no backend
+
+- `fetchUATPlans(identifier)` em `projectService.js` — busca todos os planos via `/_apis/testplan/plans`
+- `_fetchTestPoints(project, planId, suiteId)` — pagina test points com `isRecursive=true` (lotes de 1000, até 10.000)
+- Campo correto da API: `pt.testCaseReference` (não `pt.testCase`) para nome e ID do caso de teste
+- `testPlanCount` adicionado ao retorno de `fetchProject` para exibição no card principal (contagem de planos ativos)
 
 ---
 
@@ -648,7 +754,15 @@ Por projeto, o endpoint retorna:
 - [x] Indicador "Esforço Economizado" nos Health Indicators — `(OriginalEstimate − CompletedWork) / OriginalEstimate × 100`
 - [x] Override manual de `OriginalEstimate` via edição inline no anel de Esforço Economizado (ícone ✏, persistido em localStorage por projeto)
 - [x] Fix: credenciais do Copilot AI perdidas ao reconfigurar projetos via setup (`POST /setup` agora preserva campos `ai` e `github` do `config.json`)
-- [x] Modal de bugs clicável na Daily Standup — stat "Bugs Abertos" abre lista de bugs da sprint com toggle "Show all" / "Active only" e badges de status coloridos
+- [x] Modal de itens reutilizável (`itemsModal.js`) — todos os 4 stats da Daily (User Stories, No Estimate, No Assignee, Bugs) são clicáveis; modal genérico com API `openItemsModal({ title, items, showPts, defaultFilters })`
+- [x] Filtro de status com dropdown de checkboxes no `itemsModal` — substitui toggle binário; `defaultFilters` pré-seleciona estados relevantes
+- [x] Stats clicáveis no dashboard principal — todos os 4 stats do card abrem `itemsModal` via `openCardStat` em `filters.js`
+- [x] Stats clicáveis no modal de detalhes — User Stories, Novos e Sem Estimativa do Resumo Geral abrem `itemsModal` via `openDetailStat` em `detail.js`
+- [x] Botão `↻` Refresh na Daily Standup — recarrega dados do Azure sem fechar o modal, preserva slide atual
+- [x] Stats Progress (closedCount/total) e Story Points removidos do card do dashboard — layout mais limpo
+- [x] Filtro de sprint do dashboard redesenhado para match visual com o filtro do `itemsModal` (underline, label uppercase, painel arredondado)
+- [x] Link clicável na coluna ID do `itemsModal` — fix na construção da URL (`baseUrl/_workitems/edit/id`) e estilo azul
+- [x] UAT Dashboard — modal por projeto com card de resumo, acordeão por testplan, filtro de sprint persistido, indicadores por plano, pills de resultado
 - [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
@@ -661,4 +775,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3 (Story Points + Project Progress), feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual de OriginalEstimate, fix persistência de credenciais do Copilot AI após reconfiguração de projetos, modal de bugs clicável na Daily Standup*
+*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado)*
