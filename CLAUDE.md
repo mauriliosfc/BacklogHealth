@@ -580,6 +580,7 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 115 | `#ID` como link no header do acordeão, removendo botão `↗` separado | ID numérico do plano como link discreto (cor `text-faint`) com separador `|` antes do título integra navegação ao Azure DevOps sem ocupar espaço extra no header-right; botão seta era redundante e poluía visualmente |
 | 116 | `localStorage['uatSprint::NomeProjeto']` para persistência do filtro | Padrão já adotado em outros modais (`tcProject`, `sprintColVisibility`) — chave namespaced por projeto evita colisão entre projetos distintos |
 | 117 | `testPlanCount` adicionado ao `fetchProject` via `Promise.all` | Contagem de testplans no card principal precisava de uma chamada extra à API; rodar em paralelo com `paginatedItems` e `fetchIterMap` não aumenta o tempo de carregamento; `.catch(() => null)` garante que falha na API de testplans não quebre o dashboard |
+| 118 | `openDailyForProject(projectName)` em `daily.js` + botão "Daily" no card | Abrir o Daily Standup pelo header sempre iniciava no primeiro projeto; botão por card permite entrar direto no slide do projeto desejado; abre em modo `'all'` (navegação entre projetos preservada) e posiciona o carrossel via `findIndex` sem nova chamada à API |
 
 ---
 
@@ -763,6 +764,7 @@ Por projeto, o endpoint retorna:
 - [x] Filtro de sprint do dashboard redesenhado para match visual com o filtro do `itemsModal` (underline, label uppercase, painel arredondado)
 - [x] Link clicável na coluna ID do `itemsModal` — fix na construção da URL (`baseUrl/_workitems/edit/id`) e estilo azul
 - [x] UAT Dashboard — modal por projeto com card de resumo, acordeão por testplan, filtro de sprint persistido, indicadores por plano, pills de resultado
+- [x] Botão "Daily" no card do dashboard — abre Daily Standup direto no slide do projeto via `openDailyForProject`, sem resetar para o primeiro projeto
 - [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
@@ -775,4 +777,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Maio/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado)*
+*Documentação atualizada em Junho/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado), botão Daily por card (openDailyForProject — abre direto no slide do projeto)*

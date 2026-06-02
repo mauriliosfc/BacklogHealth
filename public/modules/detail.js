@@ -1,6 +1,6 @@
 import { buildSprintData, fmtD } from './utils.js';
 import { t, getDateLocale } from './i18n.js';
-import { getItemTypes } from './constants.js';
+import { getItemTypes, CLOSED_STATES } from './constants.js';
 import { getAlias } from './alias.js';
 import { openItemsModal } from './itemsModal.js';
 
@@ -205,13 +205,14 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const active   = items.filter(i => ['Active','In Progress','Doing','Committed'].includes(i.state)).length;
   const newItems = items.filter(i => i.state === 'New').length;
   const bugs     = totalBugs || items.filter(i => i.type === 'Bug').length;
-  const us       = mainTotal;
-  const noEst    = mainItems.filter(i => i.pts == null || i.pts === 0).length;
-  const donePts  = items.filter(i => ['Closed','Done','Resolved'].includes(i.state)).reduce((s,i)=>s+(i.pts||0),0);
+  const us            = mainTotal;
+  const openMainItems = mainItems.filter(i => !CLOSED_STATES.includes(i.state));
+  const noEst         = openMainItems.filter(i => i.pts == null || i.pts === 0).length;  // open only — matches dashboard
+  const mainNoEst     = mainItems.filter(i => i.pts == null || i.pts === 0).length;      // all US — used in coverage ring
+  const donePts      = items.filter(i => ['Closed','Done','Resolved'].includes(i.state)).reduce((s,i)=>s+(i.pts||0),0);
   const mainClosed   = mainItems.filter(i => ['Closed','Done','Resolved'].includes(i.state)).length;
   const mainUAT      = mainItems.filter(i => i.state === 'UAT').length;
   const uatPct       = mainTotal ? Math.round(mainUAT / mainTotal * 100) : 0;
-  const mainNoEst    = mainItems.filter(i => i.pts == null || i.pts === 0).length;
   const completedHrs = taskCompletedWork || 0;
   const completedHrsFmt = completedHrs % 1 === 0 ? completedHrs : completedHrs.toFixed(1);
   const bugHrs = bugCompletedWork || 0;
@@ -334,9 +335,11 @@ export function openDetailStat(stat) {
     case 'new':
       openItemsModal({ title: t('d_new'), items: filtered.filter(i => i.state === 'New'), showPts: true });
       break;
-    case 'noEst':
-      openItemsModal({ title: t('d_no_estimate'), items: mainItems.filter(i => i.pts == null || i.pts === 0), showPts: true });
+    case 'noEst': {
+      const openMain = filtered.filter(i => ITEM_TYPES.includes(i.type) && !CLOSED_STATES.includes(i.state));
+      openItemsModal({ title: t('d_no_estimate'), items: openMain.filter(i => i.pts == null || i.pts === 0), showPts: true });
       break;
+    }
   }
 }
 

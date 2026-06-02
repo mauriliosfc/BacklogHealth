@@ -48,7 +48,7 @@ export function buildDailySlide(card, forcedSprintKey = null) {
   const semRespItems = openItems.filter(i => !i.assigned);
   const semEst = semEstItems.length;
   const semResp = semRespItems.length;
-  const allBugs = filteredForStats.filter(i => i.type === 'Bug');
+  const allBugs    = filteredForStats.filter(i => i.type === 'Bug');
   const activeBugs = allBugs.filter(i => ACTIVE_BUG_STATES.includes(i.state));
   const bugs = activeBugs.length;
 
@@ -140,6 +140,29 @@ export function openDaily() {
   _buildDailyTrack();
   if (!_dailySlides.length) return;
 
+  updateDailyNav();
+
+  const dailyModal = document.getElementById('daily-modal');
+  dailyModal.classList.add('open', 'maximized');
+  document.getElementById('btnDailyMax').textContent = '\u2921';
+  document.getElementById('btnDailyMax').title = t('daily_restore');
+  document.body.style.overflow = 'hidden';
+  dailyModal.focus();
+}
+
+export function openDailyForProject(projectName) {
+  _dailyMode = 'all';
+  _dailyForcedProject = null;
+  _dailyForcedSprint = null;
+
+  _buildDailyTrack();
+  if (!_dailySlides.length) return;
+
+  const idx = _dailySlides.findIndex(c => c.dataset.project === projectName);
+  _dailyIndex = idx >= 0 ? idx : 0;
+
+  const track = document.getElementById('daily-track');
+  track.style.transform = 'translateX(-' + (_dailyIndex * 100) + '%)';
   updateDailyNav();
 
   const dailyModal = document.getElementById('daily-modal');

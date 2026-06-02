@@ -2,7 +2,7 @@ import { initFilters, toggleDropdown, onCheckChange, clearFilter, applyFilter, t
 import { startTimer, doRefresh } from './modules/timer.js';
 import { setTheme, toggleTheme } from './modules/theme.js';
 import { openDetails, closeDetails, closeDetailsBtn, toggleMaximize, loadDetailData, _detailState, editOrigEst, openDetailStat } from './modules/detail.js';
-import { openDaily, closeDaily, toggleDailyMaximize, dailyPrev, dailyNext, handleDailyKey, openDailyForSprint, filterDailyItems, openDailyStat, refreshDaily } from './modules/daily.js';
+import { openDaily, openDailyForProject, closeDaily, toggleDailyMaximize, dailyPrev, dailyNext, handleDailyKey, openDailyForSprint, filterDailyItems, openDailyStat, refreshDaily } from './modules/daily.js';
 import { closeItemsModal, closeItemsModalOverlay, toggleItemsFilter, clearItemsFilter, toggleItemsModalMax, toggleItemsFilterDropdown } from './modules/itemsModal.js';
 import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily } from './modules/burndown.js';
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
@@ -32,8 +32,9 @@ window.openDetailStat    = openDetailStat;
 // Expose state refs for inline HTML handlers
 Object.defineProperty(window, '_detailProject', { get: () => _detailState.project });
 Object.defineProperty(window, '_detailSprints',  { get: () => _detailState.sprints });
-window.openDaily         = openDaily;
-window.openDailyForSprint = openDailyForSprint;
+window.openDaily            = openDaily;
+window.openDailyForProject  = openDailyForProject;
+window.openDailyForSprint   = openDailyForSprint;
 window.closeDaily        = closeDaily;
 window.toggleDailyMaximize = toggleDailyMaximize;
 window.dailyPrev         = dailyPrev;

@@ -429,6 +429,7 @@ function buildCardHTML(results, baseUrl = '') {
           </button>
           <div class="card-footer-actions">
             <button class="btn-detail" type="button" onclick="openUAT(this)" data-i18n="btn_uat">UAT</button>
+            <button class="btn-detail" type="button" onclick="openDailyForProject(this.closest('[data-project]').dataset.project)" data-i18n="btn_daily">Daily</button>
             ${actionBtn}
           </div>
         </div>
