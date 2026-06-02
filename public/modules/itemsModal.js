@@ -40,6 +40,11 @@ function _closeDropdown() {
   if (trigger) trigger.classList.remove('open');
 }
 
+function _sprintLabel(iteration) {
+  if (!iteration) return '—';
+  return iteration.includes('\\') ? iteration.split('\\').pop() : iteration;
+}
+
 function _renderTable(items, showPts) {
   const ptsHeader = showPts ? '<th>' + t('th_estimate') + '</th>' : '';
   const rows = items.map(item => {
@@ -50,10 +55,12 @@ function _renderTable(items, showPts) {
     const sc = _stateClass(s);
     const ptsCell = showPts ? '<td>' + (item.pts != null ? item.pts + ' pts' : '—') + '</td>' : '';
     const assignee = item.assignedTo || (typeof item.assigned === 'string' ? item.assigned : null) || '—';
+    const sprint = _sprintLabel(item.iteration);
     return '<tr data-state="' + s.replace(/"/g, '&quot;') + '">'
       + '<td class="daily-id-cell">' + idCell + '</td>'
       + '<td>' + (item.title || '') + '</td>'
       + '<td><span class="badge ' + sc + '">' + s + '</span></td>'
+      + '<td class="items-modal-sprint">' + sprint + '</td>'
       + ptsCell
       + '<td>' + assignee + '</td>'
       + '</tr>';
@@ -62,6 +69,7 @@ function _renderTable(items, showPts) {
   return rows
     ? '<div class="items-modal-table-wrap"><table class="items-modal-table">'
       + '<thead><tr><th>ID</th><th>' + t('th_title') + '</th><th>' + t('th_status') + '</th>'
+      + '<th>Sprint</th>'
       + ptsHeader + '<th>' + t('th_assignee') + '</th></tr></thead>'
       + '<tbody>' + rows + '</tbody></table></div>'
     : '<div class="items-modal-empty">No items found.</div>';
