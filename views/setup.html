@@ -67,6 +67,40 @@
       </div>
     </div>
 
+    <!-- Service Now config card -->
+    <div class="su-form-card su-sn-card" id="sn-card">
+      <div class="su-sn-header" onclick="toggleSnSection()">
+        <span data-i18n="sn_section_title">SERVICE NOW</span>
+        <span id="sn-chevron">▸</span>
+      </div>
+      <div id="sn-body" class="su-sn-body" style="display:none">
+        <div class="su-sn-hint" data-i18n="sn_hint">Configure Service Now to include incidents and PRBs in Monthly Review reports.</div>
+        <div class="su-field">
+          <label class="su-label" data-i18n="sn_instance_label">INSTANCE</label>
+          <div class="su-input-wrap">
+            <input type="text" id="sn-instance" class="su-input" data-i18n-placeholder="sn_instance_placeholder" placeholder="company.service-now.com" autocomplete="off">
+          </div>
+        </div>
+        <div class="su-field">
+          <label class="su-label" data-i18n="sn_user_label">USERNAME</label>
+          <div class="su-input-wrap">
+            <input type="text" id="sn-user" class="su-input" placeholder="username" autocomplete="off">
+          </div>
+        </div>
+        <div class="su-field">
+          <label class="su-label" data-i18n="sn_pass_label">PASSWORD / TOKEN</label>
+          <div class="su-input-wrap">
+            <input type="password" id="sn-pass" class="su-input" placeholder="••••••••" autocomplete="off">
+          </div>
+        </div>
+        <div class="su-sn-status" id="sn-status"></div>
+        <div class="su-sn-actions">
+          <button onclick="snTest()" data-i18n="sn_test_btn">Test Connection</button>
+          <button class="su-sn-save-btn" onclick="snSave()" data-i18n="sn_save_btn">Save</button>
+        </div>
+      </div>
+    </div>
+
     <div class="su-actions">
       <button class="su-save-btn" id="btn-save" onclick="doSave()" data-i18n="setup_btn_save">Save and Open Dashboard</button>
       {{BACK_LINK}}
@@ -430,6 +464,55 @@
     } catch(e) { showErr(e.message); }
     btn.disabled = false;
     btn.textContent = _tr('setup_btn_save', 'Save and Open Dashboard');
+  }
+
+  // ── Service Now section ───────────────────────────────────────────────────
+  function toggleSnSection() {
+    const body = document.getElementById('sn-body');
+    const chev = document.getElementById('sn-chevron');
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'flex';
+    chev.textContent   = open ? '▸' : '▾';
+  }
+
+  async function _loadSnConfig() {
+    try {
+      const r = await fetch('/api/sn-config');
+      const d = await r.json();
+      if (d.instance) document.getElementById('sn-instance').value = d.instance;
+      if (d.user)     document.getElementById('sn-user').value     = d.user;
+      if (d.hasPass)  document.getElementById('sn-pass').placeholder = '••••••••  (saved)';
+    } catch(_) {}
+  }
+  _loadSnConfig();
+
+  async function snTest() {
+    const instance = document.getElementById('sn-instance').value.trim();
+    const user     = document.getElementById('sn-user').value.trim();
+    const pass     = document.getElementById('sn-pass').value;
+    const st = document.getElementById('sn-status');
+    if (!instance || !user || !pass) { st.className = 'su-sn-status error'; st.textContent = _tr('sn_err_fill', 'Fill in instance, username and password.'); return; }
+    st.className = 'su-sn-status'; st.textContent = _tr('sn_testing', 'Testing…');
+    try {
+      const r = await fetch('/api/sn-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instance, user, pass }) });
+      const d = await r.json();
+      if (d.ok) { st.className = 'su-sn-status ok'; st.textContent = _tr('sn_ok', 'Connection OK'); }
+      else { st.className = 'su-sn-status error'; st.textContent = d.error || 'Error'; }
+    } catch(e) { st.className = 'su-sn-status error'; st.textContent = e.message; }
+  }
+
+  async function snSave() {
+    const instance = document.getElementById('sn-instance').value.trim();
+    const user     = document.getElementById('sn-user').value.trim();
+    const pass     = document.getElementById('sn-pass').value;
+    const st = document.getElementById('sn-status');
+    st.className = 'su-sn-status'; st.textContent = _tr('sn_saving', 'Saving…');
+    try {
+      const body = { instance, user };
+      if (pass) body.pass = pass;
+      await fetch('/api/sn-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      st.className = 'su-sn-status ok'; st.textContent = _tr('sn_saved', 'Saved!');
+    } catch(e) { st.className = 'su-sn-status error'; st.textContent = e.message; }
   }
 
   updateCount();

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Review Mensal — {{PROJECT}}</title>
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+<link rel="stylesheet" href="/style.css">
+<script>
+window.__REPORT_PAYLOAD__  = {{PAYLOAD}};
+window.__REPORT_PROJECTS__ = {{PROJECTS}};
+window.__REPORT_PROJECT__  = {{PROJECT_JSON}};
+window.__REPORT_MONTH__    = "{{MONTH}}";
+window.__REPORT_MONTHS__   = {{MONTHS_JSON}};
+</script>
+</head>
+<body class="report-body">
+
+<!-- ── Topbar ─────────────────────────────────────────────────────────────── -->
+<div class="report-topbar">
+  <div class="report-topbar-left">
+    <a href="/" class="report-logo">
+      <span class="report-logo-icon">📋</span>
+      <div>
+        <div class="report-logo-name">Backlog Health</div>
+        <div class="report-logo-sub">SERVICE DELIVERY REPORT</div>
+      </div>
+    </a>
+  </div>
+  <div class="report-topbar-center">
+    <label class="report-sel-label">PROJECT</label>
+    <select id="report-project-sel" class="report-sel" onchange="changeProject(this.value)"></select>
+    <label class="report-sel-label">PERIOD</label>
+    <select id="report-month-sel" class="report-sel" onchange="changeMonth(this.value)"></select>
+    <button class="report-refresh-btn" onclick="refreshReport()" title="Refresh data">&#8635; Refresh</button>
+  </div>
+  <div class="report-topbar-right">
+    <span class="report-generated" id="report-generated"></span>
+    <button class="btn-theme-top" id="btnTheme" onclick="toggleTheme()">&#9728;&#65039;</button>
+  </div>
+</div>
+
+<!-- ── Content ────────────────────────────────────────────────────────────── -->
+<div class="report-page">
+  <div id="report-content" class="report-content">
+    <div class="report-loading">Loading report…</div>
+  </div>
+</div>
+
+<script>
+function toggleTheme() {
+  const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('theme', t);
+  document.getElementById('btnTheme').textContent = t === 'dark' ? '☀️' : '🌙';
+}
+const _t = localStorage.getItem('theme') || 'dark';
+document.getElementById('btnTheme').textContent = _t === 'dark' ? '☀️' : '🌙';
+
+function changeProject(name) {
+  window.location.href = '/report?project=' + encodeURIComponent(name) + '&month=' + window.__REPORT_MONTH__;
+}
+function changeMonth(month) {
+  window.location.href = '/report?project=' + encodeURIComponent(window.__REPORT_PROJECT__) + '&month=' + month;
+}
+function refreshReport() {
+  window.location.href = '/report?project=' + encodeURIComponent(window.__REPORT_PROJECT__) + '&month=' + window.__REPORT_MONTH__ + '&refresh=1';
+}
+
+// Populate selectors
+(function() {
+  const projSel  = document.getElementById('report-project-sel');
+  const monthSel = document.getElementById('report-month-sel');
+  const monthLabels = {
+    '01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun',
+    '07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec'
+  };
+  (window.__REPORT_PROJECTS__ || []).forEach(p => {
+    const o = document.createElement('option');
+    o.value = p; o.textContent = p;
+    if (p === window.__REPORT_PROJECT__) o.selected = true;
+    projSel.appendChild(o);
+  });
+  (window.__REPORT_MONTHS__ || []).forEach(m => {
+    const [y, mo] = m.split('-');
+    const o = document.createElement('option');
+    o.value = m; o.textContent = (monthLabels[mo] || mo) + ' ' + y;
+    if (m === window.__REPORT_MONTH__) o.selected = true;
+    monthSel.appendChild(o);
+  });
+  const gen = window.__REPORT_PAYLOAD__?.metadata?.generatedAt;
+  if (gen) document.getElementById('report-generated').textContent = 'Updated: ' + gen;
+})();
+</script>
+<script type="module" src="/modules/report.js"></script>
+</body>
+</html>

@@ -100,4 +100,25 @@ function getGithubCfg() {
   return cfg.github || null;
 }
 
-module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg };
+function getSnConfig() {
+  return cfg.servicenow || null;
+}
+
+function saveSnConfig({ instance, user, pass } = {}, projectGroup = null) {
+  if (instance !== undefined || user !== undefined || pass !== undefined) {
+    cfg.servicenow = { ...(cfg.servicenow || {}), ...(instance !== undefined ? { instance } : {}), ...(user !== undefined ? { user } : {}), ...(pass !== undefined ? { pass } : {}) };
+  }
+  if (projectGroup) {
+    const { projectName, assignmentGroup, assignmentGroupName } = projectGroup;
+    const proj = (cfg.projects || []).find(p => getDisplayName(p) === projectName || p.name === projectName);
+    if (proj) proj.servicenow = { assignmentGroup, assignmentGroupName };
+  }
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+}
+
+function getProjectSnGroup(displayName) {
+  const proj = (cfg.projects || []).find(p => getDisplayName(p) === displayName || p.name === displayName);
+  return proj?.servicenow || null;
+}
+
+module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg, getSnConfig, saveSnConfig, getProjectSnGroup };

@@ -4,8 +4,10 @@ const fs       = require("fs");
 const nodePath = require("path");
 dns.setDefaultResultOrder("ipv4first");
 
-const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg } = require("./config");
+const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg, getSnConfig, saveSnConfig } = require("./config");
 const { createIssue } = require("./githubClient");
+const { buildReport, getLast6Months } = require("./reportService");
+const { snGet } = require("./servicenowClient");
 const { rawAzureGet }                             = require("./azureClient");
 const { fetchProject, fetchProjectDetail, buildCardHTML, fetchUATPlans } = require("./projectService");
 const { fetchTeamCapacity } = require("./teamCapacityService");
@@ -19,6 +21,7 @@ const PUBLIC_DIR = nodePath.join(__dirname, "public");
 const templates = {
   dashboard: fs.readFileSync(nodePath.join(VIEWS_DIR, "dashboard.html"), "utf8"),
   setup:     fs.readFileSync(nodePath.join(VIEWS_DIR, "setup.html"),     "utf8"),
+  report:    fs.readFileSync(nodePath.join(VIEWS_DIR, "report.html"),    "utf8"),
 };
 
 
@@ -206,16 +209,20 @@ async function main() {
       const projectsRaw = params.get("projects") || "";
 
       // Formato: "Project1:User Story,Project2:Task:TeamName"
+      const existingForMerge = getCfg();
       const projects = projectsRaw.split(/[\n,]+/)
         .map(p => p.trim())
         .filter(Boolean)
         .map(p => {
           const [name, workItemType, ...teamParts] = p.split(':');
           const team = teamParts.join(':').trim() || undefined;
+          // Preserve per-project servicenow config if it exists
+          const prevProj = (existingForMerge.projects || []).find(ep => ep.name === name.trim() && (ep.team || undefined) === team);
           return {
             name: name.trim(),
             workItemType: (workItemType || 'User Story').trim(),
             ...(team ? { team } : {}),
+            ...(prevProj?.servicenow ? { servicenow: prevProj.servicenow } : {}),
           };
         });
 
@@ -597,6 +604,85 @@ ${context || 'No project data available at this moment.'}`;
         res.end(JSON.stringify({ ok: true, url: issue.html_url }));
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    // ── GET /report?project=NAME&month=YYYY-MM ─────────────────────────────
+    if (url.startsWith('/report')) {
+      const qp      = new URLSearchParams(url.split('?')[1] || '');
+      const project = qp.get('project') || (cfg.projects[0] ? getDisplayName(cfg.projects[0]) : '');
+      const months  = getLast6Months();
+      const month   = months.includes(qp.get('month')) ? qp.get('month') : months[0];
+      if (qp.get('refresh') === '1') {
+        const { cacheInvalidate } = require('./reportService');
+        cacheInvalidate(project, month);
+      }
+      try {
+        const payload       = await buildReport(project, month);
+        const projectNames  = cfg.projects.map(p => getDisplayName(p));
+        const html = renderTemplate(templates.report, {
+          PROJECT:      project,
+          PROJECT_JSON: JSON.stringify(project),
+          MONTH:        month,
+          PAYLOAD:      JSON.stringify(payload).replace(/</g, '\\u003c'),
+          PROJECTS:     JSON.stringify(projectNames).replace(/</g, '\\u003c'),
+          MONTHS_JSON:  JSON.stringify(months),
+        });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`<h2>Error generating report: ${e.message}</h2>`);
+      }
+      return;
+    }
+
+    // ── GET /api/sn-config ─────────────────────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/sn-config')) {
+      const sn = getSnConfig();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        instance: sn?.instance || '',
+        user:     sn?.user     || '',
+        hasPass:  !!(sn?.pass),
+      }));
+      return;
+    }
+
+    // ── POST /api/sn-config ────────────────────────────────────────────────
+    if (req.method === 'POST' && url === '/api/sn-config') {
+      const body = await readBody(req);
+      const p    = JSON.parse(body || '{}');
+      // Only update pass if explicitly provided (non-empty)
+      const global = {
+        ...(p.instance !== undefined ? { instance: p.instance.trim() } : {}),
+        ...(p.user     !== undefined ? { user: p.user.trim() }         : {}),
+        ...(p.pass     ? { pass: p.pass }                              : {}),
+      };
+      const projectGroup = p.project ? { projectName: p.project, assignmentGroup: p.assignmentGroup || '', assignmentGroupName: p.assignmentGroupName || '' } : null;
+      saveSnConfig(global, projectGroup);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    // ── POST /api/sn-test ──────────────────────────────────────────────────
+    if (req.method === 'POST' && url === '/api/sn-test') {
+      const body = await readBody(req);
+      const p    = JSON.parse(body || '{}');
+      if (!p.instance || !p.user || !p.pass) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'instance, user and pass are required.' }));
+        return;
+      }
+      try {
+        await snGet({ instance: p.instance.trim(), user: p.user.trim(), pass: p.pass }, 'table/incident?sysparm_limit=1&sysparm_fields=sys_id');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: e.message }));
       }
       return;

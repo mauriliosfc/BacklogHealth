@@ -1,6 +1,6 @@
 # 📋 Backlog Health Dashboard — Documentação
 
-> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Maio/2026 (Team Capacity, redesign, Copilot melhorias, UX, itemsModal reutilizável, stats clicáveis dashboard/detail/daily, filtro de status, refresh na Daily)
+> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Junho/2026 (Team Capacity, redesign, Copilot melhorias, UX, itemsModal reutilizável, stats clicáveis dashboard/detail/daily, filtro de status, refresh na Daily, **Review Mensal — Service Delivery Report integrado ao sistema**)
 
 ---
 
@@ -46,11 +46,16 @@ dash_azure_gestao_pessoal/
 │       ├── deliveryPlan.js ← openDeliveryPlan, buildDeliveryPlan, filtros de projeto
 │       ├── alias.js      ← getAlias, setAlias, applyAliases, startRename (apelidos de projeto)
 │       ├── teamCapacity.js ← openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject
-│       └── copilot.js    ← openCopilot, sendCopilotMessage, _loadRichContext, _buildContext (fallback DOM)
+│       ├── copilot.js    ← openCopilot, sendCopilotMessage, _loadRichContext, _buildContext (fallback DOM)
+│       └── report.js     ← renderReport, changeProject, changeMonth, refreshReport, getLast6Months (Review Mensal)
 ├── aiClient.js         ← chatCompletion, testConnection (Azure AI Foundry / Azure OpenAI / OpenAI-compat)
+├── servicenowClient.js ← snGet (cliente HTTPS para a Table API do Service Now, padrão idêntico ao azureClient.js)
+├── reportService.js    ← buildReport, buildPeriod, cacheInvalidate (coleta Azure + SN, KPIs, cache por projeto/mês)
+├── cache/              ← pasta criada automaticamente; arquivos JSON com TTL de 6h (sn_{proj}_{month}.json, azure_{proj}_{month}.json)
 ├── views/
 │   ├── dashboard.html  ← template HTML do dashboard com tokens {{ORG}}, {{CARDS}}, etc.
-│   └── setup.html      ← template HTML do setup com tokens de configuração
+│   ├── setup.html      ← template HTML do setup com tokens de configuração
+│   └── report.html     ← template HTML do Review Mensal com tokens {{PAYLOAD}}, {{PROJECTS}}, {{PROJECT}}, {{MONTH}}, {{PERIOD}}
 ├── wrapper/
 │   ├── BacklogHealth.csproj  ← projeto C# WPF (.NET Framework 4.8)
 │   └── MainWindow.xaml.cs    ← inicia server.exe, aguarda porta 3030, abre WebView2
@@ -67,6 +72,7 @@ dash_azure_gestao_pessoal/
 server.js (entry point)
         │
         ├── config.js          → gerencia config.json (org, baseUrl, pat, projects) + parseOrgInput
+        │                         + getSnConfig, saveSnConfig, getProjectSnGroup (credenciais Service Now)
         │
         ├── azureClient.js     → chamadas HTTPS para a API REST do Azure DevOps
         │       ├── Projects API    → lista todos os projetos acessíveis pelo PAT
@@ -89,12 +95,23 @@ server.js (entry point)
         │       ├── buildBody    → injeta system prompt como prefixo no Foundry; max_tokens para outros
         │       └── extractContent → parseia Responses API (Foundry) ou Chat Completions
         │
+        ├── servicenowClient.js → chamadas HTTPS para a Table API do Service Now
+        │       └── snGet        → GET autenticado (Basic auth), retorna result ou lança erro tipado
+        │
+        ├── reportService.js   → coleta dados Azure + Service Now, calcula KPIs do Review Mensal
+        │       ├── buildReport        → entrada principal: busca cache ou coleta dados em paralelo
+        │       ├── buildPeriod        → gera período { month, label, start, end, history[5] }
+        │       ├── fetchAzureReport   → work items Done + Bugs via WIQL (usa paginatedItems existente)
+        │       ├── fetchSnReport      → incidents + history + PRBs via snGet (só se assignmentGroup configurado)
+        │       ├── buildPayload       → monta objeto final { metadata, delivery, quality, incidents, prbs }
+        │       └── cacheInvalidate    → remove cache azure_ e sn_ do projeto/mês (usado pelo botão Atualizar)
+        │
         └── Servidor HTTP local (porta 3030)
                 ├── GET /                    → dashboard principal (HTML cacheado)
                 ├── GET /refresh             → rebusca dados e retorna HTML atualizado
                 ├── GET /settings            → tela de configurações (pré-preenchida)
                 ├── GET /api/projects        → lista projetos disponíveis para o PAT informado
-                ├── POST /setup              → salva config.json e retorna JSON {ok:true}
+                ├── POST /setup              → salva config.json e retorna JSON {ok:true} (preserva ai, github, servicenow)
                 ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, iterMap
                 ├── GET /api/team-capacity?project=NAME → JSON com developers, sprints, CompletedWork/RemainingWork
                 ├── GET /ai/config           → retorna config completa da IA (endpoint, apiKey, model, apiVersion)
@@ -102,6 +119,11 @@ server.js (entry point)
                 ├── POST /ai/test            → testa conexão com o provedor de IA
                 ├── POST /ai/context         → retorna contexto rico dos projetos (respeita filtros de sprint)
                 ├── POST /ai/chat            → envia mensagem para a IA e retorna resposta
+                ├── GET /report?project=NAME&month=YYYY-MM → Review Mensal (HTML com payload injetado)
+                ├── GET /report?project=NAME&month=YYYY-MM&refresh=1 → força recoleta (invalida cache)
+                ├── GET /api/sn-config?project=NAME → retorna config SN global + assignmentGroup do projeto (senha nunca exposta)
+                ├── POST /api/sn-config      → salva credenciais SN globais e/ou assignmentGroup por projeto
+                ├── POST /api/sn-test        → testa conexão com o Service Now
                 ├── GET /modules/*.js        → ES modules servidos dinamicamente de public/
                 └── GET /i18n/*.json         → arquivos de tradução servidos de public/i18n/
 ```
@@ -696,6 +718,120 @@ Retorna por projeto:
 
 ---
 
+## 📋 Review Mensal — Service Delivery Report
+
+Acessado pelo botão **Review Mensal** em cada card do dashboard principal. Abre a rota `/report?project=NOME` diretamente no projeto do card clicado, sem resetar para o primeiro projeto — mesmo padrão do botão Daily (`openDailyForProject`).
+
+### Botão no card
+
+```js
+// projectService.js — buildCardHTML
+// Adicionado na mesma linha dos botões Daily e UAT:
+<button
+  class="card-action-btn"
+  onclick="window.location.href='/report?project=${encodeURIComponent(proj.name)}'"
+  data-i18n="btn.monthlyReview"
+  title="Review Mensal do projeto">
+  Review Mensal
+</button>
+```
+
+### Credenciais do Service Now
+
+Seguem o mesmo padrão do PAT do Azure e das credenciais da IA:
+
+- **Credenciais globais** (`instance`, `user`, `pass`) — salvas uma vez na raiz do `config.json`, configuradas na tela de Settings
+- **`assignmentGroup` por projeto** — salvo dentro de cada objeto de projeto em `config.json`, idêntico ao campo `team` existente
+- **Senha nunca exposta** — `GET /api/sn-config` retorna `hasPass: true/false`, nunca o valor
+- **Projeto sem `assignmentGroup`** — relatório exibe apenas dados do Azure DevOps, sem quebrar
+
+### Estrutura do `config.json` com Service Now
+
+```json
+{
+  "org": "sua-org",
+  "pat": "seu-pat-azure",
+  "projects": [
+    {
+      "name": "Projeto Alpha",
+      "team": "Alpha Team",
+      "servicenow": {
+        "assignmentGroup": "sys_id_grupo_alpha",
+        "assignmentGroupName": "TI - Suporte Alpha"
+      }
+    }
+  ],
+  "ai": { "...": "..." },
+  "github": { "...": "..." },
+  "servicenow": {
+    "instance": "suaempresa.service-now.com",
+    "user": "usuario-sn",
+    "pass": "senha-ou-token"
+  }
+}
+```
+
+> **Importante:** `POST /setup` preserva os campos `servicenow` global e por projeto ao salvar — igual ao comportamento já existente para `ai` e `github`.
+
+### Payload do relatório
+
+```js
+// Estrutura injetada em window.__REPORT_PAYLOAD__ no report.html
+{
+  metadata:  { project, period, generatedAt },
+  hasSn:     true | false,   // false = SN não configurado para o projeto
+  delivery: {
+    totalDelivered: Number,
+    sprints: [{ name, delivered, points }]
+  },
+  quality: {
+    bugsTotal: Number,
+    bugsOpen:  Number
+  },
+  incidents: {              // null se hasSn = false
+    total: Number,
+    target: 24,             // meta contratual (futuramente por projeto)
+    byPriority: { p1, p2, p3 },
+    bySystem:   [{ name, count }],   // top 5
+    monthly:    [{ label, opened, closed }]   // últimos 5 meses
+  },
+  prbs: {                   // null se hasSn = false
+    open: Number,
+    avgAging: Number,
+    list: [{ id, title, priority, category, agingDays, state }]
+  }
+}
+```
+
+### Navegação do relatório
+
+- **Seletor de projeto** — troca o projeto sem sair da tela (`changeProject`)
+- **Seletor de mês** — últimos 6 meses disponíveis (`changeMonth`)
+- **Botão ↻ Atualizar** — invalida o cache e recoleta os dados (`refresh=1`)
+- **Indicador de atualização** — exibe `metadata.generatedAt` na toolbar
+
+### Cache local
+
+- Arquivos JSON em `/cache/` com TTL de 6 horas
+- Nomenclatura: `azure_{projeto}_{YYYY-MM}.json` e `sn_{projeto}_{YYYY-MM}.json`
+- Criado automaticamente na primeira execução
+- Invalidado pelo botão Atualizar ou via `cacheInvalidate(project, month)`
+
+### Chaves i18n adicionadas
+
+| Chave | PT | EN | ES |
+|---|---|---|---|
+| `btn.monthlyReview` | Review Mensal | Monthly Review | Revisión Mensual |
+| `report.executiveSummary` | Resumo executivo | Executive summary | Resumen ejecutivo |
+| `report.incidents` | Incidentes | Incidents | Incidentes |
+| `report.prbs` | PRBs — Problemas | PRBs — Problems | PRBs — Problemas |
+| `report.delivery` | Entrega | Delivery | Entrega |
+| `report.quality` | Qualidade | Quality | Calidad |
+| `report.noSn` | Service Now não configurado | Service Now not configured | Service Now no configurado |
+| `report.refresh` | Atualizar | Refresh | Actualizar |
+
+---
+
 ## 💬 Copilot Project — Arquitetura da feature de IA
 
 ### Provedores suportados
@@ -765,6 +901,21 @@ Por projeto, o endpoint retorna:
 - [x] Link clicável na coluna ID do `itemsModal` — fix na construção da URL (`baseUrl/_workitems/edit/id`) e estilo azul
 - [x] UAT Dashboard — modal por projeto com card de resumo, acordeão por testplan, filtro de sprint persistido, indicadores por plano, pills de resultado
 - [x] Botão "Daily" no card do dashboard — abre Daily Standup direto no slide do projeto via `openDailyForProject`, sem resetar para o primeiro projeto
+
+**Review Mensal — implementado**
+- [x] `servicenowClient.js` — cliente HTTPS Service Now (snGet, Basic auth, padrão azureClient.js)
+- [x] `config.js` — funções `getSnConfig`, `saveSnConfig`, `getProjectSnGroup`
+- [x] Tela de Settings — seção Service Now: credenciais globais + botão Testar + botão Salvar (collapsible na `su-left`)
+- [x] `POST /setup` — preserva campo `servicenow` por projeto no merge (lookup pelo `name+team` no existing config)
+- [x] `reportService.js` — `buildReport`, `fetchAzureReport`, `fetchSnReport`, cache JSON por projeto/mês (TTL 6h)
+- [x] Rotas no `server.js` — `GET /report`, `GET /api/sn-config`, `POST /api/sn-config`, `POST /api/sn-test`
+- [x] `views/report.html` — template com tokens `{{PAYLOAD}}`, `{{PROJECTS}}`, `{{PROJECT_JSON}}`, `{{MONTH}}`, `{{MONTHS_JSON}}`
+- [x] `public/modules/report.js` — `renderReport`, `changeProject`, `changeMonth`, `refreshReport`; charts CSS div-based (zero deps)
+- [x] `public/style.css` — classes `.report-*`, `.report-metric`, `.report-bar-*`, `.report-table` (dark mode automático via CSS vars)
+- [x] i18n — chaves `btn_monthly_review`, `sn_*` em `pt.json`, `en.json`, `es.json`
+- [x] Botão **Monthly Review** no `buildCardHTML` — mesma linha de Daily e UAT, `onclick` abre `/report?project=NAME`
+
+**Backlog geral**
 - [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
@@ -774,7 +925,8 @@ Por projeto, o endpoint retorna:
 - [ ] Burndown baseado em datas reais de conclusão (via histórico de estado do Azure DevOps)
 - [ ] Streaming de respostas da IA (SSE) para reduzir tempo de espera percebido
 - [ ] Troca de idioma sem reload (templates reativos ao locale via `data-i18n` no HTML gerado dinamicamente)
+- [ ] Meta contratual de incidentes configurável por projeto (hoje fixo em 24 no `reportService.js`)
 
 ---
 
-*Documentação atualizada em Junho/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado), botão Daily por card (openDailyForProject — abre direto no slide do projeto)*
+*Documentação atualizada em Junho/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado), botão Daily por card (openDailyForProject — abre direto no slide do projeto), **Review Mensal — Service Delivery Report implementado** (servicenowClient.js, reportService.js, views/report.html, public/modules/report.js, cache JSON 6h, credenciais SN globais + assignmentGroup por projeto, seção SN collapsible no Settings, rotas /report + /api/sn-*, botão Monthly Review por card)*
