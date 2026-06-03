@@ -3,7 +3,8 @@ const https = require('https');
 // GET against Service Now Table API using Basic auth.
 // snCfg: { instance, user, pass }
 function snGet(snCfg, path) {
-  const url = `https://${snCfg.instance}/api/now/${path}`;
+  const host = snCfg.instance.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  const url = `https://${host}/api/now/${path}`;
   const auth = Buffer.from(`${snCfg.user}:${snCfg.pass}`).toString('base64');
   return new Promise((resolve, reject) => {
     const opts = { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } };

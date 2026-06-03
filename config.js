@@ -40,7 +40,7 @@ function loadConfig() {
         raw.projects = raw.projects.map(p =>
           typeof p === 'string'
             ? { name: p, workItemType: 'User Story' }
-            : { name: p.name, workItemType: p.workItemType || 'User Story', ...(p.team ? { team: p.team } : {}) }
+            : { ...p, workItemType: p.workItemType || 'User Story' }
         );
       }
 
@@ -109,9 +109,9 @@ function saveSnConfig({ instance, user, pass } = {}, projectGroup = null) {
     cfg.servicenow = { ...(cfg.servicenow || {}), ...(instance !== undefined ? { instance } : {}), ...(user !== undefined ? { user } : {}), ...(pass !== undefined ? { pass } : {}) };
   }
   if (projectGroup) {
-    const { projectName, assignmentGroup, assignmentGroupName } = projectGroup;
+    const { projectName, assignmentGroup, assignmentGroupName, incidentTarget } = projectGroup;
     const proj = (cfg.projects || []).find(p => getDisplayName(p) === projectName || p.name === projectName);
-    if (proj) proj.servicenow = { assignmentGroup, assignmentGroupName };
+    if (proj) proj.servicenow = { assignmentGroup, assignmentGroupName, incidentTarget };
   }
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
 }

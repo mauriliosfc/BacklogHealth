@@ -1,7 +1,7 @@
 const fs       = require('fs');
 const nodePath = require('path');
 const { getCfg, getProjectConfig, getSnConfig, getProjectSnGroup } = require('./config');
-const { azurePost } = require('./azureClient');
+const { azureGet, azurePost } = require('./azureClient');
 const { paginatedItems } = require('./utils/paginate');
 const { snGet } = require('./servicenowClient');
 
@@ -14,28 +14,60 @@ function _ensureCache() {
   if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
 }
 
-function _cacheFile(type, project, month) {
+function _cacheFile(type, project, month, extra) {
   const safe = project.replace(/[^a-zA-Z0-9_-]/g, '_');
-  return nodePath.join(CACHE_DIR, `${type}_${safe}_${month}.json`);
+  const sfx  = extra ? `_${extra.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40)}` : '';
+  return nodePath.join(CACHE_DIR, `${type}_${safe}_${month}${sfx}.json`);
 }
 
-function _readCache(type, project, month) {
+function _readCache(type, project, month, extra) {
   try {
-    const raw = JSON.parse(fs.readFileSync(_cacheFile(type, project, month), 'utf8'));
+    const raw = JSON.parse(fs.readFileSync(_cacheFile(type, project, month, extra), 'utf8'));
     if (Date.now() - raw.ts < 6 * 60 * 60 * 1000) return raw.data; // 6h TTL
   } catch (_) {}
   return null;
 }
 
-function _writeCache(type, project, month, data) {
+function _writeCache(type, project, month, data, extra) {
   _ensureCache();
-  fs.writeFileSync(_cacheFile(type, project, month), JSON.stringify({ ts: Date.now(), data }), 'utf8');
+  fs.writeFileSync(_cacheFile(type, project, month, extra), JSON.stringify({ ts: Date.now(), data }), 'utf8');
 }
 
-function cacheInvalidate(project, month) {
-  ['azure', 'sn'].forEach(type => {
-    try { fs.unlinkSync(_cacheFile(type, project, month)); } catch (_) {}
-  });
+function cacheInvalidate(project, month, groupField) {
+  // Azure cache uses groupField as suffix; SN cache has no suffix — delete both correctly
+  try { fs.unlinkSync(_cacheFile('azure', project, month, groupField)); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn',    project, month));            } catch (_) {}
+}
+
+// Retorna Set com IterationPaths das sprints do time que se sobrepõem ao período
+// Se team não informado, retorna null (sem filtro de sprint)
+async function _fetchTeamSprintsForPeriod(proj, team, period) {
+  if (!team) return { paths: null, iterations: [] };
+  try {
+    const sd = await azureGet(
+      `${encodeURIComponent(proj)}/${encodeURIComponent(team)}/_apis/work/teamsettings/iterations?api-version=7.0`
+    );
+    if (sd.value && sd.value.length) {
+      const filtered = sd.value.filter(it => {
+        const start = it.attributes?.startDate?.slice(0, 10);
+        const end   = it.attributes?.finishDate?.slice(0, 10);
+        if (!start || !end) return false;
+        // usa o ponto médio da sprint para decidir a qual mês ela pertence
+        const mid = new Date((new Date(start).getTime() + new Date(end).getTime()) / 2)
+          .toISOString().slice(0, 10);
+        return mid >= period.start && mid <= period.end;
+      });
+      return {
+        paths: new Set(filtered.map(it => it.path)),
+        iterations: filtered.map(it => ({
+          name: it.name,
+          path: it.path,
+          start: it.attributes?.startDate?.slice(0, 10),
+        })),
+      };
+    }
+  } catch (_) {}
+  return { paths: null, iterations: [] };
 }
 
 // ── Period helpers ─────────────────────────────────────────────────────────────
@@ -47,7 +79,7 @@ function buildPeriod(month) {
   const fmt   = d => d.toISOString().slice(0, 10);
   const label = start.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
   const history = [];
-  for (let i = 5; i >= 0; i--) {
+  for (let i = 12; i >= 0; i--) {
     const d = new Date(y, m - 1 - i, 1);
     history.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
@@ -66,64 +98,157 @@ function getLast6Months() {
 
 // ── Azure data ─────────────────────────────────────────────────────────────────
 
-async function fetchAzureReport(displayName, period) {
-  const cached = _readCache('azure', displayName, period.month);
-  if (cached) return cached;
-
+async function fetchAzureReport(displayName, period, groupFields = []) {
   const pcfg = getProjectConfig(displayName);
   const proj  = pcfg?.name || displayName;
 
+  const cacheKey = groupFields.slice().sort().join('|');
+  const cached = _readCache('azure', displayName, period.month, cacheKey);
+  if (cached) return cached;
+
   const US_TYPES = "('User Story','Product Backlog Item','Requirement')";
 
-  const [delivRes, bugsRes] = await Promise.all([
-    azurePost(`${proj}/_apis/wit/wiql?api-version=7.0`, {
+  const projEnc = encodeURIComponent(proj);
+  const [delivRes, bugsRes, bugsNewRes, bugsFixRes, teamIterData] = await Promise.all([
+    azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
       query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
-                AND [System.WorkItemType] IN ${US_TYPES}
-                AND [System.State] IN ('Closed','Done','Resolved')
-                AND [Microsoft.VSTS.Common.ClosedDate] >= '${period.start}'
-                AND [Microsoft.VSTS.Common.ClosedDate] <= '${period.end}T23:59:59Z'`
+                AND [System.WorkItemType] IN ${US_TYPES}`
     }),
-    azurePost(`${proj}/_apis/wit/wiql?api-version=7.0`, {
-      query: `SELECT [System.Id],[System.State] FROM WorkItems
+    azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
+      query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
-                AND [System.WorkItemType] = 'Bug'`
+                AND [System.WorkItemType] = 'Bug'
+                AND [System.State] NOT IN ('Closed','Done','Resolved','Removed')`
     }),
+    azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
+      query: `SELECT [System.Id] FROM WorkItems
+              WHERE [System.TeamProject] = '${proj}'
+                AND [System.WorkItemType] = 'Bug'
+                AND [System.CreatedDate] >= '${period.start}'
+                AND [System.CreatedDate] <= '${period.end}'`
+    }),
+    azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
+      query: `SELECT [System.Id] FROM WorkItems
+              WHERE [System.TeamProject] = '${proj}'
+                AND [System.WorkItemType] = 'Bug'
+                AND [System.State] IN ('Closed','Done','Resolved')
+                AND [Microsoft.VSTS.Common.StateChangeDate] >= '${period.start}'
+                AND [Microsoft.VSTS.Common.StateChangeDate] <= '${period.end}'`
+    }),
+    _fetchTeamSprintsForPeriod(proj, pcfg?.team, period),
   ]);
 
-  const delivIds = (delivRes.workItems || []).map(i => i.id);
-  const bugIds   = (bugsRes.workItems  || []).map(i => i.id);
+  const { paths: teamIterPaths, iterations: teamIterations } = teamIterData;
 
-  const fields = 'System.Id,System.Title,System.State,System.IterationPath,Microsoft.VSTS.Scheduling.StoryPoints';
-  const bugFields = 'System.Id,System.State';
+  const delivIds   = (delivRes.workItems || []).map(i => i.id);
+  const bugOpenIds = (bugsRes.workItems  || []).map(i => i.id);
+  const bugNewIds  = (bugsNewRes.workItems  || []).map(i => i.id);
+  const bugFixIds  = (bugsFixRes.workItems  || []).map(i => i.id);
 
-  const [delivItems, bugItems] = await Promise.all([
-    delivIds.length ? paginatedItems(proj, delivIds, fields)    : Promise.resolve([]),
-    bugIds.length   ? paginatedItems(proj, bugIds, bugFields)   : Promise.resolve([]),
+  const baseFields  = 'System.Id,System.State,System.IterationPath,Microsoft.VSTS.Scheduling.StoryPoints,System.WorkItemType,System.CreatedDate';
+  const extraFields = groupFields.filter(r => r && !baseFields.includes(r));
+  const fields      = extraFields.length ? `${baseFields},${extraFields.join(',')}` : baseFields;
+  const bugFields = 'System.Id,System.State,System.IterationPath';
+
+  const [delivItems, bugOpenItems, bugNewItems, bugFixItems] = await Promise.all([
+    delivIds.length   ? paginatedItems(proj, delivIds,   fields)    : Promise.resolve([]),
+    bugOpenIds.length ? paginatedItems(proj, bugOpenIds, bugFields)  : Promise.resolve([]),
+    bugNewIds.length  ? paginatedItems(proj, bugNewIds,  bugFields)  : Promise.resolve([]),
+    bugFixIds.length  ? paginatedItems(proj, bugFixIds,  bugFields)  : Promise.resolve([]),
   ]);
 
-  const OPEN_BUG = ['Active', 'In Progress', 'New'];
+
+  // Se o projeto tem time configurado, filtra itens pelas sprints do mês
+  const filteredDelivItems = teamIterPaths
+    ? delivItems.filter(i => teamIterPaths.has(i.fields['System.IterationPath'] || ''))
+    : delivItems;
+
+  // Filtra bugs pelo time se configurado (bugs sem IterationPath são incluídos — backlog)
+  const filterBugs = items => teamIterPaths
+    ? items.filter(i => {
+        const ip = i.fields['System.IterationPath'] || '';
+        return !ip || teamIterPaths.has(ip);
+      })
+    : items;
+
+  const openBugs = filterBugs(bugOpenItems);
+  const newBugs  = filterBugs(bugNewItems);
+  const fixBugs  = filterBugs(bugFixItems);
+
+  const DONE_STATES = ['Closed', 'Done', 'Resolved'];
+
+  // Sprint start date map for volatility calculation
+  const sprintStartMap = {};
+  teamIterations.forEach(it => { if (it.name && it.start) sprintStartMap[it.name] = it.start; });
 
   const sprintMap = {};
-  delivItems.forEach(i => {
-    const sp = (i.fields['System.IterationPath'] || '').split('\\').pop() || 'Sem Sprint';
-    if (!sprintMap[sp]) sprintMap[sp] = { name: sp, delivered: 0, points: 0 };
-    sprintMap[sp].delivered++;
-    sprintMap[sp].points += i.fields['Microsoft.VSTS.Scheduling.StoryPoints'] || 0;
+  filteredDelivItems.forEach(i => {
+    const sp          = (i.fields['System.IterationPath'] || '').split('\\').pop() || 'Sem Sprint';
+    const pts         = i.fields['Microsoft.VSTS.Scheduling.StoryPoints'] || 0;
+    const done        = DONE_STATES.includes(i.fields['System.State']);
+    const createdDate = (i.fields['System.CreatedDate'] || '').slice(0, 10);
+    const sprintStart = sprintStartMap[sp];
+    const addedLate   = createdDate && sprintStart && createdDate > sprintStart ? 1 : 0;
+    const removed = i.fields['System.State'] === 'Removed' ? 1 : 0;
+    if (!sprintMap[sp]) sprintMap[sp] = { name: sp, total: 0, delivered: 0, points: 0, pointsDelivered: 0, addedMidSprint: 0, removedFromSprint: 0 };
+    sprintMap[sp].total++;
+    sprintMap[sp].points += pts;
+    sprintMap[sp].addedMidSprint   += addedLate;
+    sprintMap[sp].removedFromSprint += removed;
+    if (done) {
+      sprintMap[sp].delivered++;
+      sprintMap[sp].pointsDelivered += pts;
+    }
   });
 
+  // Delivered items grouped by each requested field (one pass)
+  const refs    = groupFields.length ? groupFields : [''];
+  const rawMaps = {};
+  refs.forEach(r => { rawMaps[r] = {}; });
+
+  filteredDelivItems.forEach(i => {
+    if (!DONE_STATES.includes(i.fields['System.State'])) return;
+    refs.forEach(r => {
+      const t = (r ? i.fields[r] : null) || i.fields['System.WorkItemType'] || '(sem tipo)';
+      rawMaps[r][t] = (rawMaps[r][t] || 0) + 1;
+    });
+  });
+
+  const byTypes = {};
+  Object.entries(rawMaps).forEach(([r, map]) => {
+    byTypes[r] = Object.entries(map).sort((a, b) => b[1] - a[1]).map(([type, count]) => ({ type, count }));
+  });
+
+  const allSprints = Object.values(sprintMap);
   const data = {
-    totalDelivered: delivItems.length,
-    sprints: Object.values(sprintMap),
-    bugsTotal: bugIds.length,
-    bugsOpen: bugItems.filter(i => OPEN_BUG.includes(i.fields['System.State'])).length,
+    totalDelivered: allSprints.reduce((s, sp) => s + sp.delivered, 0),
+    totalUS:        allSprints.reduce((s, sp) => s + sp.total, 0),
+    sprints:        allSprints,
+    byTypes,
+    bugsOpen:   openBugs.length,
+    bugsNew:    newBugs.length,
+    bugsClosed: fixBugs.length,
   };
 
-  _writeCache('azure', displayName, period.month, data);
+  _writeCache('azure', displayName, period.month, data, cacheKey);
   return data;
 }
 
 // ── Service Now data ───────────────────────────────────────────────────────────
+
+// Normaliza campo SN — display label (u_additional_res_code, cmdb_ci.name, etc.)
+function _snVal(v) {
+  if (!v && v !== 0) return null;
+  if (typeof v === 'object') return v.display_value || v.value || null;
+  return String(v) || null;
+}
+// Normaliza campo SN — valor interno (priority code, state code, etc.)
+function _snRaw(v) {
+  if (!v && v !== 0) return null;
+  if (typeof v === 'object') return v.value || null;
+  return String(v) || null;
+}
 
 async function fetchSnReport(displayName, period) {
   const snCfg  = getSnConfig();
@@ -133,42 +258,150 @@ async function fetchSnReport(displayName, period) {
   const cached = _readCache('sn', displayName, period.month);
   if (cached) return cached;
 
-  const grp   = snGrp.assignmentGroup;
-  const start = period.start;
-  const end   = period.end + 'T23:59:59Z';
+  const grp = snGrp.assignmentGroup.trim();
+  // ServiceNow assignment_group field accepts sys_id (32-char hex) directly.
+  // If user provided a display name, use dot-notation: assignment_group.name=
+  const isSysId   = /^[0-9a-f]{32}$/i.test(grp);
+  const grpFilter = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
 
-  const incQuery  = `assignment_group=${grp}^opened_at>=${start}^opened_at<=${end}`;
-  const prbQuery  = `assignment_group=${grp}^state!=6`;
+  const start = period.start + 'T00:00:00Z';
+  const end   = period.end   + 'T23:59:59Z';
 
-  const [incRes, prbRes] = await Promise.all([
-    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,number,priority,category,state&sysparm_limit=1000`).catch(() => ({ result: [] })),
-    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,category,state,opened_at&sysparm_limit=200`).catch(() => ({ result: [] })),
+  const incQuery              = `${grpFilter}^opened_at>=${start}^opened_at<=${end}`;
+  const incClosedQuery        = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}`;
+  const incBacklogQuery       = `${grpFilter}^active=true`;
+  const prbQuery              = `${grpFilter}^state!=106^state!=107`;
+  const prbResolvedQuery      = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}`;
+  const prbOpenedThisMonthQuery = `${grpFilter}^opened_at>=${start}^opened_at<=${end}`;
+
+  console.log(`[SN] project="${displayName}" group="${grp}" isSysId=${isSysId}`);
+  console.log(`[SN] incQuery: ${incQuery}`);
+
+  const [incRes, incClosedRes, incBacklogRes, prbRes, prbResolvedRes, prbOpenedThisMonthRes] = await Promise.all([
+    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,priority,cmdb_ci.name,u_additional_res_code,state&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN incidents error]', e.message); return { result: [] }; }),
+    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
+    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incBacklogQuery)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
+    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,category,state,opened_at&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
+    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at&sysparm_limit=200`).catch(() => ({ result: [] })),
+    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedThisMonthQuery)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
   ]);
 
-  const incidents = incRes.result || [];
-  const prbs      = prbRes.result || [];
+  const incidents              = incRes.result || [];
+  const incClosedInPeriod      = incClosedRes.result || [];
+  const incBacklog             = (incBacklogRes.result || []).length;
+  const prbs                   = prbRes.result || [];
+  const prbsResolvedInPeriod   = prbResolvedRes.result || [];
+  const prbsOpenedInPeriod     = prbOpenedThisMonthRes.result || [];
+  console.log(`[SN] incidents returned: ${incidents.length}, problems: ${prbs.length}`);
 
-  // Historical trend: last 6 months
-  const monthly = await Promise.all(period.history.map(async m => {
+  let incAvgResolutionDays = 0;
+  if (incClosedInPeriod.length > 0) {
+    const total = incClosedInPeriod.reduce((s, i) => {
+      if (i.opened_at && i.resolved_at) {
+        return s + Math.max(0, (new Date(i.resolved_at) - new Date(i.opened_at)) / 86400000);
+      }
+      return s;
+    }, 0);
+    incAvgResolutionDays = Math.round(total / incClosedInPeriod.length);
+  }
+
+  // Histórico mensal — processa um mês por vez (5 queries paralelas/mês) para
+  // não esgotar o pool de conexões com 65+ requests simultâneos ao SN.
+  const monthly      = [];
+  const prbMonthly   = [];
+  const sysMonthData = {}; // { ciName: [count per history index] }
+  const altMonthData = {}; // { resCode: [count per history index] }
+  for (let mIdx = 0; mIdx < period.history.length; mIdx++) {
+    const m = period.history[mIdx];
     const [hy, hm] = m.split('-').map(Number);
-    const hs = new Date(hy, hm - 1, 1).toISOString().slice(0, 10);
-    const he = new Date(hy, hm, 0).toISOString().slice(0, 10) + 'T23:59:59Z';
-    const q  = `assignment_group=${grp}^opened_at>=${hs}^opened_at<=${he}`;
-    const r  = await snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(q)}&sysparm_fields=sys_id,state&sysparm_limit=1000`).catch(() => ({ result: [] }));
-    const items = r.result || [];
-    return { label: m, opened: items.length, closed: items.filter(i => i.state === '7').length };
-  }));
+    const hs = new Date(hy, hm - 1, 1).toISOString().slice(0, 19) + 'Z';
+    const he = new Date(hy, hm, 0, 23, 59, 59).toISOString().slice(0, 19) + 'Z';
+
+    const incOpenedQ  = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
+    const incClosedQ  = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
+    const prbOpenedQ  = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
+    const prbResolvedQ= `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
+
+    const [rIncO, rIncC, rPrbO, rPrbR] = await Promise.all([
+      snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incOpenedQ)}&sysparm_fields=sys_id,cmdb_ci.name,u_additional_res_code&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
+      snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
+      snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
+      snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
+    ]);
+
+    const incOpened = rIncO.result || [];
+    incOpened.forEach(i => {
+      const name = _snVal(i['cmdb_ci.name']) || 'Outros';
+      if (!sysMonthData[name]) sysMonthData[name] = new Array(period.history.length).fill(0);
+      sysMonthData[name][mIdx]++;
+      const alt = _snVal(i['u_additional_res_code']) || 'N/A';
+      if (!altMonthData[alt]) altMonthData[alt] = new Array(period.history.length).fill(0);
+      altMonthData[alt][mIdx]++;
+    });
+
+    monthly.push({
+      label:  m,
+      opened: incOpened.length,
+      closed: (rIncC.result || []).length,
+    });
+    prbMonthly.push({
+      label:    m,
+      opened:   (rPrbO.result || []).length,
+      resolved: (rPrbR.result || []).length,
+    });
+  }
+
+  // Backlog histórico de PRBs — calculado de trás para frente a partir do backlog atual
+  prbMonthly[prbMonthly.length - 1].openBacklog = prbs.length;
+  for (let i = prbMonthly.length - 2; i >= 0; i--) {
+    const next = prbMonthly[i + 1];
+    prbMonthly[i].openBacklog = Math.max(0, next.openBacklog - next.opened + next.resolved);
+  }
+
+  // Backlog histórico de Incidentes — mesmo cálculo regressivo
+  monthly[monthly.length - 1].openBacklog = incBacklog;
+  for (let i = monthly.length - 2; i >= 0; i--) {
+    const next = monthly[i + 1];
+    monthly[i].openBacklog = Math.max(0, next.openBacklog - next.opened + next.closed);
+  }
 
   const byPriority = { p1: 0, p2: 0, p3: 0 };
   incidents.forEach(i => {
-    if (i.priority === '1') byPriority.p1++;
-    else if (i.priority === '2') byPriority.p2++;
-    else if (i.priority === '3') byPriority.p3++;
+    const p = _snRaw(i.priority);
+    if (p === '1') byPriority.p1++;
+    else if (p === '2') byPriority.p2++;
+    else if (p === '3') byPriority.p3++;
   });
 
-  const catMap = {};
-  incidents.forEach(i => { const c = i.category || 'Other'; catMap[c] = (catMap[c] || 0) + 1; });
-  const bySystem = Object.entries(catMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
+  const sysMap = {};
+  incidents.forEach(i => {
+    const name = _snVal(i['cmdb_ci.name']) || 'Outros';
+    const p    = _snRaw(i.priority);
+    if (!sysMap[name]) sysMap[name] = { name, total: 0, p1: 0, p2: 0, p3: 0 };
+    sysMap[name].total++;
+    if (p === '1') sysMap[name].p1++;
+    else if (p === '2') sysMap[name].p2++;
+    else if (p === '3') sysMap[name].p3++;
+  });
+  const bySystem = Object.values(sysMap).sort((a, b) => b.total - a.total);
+  const bySystemMonthly = Object.entries(sysMonthData)
+    .map(([name, counts]) => ({ name, monthly: counts, total: counts.reduce((s, c) => s + c, 0) }))
+    .sort((a, b) => b.total - a.total);
+
+  const altSysMap = {};
+  incidents.forEach(i => {
+    const name = _snVal(i['u_additional_res_code']) || 'N/A';
+    if (!altSysMap[name]) altSysMap[name] = { name, total: 0, p1: 0, p2: 0, p3: 0 };
+    const p = _snRaw(i.priority);
+    altSysMap[name].total++;
+    if (p === '1') altSysMap[name].p1++;
+    else if (p === '2') altSysMap[name].p2++;
+    else if (p === '3') altSysMap[name].p3++;
+  });
+  const byGroupAlt = Object.values(altSysMap).sort((a, b) => b.total - a.total);
+  const byGroupAltMonthly = Object.entries(altMonthData)
+    .map(([name, counts]) => ({ name, monthly: counts, total: counts.reduce((s, c) => s + c, 0) }))
+    .sort((a, b) => b.total - a.total);
 
   const now = Date.now();
   const prbList = prbs.map(p => {
@@ -176,18 +409,45 @@ async function fetchSnReport(displayName, period) {
     return { id: p.number, title: p.short_description, priority: p.priority, category: p.category, agingDays, state: p.state };
   });
 
+  // Avg resolution days for PRBs resolved this period
+  let avgResolutionDays = 0;
+  if (prbsResolvedInPeriod.length > 0) {
+    const total = prbsResolvedInPeriod.reduce((s, p) => {
+      if (p.opened_at && p.resolved_at) {
+        return s + Math.max(0, (new Date(p.resolved_at) - new Date(p.opened_at)) / 86400000);
+      }
+      return s;
+    }, 0);
+    avgResolutionDays = Math.round(total / prbsResolvedInPeriod.length);
+  }
+
+  const resolvedThisMonth = prbsResolvedInPeriod.length;
+  const openedThisMonth   = prbsOpenedInPeriod.length;
+
+  const incidentTarget = snGrp?.incidentTarget ?? 24;
   const data = {
     incidents: {
-      total: incidents.length,
-      target: 24,
+      total:             incidents.length,
+      closedThisMonth:   incClosedInPeriod.length,
+      openBacklog:       incBacklog,
+      avgResolutionDays: incAvgResolutionDays,
+      target:            incidentTarget,
       byPriority,
       bySystem,
+      bySystemMonthly,
+      byGroupAlt,
+      byGroupAltMonthly,
       monthly,
     },
     prbs: {
-      open: prbs.length,
-      avgAging: prbList.length ? Math.round(prbList.reduce((s, p) => s + p.agingDays, 0) / prbList.length) : 0,
-      list: prbList.slice(0, 50),
+      open:               prbs.length,
+      resolvedThisMonth,
+      openedThisMonth,
+      delta:              openedThisMonth - resolvedThisMonth,
+      avgAging:           prbList.length ? Math.round(prbList.reduce((s, p) => s + p.agingDays, 0) / prbList.length) : 0,
+      avgResolutionDays,
+      list:               prbList.slice(0, 50),
+      monthly:            prbMonthly,
     },
   };
 
@@ -197,17 +457,17 @@ async function fetchSnReport(displayName, period) {
 
 // ── Main entry ─────────────────────────────────────────────────────────────────
 
-async function buildReport(displayName, month) {
+async function buildReport(displayName, month, groupFields = []) {
   const period = buildPeriod(month);
   const [azure, sn] = await Promise.all([
-    fetchAzureReport(displayName, period),
+    fetchAzureReport(displayName, period, groupFields),
     fetchSnReport(displayName, period),
   ]);
   return {
     metadata:  { project: displayName, period: period.label, generatedAt: new Date().toLocaleString('pt-BR') },
     hasSn:     !!sn,
-    delivery:  { totalDelivered: azure.totalDelivered, sprints: azure.sprints },
-    quality:   { bugsTotal: azure.bugsTotal, bugsOpen: azure.bugsOpen },
+    delivery:  { totalUS: azure.totalUS, totalDelivered: azure.totalDelivered, sprints: azure.sprints, byTypes: azure.byTypes },
+    quality:   { bugsOpen: azure.bugsOpen, bugsNew: azure.bugsNew, bugsClosed: azure.bugsClosed },
     incidents: sn?.incidents || null,
     prbs:      sn?.prbs      || null,
   };
