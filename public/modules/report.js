@@ -100,10 +100,28 @@ function _barChart(items, maxVal) {
 
 // ── SVG Charts (zero deps) ────────────────────────────────────────────────────
 
+// Renders a centered HTML legend row below a chart.
+// items: [{ type: 'rect'|'line', color, label, dashed?, dot? }]
+function _legendHtml(items) {
+  if (!items || !items.length) return '';
+  const parts = items.map(({ type, color, label, dashed, dot }) => {
+    let icon;
+    if (type === 'line') {
+      const dd    = dashed ? ' stroke-dasharray="4,3"' : '';
+      const dotEl = dot    ? `<circle cx="9" cy="6" r="2.5" fill="${color}"/>` : '';
+      icon = `<svg width="18" height="12" style="flex-shrink:0;overflow:visible"><line x1="1" y1="6" x2="17" y2="6" stroke="${color}" stroke-width="1.5"${dd}/>${dotEl}</svg>`;
+    } else {
+      icon = `<span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0"></span>`;
+    }
+    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint)">${icon}${_esc(label)}</span>`;
+  });
+  return `<div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px 16px;padding:8px 0 4px">${parts.join('')}</div>`;
+}
+
 function _renderSprintChart(sprints) {
   if (!sprints.length) return '<div class="report-empty-hint">Sem dados de sprint para o período</div>';
-  const W = 600, H = 220;
-  const pad = { t: 20, r: 16, b: 56, l: 36 };
+  const W = 600, H = 184;
+  const pad = { t: 20, r: 16, b: 20, l: 36 };
   const cW = W - pad.l - pad.r;
   const cH = H - pad.t - pad.b;
 
@@ -141,23 +159,19 @@ function _renderSprintChart(sprints) {
   const line  = lineCoords.trim()
     ? `<polyline points="${lineCoords.trim()}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3" stroke-linecap="round"/>`
     : '';
-  const legend = `
-    <rect x="${pad.l}" y="${H - 18}" width="9" height="9" rx="2" fill="var(--c-blue)" opacity=".75"/>
-    <text x="${pad.l + 12}" y="${H - 10}" font-size="9" fill="var(--text-faint)">Planejado (SP)</text>
-    <rect x="${pad.l + 90}" y="${H - 18}" width="9" height="9" rx="2" fill="var(--c-green)" opacity=".85"/>
-    <text x="${pad.l + 103}" y="${H - 10}" font-size="9" fill="var(--text-faint)">Entregue (SP)</text>
-    <line x1="${pad.l + 183}" y1="${H - 13}" x2="${pad.l + 196}" y2="${H - 13}" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3"/>
-    <text x="${pad.l + 199}" y="${H - 10}" font-size="9" fill="var(--text-faint)">% Entrega</text>`;
-
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px" xmlns="http://www.w3.org/2000/svg">
-      ${axes}${rects}${labels}${line}${legend}
-    </svg>`;
+      ${axes}${rects}${labels}${line}
+    </svg>` + _legendHtml([
+    { type: 'rect', color: 'var(--c-blue)',  label: 'Planejado (SP)' },
+    { type: 'rect', color: 'var(--c-green)', label: 'Entregue (SP)' },
+    { type: 'line', color: '#f59e0b', label: '% Entrega', dashed: true },
+  ]);
 }
 
 function _renderVolatilityChart(sprints) {
   if (!sprints.length) return '<div class="report-empty-hint">Sem dados de sprint para o período</div>';
-  const W = 560, H = 200;
-  const pad = { t: 20, r: 16, b: 56, l: 36 };
+  const W = 560, H = 164;
+  const pad = { t: 20, r: 16, b: 20, l: 36 };
   const cW  = W - pad.l - pad.r;
   const cH  = H - pad.t - pad.b;
   const halfH = cH / 2;
@@ -192,15 +206,13 @@ function _renderVolatilityChart(sprints) {
 
   const axes = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + cH}" stroke="var(--bg-border)" stroke-width="1"/>
     <line x1="${pad.l}" y1="${midY.toFixed(1)}" x2="${W - pad.r}" y2="${midY.toFixed(1)}" stroke="var(--bg-border)" stroke-width="1"/>`;
-  const legend = `
-    <rect x="${pad.l}" y="${H - 18}" width="9" height="9" rx="2" fill="#f59e0b" opacity=".85"/>
-    <text x="${pad.l + 12}" y="${H - 10}" font-size="9" fill="var(--text-faint)">Adicionadas após início da sprint</text>
-    <rect x="${pad.l + 196}" y="${H - 18}" width="9" height="9" rx="2" fill="#ef4444" opacity=".75"/>
-    <text x="${pad.l + 209}" y="${H - 10}" font-size="9" fill="var(--text-faint)">Removidas da sprint</text>`;
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px" xmlns="http://www.w3.org/2000/svg">
-      ${axes}${bars}${labels}${legend}
-    </svg>`;
+      ${axes}${bars}${labels}
+    </svg>` + _legendHtml([
+    { type: 'rect', color: '#f59e0b', label: 'Adicionadas após início da sprint' },
+    { type: 'rect', color: '#ef4444', label: 'Removidas da sprint' },
+  ]);
 }
 
 function _renderTypeDonut(byType) {
@@ -226,19 +238,15 @@ function _renderTypeDonut(byType) {
   segs += `<text x="${cx}" y="${cy - 5}" text-anchor="middle" font-size="15" font-weight="800" fill="var(--text-1)">${total}</text>`;
   segs += `<text x="${cx}" y="${cy + 11}" text-anchor="middle" font-size="9" fill="var(--text-faint)">entregues</text>`;
 
-  const legendH  = byType.length * 20 + 10;
-  const svgH     = Math.max(128 + 16, legendH + 16);
-  const legendY0 = (svgH - legendH) / 2 + 10;
-  let legend = '';
-  byType.forEach((t, i) => {
-    const y   = legendY0 + i * 20;
+  const legendItems = byType.map((t, i) => {
     const pct = Math.round(t.count / total * 100);
-    legend += `<rect x="155" y="${y}" width="10" height="10" rx="2" fill="${COLORS[i % COLORS.length]}"/>`;
-    legend += `<text x="170" y="${y + 9}" font-size="10" fill="var(--text-faint)">${_esc(t.type)}</text>`;
-    legend += `<text x="340" y="${y + 9}" text-anchor="end" font-size="10" fill="var(--text-1)" font-weight="700">${t.count} (${pct}%)</text>`;
-  });
+    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint)">` +
+      `<span style="width:10px;height:10px;border-radius:2px;background:${COLORS[i % COLORS.length]};display:inline-block;flex-shrink:0"></span>` +
+      `${_esc(t.type)}: <strong style="color:var(--text-1)">${t.count} (${pct}%)</strong></span>`;
+  }).join('');
 
-  return `<svg viewBox="0 0 360 ${svgH}" style="width:100%;max-width:360px" xmlns="http://www.w3.org/2000/svg">${segs}${legend}</svg>`;
+  return `<svg viewBox="0 0 140 128" style="width:100%;max-width:140px" xmlns="http://www.w3.org/2000/svg">${segs}</svg>` +
+    `<div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px 16px;padding:8px 0 4px">${legendItems}</div>`;
 }
 
 function _renderTypeBar(byType) {
@@ -294,8 +302,8 @@ function _renderIncidentsVolumeChart(monthly, months, target) {
   const data = (monthly || []).slice(-months);
   if (!data.length) return '<div class="report-empty-hint">Sem dados de incidentes para o período</div>';
 
-  const W = 600, H = 250;
-  const pad = { t: 20, r: 20, b: 56, l: 44 };
+  const W = 600, H = 214;
+  const pad = { t: 20, r: 20, b: 20, l: 44 };
   const cW = W - pad.l - pad.r;
   const cH = H - pad.t - pad.b;
 
@@ -376,21 +384,16 @@ function _renderIncidentsVolumeChart(monthly, months, target) {
     <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + cH}" stroke="var(--bg-border)" stroke-width="1"/>
     <line x1="${pad.l}" y1="${pad.t + cH}" x2="${W - pad.r}" y2="${pad.t + cH}" stroke="var(--bg-border)" stroke-width="1"/>`;
 
-  const legend = `
-    <rect x="${pad.l}"      y="${H - 20}" width="10" height="10" rx="2" fill="#93c5fd"/>
-    <text x="${pad.l + 14}" y="${H - 11}" font-size="9" fill="var(--text-faint)">Abertos</text>
-    <rect x="${pad.l + 68}" y="${H - 20}" width="10" height="10" rx="2" fill="#34d399"/>
-    <text x="${pad.l + 82}" y="${H - 11}" font-size="9" fill="var(--text-faint)">Fechados</text>
-    <line x1="${pad.l + 148}" y1="${H - 15}" x2="${pad.l + 163}" y2="${H - 15}" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4,3"/>
-    <circle cx="${pad.l + 155}" cy="${H - 15}" r="3" fill="#f97316"/>
-    <text x="${pad.l + 167}" y="${H - 11}" font-size="9" fill="var(--text-faint)">Backlog</text>
-    ${target > 0 ? `
-    <line x1="${pad.l + 228}" y1="${H - 15}" x2="${pad.l + 243}" y2="${H - 15}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="6,4"/>
-    <text x="${pad.l + 247}"  y="${H - 11}" font-size="9" fill="var(--text-faint)">Target (${target})</text>` : ''}`;
+  const legendItems = [
+    { type: 'rect', color: '#93c5fd', label: 'Abertos' },
+    { type: 'rect', color: '#34d399', label: 'Fechados' },
+    { type: 'line', color: '#f97316', label: 'Backlog', dashed: true, dot: true },
+    ...(target > 0 ? [{ type: 'line', color: '#ef4444', label: `Target (${target})`, dashed: true }] : []),
+  ];
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
-    ${gridLines}${axes}${bars}${targetLine}${backlogLine}${backlogDots}${labels}${yLabels}${legend}
-  </svg>`;
+    ${gridLines}${axes}${bars}${targetLine}${backlogLine}${backlogDots}${labels}${yLabels}
+  </svg>` + _legendHtml(legendItems);
 }
 
 // ── Incident system charts ─────────────────────────────────────────────────────
@@ -411,8 +414,8 @@ function _renderIncidentSystemBars(bySystem) {
     items = outros.total > 0 ? [...top9, outros] : top9;
   }
 
-  const W = 600, H = 300;
-  const pad = { t: 24, r: 16, b: 80, l: 36 };
+  const W = 600, H = 280;
+  const pad = { t: 24, r: 16, b: 60, l: 36 };
   const chartW = W - pad.l - pad.r;
   const chartH = H - pad.t - pad.b;
   const slotW  = chartW / items.length;
@@ -464,17 +467,13 @@ function _renderIncidentSystemBars(bySystem) {
     <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + chartH}" stroke="var(--bg-border)" stroke-width="1"/>
     <line x1="${pad.l}" y1="${pad.t + chartH}" x2="${W - pad.r}" y2="${pad.t + chartH}" stroke="var(--bg-border)" stroke-width="1"/>`;
 
-  const legend = `
-    <rect x="${pad.l}" y="${H - 14}" width="9" height="9" rx="2" fill="rgba(239,68,68,0.65)"/>
-    <text x="${pad.l + 13}" y="${H - 6}" font-size="9" fill="var(--text-faint)">P1</text>
-    <rect x="${pad.l + 32}" y="${H - 14}" width="9" height="9" rx="2" fill="rgba(249,115,22,0.55)"/>
-    <text x="${pad.l + 45}" y="${H - 6}" font-size="9" fill="var(--text-faint)">P2</text>
-    <rect x="${pad.l + 64}" y="${H - 14}" width="9" height="9" rx="2" fill="rgba(250,204,21,0.45)"/>
-    <text x="${pad.l + 77}" y="${H - 6}" font-size="9" fill="var(--text-faint)">P3</text>`;
-
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
-    ${gridLines}${axes}${bars}${legend}
-  </svg>`;
+    ${gridLines}${axes}${bars}
+  </svg>` + _legendHtml([
+    { type: 'rect', color: 'rgba(239,68,68,0.65)',  label: 'P1' },
+    { type: 'rect', color: 'rgba(249,115,22,0.55)', label: 'P2' },
+    { type: 'rect', color: 'rgba(250,204,21,0.45)', label: 'P3' },
+  ]);
 }
 
 function _renderIncidentHeatmap(bySystemMonthly, monthly) {
@@ -745,7 +744,7 @@ function _renderPrbStatusDonut(list) {
   const counts = {};
   (list || []).forEach(p => { const k = String(p.state); counts[k] = (counts[k] || 0) + 1; });
   const total = Object.values(counts).reduce((s, v) => s + v, 0);
-  if (total === 0) return { svgHtml: '<div class="report-empty-row">No PRBs</div>', legendHtml: '' };
+  if (total === 0) return '<div class="report-empty-row">No PRBs</div>';
 
   const W = 280, cx = 140, cy = 105, R = 82, ri = 46;
   let startAngle = -Math.PI / 2;
@@ -778,17 +777,16 @@ function _renderPrbStatusDonut(list) {
     <text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle" font-size="22" font-weight="700" fill="var(--text)">${total}</text>
     <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="10" fill="var(--text-faint)">total</text>
   </svg>`;
-  const legendHtml = legendItems.map(item =>
-    `<span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;color:var(--text-muted)"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${item.color}"></span>${_esc(item.label)}: ${item.count}</span>`
-  ).join('');
-  return { svgHtml, legendHtml };
+  return svgHtml + _legendHtml(legendItems.map(item =>
+    ({ type: 'rect', color: item.color, label: `${item.label}: ${item.count}` })
+  ));
 }
 
 
 function _renderPrbEvolutionChart(monthly) {
   if (!monthly || monthly.length === 0) return '<div class="report-empty-row">No data</div>';
-  const W = 600, H = 220;
-  const pad = { t: 30, r: 56, b: 56, l: 44 };
+  const W = 600, H = 184;
+  const pad = { t: 30, r: 56, b: 20, l: 44 };
   const chartW = W - pad.l - pad.r;
   const chartH = H - pad.t - pad.b;
 
@@ -836,17 +834,6 @@ function _renderPrbEvolutionChart(monthly) {
     return `<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="#ef4444" style="cursor:default"><title>${lbl}: ${accumulated[i]} em backlog</title></circle>`;
   }).join('');
 
-  const legendY = H - 14;
-  const legend = `
-    <rect x="${pad.l}" y="${legendY - 6}" width="10" height="8" fill="#6366f1" rx="1"/>
-    <text x="${pad.l + 13}" y="${legendY + 1}" font-size="8" fill="var(--text-muted)">Abertos</text>
-    <rect x="${pad.l + 66}" y="${legendY - 6}" width="10" height="8" fill="#a5b4fc" rx="1"/>
-    <text x="${pad.l + 79}" y="${legendY + 1}" font-size="8" fill="var(--text-muted)">Resolvidos</text>
-    <line x1="${pad.l + 148}" y1="${legendY - 2}" x2="${pad.l + 160}" y2="${legendY - 2}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="3,2"/>
-    <circle cx="${pad.l + 154}" cy="${legendY - 2}" r="2.5" fill="#ef4444"/>
-    <text x="${pad.l + 163}" y="${legendY + 1}" font-size="8" fill="var(--text-muted)">Backlog</text>
-  `;
-
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">
     ${gridLines}
     <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + chartH}" stroke="var(--text-faint)" stroke-width="0.5"/>
@@ -854,12 +841,15 @@ function _renderPrbEvolutionChart(monthly) {
     ${bars.join('')}
     <polyline points="${accPts.map(p => p.join(',')).join(' ')}" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,3"/>
     ${accDots}
-    ${legend}
-  </svg>`;
+  </svg>` + _legendHtml([
+    { type: 'rect', color: '#6366f1', label: 'Abertos' },
+    { type: 'rect', color: '#a5b4fc', label: 'Resolvidos' },
+    { type: 'line', color: '#ef4444', label: 'Backlog', dashed: true, dot: true },
+  ]);
 }
 
 function _renderPrbAgingChart(list) {
-  if (!list || list.length === 0) return { svgHtml: '<div class="report-empty-row">No PRBs</div>', legendHtml: '' };
+  if (!list || list.length === 0) return '<div class="report-empty-row">No PRBs</div>';
 
   const STATE_CFG = {
     '101': { label: 'New',                 color: '#0d9488' },
@@ -923,18 +913,15 @@ function _renderPrbAgingChart(list) {
   }).join('');
 
   const H_svg = H - 38;
-  const legendHtml = activeStates.map(st => {
-    const item = STATE_CFG[st];
-    return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;color:var(--text-muted)"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${item.color}"></span>${_esc(item.label)}</span>`;
-  }).join('');
-
   const svgHtml = `<svg viewBox="0 0 ${W} ${H_svg}" style="width:100%;display:block">
     ${gridLines}
     <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + chartH}" stroke="var(--text-faint)" stroke-width="0.5"/>
     <line x1="${pad.l}" y1="${pad.t + chartH}" x2="${W - pad.r}" y2="${pad.t + chartH}" stroke="var(--text-faint)" stroke-width="0.5"/>
     ${bars}
   </svg>`;
-  return { svgHtml, legendHtml };
+  return svgHtml + _legendHtml(activeStates.map(st =>
+    ({ type: 'rect', color: STATE_CFG[st].color, label: STATE_CFG[st].label })
+  ));
 }
 
 function _renderPrbOldestList(list) {
@@ -997,14 +984,10 @@ function _renderPRBs(prbs, incidents) {
 
   const hasPrbMonthly = prbs.monthly && prbs.monthly.length > 0;
 
-  let donutSvg = '', donutLegend = '', agingSvg = '', agingLegend = '';
+  let donutChart = '', agingChart = '';
   if (prbs.list && prbs.list.length > 0) {
-    const dr = _renderPrbStatusDonut(prbs.list);
-    donutSvg    = dr.svgHtml;
-    donutLegend = dr.legendHtml;
-    const ar = _renderPrbAgingChart(prbs.list);
-    agingSvg    = ar.svgHtml;
-    agingLegend = ar.legendHtml;
+    donutChart = _renderPrbStatusDonut(prbs.list);
+    agingChart = _renderPrbAgingChart(prbs.list);
   }
 
   return `<div class="report-section">
@@ -1040,14 +1023,12 @@ function _renderPRBs(prbs, incidents) {
       <div style="flex:0 0 280px">
         <div class="report-subsection-title">PRBs por status</div>
         <div class="report-prb-chart-sub">Distribuição atual</div>
-        ${donutSvg}
-        <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:4px 14px;padding-top:8px">${donutLegend}</div>
+        ${donutChart}
       </div>
       <div style="flex:1;min-width:300px">
         <div class="report-subsection-title">Aging do Backlog</div>
         <div class="report-prb-chart-sub">Distribuição por tempo em aberto e status</div>
-        ${agingSvg}
-        <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:4px 14px;padding-top:8px">${agingLegend}</div>
+        ${agingChart}
       </div>
     </div>
     <div class="report-subsection-title" style="margin-top:12px">Top 10 PRBs mais antigos</div>
