@@ -294,8 +294,8 @@ function _renderIncidentsVolumeChart(monthly, months, target) {
   const data = (monthly || []).slice(-months);
   if (!data.length) return '<div class="report-empty-hint">Sem dados de incidentes para o período</div>';
 
-  const W = 600, H = 270;
-  const pad = { t: 40, r: 20, b: 56, l: 44 };
+  const W = 600, H = 250;
+  const pad = { t: 20, r: 20, b: 56, l: 44 };
   const cW = W - pad.l - pad.r;
   const cH = H - pad.t - pad.b;
 
@@ -376,8 +376,6 @@ function _renderIncidentsVolumeChart(monthly, months, target) {
     <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + cH}" stroke="var(--bg-border)" stroke-width="1"/>
     <line x1="${pad.l}" y1="${pad.t + cH}" x2="${W - pad.r}" y2="${pad.t + cH}" stroke="var(--bg-border)" stroke-width="1"/>`;
 
-  const subtitle = `<text x="${pad.l}" y="14" font-size="9" fill="var(--text-faint)">Histórico mensal${target > 0 ? ` — linha vermelha = limite de ${target}` : ''}</text>`;
-
   const legend = `
     <rect x="${pad.l}"      y="${H - 20}" width="10" height="10" rx="2" fill="#93c5fd"/>
     <text x="${pad.l + 14}" y="${H - 11}" font-size="9" fill="var(--text-faint)">Abertos</text>
@@ -391,7 +389,7 @@ function _renderIncidentsVolumeChart(monthly, months, target) {
     <text x="${pad.l + 247}"  y="${H - 11}" font-size="9" fill="var(--text-faint)">Target (${target})</text>` : ''}`;
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
-    ${subtitle}${gridLines}${axes}${bars}${targetLine}${backlogLine}${backlogDots}${labels}${yLabels}${legend}
+    ${gridLines}${axes}${bars}${targetLine}${backlogLine}${backlogDots}${labels}${yLabels}${legend}
   </svg>`;
 }
 
@@ -725,6 +723,8 @@ function _renderIncidents(inc) {
         <div class="report-prb-card-sub">${inc.total > inc.target ? 'Acima do target' : 'Dentro do target'}</div>
       </div>
     </div>
+    <div class="report-subsection-title">Abertos e Fechados por Mês</div>
+    <div class="report-prb-chart-sub">Histórico de volume de incidentes${inc.target > 0 ? ` — target: ${inc.target}` : ''}</div>
     ${_renderIncidentsVolumeChart(inc.monthly, _incidentMonths, inc.target)}
     <div class="report-subsection-title" style="margin-top:16px">${groupLabel} — Top 9 por Volume</div>
     <div class="report-prb-chart-sub">Volume de incidentes por severidade</div>
