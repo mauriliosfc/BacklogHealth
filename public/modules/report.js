@@ -470,9 +470,7 @@ function _renderIncidentSystemBars(bySystem) {
     <rect x="${pad.l + 32}" y="${H - 14}" width="9" height="9" rx="2" fill="rgba(249,115,22,0.55)"/>
     <text x="${pad.l + 45}" y="${H - 6}" font-size="9" fill="var(--text-faint)">P2</text>
     <rect x="${pad.l + 64}" y="${H - 14}" width="9" height="9" rx="2" fill="rgba(250,204,21,0.45)"/>
-    <text x="${pad.l + 77}" y="${H - 6}" font-size="9" fill="var(--text-faint)">P3</text>
-    <rect x="${pad.l + 96}" y="${H - 14}" width="9" height="9" rx="2" fill="rgba(34,197,94,0.35)"/>
-    <text x="${pad.l + 109}" y="${H - 6}" font-size="9" fill="var(--text-faint)">Outros</text>`;
+    <text x="${pad.l + 77}" y="${H - 6}" font-size="9" fill="var(--text-faint)">P3</text>`;
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
     ${gridLines}${axes}${bars}${legend}
