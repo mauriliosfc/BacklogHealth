@@ -1,6 +1,6 @@
 # 📋 Backlog Health Dashboard — Documentação
 
-> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Maio/2026 (Team Capacity, redesign, Copilot melhorias, UX, itemsModal reutilizável, stats clicáveis dashboard/detail/daily, filtro de status, refresh na Daily)
+> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Junho/2026 (Team Capacity, redesign, Copilot melhorias, UX, itemsModal reutilizável, stats clicáveis dashboard/detail/daily, filtro de status, refresh na Daily, **Review Mensal — Service Delivery Report integrado ao sistema**)
 
 ---
 
@@ -46,11 +46,16 @@ dash_azure_gestao_pessoal/
 │       ├── deliveryPlan.js ← openDeliveryPlan, buildDeliveryPlan, filtros de projeto
 │       ├── alias.js      ← getAlias, setAlias, applyAliases, startRename (apelidos de projeto)
 │       ├── teamCapacity.js ← openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject
-│       └── copilot.js    ← openCopilot, sendCopilotMessage, _loadRichContext, _buildContext (fallback DOM)
+│       ├── copilot.js    ← openCopilot, sendCopilotMessage, _loadRichContext, _buildContext (fallback DOM)
+│       └── report.js     ← renderReport, changeProject, changeMonth, refreshReport, getLast6Months (Review Mensal)
 ├── aiClient.js         ← chatCompletion, testConnection (Azure AI Foundry / Azure OpenAI / OpenAI-compat)
+├── servicenowClient.js ← snGet (cliente HTTPS para a Table API do Service Now, padrão idêntico ao azureClient.js)
+├── reportService.js    ← buildReport, buildPeriod, cacheInvalidate (coleta Azure + SN, KPIs, cache por projeto/mês)
+├── cache/              ← pasta criada automaticamente; arquivos JSON com TTL de 6h (sn_{proj}_{month}.json, azure_{proj}_{month}.json)
 ├── views/
 │   ├── dashboard.html  ← template HTML do dashboard com tokens {{ORG}}, {{CARDS}}, etc.
-│   └── setup.html      ← template HTML do setup com tokens de configuração
+│   ├── setup.html      ← template HTML do setup com tokens de configuração
+│   └── report.html     ← template HTML do Review Mensal com tokens {{PAYLOAD}}, {{PROJECTS}}, {{PROJECT}}, {{MONTH}}, {{PERIOD}}
 ├── wrapper/
 │   ├── BacklogHealth.csproj  ← projeto C# WPF (.NET Framework 4.8)
 │   └── MainWindow.xaml.cs    ← inicia server.exe, aguarda porta 3030, abre WebView2
@@ -67,6 +72,7 @@ dash_azure_gestao_pessoal/
 server.js (entry point)
         │
         ├── config.js          → gerencia config.json (org, baseUrl, pat, projects) + parseOrgInput
+        │                         + getSnConfig, saveSnConfig, getProjectSnGroup (credenciais Service Now)
         │
         ├── azureClient.js     → chamadas HTTPS para a API REST do Azure DevOps
         │       ├── Projects API    → lista todos os projetos acessíveis pelo PAT
@@ -89,12 +95,23 @@ server.js (entry point)
         │       ├── buildBody    → injeta system prompt como prefixo no Foundry; max_tokens para outros
         │       └── extractContent → parseia Responses API (Foundry) ou Chat Completions
         │
+        ├── servicenowClient.js → chamadas HTTPS para a Table API do Service Now
+        │       └── snGet        → GET autenticado (Basic auth), retorna result ou lança erro tipado
+        │
+        ├── reportService.js   → coleta dados Azure + Service Now, calcula KPIs do Review Mensal
+        │       ├── buildReport        → entrada principal: busca cache ou coleta dados em paralelo
+        │       ├── buildPeriod        → gera período { month, label, start, end, history[5] }
+        │       ├── fetchAzureReport   → work items Done + Bugs via WIQL (usa paginatedItems existente)
+        │       ├── fetchSnReport      → incidents + history + PRBs via snGet (só se assignmentGroup configurado)
+        │       ├── buildPayload       → monta objeto final { metadata, delivery, quality, incidents, prbs }
+        │       └── cacheInvalidate    → remove cache azure_ e sn_ do projeto/mês (usado pelo botão Atualizar)
+        │
         └── Servidor HTTP local (porta 3030)
                 ├── GET /                    → dashboard principal (HTML cacheado)
                 ├── GET /refresh             → rebusca dados e retorna HTML atualizado
                 ├── GET /settings            → tela de configurações (pré-preenchida)
                 ├── GET /api/projects        → lista projetos disponíveis para o PAT informado
-                ├── POST /setup              → salva config.json e retorna JSON {ok:true}
+                ├── POST /setup              → salva config.json e retorna JSON {ok:true} (preserva ai, github, servicenow)
                 ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, iterMap
                 ├── GET /api/team-capacity?project=NAME → JSON com developers, sprints, CompletedWork/RemainingWork
                 ├── GET /ai/config           → retorna config completa da IA (endpoint, apiKey, model, apiVersion)
@@ -102,6 +119,11 @@ server.js (entry point)
                 ├── POST /ai/test            → testa conexão com o provedor de IA
                 ├── POST /ai/context         → retorna contexto rico dos projetos (respeita filtros de sprint)
                 ├── POST /ai/chat            → envia mensagem para a IA e retorna resposta
+                ├── GET /report?project=NAME&month=YYYY-MM → Review Mensal (HTML com payload injetado)
+                ├── GET /report?project=NAME&month=YYYY-MM&refresh=1 → força recoleta (invalida cache)
+                ├── GET /api/sn-config?project=NAME → retorna config SN global + assignmentGroup do projeto (senha nunca exposta)
+                ├── POST /api/sn-config      → salva credenciais SN globais e/ou assignmentGroup por projeto
+                ├── POST /api/sn-test        → testa conexão com o Service Now
                 ├── GET /modules/*.js        → ES modules servidos dinamicamente de public/
                 └── GET /i18n/*.json         → arquivos de tradução servidos de public/i18n/
 ```
@@ -581,6 +603,31 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 116 | `localStorage['uatSprint::NomeProjeto']` para persistência do filtro | Padrão já adotado em outros modais (`tcProject`, `sprintColVisibility`) — chave namespaced por projeto evita colisão entre projetos distintos |
 | 117 | `testPlanCount` adicionado ao `fetchProject` via `Promise.all` | Contagem de testplans no card principal precisava de uma chamada extra à API; rodar em paralelo com `paginatedItems` e `fetchIterMap` não aumenta o tempo de carregamento; `.catch(() => null)` garante que falha na API de testplans não quebre o dashboard |
 | 118 | `openDailyForProject(projectName)` em `daily.js` + botão "Daily" no card | Abrir o Daily Standup pelo header sempre iniciava no primeiro projeto; botão por card permite entrar direto no slide do projeto desejado; abre em modo `'all'` (navegação entre projetos preservada) e posiciona o carrossel via `findIndex` sem nova chamada à API |
+| 119 | Review Mensal convertido de SSR para SPA — `/report` serve HTML estático; `/api/report` retorna JSON | Template server-side (`views/report.html`) impossibilitava renderização incremental e reuso de módulos existentes — converter para modal no `dashboard.html` com `report.js` como ES Module garante mesma arquitetura dos demais modais (UAT, Daily, etc.) sem troca de página |
+| 120 | `snConfig.js` como módulo dedicado para configurar Service Now — modal in-app | Configuração de SN era feita apenas na tela de Setup; ter um modal acessível a partir do Report Modal permite ajustar `assignmentGroup` e credenciais sem sair do contexto — mesmo padrão de `open/close/overlay/Escape` do restante da app |
+| 121 | `Report Modal` no `dashboard.html` com `openReport(project)` — não mais `window.location.href='/report'` | Navegação por URL trocava de página e perdia o contexto do dashboard — modal in-app mantém estado, filtros e outras views intactos; abre direto no projeto do card clicado sem resetar para o primeiro |
+| 122 | Agrupamento de incidentes configurável (`cmdb_ci` vs `u_additional_res_code`) — seletor "Agrupar" na toolbar | Diferentes projetos usam métricas distintas para análise de incidentes; persiste `incidentGroupBy` em `config.json` via `POST /api/report-config` — mesmo padrão do `incidentMonths` já existente |
+| 123 | TOP 9 + "Outros" para gráfico de incidentes e heatmap | Mais de 9 sistemas gerava barras/colunas ilegíveis — agregar o restante em "Outros" mantém o visual limpo sem perder a totalidade; corte feito no frontend (top 9 por volume) com soma de `p1/p2/p3/total` para barra e soma de arrays mensais para heatmap |
+| 124 | Gráfico de incidentes por sistema reescrito como barras verticais agrupadas | Barras horizontais com rótulos longos eram difíceis de comparar — barras verticais com labels no eixo X rotacionados (-42°) comportam melhor no espaço fixo e seguem convenção de gráficos de colunas temporais/por categoria |
+| 125 | Paleta rgba semitransparente no gráfico TOP 9 — mesma do heatmap | Cores sólidas saturadas geravam alto contraste indesejado; rgba com alpha 0.35–0.65 alinha visualmente com o heatmap e reduz fadiga visual sem perder distinção entre segmentos P1/P2/P3/Outros |
+| 126 | Contadores numéricos dentro de segmentos/fatias (`angle > 0.3` rad; `h > 12px`) | Ler contagens exigia consultar a legenda — exibir o número diretamente no shape elimina esse custo; threshold evita texto em slices/barras pequenos que causariam overflow; `fill: var(--text-muted)` sem negrito para não competir com o label |
+| 127 | Legendas dos charts SVG extraídas para HTML — funções retornam `{ svgHtml, legendHtml }` | Renderizar texto longo dentro de `<svg>` não quebra linha e pode vazar do viewBox; `<div>` HTML com `flex-wrap` centraliza e reflow automaticamente independente do tamanho da tela |
+| 128 | Gráfico de evolução PRB reposicionado antes do donut/aging | Fluxo de leitura natural: primeiro a tendência temporal (o que mudou ao longo dos meses), depois o detalhe estático do estado atual — mover o chart de evolução para cima segue a lógica de funil de análise |
+| 129 | `_snVal(v)` / `_snRaw(v)` + `sysparm_display_value=all` no `reportService.js` | Com `display_value=all` a Table API do SN retorna objetos `{value, display_value}` para todos os campos relacionais — sem normalização o campo `u_additional_res_code` vira `"[object Object]"` e todos os incidentes agrupam na mesma chave; `_snVal` extrai `display_value || value` para labels; `_snRaw` extrai `value` para campos coded (priority `=== '1'`) |
+| 130 | `byGroupAlt` / `byGroupAltMonthly` no payload de incidents — dados de agrupamento alternativo pré-computados no backend | Trocar o groupBy no frontend sem nova chamada ao servidor exigiria reprocessar os dados brutos no cliente — computar ambos os agrupamentos no `fetchSnReport` e incluir no payload permite troca instantânea entre `cmdb_ci` e `u_additional_res_code` sem round-trip |
+| 131 | Cache key com sufixo `groupFields` em `reportService.js` | Trocar o groupField altera a query ao Azure (pois `groupFields` determina quais campos são buscados); sufixo na chave do cache file garante que caches de diferentes configurações coexistam sem invalidação desnecessária |
+| 132 | `_fetchTeamSprintsForPeriod` — filtragem de work items por sprints do time no período | Relatório de entrega sem filtro por time incluía items de sprints de outros times no mesmo projeto — buscar `teamsettings/iterations` e filtrar por `IterationPath` limita os resultados ao escopo correto da squad |
+| 133 | Refactor `report.js`: `_PRB_STATES` module-level, `_fmtMonth`, `_loadReportConfig`/`_saveReportConfig`, `display:block` em SVGs, legendas como HTML | Múltiplas duplicações e inconsistências identificadas em revisão de código — fonte única de configuração de estados PRB, helper de formatação de mês elimina 4 blocos repetidos, renome torna a responsabilidade das funções explícita |
+| 134 | Loop sequencial de histórico SN (`13 rounds`) → batches paralelos de 4 via `HISTORY_BATCH` | Monthly Review sem cache fazia 13 rounds sequenciais de 4 requisições SN cada (~52 req totais); batches paralelos reduzem de ~13 para ~4 rounds (~3× mais rápido) sem alterar o total de requisições |
+| 135 | Seção Delivery padronizada com `report-prb-cards` (4 colunas) — mesmo padrão de Incidents/PRBs | Seção usava layout diferente dos demais; unificar o padrão visual reduz CSS específico e cria consistência — `totalUS`, `totalDelivered`, `totalSP`, `totalSPDelivered` com cores semânticas |
+| 136 | Gráficos de Delivery (SP vs Entregues, Volatilidade, donuts configuráveis) movidos para dentro da seção Delivery | Gráficos ficavam numa grid separada abaixo de Quality — movê-los para Delivery cria uma seção coesa de análise de entrega; `_renderFixedChartCell` descartado pois todos os gráficos usam o mesmo `_renderChartCell` (drag + resize + ⚙) |
+| 137 | `byTypes` em `fetchAzureReport` considera todas as USs do período (não só `DONE_STATES`) | Guard `if (!DONE_STATES.includes(...)) return` excluía US abertas dos gráficos de agrupamento — remover o filtro reflete o escopo real do backlog no período |
+| 138 | Seção Quality eliminada; indicadores de bugs incorporados à seção Delivery renomeada "AMS Sprint Delivery" | Separar Delivery e Quality criava duas seções para o mesmo contexto de sprint — unificar em 8 cards (4 entrega + 4 bugs) numa única seção reduz scroll e coloca os indicadores de qualidade junto ao contexto de entrega que os gerou |
+| 139 | `_renderTypeBarVertical` — terceiro estilo visual para gráficos de agrupamento (barras verticais SVG) | Barras horizontais são boas para rótulos longos; barras verticais se encaixam melhor quando há poucas categorias e labels curtos — oferecer os dois estilos deixa o usuário escolher conforme os dados |
+| 140 | `/api/report-fields` expandido com campos standard (`System.State`, `System.AssignedTo`, `Microsoft.VSTS.Common.Priority` etc.) | Filtro anterior só retornava `Custom.*` + 3 campos exatos; times que usam campos padrão do Azure DevOps para classificar USs não tinham como criar gráficos de agrupamento por esses campos |
+| 141 | Donut ampliado (`r 44→62`, `stroke-width 22→26`); legenda empurrada para base do card via `flex-column` + `margin-top:auto` | Donut pequeno era difícil de visualizar; legenda flutuava no meio do card sem âncora visual — flex column com margin-top:auto fixa a legenda sempre na borda inferior independente do tamanho do SVG |
+| 142 | Barras horizontais/verticais usam mesma paleta `COLORS` do donut; picker adiciona opção "Cor única" com `<input type="color">` | Barras com cor única (#8b5cf6 fixo) impossibilitavam distinguir categorias visualmente — paleta multicolor por padrão; cor única útil quando o gráfico representa uma métrica homogênea (ex: todas as US são do mesmo tipo) |
+| 143 | `<title>` + `onmouseenter/onmouseleave` opacity nos segmentos do donut | Usuário não conseguia ver o valor de cada fatia sem consultar a legenda — tooltip nativo SVG `<title>` exibe `"Nome: N (XX%)"` sem JS extra; transição de opacidade dá feedback visual de qual segmento está sendo inspecionado |
 
 ---
 
@@ -696,6 +743,120 @@ Retorna por projeto:
 
 ---
 
+## 📋 Review Mensal — Service Delivery Report
+
+Acessado pelo botão **Review Mensal** em cada card do dashboard principal. Abre a rota `/report?project=NOME` diretamente no projeto do card clicado, sem resetar para o primeiro projeto — mesmo padrão do botão Daily (`openDailyForProject`).
+
+### Botão no card
+
+```js
+// projectService.js — buildCardHTML
+// Adicionado na mesma linha dos botões Daily e UAT:
+<button
+  class="card-action-btn"
+  onclick="window.location.href='/report?project=${encodeURIComponent(proj.name)}'"
+  data-i18n="btn.monthlyReview"
+  title="Review Mensal do projeto">
+  Review Mensal
+</button>
+```
+
+### Credenciais do Service Now
+
+Seguem o mesmo padrão do PAT do Azure e das credenciais da IA:
+
+- **Credenciais globais** (`instance`, `user`, `pass`) — salvas uma vez na raiz do `config.json`, configuradas na tela de Settings
+- **`assignmentGroup` por projeto** — salvo dentro de cada objeto de projeto em `config.json`, idêntico ao campo `team` existente
+- **Senha nunca exposta** — `GET /api/sn-config` retorna `hasPass: true/false`, nunca o valor
+- **Projeto sem `assignmentGroup`** — relatório exibe apenas dados do Azure DevOps, sem quebrar
+
+### Estrutura do `config.json` com Service Now
+
+```json
+{
+  "org": "sua-org",
+  "pat": "seu-pat-azure",
+  "projects": [
+    {
+      "name": "Projeto Alpha",
+      "team": "Alpha Team",
+      "servicenow": {
+        "assignmentGroup": "sys_id_grupo_alpha",
+        "assignmentGroupName": "TI - Suporte Alpha"
+      }
+    }
+  ],
+  "ai": { "...": "..." },
+  "github": { "...": "..." },
+  "servicenow": {
+    "instance": "suaempresa.service-now.com",
+    "user": "usuario-sn",
+    "pass": "senha-ou-token"
+  }
+}
+```
+
+> **Importante:** `POST /setup` preserva os campos `servicenow` global e por projeto ao salvar — igual ao comportamento já existente para `ai` e `github`.
+
+### Payload do relatório
+
+```js
+// Estrutura injetada em window.__REPORT_PAYLOAD__ no report.html
+{
+  metadata:  { project, period, generatedAt },
+  hasSn:     true | false,   // false = SN não configurado para o projeto
+  delivery: {
+    totalDelivered: Number,
+    sprints: [{ name, delivered, points }]
+  },
+  quality: {
+    bugsTotal: Number,
+    bugsOpen:  Number
+  },
+  incidents: {              // null se hasSn = false
+    total: Number,
+    target: 24,             // meta contratual (futuramente por projeto)
+    byPriority: { p1, p2, p3 },
+    bySystem:   [{ name, count }],   // top 5
+    monthly:    [{ label, opened, closed }]   // últimos 5 meses
+  },
+  prbs: {                   // null se hasSn = false
+    open: Number,
+    avgAging: Number,
+    list: [{ id, title, priority, category, agingDays, state }]
+  }
+}
+```
+
+### Navegação do relatório
+
+- **Seletor de projeto** — troca o projeto sem sair da tela (`changeProject`)
+- **Seletor de mês** — últimos 6 meses disponíveis (`changeMonth`)
+- **Botão ↻ Atualizar** — invalida o cache e recoleta os dados (`refresh=1`)
+- **Indicador de atualização** — exibe `metadata.generatedAt` na toolbar
+
+### Cache local
+
+- Arquivos JSON em `/cache/` com TTL de 6 horas
+- Nomenclatura: `azure_{projeto}_{YYYY-MM}.json` e `sn_{projeto}_{YYYY-MM}.json`
+- Criado automaticamente na primeira execução
+- Invalidado pelo botão Atualizar ou via `cacheInvalidate(project, month)`
+
+### Chaves i18n adicionadas
+
+| Chave | PT | EN | ES |
+|---|---|---|---|
+| `btn.monthlyReview` | Review Mensal | Monthly Review | Revisión Mensual |
+| `report.executiveSummary` | Resumo executivo | Executive summary | Resumen ejecutivo |
+| `report.incidents` | Incidentes | Incidents | Incidentes |
+| `report.prbs` | PRBs — Problemas | PRBs — Problems | PRBs — Problemas |
+| `report.delivery` | Entrega | Delivery | Entrega |
+| `report.quality` | Qualidade | Quality | Calidad |
+| `report.noSn` | Service Now não configurado | Service Now not configured | Service Now no configurado |
+| `report.refresh` | Atualizar | Refresh | Actualizar |
+
+---
+
 ## 💬 Copilot Project — Arquitetura da feature de IA
 
 ### Provedores suportados
@@ -765,6 +926,47 @@ Por projeto, o endpoint retorna:
 - [x] Link clicável na coluna ID do `itemsModal` — fix na construção da URL (`baseUrl/_workitems/edit/id`) e estilo azul
 - [x] UAT Dashboard — modal por projeto com card de resumo, acordeão por testplan, filtro de sprint persistido, indicadores por plano, pills de resultado
 - [x] Botão "Daily" no card do dashboard — abre Daily Standup direto no slide do projeto via `openDailyForProject`, sem resetar para o primeiro projeto
+
+**Review Mensal — implementado**
+- [x] `servicenowClient.js` — cliente HTTPS Service Now (snGet, Basic auth, padrão azureClient.js)
+- [x] `config.js` — funções `getSnConfig`, `saveSnConfig`, `getProjectSnGroup`
+- [x] Tela de Settings — seção Service Now: credenciais globais + botão Testar + botão Salvar (collapsible na `su-left`)
+- [x] `POST /setup` — preserva campo `servicenow` por projeto no merge (lookup pelo `name+team` no existing config)
+- [x] `reportService.js` — `buildReport`, `fetchAzureReport`, `fetchSnReport`, cache JSON por projeto/mês (TTL 6h)
+- [x] Rotas no `server.js` — `GET /api/report` (JSON), `GET /api/report-config`, `POST /api/report-config`, `GET /api/report-fields`, `GET /api/sn-config`, `POST /api/sn-config`, `POST /api/sn-test`
+- [x] `public/modules/report.js` — modal in-app (ES Module); `openReport`, `renderReport`, `reportChangeMonth`, `reportRefresh`; charts SVG+CSS (zero deps)
+- [x] `public/modules/snConfig.js` — modal de configuração SN acessível a partir do Report Modal (credenciais globais + assignmentGroup por projeto + incidentTarget)
+- [x] Report Modal adicionado ao `dashboard.html` — mesmo padrão dos outros modais; abre direto no projeto via `openReport(project)`
+- [x] `public/style.css` — classes `.report-*`, `.sn-config-*` (dark mode automático via CSS vars)
+- [x] i18n — chaves `btn.monthlyReview`, `sn_*` em `pt.json`, `en.json`, `es.json`
+- [x] Botão **Monthly Review** no `buildCardHTML` — mesma linha de Daily e UAT, chama `openReport(project)`
+
+**Review Mensal — melhorias de charts e dados**
+- [x] Agrupamento de incidentes configurável — seletor "Agrupar" na toolbar: `cmdb_ci` (IC Afetado) ou `u_additional_res_code` (Additional Resolution Code); persiste em `config.json` via `POST /api/report-config`
+- [x] `_snVal(v)` / `_snRaw(v)` + `sysparm_display_value=all` — normaliza campos relacionais SN que retornam `{value, display_value}` com a Table API; `byGroupAlt` / `byGroupAltMonthly` pré-computados no backend para troca sem round-trip
+- [x] TOP 9 + "Outros" — gráfico de incidentes por sistema e heatmap agora agrupam do 10º sistema em diante em "Outros" (soma de `total/p1/p2/p3` no bar; soma de arrays mensais no heatmap)
+- [x] Gráfico TOP 9 reescrito como barras verticais com paleta rgba semitransparente — labels no eixo X rotacionados -42°; mesma paleta do heatmap (rgba 0.35–0.65 alpha por severidade)
+- [x] Contadores numéricos dentro de segmentos/fatias dos charts PRB (`angle > 0.3` rad; `h > 12px`); `fill: var(--text-muted)` sem negrito
+- [x] Legendas dos charts SVG (PRB donut + aging) extraídas para HTML — funções retornam `{ svgHtml, legendHtml }`; renderizado como `div` flex-wrap centralizado abaixo de cada SVG
+- [x] Gráfico de evolução PRB reposicionado antes do donut/aging — fluxo de leitura: tendência temporal → detalhe de estado atual
+- [x] `incidentTarget` por projeto — meta contratual configurável pelo modal snConfig; salvo em `config.json`; `null` usa padrão 24
+- [x] `_fetchTeamSprintsForPeriod` — filtragem de work items por sprints do time no período do relatório
+- [x] Cache key com sufixo `groupFields` — caches de diferentes configurações coexistem sem invalidação cruzada
+
+**Review Mensal — refactor e UX (sessão atual)**
+- [x] Refactor `report.js`: `_PRB_STATES` module-level constant; `_fmtMonth(label)` helper elimina 4 blocos duplicados; `_loadReportConfig`/`_saveReportConfig` renomeados; `display:block` em todos os SVGs; legendas extraídas para HTML (`_legendHtml`)
+- [x] Loop sequencial histórico SN → batches paralelos de 4 (`HISTORY_BATCH=4`) — ~3× mais rápido sem cache
+- [x] Seção Delivery padronizada com `report-prb-cards` — mesmo padrão visual de Incidents/PRBs
+- [x] Gráficos de Delivery movidos para dentro da seção Delivery — todos draggable + resizable via `_renderChartCell` (sem `_renderFixedChartCell` separado)
+- [x] `byTypes` considera todas as USs do período (removido filtro `DONE_STATES`) — título "US por" em vez de "Entregas por"
+- [x] Seção Quality eliminada; indicadores de bugs incorporados à seção Delivery — renomeada "AMS Sprint Delivery" (8 cards: 4 entrega + 4 bugs)
+- [x] `_renderTypeBarVertical` — barras verticais SVG como terceiro estilo visual para gráficos de agrupamento
+- [x] `/api/report-fields` expandido com campos standard do Azure DevOps (`System.State`, `System.AssignedTo`, `Microsoft.VSTS.Common.Priority`, `System.IterationPath`, `System.WorkItemType`, `Microsoft.VSTS.Common.Activity`)
+- [x] Donut ampliado (`r 44→62`); legenda ancorada na base do card via `flex-column` + `margin-top:auto`; label central "User Stories"
+- [x] Barras (horizontal + vertical) usam paleta `COLORS` multicolor por padrão; picker oferece opção "Cor única" com `<input type="color">`
+- [x] Tooltip no hover de cada segmento do donut — `<title>` SVG nativo + transição de opacidade 70%
+
+**Backlog geral**
 - [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
 - [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
@@ -774,7 +976,8 @@ Por projeto, o endpoint retorna:
 - [ ] Burndown baseado em datas reais de conclusão (via histórico de estado do Azure DevOps)
 - [ ] Streaming de respostas da IA (SSE) para reduzir tempo de espera percebido
 - [ ] Troca de idioma sem reload (templates reativos ao locale via `data-i18n` no HTML gerado dinamicamente)
+- [ ] Meta contratual de incidentes configurável por projeto (hoje fixo em 24 no `reportService.js`)
 
 ---
 
-*Documentação atualizada em Junho/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado), botão Daily por card (openDailyForProject — abre direto no slide do projeto)*
+*Documentação atualizada em Junho/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado), botão Daily por card (openDailyForProject — abre direto no slide do projeto), **Review Mensal — Service Delivery Report** (servicenowClient.js, reportService.js, modal in-app, snConfig.js, credenciais SN + assignmentGroup + incidentTarget por projeto, `/api/report` JSON, agrupamento configurável cmdb_ci/u_additional_res_code, TOP 9 + Outros, barras verticais rgba, contadores em fatias/segmentos, legendas SVG → HTML, evolução PRB reposicionada, `_snVal`/`_snRaw` + display_value=all, cache por groupField), **Review Mensal — refactor e UX** (refactor `report.js` (`_PRB_STATES`, `_fmtMonth`, `_loadReportConfig`, SVGs display:block), paralelização histórico SN em batches de 4, seção Delivery unificada com Quality → "AMS Sprint Delivery" 8 cards, gráficos de entrega movidos para Delivery (draggable+resizable), `byTypes` todas as USs, barras verticais SVG, campos standard em `/api/report-fields`, donut ampliado + legenda ancorada na base, paleta multicolor nas barras + cor única via color picker, tooltip hover no donut via `<title>`)*

@@ -13,6 +13,8 @@ import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from './modules/teamCapacity.js';
 import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback, openFeedbackSuccess, closeFeedbackSuccess, closeFeedbackSuccessOverlay } from './modules/feedback.js';
 import { openUAT, closeUAT, closeUATOverlay, toggleUATMax, refreshUAT, uatChangeSprint, uatTogglePlan, uatFilterPlan, uatClearPlanFilter } from './modules/uat.js';
+import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, reportSetIncidentMonths, reportSetIncidentGroupBy, openReportSnConfig } from './modules/report.js';
+import { openSnConfig, closeSnConfig, closeSnConfigOverlay, snConfigTest, snConfigSaveGlobal, snConfigSaveProject } from './modules/snConfig.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -97,6 +99,30 @@ window.uatChangeSprint   = uatChangeSprint;
 window.uatTogglePlan      = uatTogglePlan;
 window.uatFilterPlan      = uatFilterPlan;
 window.uatClearPlanFilter = uatClearPlanFilter;
+window.openReport            = openReport;
+window.closeReport           = closeReport;
+window.closeReportOverlay    = closeReportOverlay;
+window.toggleReportMax       = toggleReportMax;
+window.reportChangeMonth     = reportChangeMonth;
+window.reportRefresh         = reportRefresh;
+window.reportOpenFieldPicker = reportOpenFieldPicker;
+window.reportAddChart        = reportAddChart;
+window.reportRemoveChart     = reportRemoveChart;
+window.reportResizeChart     = reportResizeChart;
+window.reportDragStart       = reportDragStart;
+window.reportDragOver        = reportDragOver;
+window.reportDragLeave       = reportDragLeave;
+window.reportDrop            = reportDrop;
+window.reportDragEnd            = reportDragEnd;
+window.reportSetIncidentMonths   = reportSetIncidentMonths;
+window.reportSetIncidentGroupBy  = reportSetIncidentGroupBy;
+window.openReportSnConfig    = openReportSnConfig;
+window.openSnConfig          = openSnConfig;
+window.closeSnConfig         = closeSnConfig;
+window.closeSnConfigOverlay  = closeSnConfigOverlay;
+window.snConfigTest          = snConfigTest;
+window.snConfigSaveGlobal    = snConfigSaveGlobal;
+window.snConfigSaveProject   = snConfigSaveProject;
 
 let _removeCard = null;
 

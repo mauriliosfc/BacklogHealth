@@ -267,5 +267,22 @@
   "fb_success_title": "Feedback registrado",
   "fb_success_msg": "Seu feedback foi registrado. Você pode acessá-lo clicando no link abaixo.",
   "fb_success_link": "Ver no GitHub",
-  "fb_success_close": "Fechar"
+  "fb_success_close": "Fechar",
+
+  "btn_monthly_review": "Review Mensal",
+  "sn_section_title": "SERVICE NOW",
+  "sn_instance_label": "INSTÂNCIA",
+  "sn_instance_placeholder": "empresa.service-now.com",
+  "sn_user_label": "USUÁRIO",
+  "sn_pass_label": "SENHA / TOKEN",
+  "sn_group_label": "ASSIGNMENT GROUP (sys_id)",
+  "sn_group_placeholder": "sys_id do grupo de atendimento",
+  "sn_test_btn": "Testar Conexão",
+  "sn_save_btn": "Salvar Config Service Now",
+  "sn_saving": "Salvando…",
+  "sn_saved": "Salvo!",
+  "sn_testing": "Testando…",
+  "sn_ok": "Conexão OK",
+  "sn_err_fill": "Preencha instância, usuário e senha.",
+  "sn_hint": "Configure o Service Now para incluir incidentes e PRBs nos relatórios de Review Mensal."
 }
