@@ -2,7 +2,7 @@
 
 let _reportProject   = null;
 let _reportMonth     = null;
-let _reportCharts    = []; // [{type:'sprint'|'volatility'|'donut'|'incidents', size:'sm'|'md'|'lg', ref?:'', label?:'', chartStyle?:'donut'|'bar', months?:number}]
+let _reportCharts    = []; // [{type:'sprint'|'volatility'|'donut'|'incidents', size:'sm'|'md'|'lg', ref?:'', label?:'', chartStyle?:'donut'|'bar'|'bar-vertical', barColor?:'', months?:number}]
 let _incidentMonths  = 5; // months to show in the static incidents section
 let _incidentGroupBy = 'cmdb_ci'; // 'cmdb_ci' | 'resolution_code'
 let _pickerIdx       = -1; // -1 = add new, >=0 = edit existing chart
@@ -15,7 +15,16 @@ const _DEFAULT_CHARTS = [
   { type: 'donut',      size: 'md', ref: '', label: 'Tipo de Item' },
 ];
 
-async function _loadGroupFields() {
+const _PRB_STATES = {
+  '101': { label: 'New',                 color: '#0d9488' },
+  '102': { label: 'Assess',              color: '#f97316' },
+  '103': { label: 'Root Cause Analysis', color: '#eab308' },
+  '104': { label: 'Fix in Progress',     color: '#3b82f6' },
+  '106': { label: 'Resolved',            color: '#8b5cf6' },
+  '107': { label: 'Closed',              color: '#374151' },
+};
+
+async function _loadReportConfig() {
   let charts   = null;
   let needsSave = false;
 
@@ -26,7 +35,7 @@ async function _loadGroupFields() {
     if (data.incidentMonths)  _incidentMonths  = data.incidentMonths;
     if (data.incidentGroupBy) _incidentGroupBy = data.incidentGroupBy;
     if (data.reportCharts?.length) {
-      charts = data.reportCharts; // already in new format — no re-save needed
+      charts = data.reportCharts;
     } else if (data.groupFields?.length) {
       // Migrate old groupFields key → new reportCharts format and persist
       charts = [
@@ -57,10 +66,10 @@ async function _loadGroupFields() {
 
   // 3. Default
   _reportCharts = charts || _DEFAULT_CHARTS.map(c => ({ ...c }));
-  if (!charts || needsSave) _saveGroupFields(); // persist to config.json
+  if (!charts || needsSave) _saveReportConfig(); // persist to config.json
 }
 
-function _saveGroupFields() {
+function _saveReportConfig() {
   fetch('/api/report-config', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -118,6 +127,18 @@ function _legendHtml(items) {
   return `<div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px 16px;padding:8px 0 4px">${parts.join('')}</div>`;
 }
 
+// Converts "YYYY-MM" → "Mon/YY" (e.g. "2026-05" → "Mai/26")
+function _fmtMonth(label) {
+  const p = (label || '').split('-');
+  if (p.length === 2) {
+    try {
+      const raw = new Date(+p[0], +p[1] - 1, 1).toLocaleString('pt-BR', { month: 'short' });
+      return raw.charAt(0).toUpperCase() + raw.slice(1, 3).replace('.', '') + '/' + p[0].slice(2);
+    } catch (_) {}
+  }
+  return label || '';
+}
+
 function _renderSprintChart(sprints) {
   if (!sprints.length) return '<div class="report-empty-hint">Sem dados de sprint para o período</div>';
   const W = 600, H = 184;
@@ -159,7 +180,7 @@ function _renderSprintChart(sprints) {
   const line  = lineCoords.trim()
     ? `<polyline points="${lineCoords.trim()}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3" stroke-linecap="round"/>`
     : '';
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px" xmlns="http://www.w3.org/2000/svg">
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
       ${axes}${rects}${labels}${line}
     </svg>` + _legendHtml([
     { type: 'rect', color: 'var(--c-blue)',  label: 'Planejado (SP)' },
@@ -207,7 +228,7 @@ function _renderVolatilityChart(sprints) {
   const axes = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + cH}" stroke="var(--bg-border)" stroke-width="1"/>
     <line x1="${pad.l}" y1="${midY.toFixed(1)}" x2="${W - pad.r}" y2="${midY.toFixed(1)}" stroke="var(--bg-border)" stroke-width="1"/>`;
 
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px" xmlns="http://www.w3.org/2000/svg">
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
       ${axes}${bars}${labels}
     </svg>` + _legendHtml([
     { type: 'rect', color: '#f59e0b', label: 'Adicionadas após início da sprint' },
@@ -216,27 +237,32 @@ function _renderVolatilityChart(sprints) {
 }
 
 function _renderTypeDonut(byType) {
-  if (!byType || !byType.length) return '<div class="report-empty-hint">Sem entregas no período</div>';
+  if (!byType || !byType.length) return '<div class="report-empty-hint">Sem User Stories no período</div>';
   const total = byType.reduce((s, t) => s + t.count, 0);
-  if (!total) return '<div class="report-empty-hint">Sem entregas no período</div>';
+  if (!total) return '<div class="report-empty-hint">Sem User Stories no período</div>';
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
-  const r = 44, cx = 70, cy = 64;
+  const r = 62, cx = 80, cy = 78;
   const circ = 2 * Math.PI * r;
 
   let segs = '', accumulated = 0;
   byType.forEach((t, i) => {
     const arc    = (t.count / total) * circ;
     const offset = circ - accumulated;
+    const pct    = Math.round(t.count / total * 100);
     segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
-      stroke="${COLORS[i % COLORS.length]}" stroke-width="22"
+      stroke="${COLORS[i % COLORS.length]}" stroke-width="26"
       stroke-dasharray="${arc.toFixed(2)} ${(circ - arc).toFixed(2)}"
       stroke-dashoffset="${offset.toFixed(2)}"
-      transform="rotate(-90 ${cx} ${cy})"/>`;
+      transform="rotate(-90 ${cx} ${cy})"
+      style="cursor:default;transition:opacity .15s"
+      onmouseenter="this.style.opacity='.7'" onmouseleave="this.style.opacity='1'">
+      <title>${_esc(t.type)}: ${t.count} (${pct}%)</title>
+    </circle>`;
     accumulated += arc;
   });
-  segs += `<text x="${cx}" y="${cy - 5}" text-anchor="middle" font-size="15" font-weight="800" fill="var(--text-1)">${total}</text>`;
-  segs += `<text x="${cx}" y="${cy + 11}" text-anchor="middle" font-size="9" fill="var(--text-faint)">entregues</text>`;
+  segs += `<text x="${cx}" y="${cy - 5}" text-anchor="middle" font-size="18" font-weight="800" fill="var(--text-1)">${total}</text>`;
+  segs += `<text x="${cx}" y="${cy + 13}" text-anchor="middle" font-size="10" fill="var(--text-faint)">User Stories</text>`;
 
   const legendItems = byType.map((t, i) => {
     const pct = Math.round(t.count / total * 100);
@@ -245,15 +271,18 @@ function _renderTypeDonut(byType) {
       `${_esc(t.type)}: <strong style="color:var(--text-1)">${t.count} (${pct}%)</strong></span>`;
   }).join('');
 
-  return `<svg viewBox="0 0 140 128" style="width:100%;max-width:140px" xmlns="http://www.w3.org/2000/svg">${segs}</svg>` +
-    `<div style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px 16px;padding:8px 0 4px">${legendItems}</div>`;
+  return `<div style="display:flex;flex-direction:column;align-items:center;height:100%">` +
+    `<svg viewBox="0 0 160 158" style="width:100%;max-width:200px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">${segs}</svg>` +
+    `<div style="margin-top:auto;display:flex;justify-content:center;flex-wrap:wrap;gap:6px 16px;padding:10px 0 2px">${legendItems}</div>` +
+    `</div>`;
 }
 
-function _renderTypeBar(byType) {
-  if (!byType || !byType.length) return '<div class="report-empty-hint">Sem entregas no período</div>';
+function _renderTypeBar(byType, barColor) {
+  if (!byType || !byType.length) return '<div class="report-empty-hint">Sem User Stories no período</div>';
   const total = byType.reduce((s, t) => s + t.count, 0);
-  if (!total) return '<div class="report-empty-hint">Sem entregas no período</div>';
+  if (!total) return '<div class="report-empty-hint">Sem User Stories no período</div>';
 
+  const COLORS  = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
   const maxVal  = Math.max(...byType.map(t => t.count), 1);
   const barH    = 28;
   const gap     = 10;
@@ -282,9 +311,10 @@ function _renderTypeBar(byType) {
   });
 
   byType.forEach((t, i) => {
-    const y  = padT + i * (barH + gap);
-    const bW = (t.count / maxVal) * trackW;
-    bars   += `<rect x="${padL}" y="${y}" width="${bW.toFixed(1)}" height="${barH}" fill="#8b5cf6" opacity=".8" rx="3"/>`;
+    const y     = padT + i * (barH + gap);
+    const bW    = (t.count / maxVal) * trackW;
+    const color = barColor || COLORS[i % COLORS.length];
+    bars   += `<rect x="${padL}" y="${y}" width="${bW.toFixed(1)}" height="${barH}" fill="${color}" opacity=".8" rx="3"/>`;
     bars   += `<text x="${(padL + bW + 6).toFixed(1)}" y="${(y + barH / 2 + 4).toFixed(1)}" font-size="10" font-weight="700" fill="var(--text-1)">${t.count}</text>`;
     const lbl = t.type.length > 15 ? t.type.slice(0, 14) + '…' : t.type;
     labels += `<text x="${padL - 8}" y="${(y + barH / 2 + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--text-faint)">${_esc(lbl)}</text>`;
@@ -293,8 +323,58 @@ function _renderTypeBar(byType) {
   const axes = `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + innerH}" stroke="var(--bg-border)" stroke-width="1"/>
     <line x1="${padL}" y1="${padT + innerH}" x2="${W - padR}" y2="${padT + innerH}" stroke="var(--bg-border)" stroke-width="1"/>`;
 
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px" xmlns="http://www.w3.org/2000/svg">
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
     ${gridLines}${axes}${bars}${labels}
+  </svg>`;
+}
+
+function _renderTypeBarVertical(byType, barColor) {
+  if (!byType || !byType.length) return '<div class="report-empty-hint">Sem User Stories no período</div>';
+  const total = byType.reduce((s, t) => s + t.count, 0);
+  if (!total) return '<div class="report-empty-hint">Sem User Stories no período</div>';
+
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+  const W = 480, padT = 20, padB = 56, padL = 36, padR = 16;
+  const maxVal = Math.max(...byType.map(t => t.count), 1);
+  const cW     = W - padL - padR;
+  const cH     = 160;
+  const H      = padT + cH + padB;
+  const barW   = Math.min(cW / byType.length * 0.6, 40);
+
+  const rawStep = maxVal / 4;
+  const step    = Math.max(1, Math.ceil(rawStep));
+  const ticks   = [];
+  for (let v = 0; v <= maxVal; v += step) ticks.push(v);
+  if (ticks[ticks.length - 1] < maxVal) ticks.push(maxVal);
+
+  let grid = '', bars = '', xlabels = '';
+
+  ticks.forEach(v => {
+    const y = padT + cH - (v / maxVal) * cH;
+    grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="var(--bg-border)" stroke-width="1" stroke-dasharray="3,3"/>`;
+    grid += `<text x="${padL - 4}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-faint)">${v}</text>`;
+  });
+
+  byType.forEach((t, i) => {
+    const cx    = padL + (i + 0.5) * (cW / byType.length);
+    const bH    = (t.count / maxVal) * cH;
+    const y     = padT + cH - bH;
+    const color = barColor || COLORS[i % COLORS.length];
+    bars += `<rect x="${(cx - barW / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bH.toFixed(1)}" fill="${color}" opacity=".8" rx="3"/>`;
+    if (bH > 14) {
+      bars += `<text x="${cx.toFixed(1)}" y="${(y + bH / 2 + 4).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${t.count}</text>`;
+    } else {
+      bars += `<text x="${cx.toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-faint)">${t.count}</text>`;
+    }
+    const lbl = t.type.length > 12 ? t.type.slice(0, 11) + '…' : t.type;
+    xlabels += `<text x="${cx.toFixed(1)}" y="${padT + cH + 14}" text-anchor="end" transform="rotate(-42,${cx.toFixed(1)},${padT + cH + 14})" font-size="9" fill="var(--text-faint)">${_esc(lbl)}</text>`;
+  });
+
+  const axes = `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + cH}" stroke="var(--bg-border)" stroke-width="1"/>
+    <line x1="${padL}" y1="${padT + cH}" x2="${W - padR}" y2="${padT + cH}" stroke="var(--bg-border)" stroke-width="1"/>`;
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
+    ${grid}${axes}${bars}${xlabels}
   </svg>`;
 }
 
@@ -342,17 +422,7 @@ function _renderIncidentsVolumeChart(monthly, months, target) {
       bars += `<text x="${(xC + barW / 2).toFixed(1)}" y="${(pad.t + cH - hC - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)">${closed}</text>`;
     }
 
-    // Label: "Jun/26" (3-char month + 2-digit year)
-    const parts = (m.label || '').split('-');
-    let shortLabel = m.label;
-    if (parts.length === 2) {
-      try {
-        const raw = new Date(+parts[0], +parts[1] - 1, 1).toLocaleString('pt-BR', { month: 'short' });
-        const mon = raw.charAt(0).toUpperCase() + raw.slice(1, 3).replace('.', '');
-        shortLabel = mon + '/' + parts[0].slice(2);
-      } catch (_) {}
-    }
-    labels += `<text x="${cx.toFixed(1)}" y="${(H - pad.b + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-faint)">${_esc(shortLabel)}</text>`;
+    labels += `<text x="${cx.toFixed(1)}" y="${(H - pad.b + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-faint)">${_esc(_fmtMonth(m.label))}</text>`;
   });
 
   const targetLine = target > 0 ? (() => {
@@ -369,15 +439,7 @@ function _renderIncidentsVolumeChart(monthly, months, target) {
   });
   const backlogLine = `<polyline points="${bkPts.map(p => p.join(',')).join(' ')}" fill="none" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4,3"/>`;
   const backlogDots = bkPts.map((p, i) => {
-    const parts = (data[i].label || '').split('-');
-    let lbl = data[i].label;
-    if (parts.length === 2) {
-      try {
-        const raw = new Date(+parts[0], +parts[1] - 1, 1).toLocaleString('pt-BR', { month: 'short' });
-        lbl = raw.charAt(0).toUpperCase() + raw.slice(1, 3).replace('.', '') + '/' + parts[0].slice(2);
-      } catch (_) {}
-    }
-    return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4" fill="#f97316" style="cursor:default"><title>${lbl}: ${backlogVals[i]} em backlog</title></circle>`;
+    return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4" fill="#f97316" style="cursor:default"><title>${_fmtMonth(data[i].label)}: ${backlogVals[i]} em backlog</title></circle>`;
   }).join('');
 
   const axes = `
@@ -476,7 +538,7 @@ function _renderIncidentSystemBars(bySystem) {
   ]);
 }
 
-function _renderIncidentHeatmap(bySystemMonthly, monthly) {
+function _renderIncidentHeatmap(bySystemMonthly, monthly, colLabel) {
   const allMonths = monthly || [];
   const months = allMonths.slice(-_incidentMonths);
   const allSystems = bySystemMonthly || [];
@@ -506,16 +568,7 @@ function _renderIncidentHeatmap(bySystemMonthly, monthly) {
     return 'rgba(239,68,68,0.65)';
   };
 
-  const monthLabels = months.map(m => {
-    const p = (m.label || '').split('-');
-    if (p.length === 2) {
-      try {
-        const raw = new Date(+p[0], +p[1] - 1, 1).toLocaleString('pt-BR', { month: 'short' });
-        return raw.charAt(0).toUpperCase() + raw.slice(1, 3).replace('.', '') + '/' + p[0].slice(2);
-      } catch (_) {}
-    }
-    return m.label;
-  });
+  const monthLabels = months.map(m => _fmtMonth(m.label));
 
   const th = 'padding:4px 8px;font-size:9px;font-weight:600;color:var(--text-faint);text-align:center;border-bottom:1px solid var(--bg-border)';
   const td = 'padding:4px 6px;font-size:10px;text-align:center;border:1px solid var(--bg-border)';
@@ -533,7 +586,7 @@ function _renderIncidentHeatmap(bySystemMonthly, monthly) {
 
   return `<div style="overflow-x:auto">
     <table style="border-collapse:collapse;width:100%;min-width:360px">
-      <thead><tr><th style="${th};text-align:left">IC Afetado</th>${headerCells}</tr></thead>
+      <thead><tr><th style="${th};text-align:left">${_esc(colLabel || 'Sistema')}</th>${headerCells}</tr></thead>
       <tbody>${rows}</tbody>
     </table>
   </div>`;
@@ -557,12 +610,14 @@ function _renderChartCell(chart, delivery, idx, sprints, incidents) {
     const monthsLabel = chart.months || 5;
     title   = `Volume de Incidentes vs Target · ${monthsLabel} meses`;
     content = incidents
-      ? _renderIncidentsVolumeChart(incidents.monthly, chart.months || 5, incidents.target)
+      ? _renderIncidentsVolumeChart(incidents.monthly, monthsLabel, incidents.target)
       : '<div class="report-empty-hint">Service Now not configured for this project</div>';
   } else {
-    title   = `Entregas por ${_esc(chart.label || 'Tipo de Item')}`;
+    title   = `US por ${_esc(chart.label || 'Tipo de Item')}`;
     const data = (delivery.byTypes || {})[chart.ref || ''] || [];
-    content = (chart.chartStyle === 'bar') ? _renderTypeBar(data) : _renderTypeDonut(data);
+    content = chart.chartStyle === 'bar'          ? _renderTypeBar(data, chart.barColor)
+            : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical(data, chart.barColor)
+            : _renderTypeDonut(data);
   }
 
   const header = `<div class="report-field-picker-header">
@@ -590,14 +645,27 @@ function _renderChartCell(chart, delivery, idx, sprints, incidents) {
 
 // ── Sections ──────────────────────────────────────────────────────────────────
 
-function _renderDelivery(delivery) {
+function _renderDelivery(delivery, quality, incidents) {
   const sprints = (delivery.sprints || []).sort((a, b) => a.name.localeCompare(b.name));
   const totalSP          = sprints.reduce((s, sp) => s + (sp.points || 0), 0);
   const totalSPDelivered = sprints.reduce((s, sp) => s + (sp.pointsDelivered || 0), 0);
 
+  const totalUS = delivery.totalUS ?? delivery.totalDelivered;
+  const delRate = totalUS  > 0 ? Math.round(delivery.totalDelivered / totalUS  * 100) : 0;
+  const spRate  = totalSP  > 0 ? Math.round(totalSPDelivered        / totalSP  * 100) : 0;
+  const delCls  = delRate >= 70 ? 'green' : delRate >= 40 ? 'yellow' : totalUS > 0 ? 'red' : '';
+  const spCls   = spRate  >= 70 ? 'green' : spRate  >= 40 ? 'yellow' : totalSP > 0 ? 'red' : '';
+
+  const openCls   = quality.bugsOpen   > 10 ? 'red' : quality.bugsOpen   > 5 ? 'yellow' : 'green';
+  const newCls    = quality.bugsNew    > 5  ? 'red' : quality.bugsNew    > 2 ? 'yellow' : '';
+  const closedCls = quality.bugsClosed > 0  ? 'green' : '';
+  const net       = (quality.bugsNew || 0) - (quality.bugsClosed || 0);
+  const saldoCls  = net < 0 ? 'green' : net > 0 ? 'red' : '';
+  const saldoSub  = net < 0 ? 'Melhorando' : net > 0 ? 'Piorando' : 'Estável';
+
   const sprintRows = sprints.length
     ? sprints.map(s => {
-        const pct    = s.total > 0 ? Math.round(s.delivered / s.total * 100) : 0;
+        const pct    = s.total  > 0 ? Math.round(s.delivered           / s.total  * 100) : 0;
         const ptsPct = s.points > 0 ? Math.round((s.pointsDelivered || 0) / s.points * 100) : 0;
         return `<tr>
           <td>${_esc(s.name)}</td>
@@ -609,34 +677,69 @@ function _renderDelivery(delivery) {
       }).join('')
     : '<tr><td colspan="5" class="report-empty-row">No sprints found for this period</td></tr>';
 
+  const chartCells = _reportCharts.map((chart, idx) =>
+    _renderChartCell(chart, delivery, idx, sprints, incidents)
+  ).join('');
+
   return `<div class="report-section">
-    <div class="report-section-title">Delivery</div>
-    <div class="report-metrics-row">
-      ${_metric('User Stories', delivery.totalUS ?? delivery.totalDelivered, 'in period sprints', '')}
-      ${_metric('Delivered', delivery.totalDelivered, 'Done / Closed / Resolved', delivery.totalDelivered > 0 ? 'green' : '')}
-      ${_metric('Story Points', totalSP, 'committed', '')}
-      ${_metric('SP Delivered', totalSPDelivered, 'Done / Closed / Resolved', totalSPDelivered > 0 ? 'green' : '')}
+    <div class="report-section-title">AMS Sprint Delivery</div>
+    <div class="report-prb-cards">
+      <div class="report-prb-card">
+        <div class="report-prb-card-val">${totalUS}</div>
+        <div class="report-prb-card-label">User Stories</div>
+        <div class="report-prb-card-sub">no período</div>
+      </div>
+      <div class="report-prb-card">
+        <div class="report-prb-card-val ${delCls}">${delivery.totalDelivered}</div>
+        <div class="report-prb-card-label">Entregues</div>
+        <div class="report-prb-card-sub">${delRate}% do total</div>
+      </div>
+      <div class="report-prb-card">
+        <div class="report-prb-card-val">${totalSP}</div>
+        <div class="report-prb-card-label">Story Points</div>
+        <div class="report-prb-card-sub">comprometidos</div>
+      </div>
+      <div class="report-prb-card">
+        <div class="report-prb-card-val ${spCls}">${totalSPDelivered}</div>
+        <div class="report-prb-card-label">SP Entregues</div>
+        <div class="report-prb-card-sub">${spRate}% do total</div>
+      </div>
+      <div class="report-prb-card">
+        <div class="report-prb-card-val ${openCls}">${quality.bugsOpen}</div>
+        <div class="report-prb-card-label">Bugs Abertos</div>
+        <div class="report-prb-card-sub">ativos no momento</div>
+      </div>
+      <div class="report-prb-card">
+        <div class="report-prb-card-val ${newCls}">${quality.bugsNew}</div>
+        <div class="report-prb-card-label">Bugs Novos</div>
+        <div class="report-prb-card-sub">abertos no período</div>
+      </div>
+      <div class="report-prb-card">
+        <div class="report-prb-card-val ${closedCls}">${quality.bugsClosed}</div>
+        <div class="report-prb-card-label">Bugs Resolvidos</div>
+        <div class="report-prb-card-sub">fechados no período</div>
+      </div>
+      <div class="report-prb-card">
+        <div class="report-prb-card-val ${saldoCls}">${net > 0 ? '+' : ''}${net}</div>
+        <div class="report-prb-card-label">Saldo de Bugs</div>
+        <div class="report-prb-card-sub">${saldoSub}</div>
+      </div>
     </div>
+    <div class="report-subsection-title" style="margin-top:4px">Distribuição por Sprint</div>
+    <div class="report-prb-chart-sub">User Stories e Story Points por sprint no período</div>
     <table class="report-table">
-      <thead><tr><th>Sprint</th><th class="num">Total US</th><th class="num">Delivered</th><th class="num">SP Total</th><th class="num">SP Delivered</th></tr></thead>
+      <thead><tr><th>Sprint</th><th class="num">Total US</th><th class="num">Entregues</th><th class="num">SP Total</th><th class="num">SP Entregues</th></tr></thead>
       <tbody>${sprintRows}</tbody>
     </table>
+    <div class="report-donuts-grid">
+      ${chartCells}
+      <div class="report-add-chart-section">
+        <button class="report-add-chart-btn" onclick="reportAddChart()">+ Adicionar gráfico</button>
+      </div>
+    </div>
   </div>`;
 }
 
-function _renderQuality(quality) {
-  const openCls   = quality.bugsOpen > 10 ? 'red' : quality.bugsOpen > 5 ? 'yellow' : 'green';
-  const newCls    = quality.bugsNew  > 5  ? 'red' : quality.bugsNew  > 2  ? 'yellow' : '';
-  const closedCls = quality.bugsClosed > 0 ? 'green' : '';
-  return `<div class="report-section">
-    <div class="report-section-title">Quality</div>
-    <div class="report-metrics-row">
-      ${_metric('Open Bugs', quality.bugsOpen,   'currently active', openCls)}
-      ${_metric('New Bugs',  quality.bugsNew,    'opened this month', newCls)}
-      ${_metric('Fixed',     quality.bugsClosed, 'closed this month', closedCls)}
-    </div>
-  </div>`;
-}
 
 function _renderIncidents(inc) {
   if (!inc) return '';
@@ -728,19 +831,11 @@ function _renderIncidents(inc) {
     ${_renderIncidentSystemBars(barData)}
     <div class="report-subsection-title" style="margin-top:16px">Heatmap: ${groupLabel} × Mês</div>
     <div class="report-prb-chart-sub">Frequência de incidentes no histórico</div>
-    ${_renderIncidentHeatmap(heatmapData, inc.monthly)}
+    ${_renderIncidentHeatmap(heatmapData, inc.monthly, groupLabel)}
   </div>`;
 }
 
 function _renderPrbStatusDonut(list) {
-  const STATE_CFG = {
-    '101': { label: 'New',                 color: '#0d9488' },
-    '102': { label: 'Assess',              color: '#f97316' },
-    '103': { label: 'Root Cause Analysis', color: '#eab308' },
-    '104': { label: 'Fix in Progress',     color: '#3b82f6' },
-    '106': { label: 'Resolved',            color: '#8b5cf6' },
-    '107': { label: 'Closed',              color: '#374151' },
-  };
   const counts = {};
   (list || []).forEach(p => { const k = String(p.state); counts[k] = (counts[k] || 0) + 1; });
   const total = Object.values(counts).reduce((s, v) => s + v, 0);
@@ -751,7 +846,7 @@ function _renderPrbStatusDonut(list) {
   const slices = [];
   const legendItems = [];
   Object.entries(counts).forEach(([state, count]) => {
-    const cfg = STATE_CFG[state] || { label: state, color: '#6b7280' };
+    const cfg = _PRB_STATES[state] || { label: state, color: '#6b7280' };
     const angle = (count / total) * 2 * Math.PI;
     const endAngle = startAngle + angle;
     const large = angle > Math.PI ? 1 : 0;
@@ -798,8 +893,6 @@ function _renderPrbEvolutionChart(monthly) {
   const slotW = chartW / n;
   const bw = Math.max(4, Math.floor(slotW * 0.28));
 
-  const MONTH_NAMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-
   // Grid lines (left axis)
   const gridLines = Array.from({ length: 5 }, (_, i) => {
     const val = Math.round(maxBar * i / 4);
@@ -814,8 +907,7 @@ function _renderPrbEvolutionChart(monthly) {
     const hR = (m.resolved|| 0) / maxBar * chartH;
     const xO = cx - bw - 1;
     const xR = cx + 1;
-    const [y, mo] = m.label.split('-');
-    const lbl = MONTH_NAMES[parseInt(mo) - 1] + '/' + y.slice(2);
+    const lbl = _fmtMonth(m.label);
     return `<rect x="${xO}" y="${pad.t + chartH - hO}" width="${bw}" height="${hO}" fill="#6366f1" rx="1"/>` +
       `<rect x="${xR}" y="${pad.t + chartH - hR}" width="${bw}" height="${hR}" fill="#a5b4fc" rx="1"/>` +
       (m.opened  > 0 ? `<text x="${xO + bw / 2}" y="${pad.t + chartH - hO - 3}" text-anchor="middle" font-size="7" fill="var(--text-faint)">${m.opened}</text>`   : '') +
@@ -829,9 +921,7 @@ function _renderPrbEvolutionChart(monthly) {
     pad.t + chartH - Math.max(0, v) / maxBar * chartH,
   ]);
   const accDots = accPts.map((p, i) => {
-    const [y, mo] = monthly[i].label.split('-');
-    const lbl = MONTH_NAMES[parseInt(mo) - 1] + '/' + y.slice(2);
-    return `<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="#ef4444" style="cursor:default"><title>${lbl}: ${accumulated[i]} em backlog</title></circle>`;
+    return `<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="#ef4444" style="cursor:default"><title>${_fmtMonth(monthly[i].label)}: ${accumulated[i]} em backlog</title></circle>`;
   }).join('');
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">
@@ -851,14 +941,6 @@ function _renderPrbEvolutionChart(monthly) {
 function _renderPrbAgingChart(list) {
   if (!list || list.length === 0) return '<div class="report-empty-row">No PRBs</div>';
 
-  const STATE_CFG = {
-    '101': { label: 'New',                 color: '#0d9488' },
-    '102': { label: 'Assess',              color: '#f97316' },
-    '103': { label: 'Root Cause Analysis', color: '#eab308' },
-    '104': { label: 'Fix in Progress',     color: '#3b82f6' },
-    '106': { label: 'Resolved',            color: '#8b5cf6' },
-    '107': { label: 'Closed',              color: '#374151' },
-  };
   const STATE_ORDER = ['101','102','103','104','106','107'];
 
   const BUCKETS = [
@@ -904,7 +986,7 @@ function _renderPrbAgingChart(list) {
       const h = (count / maxTotal) * chartH;
       yTop -= h;
       const segY = (yTop + h / 2 + 3).toFixed(1);
-      return `<rect x="${bx}" y="${yTop}" width="${bw}" height="${h}" fill="${STATE_CFG[st].color}" rx="1"/>` +
+      return `<rect x="${bx}" y="${yTop}" width="${bw}" height="${h}" fill="${_PRB_STATES[st].color}" rx="1"/>` +
         (h > 12 ? `<text x="${cx}" y="${segY}" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">${count}</text>` : '');
     }).join('');
     return segs +
@@ -920,16 +1002,14 @@ function _renderPrbAgingChart(list) {
     ${bars}
   </svg>`;
   return svgHtml + _legendHtml(activeStates.map(st =>
-    ({ type: 'rect', color: STATE_CFG[st].color, label: STATE_CFG[st].label })
+    ({ type: 'rect', color: _PRB_STATES[st].color, label: _PRB_STATES[st].label })
   ));
 }
 
 function _renderPrbOldestList(list) {
   if (!list || list.length === 0) return '<div class="report-empty-row">No PRBs</div>';
 
-  const STATE_LABELS = { '101':'New','102':'Assess','103':'Root Cause Analysis','104':'Fix in Progress','106':'Resolved','107':'Closed' };
-  const STATE_COLORS = { '101':'#0d9488','102':'#f97316','103':'#eab308','104':'#3b82f6','106':'#8b5cf6','107':'#6b7280' };
-  const P_COLORS     = { '1':'#ef4444','2':'#f97316','3':'#eab308','4':'#6b7280' };
+  const P_COLORS = { '1':'#ef4444','2':'#f97316','3':'#eab308','4':'#6b7280' };
 
   const sorted  = [...list].sort((a, b) => (b.agingDays || 0) - (a.agingDays || 0)).slice(0, 10);
   const maxDays = Math.max(...sorted.map(p => p.agingDays || 0), 1);
@@ -944,7 +1024,7 @@ function _renderPrbOldestList(list) {
       <td class="report-td" style="color:var(--text-faint);width:24px;text-align:center">${i + 1}</td>
       <td class="report-td" style="font-family:monospace;font-size:11px;white-space:nowrap">${_esc(p.id || '—')}</td>
       <td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.title)}">${_esc(p.title || '—')}</td>
-      <td class="report-td"><span style="font-size:11px;font-weight:600;color:${STATE_COLORS[st] || 'var(--text-faint)'}">${_esc(STATE_LABELS[st] || st)}</span></td>
+      <td class="report-td"><span style="font-size:11px;font-weight:600;color:${_PRB_STATES[st]?.color || 'var(--text-faint)'}">${_esc(_PRB_STATES[st]?.label || st)}</span></td>
       <td class="report-td" style="text-align:center"><span style="font-size:11px;font-weight:700;color:${P_COLORS[pr] || 'var(--text-faint)'}">P${_esc(pr)}</span></td>
       <td class="report-td" style="min-width:130px">
         <div style="display:flex;align-items:center;gap:6px">
@@ -1044,12 +1124,6 @@ function _buildHTML(payload) {
     ? '<div class="report-sn-notice">Service Now not configured for this project. Showing Azure DevOps data only.</div>'
     : '';
 
-  const sprints = (delivery.sprints || []).sort((a, b) => a.name.localeCompare(b.name));
-
-  const chartCells = _reportCharts.map((chart, idx) =>
-    _renderChartCell(chart, delivery, idx, sprints, incidents)
-  ).join('');
-
   return `
     <div class="report-content">
       <div class="report-header-card">
@@ -1058,16 +1132,7 @@ function _buildHTML(payload) {
         <div class="report-header-gen">Generated: ${_esc(metadata.generatedAt)}</div>
       </div>
       ${snWarning}
-      <div class="report-grid">
-        ${_renderDelivery(delivery)}
-        ${_renderQuality(quality)}
-      </div>
-      <div class="report-donuts-grid">
-        ${chartCells}
-        <div class="report-add-chart-section">
-          <button class="report-add-chart-btn" onclick="reportAddChart()">+ Adicionar gráfico</button>
-        </div>
-      </div>
+      ${_renderDelivery(delivery, quality, incidents)}
       ${incidents ? _renderIncidents(incidents) : ''}
       ${prbs      ? _renderPRBs(prbs, incidents) : ''}
     </div>
@@ -1090,7 +1155,7 @@ export async function openReport(btn) {
   const card = btn.closest('[data-project]');
   _reportProject = card ? card.dataset.project : '';
   _reportMonth   = null;
-  await _loadGroupFields();
+  await _loadReportConfig();
 
   document.getElementById('report-modal-title').textContent = _reportProject;
   const modal = document.getElementById('report-modal');
@@ -1137,13 +1202,15 @@ export function reportOpenFieldPicker(idx) {
 
   const isEdit        = _pickerIdx >= 0;
   const currentChart  = isEdit ? _reportCharts[_pickerIdx] : null;
-  const currentSize   = currentChart?.size       || 'md';
-  const currentType   = currentChart?.type       || 'donut';
-  const currentRef    = currentChart?.ref        || '';
-  const currentStyle  = currentChart?.chartStyle || 'donut';
-  const isDonut       = !isEdit ? true : currentType === 'donut';
-  const isIncidents   = isEdit && currentType === 'incidents';
-  const currentMonths = currentChart?.months || 5;
+  const currentSize     = currentChart?.size       || 'md';
+  const currentType     = currentChart?.type       || 'donut';
+  const currentRef      = currentChart?.ref        || '';
+  const currentStyle    = currentChart?.chartStyle || 'donut';
+  const currentBarColor = currentChart?.barColor   || '';
+  const isDonut         = !isEdit ? true : currentType === 'donut';
+  const isIncidents     = isEdit && currentType === 'incidents';
+  const currentMonths   = currentChart?.months || 5;
+  const isBarStyle      = isDonut && (currentStyle === 'bar' || currentStyle === 'bar-vertical');
 
   const backdrop = document.createElement('div');
   backdrop.id        = 'report-picker-backdrop';
@@ -1182,8 +1249,9 @@ export function reportOpenFieldPicker(idx) {
 
   // Chart style (donut vs bar) — only for donut charts
   const styleOpts = [
-    { val: 'donut', label: 'Donut' },
-    { val: 'bar',   label: 'Barras' },
+    { val: 'donut',        label: 'Donut' },
+    { val: 'bar',          label: 'Barras' },
+    { val: 'bar-vertical', label: 'Barras Verticais' },
   ].map(o => `<button class="report-size-opt${currentStyle === o.val ? ' active' : ''}" data-style="${o.val}">${o.label}</button>`).join('');
   const styleSection = `
     <div id="report-style-label"${!isDonut ? ' style="display:none"' : ''}>
@@ -1198,11 +1266,26 @@ export function reportOpenFieldPicker(idx) {
       <input type="number" id="report-inc-months" class="report-inc-months-input" min="1" max="12" value="${currentMonths}">
     </div>`;
 
+  // Bar color — only for bar/bar-vertical donut charts
+  const barColorSection = `
+    <div id="report-bar-color-section"${!isBarStyle ? ' style="display:none"' : ''}>
+      <div class="report-field-picker-label">Cor das barras</div>
+      <select id="report-bar-color-mode" class="report-field-sel">
+        <option value="multi"${!currentBarColor ? ' selected' : ''}>Multicolor</option>
+        <option value="single"${currentBarColor ? ' selected' : ''}>Cor única</option>
+      </select>
+      <div id="report-bar-color-picker"${!currentBarColor ? ' style="display:none"' : ''}>
+        <input type="color" id="report-bar-color-input" value="${currentBarColor || '#8b5cf6'}"
+          style="margin-top:6px;width:100%;height:32px;border:none;padding:0;cursor:pointer;background:none">
+      </div>
+    </div>`;
+
   picker.innerHTML = `
     <div class="report-field-picker-title">${isEdit ? 'Configurar gráfico' : 'Novo gráfico'}</div>
     ${typeSection}
     ${fieldSection}
     ${styleSection}
+    ${barColorSection}
     ${monthsSection}
     <div class="report-field-picker-label">Tamanho</div>
     <div class="report-size-group" id="report-size-group-el">${sizeOpts}</div>
@@ -1222,6 +1305,17 @@ export function reportOpenFieldPicker(idx) {
     const group = opt.closest('.report-size-group');
     group?.querySelectorAll('.report-size-opt').forEach(b => b.classList.remove('active'));
     opt.classList.add('active');
+    // Show/hide bar color section when style changes
+    if (group?.id === 'report-style-group' && opt.dataset.style) {
+      const sec = document.getElementById('report-bar-color-section');
+      if (sec) sec.style.display = (opt.dataset.style === 'bar' || opt.dataset.style === 'bar-vertical') ? '' : 'none';
+    }
+  });
+
+  // Toggle color picker input when mode changes
+  document.getElementById('report-bar-color-mode')?.addEventListener('change', e => {
+    const cp = document.getElementById('report-bar-color-picker');
+    if (cp) cp.style.display = e.target.value === 'single' ? '' : 'none';
   });
 
   function _loadPickerFields(selectedRef) {
@@ -1255,14 +1349,17 @@ export function reportOpenFieldPicker(idx) {
         show('report-field-label'); show('report-field-picker-body');
         show('report-style-label'); show('report-style-group');
         hide('report-months-section');
+        hide('report-bar-color-section'); // hidden until bar style selected
         _loadPickerFields('');
       } else if (isIncNow) {
         hide('report-field-label'); hide('report-field-picker-body');
         hide('report-style-label'); hide('report-style-group');
+        hide('report-bar-color-section');
         show('report-months-section');
       } else {
         hide('report-field-label'); hide('report-field-picker-body');
         hide('report-style-label'); hide('report-style-group');
+        hide('report-bar-color-section');
         hide('report-months-section');
       }
     });
@@ -1276,13 +1373,13 @@ export function reportOpenFieldPicker(idx) {
 
 export function reportSetIncidentMonths(n) {
   _incidentMonths = Math.min(13, Math.max(1, parseInt(n) || 5));
-  _saveGroupFields();
+  _saveReportConfig();
   _rerender();
 }
 
 export function reportSetIncidentGroupBy(val) {
   _incidentGroupBy = val === 'resolution_code' ? 'resolution_code' : 'cmdb_ci';
-  _saveGroupFields();
+  _saveReportConfig();
   _rerender();
 }
 
@@ -1292,13 +1389,13 @@ export function reportAddChart() {
 
 export function reportRemoveChart(idx) {
   _reportCharts.splice(idx, 1);
-  _saveGroupFields();
+  _saveReportConfig();
   _rerender();
 }
 
 export function reportResizeChart(idx, size) {
   _reportCharts[idx] = { ..._reportCharts[idx], size };
-  _saveGroupFields();
+  _saveReportConfig();
   _rerender();
 }
 
@@ -1325,7 +1422,7 @@ export function reportDrop(e, targetIdx) {
   const moved = _reportCharts.splice(_dragSrcIdx, 1)[0];
   _reportCharts.splice(targetIdx, 0, moved);
   _dragSrcIdx = -1;
-  _saveGroupFields();
+  _saveReportConfig();
   _rerender();
 }
 
@@ -1350,7 +1447,9 @@ function _applyChartPicker() {
   const size       = document.querySelector('#report-size-group-el .report-size-opt.active')?.dataset.size
                   || document.querySelector('#report-field-picker .report-size-opt[data-size].active')?.dataset.size
                   || 'md';
-  const chartStyle = document.querySelector('#report-style-group .report-size-opt.active')?.dataset.style || 'donut';
+  const chartStyle    = document.querySelector('#report-style-group .report-size-opt.active')?.dataset.style || 'donut';
+  const barColorMode  = document.getElementById('report-bar-color-mode')?.value;
+  const barColor      = barColorMode === 'single' ? (document.getElementById('report-bar-color-input')?.value || '') : '';
   let needsRefetch = false;
 
   if (_pickerIdx >= 0) {
@@ -1365,9 +1464,9 @@ function _applyChartPicker() {
         const ref   = sel.value;
         const label = ref ? (sel.options[sel.selectedIndex]?.text || ref) : 'Tipo de Item';
         needsRefetch = ref !== chart.ref;
-        _reportCharts[_pickerIdx] = { type: 'donut', ref, label, size, chartStyle };
+        _reportCharts[_pickerIdx] = { type: 'donut', ref, label, size, chartStyle, barColor };
       } else {
-        _reportCharts[_pickerIdx] = { ...chart, size, chartStyle };
+        _reportCharts[_pickerIdx] = { ...chart, size, chartStyle, barColor };
       }
     } else {
       // sprint or volatility — only size can change
@@ -1384,14 +1483,14 @@ function _applyChartPicker() {
       const sel   = document.getElementById('report-field-sel');
       const ref   = sel?.value || '';
       const label = ref ? (sel?.options[sel?.selectedIndex]?.text || ref) : 'Tipo de Item';
-      _reportCharts.push({ type: 'donut', ref, label, size, chartStyle });
+      _reportCharts.push({ type: 'donut', ref, label, size, chartStyle, barColor });
       needsRefetch = true;
     } else {
       _reportCharts.push({ type, size });
     }
   }
 
-  _saveGroupFields();
+  _saveReportConfig();
   _closeFieldPicker();
   if (needsRefetch) {
     _load(true);

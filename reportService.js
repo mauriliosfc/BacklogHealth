@@ -208,7 +208,6 @@ async function fetchAzureReport(displayName, period, groupFields = []) {
   refs.forEach(r => { rawMaps[r] = {}; });
 
   filteredDelivItems.forEach(i => {
-    if (!DONE_STATES.includes(i.fields['System.State'])) return;
     refs.forEach(r => {
       const t = (r ? i.fields[r] : null) || i.fields['System.WorkItemType'] || '(sem tipo)';
       rawMaps[r][t] = (rawMaps[r][t] || 0) + 1;
@@ -305,30 +304,38 @@ async function fetchSnReport(displayName, period) {
     incAvgResolutionDays = Math.round(total / incClosedInPeriod.length);
   }
 
-  // Histórico mensal — processa um mês por vez (5 queries paralelas/mês) para
-  // não esgotar o pool de conexões com 65+ requests simultâneos ao SN.
+  // Histórico mensal — processado em lotes de 4 meses em paralelo (16 req/lote).
+  // Reduz de 13 round-trips sequenciais para ~4, sem sobrecarregar o SN.
+  const HISTORY_BATCH = 4;
   const monthly      = [];
   const prbMonthly   = [];
   const sysMonthData = {}; // { ciName: [count per history index] }
   const altMonthData = {}; // { resCode: [count per history index] }
-  for (let mIdx = 0; mIdx < period.history.length; mIdx++) {
-    const m = period.history[mIdx];
-    const [hy, hm] = m.split('-').map(Number);
-    const hs = new Date(hy, hm - 1, 1).toISOString().slice(0, 19) + 'Z';
-    const he = new Date(hy, hm, 0, 23, 59, 59).toISOString().slice(0, 19) + 'Z';
 
-    const incOpenedQ  = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
-    const incClosedQ  = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
-    const prbOpenedQ  = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
-    const prbResolvedQ= `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
+  const allHistoryResults = [];
+  for (let bStart = 0; bStart < period.history.length; bStart += HISTORY_BATCH) {
+    const batch = await Promise.all(
+      period.history.slice(bStart, bStart + HISTORY_BATCH).map(async m => {
+        const [hy, hm] = m.split('-').map(Number);
+        const hs = new Date(hy, hm - 1, 1).toISOString().slice(0, 19) + 'Z';
+        const he = new Date(hy, hm, 0, 23, 59, 59).toISOString().slice(0, 19) + 'Z';
+        const incOpenedQ   = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
+        const incClosedQ   = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
+        const prbOpenedQ   = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
+        const prbResolvedQ = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
+        const [rIncO, rIncC, rPrbO, rPrbR] = await Promise.all([
+          snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incOpenedQ)}&sysparm_fields=sys_id,cmdb_ci.name,u_additional_res_code&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
+          snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
+          snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
+          snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
+        ]);
+        return { m, rIncO, rIncC, rPrbO, rPrbR };
+      })
+    );
+    allHistoryResults.push(...batch);
+  }
 
-    const [rIncO, rIncC, rPrbO, rPrbR] = await Promise.all([
-      snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incOpenedQ)}&sysparm_fields=sys_id,cmdb_ci.name,u_additional_res_code&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
-      snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
-      snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
-      snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
-    ]);
-
+  allHistoryResults.forEach(({ m, rIncO, rIncC, rPrbO, rPrbR }, mIdx) => {
     const incOpened = rIncO.result || [];
     incOpened.forEach(i => {
       const name = _snVal(i['cmdb_ci.name']) || 'Outros';
@@ -338,7 +345,6 @@ async function fetchSnReport(displayName, period) {
       if (!altMonthData[alt]) altMonthData[alt] = new Array(period.history.length).fill(0);
       altMonthData[alt][mIdx]++;
     });
-
     monthly.push({
       label:  m,
       opened: incOpened.length,
@@ -349,7 +355,7 @@ async function fetchSnReport(displayName, period) {
       opened:   (rPrbO.result || []).length,
       resolved: (rPrbR.result || []).length,
     });
-  }
+  });
 
   // Backlog histórico de PRBs — calculado de trás para frente a partir do backlog atual
   prbMonthly[prbMonthly.length - 1].openBacklog = prbs.length;

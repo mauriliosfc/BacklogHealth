@@ -642,9 +642,19 @@ ${context || 'No project data available at this moment.'}`;
         const pcfg    = cfg.projects.find(p => getDisplayName(p) === project);
         const proj    = pcfg?.name || project;
         const r       = await azureGet(`${encodeURIComponent(proj)}/_apis/wit/fields?api-version=7.0`);
-        const EXACT   = new Set(['System.AreaPath', 'System.Tags', 'Microsoft.VSTS.Common.ValueArea']);
+        const STANDARD = new Set([
+          'System.AreaPath',
+          'System.IterationPath',
+          'System.WorkItemType',
+          'System.State',
+          'System.AssignedTo',
+          'System.Tags',
+          'Microsoft.VSTS.Common.Priority',
+          'Microsoft.VSTS.Common.ValueArea',
+          'Microsoft.VSTS.Common.Activity',
+        ]);
         const fields  = (r.value || [])
-          .filter(f => f.referenceName.startsWith('Custom.') || EXACT.has(f.referenceName))
+          .filter(f => f.referenceName.startsWith('Custom.') || STANDARD.has(f.referenceName))
           .map(f => ({ ref: f.referenceName, label: f.name }))
           .sort((a, b) => a.label.localeCompare(b.label));
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
