@@ -109,9 +109,18 @@ function saveSnConfig({ instance, user, pass } = {}, projectGroup = null) {
     cfg.servicenow = { ...(cfg.servicenow || {}), ...(instance !== undefined ? { instance } : {}), ...(user !== undefined ? { user } : {}), ...(pass !== undefined ? { pass } : {}) };
   }
   if (projectGroup) {
-    const { projectName, assignmentGroup, assignmentGroupName, incidentTarget } = projectGroup;
+    const { projectName, assignmentGroup, assignmentGroupName, slaThresholds, slaEnabled } = projectGroup;
     const proj = (cfg.projects || []).find(p => getDisplayName(p) === projectName || p.name === projectName);
-    if (proj) proj.servicenow = { assignmentGroup, assignmentGroupName, incidentTarget };
+    if (proj) {
+      const existing = proj.servicenow || {};
+      proj.servicenow = {
+        ...existing,
+        ...(assignmentGroup     !== undefined ? { assignmentGroup }     : {}),
+        ...(assignmentGroupName !== undefined ? { assignmentGroupName } : {}),
+        ...(slaEnabled          !== undefined ? { slaEnabled: slaEnabled === true } : {}),
+        ...(slaThresholds                     ? { slaThresholds }                   : {}),
+      };
+    }
   }
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
 }

@@ -3,8 +3,15 @@
 let _reportProject   = null;
 let _reportMonth     = null;
 let _reportCharts    = []; // [{type:'sprint'|'volatility'|'donut'|'incidents', size:'sm'|'md'|'lg', ref?:'', label?:'', chartStyle?:'donut'|'bar'|'bar-vertical', barColor?:'', months?:number}]
-let _incidentMonths  = 5; // months to show in the static incidents section
+let _agingState      = 'In Review'; // estado monitorado nos gráficos de aging (compartilhado)
+let _agingCharts     = [{ size: 'md' }, { size: 'md' }]; // tamanho por gráfico de aging
+let _incidentMonths  = 5;        // months to show in the incidents section
+let _incidentTarget  = 24;       // target mensal de incidentes
 let _incidentGroupBy = 'cmdb_ci'; // 'cmdb_ci' | 'resolution_code'
+let _heatmapMax      = 0;        // 0 = escala automática (relativa ao max dos dados)
+let _agingBuckets    = [7, 14, 30, 60]; // thresholds for US aging buckets (days)
+let _deliveryStates  = ['Closed', 'Done', 'Resolved']; // states counted as delivered
+let _slaEnabled      = false;
 let _pickerIdx       = -1; // -1 = add new, >=0 = edit existing chart
 let _lastPayload     = null;
 let _dragSrcIdx      = -1;
@@ -28,12 +35,27 @@ async function _loadReportConfig() {
   let charts   = null;
   let needsSave = false;
 
+  // 0. Load SLA config from sn-config (parallel, non-blocking)
+  fetch('/api/sn-config?' + new URLSearchParams({ project: _reportProject }))
+    .then(r => r.json())
+    .then(d => {
+      _slaEnabled    = d.slaEnabled    === true;
+      _slaThresholds = d.slaThresholds || { p1: 4, p2: 8, p3: 72 };
+    })
+    .catch(() => {});
+
   // 1. Try server (config.json) — prefer new format, migrate old format
   try {
     const r    = await fetch('/api/report-config?' + new URLSearchParams({ project: _reportProject }));
     const data = await r.json();
-    if (data.incidentMonths)  _incidentMonths  = data.incidentMonths;
-    if (data.incidentGroupBy) _incidentGroupBy = data.incidentGroupBy;
+    if (data.incidentMonths)          _incidentMonths  = data.incidentMonths;
+    if (data.incidentGroupBy)         _incidentGroupBy = data.incidentGroupBy;
+    if (data.incidentTarget != null)  _incidentTarget  = data.incidentTarget;
+    if (data.heatmapMax     != null)  _heatmapMax      = data.heatmapMax;
+    if (Array.isArray(data.agingBuckets) && data.agingBuckets.length === 4) _agingBuckets = data.agingBuckets;
+    if (Array.isArray(data.deliveryStates) && data.deliveryStates.length)  _deliveryStates = data.deliveryStates;
+    if (data.agingState)              _agingState      = data.agingState;
+    if (data.agingCharts?.length) _agingCharts    = data.agingCharts;
     if (data.reportCharts?.length) {
       charts = data.reportCharts;
     } else if (data.groupFields?.length) {
@@ -73,7 +95,7 @@ function _saveReportConfig() {
   fetch('/api/report-config', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ project: _reportProject, reportCharts: _reportCharts, incidentMonths: _incidentMonths, incidentGroupBy: _incidentGroupBy }),
+    body:    JSON.stringify({ project: _reportProject, reportCharts: _reportCharts, incidentMonths: _incidentMonths, incidentTarget: _incidentTarget, incidentGroupBy: _incidentGroupBy, heatmapMax: _heatmapMax, agingState: _agingState, agingCharts: _agingCharts, agingBuckets: _agingBuckets, deliveryStates: _deliveryStates }),
   }).catch(() => {});
 }
 
@@ -378,7 +400,7 @@ function _renderTypeBarVertical(byType, barColor) {
   </svg>`;
 }
 
-function _renderIncidentsVolumeChart(monthly, months, target) {
+function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
   const data = (monthly || []).slice(-months);
   if (!data.length) return '<div class="report-empty-hint">Sem dados de incidentes para o período</div>';
 
@@ -405,24 +427,32 @@ function _renderIncidentsVolumeChart(monthly, months, target) {
   }
 
   data.forEach((m, i) => {
-    const cx     = pad.l + i * grpW + grpW / 2;
-    const opened = m.opened || 0;
-    const closed = m.closed || 0;
-    const hO     = (opened / yMax) * cH;
-    const hC     = (closed / yMax) * cH;
+    const cx       = pad.l + i * grpW + grpW / 2;
+    const opened   = m.opened || 0;
+    const closed   = m.closed || 0;
+    const hO       = (opened / yMax) * cH;
+    const hC       = (closed / yMax) * cH;
+    const isSel    = selectedMonth && m.label === selectedMonth;
+
+    // Fundo de destaque para o mês selecionado
+    if (isSel) {
+      bars += `<rect x="${(pad.l + i * grpW + 2).toFixed(1)}" y="${pad.t}" width="${(grpW - 4).toFixed(1)}" height="${cH}" fill="var(--bg-border)" rx="3" opacity="0.35"/>`;
+    }
 
     const xO = cx - barW - gap / 2;
     const xC = cx + gap / 2;
     if (hO > 0) {
-      bars += `<rect x="${xO.toFixed(1)}" y="${(pad.t + cH - hO).toFixed(1)}" width="${barW}" height="${hO.toFixed(1)}" fill="#93c5fd" rx="2"/>`;
+      bars += `<rect x="${xO.toFixed(1)}" y="${(pad.t + cH - hO).toFixed(1)}" width="${barW}" height="${hO.toFixed(1)}" fill="${isSel ? '#60a5fa' : '#93c5fd'}" rx="2"/>`;
       bars += `<text x="${(xO + barW / 2).toFixed(1)}" y="${(pad.t + cH - hO - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)">${opened}</text>`;
     }
     if (hC > 0) {
-      bars += `<rect x="${xC.toFixed(1)}" y="${(pad.t + cH - hC).toFixed(1)}" width="${barW}" height="${hC.toFixed(1)}" fill="#34d399" rx="2"/>`;
+      bars += `<rect x="${xC.toFixed(1)}" y="${(pad.t + cH - hC).toFixed(1)}" width="${barW}" height="${hC.toFixed(1)}" fill="${isSel ? '#10b981' : '#34d399'}" rx="2"/>`;
       bars += `<text x="${(xC + barW / 2).toFixed(1)}" y="${(pad.t + cH - hC - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)">${closed}</text>`;
     }
 
-    labels += `<text x="${cx.toFixed(1)}" y="${(H - pad.b + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-faint)">${_esc(_fmtMonth(m.label))}</text>`;
+    const labelColor = isSel ? 'var(--text-muted)' : 'var(--text-faint)';
+    const labelWeight = isSel ? 'font-weight="600"' : '';
+    labels += `<text x="${cx.toFixed(1)}" y="${(H - pad.b + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="${labelColor}" ${labelWeight}>${_esc(_fmtMonth(m.label))}</text>`;
   });
 
   const targetLine = target > 0 ? (() => {
@@ -557,11 +587,12 @@ function _renderIncidentHeatmap(bySystemMonthly, monthly, colLabel) {
 
   const histLen   = (items[0]?.monthly || []).length;
   const monthStart = Math.max(0, histLen - months.length);
-  const maxCount  = Math.max(...items.flatMap(s => months.map((_, i) => s.monthly[monthStart + i] || 0)), 1);
+  const autoMax   = Math.max(...items.flatMap(s => months.map((_, i) => s.monthly[monthStart + i] || 0)), 1);
+  const maxCount  = _heatmapMax > 0 ? _heatmapMax : autoMax;
 
   const heatBg = cnt => {
     if (!cnt) return 'var(--bg-card)';
-    const r = cnt / maxCount;
+    const r = Math.min(1, cnt / maxCount);
     if (r < 0.25) return 'rgba(34,197,94,0.25)';
     if (r < 0.5)  return 'rgba(250,204,21,0.45)';
     if (r < 0.75) return 'rgba(249,115,22,0.55)';
@@ -610,7 +641,7 @@ function _renderChartCell(chart, delivery, idx, sprints, incidents) {
     const monthsLabel = chart.months || 5;
     title   = `Volume de Incidentes vs Target · ${monthsLabel} meses`;
     content = incidents
-      ? _renderIncidentsVolumeChart(incidents.monthly, monthsLabel, incidents.target)
+      ? _renderIncidentsVolumeChart(incidents.monthly, monthsLabel, _incidentTarget)
       : '<div class="report-empty-hint">Service Now not configured for this project</div>';
   } else {
     title   = `US por ${_esc(chart.label || 'Tipo de Item')}`;
@@ -643,10 +674,138 @@ function _renderChartCell(chart, delivery, idx, sprints, incidents) {
   </div>`;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function _computeAgingBuckets(items, thresholds) {
+  const [t1, t2, t3, t4] = thresholds;
+  const labels = [`≤${t1}d`, `${t1 + 1}–${t2}d`, `${t2 + 1}–${t3}d`, `${t3 + 1}–${t4}d`, `>${t4}d`];
+  const counts = labels.map(label => ({ label, count: 0 }));
+  (items || []).forEach(item => {
+    const d = item.agingDays || 0;
+    if (d <= t1)      counts[0].count++;
+    else if (d <= t2) counts[1].count++;
+    else if (d <= t3) counts[2].count++;
+    else if (d <= t4) counts[3].count++;
+    else              counts[4].count++;
+  });
+  return counts;
+}
+
+function _deltaHtml(curr, prev, lowerIsBetter = false) {
+  if (prev == null || curr == null) return '';
+  const diff = curr - prev;
+  if (diff === 0) return '<span class="report-delta report-delta--neutral">= 0</span>';
+  const good = lowerIsBetter ? diff < 0 : diff > 0;
+  const cls  = good ? 'report-delta--good' : 'report-delta--bad';
+  return `<span class="report-delta ${cls}">${diff > 0 ? '+' : ''}${diff}</span>`;
+}
+
+function _slaBadge(sla) {
+  if (!sla || sla.total === 0) return '<div class="report-prb-card-sub">Sem dados de SLA</div>';
+  const cls = sla.pct >= 90 ? 'sla-ok' : sla.pct >= 70 ? 'sla-warn' : 'sla-bad';
+  const breachLabel = sla.breached > 0
+    ? `<span class="report-sla-threshold">(${sla.breached} violado${sla.breached !== 1 ? 's' : ''})</span>`
+    : '';
+  return `<div class="report-sla-badge ${cls}">${sla.pct}% no SLA ${breachLabel}</div>`;
+}
+
+// ── US Aging charts ──────────────────────────────────────────────────────────
+
+function _renderUsAgingBuckets(usAging) {
+  if (!usAging) return '<div class="report-empty-hint">Sem dados — clique em ⚙ para configurar o estado</div>';
+  if (!usAging.total) return '<div class="report-empty-hint">Sem US no estado configurado</div>';
+  // Use list for configurable thresholds; fall back to pre-computed buckets in old cache entries
+  const buckets = usAging.list?.length
+    ? _computeAgingBuckets(usAging.list, _agingBuckets)
+    : (usAging.buckets || []);
+  if (!buckets.length || !buckets.some(b => b.count > 0)) return '<div class="report-empty-hint">Sem US no estado configurado</div>';
+
+  const COLORS  = ['#0d9488', '#3b82f6', '#f59e0b', '#f97316', '#ef4444'];
+  const maxCount = Math.max(...buckets.map(b => b.count), 1);
+
+  const W = 600, H = 210;
+  const pad = { t: 20, r: 20, b: 60, l: 36 };
+  const chartW = W - pad.l - pad.r;
+  const chartH = H - pad.t - pad.b;
+  const slotW  = chartW / buckets.length;
+  const bw     = Math.floor(slotW * 0.5);
+
+  const gridLines = Array.from({ length: 5 }, (_, i) => {
+    const val = Math.round(maxCount * i / 4);
+    const y   = pad.t + chartH - (val / maxCount) * chartH;
+    return `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="var(--text-faint)" stroke-width="0.3" stroke-dasharray="3,3"/>` +
+      `<text x="${pad.l - 4}" y="${y + 4}" text-anchor="end" font-size="7.5" fill="var(--text-faint)">${val}</text>`;
+  }).join('');
+
+  const bars = buckets.map((b, i) => {
+    const cx = pad.l + i * slotW + slotW / 2;
+    const bx = cx - bw / 2;
+    const h  = (b.count / maxCount) * chartH;
+    const y  = pad.t + chartH - h;
+    const color = COLORS[i];
+    return (b.count > 0
+      ? `<rect x="${bx}" y="${y}" width="${bw}" height="${h}" fill="${color}" rx="1"/>` +
+        (h > 12 ? `<text x="${cx}" y="${(y + h / 2 + 3).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">${b.count}</text>` : '') +
+        `<text x="${cx}" y="${y - 4}" text-anchor="middle" font-size="8" fill="var(--text-muted)">${b.count}</text>`
+      : '') +
+      `<text x="${cx}" y="${pad.t + chartH + 14}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${_esc(b.label)}</text>`;
+  }).join('');
+
+  const H_svg = H - 38;
+  const svgHtml = `<svg viewBox="0 0 ${W} ${H_svg}" style="width:100%;display:block">
+    ${gridLines}
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + chartH}" stroke="var(--text-faint)" stroke-width="0.5"/>
+    <line x1="${pad.l}" y1="${pad.t + chartH}" x2="${W - pad.r}" y2="${pad.t + chartH}" stroke="var(--text-faint)" stroke-width="0.5"/>
+    ${bars}
+  </svg>`;
+
+  return svgHtml + _legendHtml(COLORS.map((color, i) => ({ type: 'rect', color, label: buckets[i]?.label || '' })));
+}
+
+function _renderUsTop10(usAging) {
+  if (!usAging) return '<div class="report-empty-hint">Sem dados — clique em ⚙ para configurar o estado</div>';
+  const list = (usAging.list || usAging.top10 || []).slice(0, 10);
+  if (!list.length) return '<div class="report-empty-hint">Nenhuma US encontrada</div>';
+
+  const maxDays = Math.max(...list.map(u => u.agingDays || 0), 1);
+
+  const rows = list.map((u, i) => {
+    const pct       = Math.round((u.agingDays || 0) / maxDays * 100);
+    const barColor  = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : '#0d9488';
+    const daysColor = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : 'var(--text-muted)';
+    return `<tr>
+      <td class="report-td" style="color:var(--text-faint);width:24px;text-align:center">${i + 1}</td>
+      <td class="report-td" style="width:60px">
+        <a href="${u.url || '#'}" target="_blank" style="color:var(--c-blue);text-decoration:none;font-family:monospace;font-size:11px">#${u.id}</a>
+      </td>
+      <td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(u.title)}">${_esc(u.title)}</td>
+      <td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px" title="${_esc(u.sprint)}">${_esc(u.sprint)}</td>
+      <td class="report-td" style="min-width:130px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:5px;background:var(--bg-el);border-radius:3px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${barColor};border-radius:3px"></div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${daysColor};min-width:34px;text-align:right">${u.agingDays}d</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `<table class="report-table" style="width:100%;table-layout:fixed">
+    <colgroup>
+      <col style="width:28px"><col style="width:68px"><col>
+      <col style="width:120px"><col style="width:150px">
+    </colgroup>
+    <thead><tr><th></th><th>ID</th><th>Título</th><th>Sprint</th><th>Aging</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 // ── Sections ──────────────────────────────────────────────────────────────────
 
-function _renderDelivery(delivery, quality, incidents) {
-  const sprints = (delivery.sprints || []).sort((a, b) => a.name.localeCompare(b.name));
+function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality) {
+  const sprints  = (delivery.sprints || []).sort((a, b) => a.name.localeCompare(b.name));
+  const usAging  = delivery.usAging || null;
   const totalSP          = sprints.reduce((s, sp) => s + (sp.points || 0), 0);
   const totalSPDelivered = sprints.reduce((s, sp) => s + (sp.pointsDelivered || 0), 0);
 
@@ -681,16 +840,26 @@ function _renderDelivery(delivery, quality, incidents) {
     _renderChartCell(chart, delivery, idx, sprints, incidents)
   ).join('');
 
+  const DEFAULT_DONE = ['Closed', 'Done', 'Resolved'];
+  const isCustomDelivery = _deliveryStates.length !== DEFAULT_DONE.length || _deliveryStates.some(s => !DEFAULT_DONE.includes(s));
+  const deliveryStatesSub = isCustomDelivery
+    ? `<div class="report-prb-chart-sub" style="margin-top:2px">Contando como entregue: <strong>${_deliveryStates.join(', ')}</strong></div>`
+    : '';
+
   return `<div class="report-section">
-    <div class="report-section-title">AMS Sprint Delivery</div>
+    <div class="report-section-header-row">
+      <div class="report-section-title">AMS Sprint Delivery</div>
+      <button class="report-field-picker-btn" onclick="reportOpenDeliveryStatesPicker()" title="Configurar estados de entrega">⚙</button>
+    </div>
+    ${deliveryStatesSub}
     <div class="report-prb-cards">
       <div class="report-prb-card">
-        <div class="report-prb-card-val">${totalUS}</div>
+        <div class="report-prb-card-val">${totalUS} ${_deltaHtml(totalUS, prevDelivery?.totalUS, false)}</div>
         <div class="report-prb-card-label">User Stories</div>
         <div class="report-prb-card-sub">no período</div>
       </div>
       <div class="report-prb-card">
-        <div class="report-prb-card-val ${delCls}">${delivery.totalDelivered}</div>
+        <div class="report-prb-card-val ${delCls}">${delivery.totalDelivered} ${_deltaHtml(delivery.totalDelivered, prevDelivery?.totalDelivered, false)}</div>
         <div class="report-prb-card-label">Entregues</div>
         <div class="report-prb-card-sub">${delRate}% do total</div>
       </div>
@@ -705,12 +874,12 @@ function _renderDelivery(delivery, quality, incidents) {
         <div class="report-prb-card-sub">${spRate}% do total</div>
       </div>
       <div class="report-prb-card">
-        <div class="report-prb-card-val ${openCls}">${quality.bugsOpen}</div>
+        <div class="report-prb-card-val ${openCls}">${quality.bugsOpen} ${_deltaHtml(quality.bugsOpen, prevQuality?.bugsOpen, true)}</div>
         <div class="report-prb-card-label">Bugs Abertos</div>
         <div class="report-prb-card-sub">ativos no momento</div>
       </div>
       <div class="report-prb-card">
-        <div class="report-prb-card-val ${newCls}">${quality.bugsNew}</div>
+        <div class="report-prb-card-val ${newCls}">${quality.bugsNew} ${_deltaHtml(quality.bugsNew, prevQuality?.bugsNew, true)}</div>
         <div class="report-prb-card-label">Bugs Novos</div>
         <div class="report-prb-card-sub">abertos no período</div>
       </div>
@@ -737,25 +906,37 @@ function _renderDelivery(delivery, quality, incidents) {
         <button class="report-add-chart-btn" onclick="reportAddChart()">+ Adicionar gráfico</button>
       </div>
     </div>
+    <div class="report-subsection-title" style="margin-top:20px">US Aging — ${_esc(usAging?.state || _agingState)}</div>
+    <div class="report-prb-chart-sub">${usAging ? `${usAging.total} US em "${_esc(usAging.state)}" · sem filtro de sprint` : `Aguardando dados para "${_esc(_agingState)}"`}</div>
+    <div class="report-donuts-grid">
+      <div class="report-donut-cell report-donut-cell-${_agingCharts[0]?.size || 'md'}">
+        <div class="report-field-picker-header">
+          <div class="report-donut-title-row"><div class="report-subsection-title">Aging do Backlog</div></div>
+          <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar gráfico" onclick="reportOpenAgingPicker(0)" draggable="false">⚙</button></div>
+        </div>
+        ${_renderUsAgingBuckets(usAging)}
+      </div>
+      <div class="report-donut-cell report-donut-cell-${_agingCharts[1]?.size || 'md'}">
+        <div class="report-field-picker-header">
+          <div class="report-donut-title-row"><div class="report-subsection-title">TOP 10 — Mais Tempo em "${_esc(usAging?.state || _agingState)}"</div></div>
+          <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar gráfico" onclick="reportOpenAgingPicker(1)" draggable="false">⚙</button></div>
+        </div>
+        ${_renderUsTop10(usAging)}
+      </div>
+    </div>
   </div>`;
 }
 
 
 function _renderIncidents(inc) {
   if (!inc) return '';
-  const riskCls    = inc.total > inc.target ? 'red' : inc.total > inc.target * 0.8 ? 'yellow' : 'green';
+  const riskCls    = _incidentTarget > 0 ? (inc.total > _incidentTarget ? 'red' : inc.total > _incidentTarget * 0.8 ? 'yellow' : 'green') : '';
   const closedCls  = (inc.closedThisMonth || 0) > 0 ? 'green' : '';
   const backlogCls = (inc.openBacklog || 0) > 20 ? 'red' : (inc.openBacklog || 0) > 10 ? 'yellow' : 'green';
   const avgCls     = (inc.avgResolutionDays || 0) > 5 ? 'red' : (inc.avgResolutionDays || 0) > 2 ? 'yellow' : 'green';
 
-  const monthsOpts = [3, 5, 6, 8, 10, 12, 13].map(n =>
-    `<option value="${n}"${n === _incidentMonths ? ' selected' : ''}>${n} meses</option>`
-  ).join('');
-
-  const groupOpts = [
-    { val: 'cmdb_ci',         label: 'IC Afetado' },
-    { val: 'resolution_code', label: 'Additional Resolution Code' },
-  ].map(o => `<option value="${o.val}"${_incidentGroupBy === o.val ? ' selected' : ''}>${o.label}</option>`).join('');
+  const monthly    = inc.monthly || [];
+  const prevMonth  = monthly.length >= 2 ? monthly[monthly.length - 2] : null;
 
   const useAlt      = _incidentGroupBy === 'resolution_code';
   const barData     = useAlt ? (inc.byGroupAlt || [])        : (inc.bySystem || []);
@@ -768,25 +949,16 @@ function _renderIncidents(inc) {
   return `<div class="report-section">
     <div class="report-section-header-row">
       <div class="report-section-title">Incidents</div>
-      <div style="display:flex;gap:12px;align-items:center">
-        <div class="report-inc-months-ctrl">
-          <span class="report-inc-months-lbl">Agrupar</span>
-          <select class="report-inc-months-sel" onchange="reportSetIncidentGroupBy(this.value)">${groupOpts}</select>
-        </div>
-        <div class="report-inc-months-ctrl">
-          <span class="report-inc-months-lbl">Hist.</span>
-          <select class="report-inc-months-sel" onchange="reportSetIncidentMonths(this.value)">${monthsOpts}</select>
-        </div>
-      </div>
+      <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar SLA" onclick="reportOpenSlaPicker()" draggable="false">&#9881;</button></div>
     </div>
     <div class="report-prb-cards">
       <div class="report-prb-card">
-        <div class="report-prb-card-val ${riskCls}">${inc.total}</div>
+        <div class="report-prb-card-val ${riskCls}">${inc.total} ${_deltaHtml(inc.total, prevMonth?.opened, true)}</div>
         <div class="report-prb-card-label">Abertos no mês</div>
-        <div class="report-prb-card-sub">Target: ${inc.target}</div>
+        <div class="report-prb-card-sub">Target: ${_incidentTarget}</div>
       </div>
       <div class="report-prb-card">
-        <div class="report-prb-card-val ${closedCls}">${inc.closedThisMonth ?? 0}</div>
+        <div class="report-prb-card-val ${closedCls}">${inc.closedThisMonth ?? 0} ${_deltaHtml(inc.closedThisMonth ?? 0, prevMonth?.closed, false)}</div>
         <div class="report-prb-card-label">Encerrados no mês</div>
         <div class="report-prb-card-sub">Resolvidos no período</div>
       </div>
@@ -805,32 +977,41 @@ function _renderIncidents(inc) {
       <div class="report-prb-card">
         <div class="report-prb-card-val ${p1Cls}">${inc.byPriority.p1}</div>
         <div class="report-prb-card-label">P1 — Crítico</div>
-        <div class="report-prb-card-sub">Prioridade máxima</div>
+        ${_slaEnabled ? _slaBadge(inc.slaByPriority?.p1) : '<div class="report-prb-card-sub">Prioridade máxima</div>'}
       </div>
       <div class="report-prb-card">
         <div class="report-prb-card-val ${p2Cls}">${inc.byPriority.p2}</div>
         <div class="report-prb-card-label">P2 — Alto</div>
-        <div class="report-prb-card-sub">Alta prioridade</div>
+        ${_slaEnabled ? _slaBadge(inc.slaByPriority?.p2) : '<div class="report-prb-card-sub">Alta prioridade</div>'}
       </div>
       <div class="report-prb-card">
         <div class="report-prb-card-val">${inc.byPriority.p3}</div>
         <div class="report-prb-card-label">P3 — Médio</div>
-        <div class="report-prb-card-sub">Média prioridade</div>
+        ${_slaEnabled ? _slaBadge(inc.slaByPriority?.p3) : '<div class="report-prb-card-sub">Média prioridade</div>'}
       </div>
       <div class="report-prb-card">
-        <div class="report-prb-card-val">${Math.round(inc.target > 0 ? inc.total / inc.target * 100 : 0)}%</div>
+        <div class="report-prb-card-val">${_incidentTarget > 0 ? `${Math.round(inc.total / _incidentTarget * 100)}%` : '—'}</div>
         <div class="report-prb-card-label">vs Target</div>
-        <div class="report-prb-card-sub">${inc.total > inc.target ? 'Acima do target' : 'Dentro do target'}</div>
+        <div class="report-prb-card-sub">${_incidentTarget > 0 ? (inc.total > _incidentTarget ? 'Acima do target' : 'Dentro do target') : 'Sem target definido'}</div>
       </div>
     </div>
-    <div class="report-subsection-title">Abertos e Fechados por Mês</div>
-    <div class="report-prb-chart-sub">Histórico de volume de incidentes${inc.target > 0 ? ` — target: ${inc.target}` : ''}</div>
-    ${_renderIncidentsVolumeChart(inc.monthly, _incidentMonths, inc.target)}
-    <div class="report-subsection-title" style="margin-top:16px">${groupLabel} — Top 9 por Volume</div>
+    <div class="report-field-picker-header" style="margin-top:12px">
+      <div class="report-donut-title-row"><div class="report-subsection-title">Abertos e Fechados por Mês</div></div>
+      <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar gráfico" onclick="reportOpenIncidentVolumePicker()" draggable="false">⚙</button></div>
+    </div>
+    <div class="report-prb-chart-sub">Histórico de volume de incidentes${_incidentTarget > 0 ? ` — target: ${_incidentTarget}` : ''} · ${_incidentMonths} meses</div>
+    ${_renderIncidentsVolumeChart(inc.monthly, _incidentMonths, _incidentTarget, _reportMonth)}
+    <div class="report-field-picker-header" style="margin-top:16px">
+      <div class="report-donut-title-row"><div class="report-subsection-title">${groupLabel} — Top 9 por Volume</div></div>
+      <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar agrupamento" onclick="reportOpenIncidentGroupByPicker()" draggable="false">⚙</button></div>
+    </div>
     <div class="report-prb-chart-sub">Volume de incidentes por severidade</div>
     ${_renderIncidentSystemBars(barData)}
-    <div class="report-subsection-title" style="margin-top:16px">Heatmap: ${groupLabel} × Mês</div>
-    <div class="report-prb-chart-sub">Frequência de incidentes no histórico</div>
+    <div class="report-field-picker-header" style="margin-top:16px">
+      <div class="report-donut-title-row"><div class="report-subsection-title">Heatmap: ${groupLabel} × Mês</div></div>
+      <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar heatmap" onclick="reportOpenHeatmapPicker()" draggable="false">⚙</button></div>
+    </div>
+    <div class="report-prb-chart-sub">Frequência de incidentes${_heatmapMax > 0 ? ` — escala fixa: máx ${_heatmapMax}` : ' — escala automática'}</div>
     ${_renderIncidentHeatmap(heatmapData, inc.monthly, groupLabel)}
   </div>`;
 }
@@ -1119,20 +1300,43 @@ function _renderPRBs(prbs, incidents) {
 }
 
 function _buildHTML(payload) {
-  const { metadata, hasSn, delivery, quality, incidents, prbs } = payload;
-  const snWarning = !hasSn
-    ? '<div class="report-sn-notice">Service Now not configured for this project. Showing Azure DevOps data only.</div>'
+  const { metadata, hasSn, delivery, quality, incidents, prbs, prevDelivery, prevQuality } = payload;
+
+  // Cache age indicator
+  const ageMs  = metadata.generatedAtTs ? Date.now() - metadata.generatedAtTs : 0;
+  const ageH   = Math.floor(ageMs / 3600000);
+  const ageMin = Math.floor((ageMs % 3600000) / 60000);
+  const ageCls = ageH >= 5 ? 'red' : ageH >= 3 ? 'yellow' : 'green';
+  const ageStr = ageMs > 0
+    ? (ageH > 0 ? `${ageH}h${ageMin > 0 ? ` ${ageMin}min` : ''} atrás` : ageMin > 0 ? `${ageMin}min atrás` : 'agora mesmo')
     : '';
+
+  const snWarning = !hasSn
+    ? `<div class="report-sn-notice">
+        <span>Service Now não configurado para este projeto. Exibindo apenas dados do Azure DevOps.</span>
+        <button class="report-sn-notice-btn" onclick="openReportSnConfig()">Configurar</button>
+       </div>`
+    : '';
+
+  const savedNotes = localStorage.getItem(`reportNotes::${_reportProject}::${_reportMonth}`) || '';
+  const notesBar = `<div class="report-notes-bar">
+    <textarea class="report-notes-input" placeholder="Anotações para este relatório..." onchange="reportSaveNotes(this.value)">${_esc(savedNotes)}</textarea>
+    <button class="report-print-btn" onclick="window.print()" title="Imprimir / Exportar PDF">&#128424; Imprimir / PDF</button>
+  </div>`;
 
   return `
     <div class="report-content">
       <div class="report-header-card">
         <div class="report-header-title">${_esc(metadata.project)}</div>
         <div class="report-header-period">${_esc(metadata.period)}</div>
-        <div class="report-header-gen">Generated: ${_esc(metadata.generatedAt)}</div>
+        <div class="report-header-gen">
+          Coletado: ${_esc(metadata.generatedAt)}
+          ${ageStr ? `<span class="report-age-badge report-age-badge--${ageCls}">${ageStr}</span>` : ''}
+        </div>
       </div>
       ${snWarning}
-      ${_renderDelivery(delivery, quality, incidents)}
+      ${notesBar}
+      ${_renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality)}
       ${incidents ? _renderIncidents(incidents) : ''}
       ${prbs      ? _renderPRBs(prbs, incidents) : ''}
     </div>
@@ -1170,6 +1374,12 @@ export function closeReport() {
   modal.classList.remove('open', 'maximized');
   document.getElementById('report-modal-max').textContent = '\u2922';
   document.body.style.overflow = '';
+}
+
+export function reportSaveNotes(value) {
+  const key = `reportNotes::${_reportProject}::${_reportMonth}`;
+  if (value && value.trim()) localStorage.setItem(key, value);
+  else localStorage.removeItem(key);
 }
 
 export function openReportSnConfig() {
@@ -1371,17 +1581,6 @@ export function reportOpenFieldPicker(idx) {
   }
 }
 
-export function reportSetIncidentMonths(n) {
-  _incidentMonths = Math.min(13, Math.max(1, parseInt(n) || 5));
-  _saveReportConfig();
-  _rerender();
-}
-
-export function reportSetIncidentGroupBy(val) {
-  _incidentGroupBy = val === 'resolution_code' ? 'resolution_code' : 'cmdb_ci';
-  _saveReportConfig();
-  _rerender();
-}
 
 export function reportAddChart() {
   reportOpenFieldPicker(-1);
@@ -1443,6 +1642,325 @@ function _closeFieldPicker() {
   document.getElementById('report-picker-backdrop')?.remove();
 }
 
+export function reportOpenIncidentVolumePicker() {
+  _closeFieldPicker();
+
+  const MONTH_OPTS = [3, 5, 6, 8, 10, 12, 13, 24];
+  const monthBtns = MONTH_OPTS.map(n =>
+    `<button class="report-size-opt${n === _incidentMonths ? ' active' : ''}" data-months="${n}">${n} meses</button>`
+  ).join('');
+
+  const backdrop = document.createElement('div');
+  backdrop.id        = 'report-picker-backdrop';
+  backdrop.className = 'report-field-backdrop';
+  backdrop.onclick   = _closeFieldPicker;
+  document.body.appendChild(backdrop);
+
+  const picker = document.createElement('div');
+  picker.id        = 'report-field-picker';
+  picker.className = 'report-field-picker';
+  picker.innerHTML = `
+    <div class="report-field-picker-title">Configurar — Histórico de Incidentes</div>
+    <div class="report-field-picker-label">Meses de histórico</div>
+    <div class="report-size-group" id="report-inc-vol-months-group" style="flex-wrap:wrap">${monthBtns}</div>
+    <div class="report-field-picker-label" style="margin-top:10px">Target mensal</div>
+    <input type="number" id="report-inc-vol-target" class="report-inc-months-input" min="0" max="9999" value="${_incidentTarget}">
+    <div class="report-field-picker-actions">
+      <button class="report-picker-btn-cancel" id="report-inc-vol-cancel">Cancelar</button>
+      <button class="report-picker-btn-apply"  id="report-inc-vol-apply">Aplicar</button>
+    </div>`;
+  document.body.appendChild(picker);
+
+  document.getElementById('report-inc-vol-cancel').onclick = _closeFieldPicker;
+  document.getElementById('report-inc-vol-apply').onclick  = _applyIncidentVolumePicker;
+
+  picker.querySelectorAll('#report-inc-vol-months-group .report-size-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      picker.querySelectorAll('#report-inc-vol-months-group .report-size-opt').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+}
+
+function _applyIncidentVolumePicker() {
+  const newMonths = parseInt(document.querySelector('#report-inc-vol-months-group .report-size-opt.active')?.dataset.months) || _incidentMonths;
+  const newTarget = Math.max(0, parseInt(document.getElementById('report-inc-vol-target')?.value) || 0);
+  _closeFieldPicker();
+  const monthsChanged = newMonths !== _incidentMonths;
+  _incidentMonths = newMonths;
+  _incidentTarget = newTarget;
+  _saveReportConfig();
+  if (monthsChanged) _load(); else _rerender();
+}
+
+export function reportOpenIncidentGroupByPicker() {
+  _closeFieldPicker();
+  const selectOpts = [
+    { val: 'cmdb_ci',         label: 'IC Afetado' },
+    { val: 'resolution_code', label: 'Additional Resolution Code' },
+  ].map(o => `<option value="${o.val}"${_incidentGroupBy === o.val ? ' selected' : ''}>${o.label}</option>`).join('');
+
+  const backdrop = document.createElement('div');
+  backdrop.id        = 'report-picker-backdrop';
+  backdrop.className = 'report-field-backdrop';
+  backdrop.onclick   = _closeFieldPicker;
+  document.body.appendChild(backdrop);
+
+  const picker = document.createElement('div');
+  picker.id        = 'report-field-picker';
+  picker.className = 'report-field-picker';
+  picker.innerHTML = `
+    <div class="report-field-picker-title">Configurar — Agrupamento de Incidentes</div>
+    <div class="report-field-picker-label">Agrupar por</div>
+    <select id="report-inc-groupby-sel" class="report-inc-months-sel" style="width:100%">${selectOpts}</select>
+    <div class="report-field-picker-actions">
+      <button class="report-picker-btn-cancel" id="report-inc-groupby-cancel">Cancelar</button>
+      <button class="report-picker-btn-apply"  id="report-inc-groupby-apply">Aplicar</button>
+    </div>`;
+  document.body.appendChild(picker);
+
+  document.getElementById('report-inc-groupby-cancel').onclick = _closeFieldPicker;
+  document.getElementById('report-inc-groupby-apply').onclick  = _applyIncidentGroupByPicker;
+}
+
+function _applyIncidentGroupByPicker() {
+  const val = document.getElementById('report-inc-groupby-sel')?.value || _incidentGroupBy;
+  _closeFieldPicker();
+  _incidentGroupBy = val === 'resolution_code' ? 'resolution_code' : 'cmdb_ci';
+  _saveReportConfig();
+  _rerender();
+}
+
+export function reportOpenHeatmapPicker() {
+  _closeFieldPicker();
+
+  const backdrop = document.createElement('div');
+  backdrop.id        = 'report-picker-backdrop';
+  backdrop.className = 'report-field-backdrop';
+  backdrop.onclick   = _closeFieldPicker;
+  document.body.appendChild(backdrop);
+
+  const picker = document.createElement('div');
+  picker.id        = 'report-field-picker';
+  picker.className = 'report-field-picker';
+  picker.innerHTML = `
+    <div class="report-field-picker-title">Configurar — Heatmap de Incidentes</div>
+    <div class="report-field-picker-label">
+      Máximo da escala de cor
+      <span style="font-weight:400;opacity:.7;display:block;font-size:11px;margin-top:2px">0 = automático (relativo ao maior valor dos dados visíveis)</span>
+    </div>
+    <input type="number" id="report-heatmap-max-input" class="report-inc-months-input" min="0" max="9999" value="${_heatmapMax}" placeholder="0">
+    <div class="report-field-picker-actions">
+      <button class="report-picker-btn-cancel" id="report-heatmap-cancel">Cancelar</button>
+      <button class="report-picker-btn-apply"  id="report-heatmap-apply">Aplicar</button>
+    </div>`;
+  document.body.appendChild(picker);
+
+  document.getElementById('report-heatmap-cancel').onclick = _closeFieldPicker;
+  document.getElementById('report-heatmap-apply').onclick  = _applyHeatmapPicker;
+}
+
+function _applyHeatmapPicker() {
+  _heatmapMax = Math.max(0, parseInt(document.getElementById('report-heatmap-max-input')?.value) || 0);
+  _closeFieldPicker();
+  _saveReportConfig();
+  _rerender();
+}
+
+let _agingPickerIdx = -1; // índice do gráfico de aging sendo configurado
+
+export async function reportOpenAgingPicker(idx) {
+  _agingPickerIdx = idx ?? 0;
+  _closeFieldPicker();
+
+  const currentSize = _agingCharts[_agingPickerIdx]?.size || 'md';
+  const sizeOpts = [
+    { val: 'sm', label: '3 por linha' },
+    { val: 'md', label: '2 por linha' },
+    { val: 'lg', label: 'Largura total' },
+  ].map(o => `<button class="report-size-opt${currentSize === o.val ? ' active' : ''}" data-size="${o.val}">${o.label}</button>`).join('');
+
+  const backdrop = document.createElement('div');
+  backdrop.id        = 'report-picker-backdrop';
+  backdrop.className = 'report-field-backdrop';
+  backdrop.onclick   = _closeFieldPicker;
+  document.body.appendChild(backdrop);
+
+  const picker = document.createElement('div');
+  picker.id        = 'report-field-picker';
+  picker.className = 'report-field-picker';
+  picker.innerHTML = `
+    <div class="report-field-picker-title">Configurar gráfico — Aging</div>
+    <div class="report-field-picker-label">Estado monitorado</div>
+    <select id="report-aging-state-sel" class="report-field-sel">
+      <option value="${_esc(_agingState)}">${_esc(_agingState)}</option>
+    </select>
+    <div class="report-field-picker-label">Faixas de aging (dias)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div><label style="font-size:11px;color:var(--text-faint)">Limite 1</label><br>
+        <input type="number" id="report-aging-rb0" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${_agingBuckets[0]}"></div>
+      <div><label style="font-size:11px;color:var(--text-faint)">Limite 2</label><br>
+        <input type="number" id="report-aging-rb1" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${_agingBuckets[1]}"></div>
+      <div><label style="font-size:11px;color:var(--text-faint)">Limite 3</label><br>
+        <input type="number" id="report-aging-rb2" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${_agingBuckets[2]}"></div>
+      <div><label style="font-size:11px;color:var(--text-faint)">Limite 4</label><br>
+        <input type="number" id="report-aging-rb3" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${_agingBuckets[3]}"></div>
+    </div>
+    <div class="report-field-picker-label">Tamanho</div>
+    <div class="report-size-group" id="report-aging-size-group">${sizeOpts}</div>
+    <div class="report-field-picker-actions">
+      <button class="report-picker-btn-cancel" id="report-aging-cancel-btn">Cancelar</button>
+      <button class="report-picker-btn-apply" id="report-aging-apply-btn">Aplicar</button>
+    </div>`;
+  document.body.appendChild(picker);
+
+  document.getElementById('report-aging-cancel-btn').onclick = _closeFieldPicker;
+  document.getElementById('report-aging-apply-btn').onclick  = _applyAgingPicker;
+
+  // Toggle de tamanho
+  picker.querySelectorAll('#report-aging-size-group .report-size-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      picker.querySelectorAll('#report-aging-size-group .report-size-opt').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Carrega estados do Azure e popula o select
+  try {
+    const r    = await fetch('/api/us-states?' + new URLSearchParams({ project: _reportProject }));
+    const data = await r.json();
+    const sel  = document.getElementById('report-aging-state-sel');
+    if (sel && data.states?.length) {
+      sel.innerHTML = data.states
+        .map(s => `<option value="${_esc(s)}"${s === _agingState ? ' selected' : ''}>${_esc(s)}</option>`)
+        .join('');
+    }
+  } catch (_) {}
+}
+
+function _applyAgingPicker() {
+  const sel      = document.getElementById('report-aging-state-sel');
+  const newState = sel?.value || _agingState;
+  const newSize  = document.querySelector('#report-aging-size-group .report-size-opt.active')?.dataset.size
+                || _agingCharts[_agingPickerIdx]?.size || 'md';
+  const rb0 = Math.max(1, parseInt(document.getElementById('report-aging-rb0')?.value) || _agingBuckets[0]);
+  const rb1 = Math.max(rb0 + 1, parseInt(document.getElementById('report-aging-rb1')?.value) || _agingBuckets[1]);
+  const rb2 = Math.max(rb1 + 1, parseInt(document.getElementById('report-aging-rb2')?.value) || _agingBuckets[2]);
+  const rb3 = Math.max(rb2 + 1, parseInt(document.getElementById('report-aging-rb3')?.value) || _agingBuckets[3]);
+  const newBuckets = [rb0, rb1, rb2, rb3];
+  _closeFieldPicker();
+
+  const stateChanged   = newState !== _agingState;
+  const bucketsChanged = newBuckets.some((v, i) => v !== _agingBuckets[i]);
+  if (_agingCharts[_agingPickerIdx]) _agingCharts[_agingPickerIdx] = { size: newSize };
+  if (stateChanged)   _agingState   = newState;
+  if (bucketsChanged) _agingBuckets = newBuckets;
+
+  _saveReportConfig();
+  if (stateChanged) _load();
+  else _rerender();
+}
+
+export async function reportOpenDeliveryStatesPicker() {
+  _closeFieldPicker();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'report-picker-backdrop';
+  backdrop.className = 'report-field-backdrop';
+  backdrop.onclick = _closeFieldPicker;
+  document.body.appendChild(backdrop);
+
+  const picker = document.createElement('div');
+  picker.id = 'report-field-picker';
+  picker.className = 'report-field-picker';
+  picker.innerHTML = `
+    <div class="report-field-picker-title">Estados de Entrega</div>
+    <div class="report-field-picker-desc" style="font-size:12px;color:var(--text-faint);margin-top:-6px">US nesses estados contam como entregues na sprint</div>
+    <div id="report-delivery-states-body"><div class="report-field-picker-loading">Carregando estados...</div></div>
+    <div class="report-field-picker-actions">
+      <button class="report-picker-btn-cancel" id="report-delivery-cancel">Cancelar</button>
+      <button class="report-picker-btn-apply"  id="report-delivery-apply">Aplicar</button>
+    </div>`;
+  document.body.appendChild(picker);
+
+  document.getElementById('report-delivery-cancel').onclick = _closeFieldPicker;
+  document.getElementById('report-delivery-apply').onclick  = _applyDeliveryStatesPicker;
+
+  // Load states from Azure
+  try {
+    const r    = await fetch('/api/us-states?' + new URLSearchParams({ project: _reportProject }));
+    const data = await r.json();
+    const body = document.getElementById('report-delivery-states-body');
+    if (!body) return;
+    const states = data.states?.length ? data.states : ['Closed', 'Done', 'Resolved', 'UAT', 'In Review'];
+    body.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;padding:2px 0">` +
+      states.map(s => {
+        const checked = _deliveryStates.includes(s) ? ' checked' : '';
+        return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-1)">
+          <input type="checkbox" value="${_esc(s)}"${checked} style="accent-color:var(--c-blue);width:15px;height:15px">
+          ${_esc(s)}
+        </label>`;
+      }).join('') + `</div>`;
+  } catch (_) {
+    const body = document.getElementById('report-delivery-states-body');
+    if (body) body.innerHTML = '<div class="report-field-picker-error">Erro ao carregar estados</div>';
+  }
+}
+
+function _applyDeliveryStatesPicker() {
+  const checkboxes = document.querySelectorAll('#report-delivery-states-body input[type=checkbox]:checked');
+  const selected   = [...checkboxes].map(cb => cb.value);
+  _closeFieldPicker();
+  if (!selected.length) return; // não salva seleção vazia
+  _deliveryStates = selected;
+  _saveReportConfig();
+  _load();
+}
+
+export function reportOpenSlaPicker() {
+  _closeFieldPicker();
+
+  const backdrop = document.createElement('div');
+  backdrop.id        = 'report-picker-backdrop';
+  backdrop.className = 'report-field-backdrop';
+  backdrop.onclick   = _closeFieldPicker;
+  document.body.appendChild(backdrop);
+
+  const picker = document.createElement('div');
+  picker.id        = 'report-field-picker';
+  picker.className = 'report-field-picker';
+  picker.innerHTML = `
+    <div class="report-field-picker-title">Configurar SLA — Incidents</div>
+    <div style="font-size:12px;color:var(--text-faint);margin-bottom:14px;line-height:1.6">
+      Usa <strong style="color:var(--text-1)">business_elapsed_percentage</strong> da tabela <code>task_sla</code> do ServiceNow.<br>
+      Incidente violado = maior % entre seus SLAs &gt; 100%.
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <input type="checkbox" id="report-sla-enabled-chk" style="width:15px;height:15px;accent-color:var(--c-blue);cursor:pointer" ${_slaEnabled ? 'checked' : ''}>
+      <label for="report-sla-enabled-chk" style="font-size:13px;color:var(--text-1);cursor:pointer;user-select:none">Exibir % dentro do SLA por prioridade</label>
+    </div>
+    <div class="report-field-picker-actions">
+      <button class="report-picker-btn-cancel" id="report-sla-cancel">Cancelar</button>
+      <button class="report-picker-btn-apply" id="report-sla-apply">Aplicar</button>
+    </div>`;
+  document.body.appendChild(picker);
+
+  picker.querySelector('#report-sla-cancel').onclick = _closeFieldPicker;
+  picker.querySelector('#report-sla-apply').onclick  = _applySlaPicker;
+}
+
+async function _applySlaPicker() {
+  const enabled = document.getElementById('report-sla-enabled-chk')?.checked ?? false;
+  _closeFieldPicker();
+  _slaEnabled = enabled;
+  await fetch('/api/sn-config', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ project: _reportProject, slaEnabled: enabled }),
+  }).catch(() => {});
+  _rerender();
+}
+
 function _applyChartPicker() {
   const size       = document.querySelector('#report-size-group-el .report-size-opt.active')?.dataset.size
                   || document.querySelector('#report-field-picker .report-size-opt[data-size].active')?.dataset.size
@@ -1456,7 +1974,7 @@ function _applyChartPicker() {
     // Edit existing chart
     const chart = _reportCharts[_pickerIdx];
     if (chart.type === 'incidents') {
-      const months = Math.min(12, Math.max(1, parseInt(document.getElementById('report-inc-months')?.value) || 5));
+      const months = Math.min(24, Math.max(1, parseInt(document.getElementById('report-inc-months')?.value) || 5));
       _reportCharts[_pickerIdx] = { type: 'incidents', size, months };
     } else if (chart.type === 'donut') {
       const sel = document.getElementById('report-field-sel');
@@ -1477,7 +1995,7 @@ function _applyChartPicker() {
     const typeSel = document.getElementById('report-chart-type-sel');
     const type    = typeSel?.value || 'donut';
     if (type === 'incidents') {
-      const months = Math.min(12, Math.max(1, parseInt(document.getElementById('report-inc-months')?.value) || 5));
+      const months = Math.min(24, Math.max(1, parseInt(document.getElementById('report-inc-months')?.value) || 5));
       _reportCharts.push({ type: 'incidents', size, months });
     } else if (type === 'donut') {
       const sel   = document.getElementById('report-field-sel');
@@ -1518,6 +2036,9 @@ async function _load(refresh = false) {
   if (_reportMonth) q.set('month', _reportMonth);
   if (refresh)      q.set('refresh', '1');
   q.set('groupFields', donutRefs.join(','));
+  q.set('agingState', _agingState);
+  q.set('incidentMonths', String(_incidentMonths));
+  q.set('deliveryStates', _deliveryStates.join(','));
 
   try {
     const r = await fetch('/api/report?' + q);

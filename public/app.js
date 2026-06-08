@@ -13,7 +13,7 @@ import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from './modules/teamCapacity.js';
 import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback, openFeedbackSuccess, closeFeedbackSuccess, closeFeedbackSuccessOverlay } from './modules/feedback.js';
 import { openUAT, closeUAT, closeUATOverlay, toggleUATMax, refreshUAT, uatChangeSprint, uatTogglePlan, uatFilterPlan, uatClearPlanFilter } from './modules/uat.js';
-import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, reportSetIncidentMonths, reportSetIncidentGroupBy, openReportSnConfig } from './modules/report.js';
+import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker } from './modules/report.js';
 import { openSnConfig, closeSnConfig, closeSnConfigOverlay, snConfigTest, snConfigSaveGlobal, snConfigSaveProject } from './modules/snConfig.js';
 
 // Expor funções ao window para inline handlers no HTML
@@ -114,8 +114,13 @@ window.reportDragOver        = reportDragOver;
 window.reportDragLeave       = reportDragLeave;
 window.reportDrop            = reportDrop;
 window.reportDragEnd            = reportDragEnd;
-window.reportSetIncidentMonths   = reportSetIncidentMonths;
-window.reportSetIncidentGroupBy  = reportSetIncidentGroupBy;
+window.reportOpenIncidentGroupByPicker = reportOpenIncidentGroupByPicker;
+window.reportOpenHeatmapPicker         = reportOpenHeatmapPicker;
+window.reportSaveNotes                 = reportSaveNotes;
+window.reportOpenDeliveryStatesPicker  = reportOpenDeliveryStatesPicker;
+window.reportOpenSlaPicker             = reportOpenSlaPicker;
+window.reportOpenAgingPicker          = reportOpenAgingPicker;
+window.reportOpenIncidentVolumePicker = reportOpenIncidentVolumePicker;
 window.openReportSnConfig    = openReportSnConfig;
 window.openSnConfig          = openSnConfig;
 window.closeSnConfig         = closeSnConfig;

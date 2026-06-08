@@ -33,32 +33,33 @@ function _writeCache(type, project, month, data, extra) {
   fs.writeFileSync(_cacheFile(type, project, month, extra), JSON.stringify({ ts: Date.now(), data }), 'utf8');
 }
 
-function cacheInvalidate(project, month, groupField) {
-  // Azure cache uses groupField as suffix; SN cache has no suffix — delete both correctly
+function cacheInvalidate(project, month, groupField, snExtra) {
   try { fs.unlinkSync(_cacheFile('azure', project, month, groupField)); } catch (_) {}
-  try { fs.unlinkSync(_cacheFile('sn',    project, month));            } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn',    project, month, snExtra));   } catch (_) {}
 }
 
 // Retorna Set com IterationPaths das sprints do time que se sobrepõem ao período
 // Se team não informado, retorna null (sem filtro de sprint)
 async function _fetchTeamSprintsForPeriod(proj, team, period) {
-  if (!team) return { paths: null, iterations: [] };
+  if (!team) return { paths: null, allPaths: null, iterations: [] };
   try {
     const sd = await azureGet(
       `${encodeURIComponent(proj)}/${encodeURIComponent(team)}/_apis/work/teamsettings/iterations?api-version=7.0`
     );
     if (sd.value && sd.value.length) {
-      const filtered = sd.value.filter(it => {
+      const all      = sd.value;
+      const filtered = all.filter(it => {
         const start = it.attributes?.startDate?.slice(0, 10);
         const end   = it.attributes?.finishDate?.slice(0, 10);
         if (!start || !end) return false;
-        // usa o ponto médio da sprint para decidir a qual mês ela pertence
+        // Midpoint within period — each sprint counted in exactly one month
         const mid = new Date((new Date(start).getTime() + new Date(end).getTime()) / 2)
           .toISOString().slice(0, 10);
         return mid >= period.start && mid <= period.end;
       });
       return {
-        paths: new Set(filtered.map(it => it.path)),
+        paths:    new Set(filtered.map(it => it.path)), // period sprints (delivery filter)
+        allPaths: new Set(all.map(it => it.path)),       // all team sprints (aging filter)
         iterations: filtered.map(it => ({
           name: it.name,
           path: it.path,
@@ -66,30 +67,35 @@ async function _fetchTeamSprintsForPeriod(proj, team, period) {
         })),
       };
     }
-  } catch (_) {}
-  return { paths: null, iterations: [] };
+  } catch (e) {
+    console.error(`[reportService] _fetchTeamSprintsForPeriod failed for team "${team}":`, e.message);
+  }
+  // Team is configured but API failed or returned no iterations.
+  // Return empty Sets (not null) so filters are always applied and prevent
+  // showing items from other teams in the same project.
+  return { paths: new Set(), allPaths: new Set(), iterations: [] };
 }
 
 // ── Period helpers ─────────────────────────────────────────────────────────────
 
-function buildPeriod(month) {
+function buildPeriod(month, historyMonths = 13) {
   const [y, m] = month.split('-').map(Number);
   const start = new Date(y, m - 1, 1);
   const end   = new Date(y, m, 0);
   const fmt   = d => d.toISOString().slice(0, 10);
   const label = start.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
   const history = [];
-  for (let i = 12; i >= 0; i--) {
+  for (let i = historyMonths - 1; i >= 0; i--) {
     const d = new Date(y, m - 1 - i, 1);
     history.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
   return { month, label, start: fmt(start), end: fmt(end), history };
 }
 
-function getLast6Months() {
+function getLast6Months(n = 6) {
   const result = [];
   const now = new Date();
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < n; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     result.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
@@ -98,18 +104,25 @@ function getLast6Months() {
 
 // ── Azure data ─────────────────────────────────────────────────────────────────
 
-async function fetchAzureReport(displayName, period, groupFields = []) {
+const _DEFAULT_DONE_STATES = ['Closed', 'Done', 'Resolved'];
+
+async function fetchAzureReport(displayName, period, groupFields = [], agingState = '', deliveryStates = null) {
   const pcfg = getProjectConfig(displayName);
   const proj  = pcfg?.name || displayName;
 
-  const cacheKey = groupFields.slice().sort().join('|');
+  const DONE_STATES      = (Array.isArray(deliveryStates) && deliveryStates.length) ? deliveryStates : _DEFAULT_DONE_STATES;
+  const usAgingState     = agingState || '';
+  const cleanGroupFields = (groupFields || []).filter(f => f);
+  // Only extend cache key when delivery states differ from default (backward compat)
+  const isDefaultDelivery = DONE_STATES.length === _DEFAULT_DONE_STATES.length && DONE_STATES.every(s => _DEFAULT_DONE_STATES.includes(s));
+  const cacheKey = [...cleanGroupFields.slice().sort(), usAgingState, ...(isDefaultDelivery ? [] : [DONE_STATES.slice().sort().join(',')])].join('|');
   const cached = _readCache('azure', displayName, period.month, cacheKey);
   if (cached) return cached;
 
   const US_TYPES = "('User Story','Product Backlog Item','Requirement')";
 
   const projEnc = encodeURIComponent(proj);
-  const [delivRes, bugsRes, bugsNewRes, bugsFixRes, teamIterData] = await Promise.all([
+  const [delivRes, bugsRes, bugsNewRes, bugsFixRes, teamIterData, agingRes] = await Promise.all([
     azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
       query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
@@ -137,25 +150,36 @@ async function fetchAzureReport(displayName, period, groupFields = []) {
                 AND [Microsoft.VSTS.Common.StateChangeDate] <= '${period.end}'`
     }),
     _fetchTeamSprintsForPeriod(proj, pcfg?.team, period),
+    usAgingState
+      ? azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
+          query: `SELECT [System.Id] FROM WorkItems
+                  WHERE [System.TeamProject] = '${proj}'
+                    AND [System.WorkItemType] IN ${US_TYPES}
+                    AND [System.State] = '${usAgingState}'`
+        }).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
-  const { paths: teamIterPaths, iterations: teamIterations } = teamIterData;
+  const { paths: teamIterPaths, allPaths: teamAllPaths, iterations: teamIterations } = teamIterData;
 
   const delivIds   = (delivRes.workItems || []).map(i => i.id);
   const bugOpenIds = (bugsRes.workItems  || []).map(i => i.id);
   const bugNewIds  = (bugsNewRes.workItems  || []).map(i => i.id);
   const bugFixIds  = (bugsFixRes.workItems  || []).map(i => i.id);
+  const agingIds   = (agingRes?.workItems  || []).map(i => i.id);
 
-  const baseFields  = 'System.Id,System.State,System.IterationPath,Microsoft.VSTS.Scheduling.StoryPoints,System.WorkItemType,System.CreatedDate';
-  const extraFields = groupFields.filter(r => r && !baseFields.includes(r));
-  const fields      = extraFields.length ? `${baseFields},${extraFields.join(',')}` : baseFields;
-  const bugFields = 'System.Id,System.State,System.IterationPath';
+  const baseFields   = 'System.Id,System.State,System.IterationPath,Microsoft.VSTS.Scheduling.StoryPoints,System.WorkItemType,System.CreatedDate';
+  const extraFields  = cleanGroupFields.filter(r => !baseFields.includes(r));
+  const fields       = extraFields.length ? `${baseFields},${extraFields.join(',')}` : baseFields;
+  const bugFields    = 'System.Id,System.State,System.IterationPath';
+  const agingFields  = 'System.Id,System.Title,System.State,System.AssignedTo,Microsoft.VSTS.Common.StateChangeDate,System.IterationPath';
 
-  const [delivItems, bugOpenItems, bugNewItems, bugFixItems] = await Promise.all([
-    delivIds.length   ? paginatedItems(proj, delivIds,   fields)    : Promise.resolve([]),
-    bugOpenIds.length ? paginatedItems(proj, bugOpenIds, bugFields)  : Promise.resolve([]),
-    bugNewIds.length  ? paginatedItems(proj, bugNewIds,  bugFields)  : Promise.resolve([]),
-    bugFixIds.length  ? paginatedItems(proj, bugFixIds,  bugFields)  : Promise.resolve([]),
+  const [delivItems, bugOpenItems, bugNewItems, bugFixItems, agingItems] = await Promise.all([
+    delivIds.length   ? paginatedItems(proj, delivIds,   fields)      : Promise.resolve([]),
+    bugOpenIds.length ? paginatedItems(proj, bugOpenIds, bugFields)    : Promise.resolve([]),
+    bugNewIds.length  ? paginatedItems(proj, bugNewIds,  bugFields)    : Promise.resolve([]),
+    bugFixIds.length  ? paginatedItems(proj, bugFixIds,  bugFields)    : Promise.resolve([]),
+    agingIds.length   ? paginatedItems(proj, agingIds,   agingFields)  : Promise.resolve([]),
   ]);
 
 
@@ -175,8 +199,6 @@ async function fetchAzureReport(displayName, period, groupFields = []) {
   const openBugs = filterBugs(bugOpenItems);
   const newBugs  = filterBugs(bugNewItems);
   const fixBugs  = filterBugs(bugFixItems);
-
-  const DONE_STATES = ['Closed', 'Done', 'Resolved'];
 
   // Sprint start date map for volatility calculation
   const sprintStartMap = {};
@@ -203,7 +225,7 @@ async function fetchAzureReport(displayName, period, groupFields = []) {
   });
 
   // Delivered items grouped by each requested field (one pass)
-  const refs    = groupFields.length ? groupFields : [''];
+  const refs    = cleanGroupFields.length ? cleanGroupFields : [''];
   const rawMaps = {};
   refs.forEach(r => { rawMaps[r] = {}; });
 
@@ -219,6 +241,45 @@ async function fetchAzureReport(displayName, period, groupFields = []) {
     byTypes[r] = Object.entries(map).sort((a, b) => b[1] - a[1]).map(([type, count]) => ({ type, count }));
   });
 
+  // Filter aging items by all team iteration paths (not just period — item may be in an old sprint)
+  const filteredAgingItems = teamAllPaths
+    ? agingItems.filter(i => {
+        const ip = i.fields['System.IterationPath'] || '';
+        return !ip || teamAllPaths.has(ip);
+      })
+    : agingItems;
+
+  // US Aging
+  let usAging = null;
+  if (usAgingState && filteredAgingItems.length >= 0) {
+    const today = new Date();
+    const BUCKETS = [
+      { label: '< 7 dias',   max: 7          },
+      { label: '7–14 dias',  max: 14         },
+      { label: '15–30 dias', max: 30         },
+      { label: '31–60 dias', max: 60         },
+      { label: '> 60 dias',  max: Infinity   },
+    ];
+    const counts = BUCKETS.map(() => 0);
+
+    const list = filteredAgingItems.map(i => {
+      const sd         = i.fields['Microsoft.VSTS.Common.StateChangeDate'];
+      const agingDays  = sd ? Math.max(0, Math.floor((today - new Date(sd)) / 86400000)) : 0;
+      const sprint     = (i.fields['System.IterationPath'] || '').split('\\').pop() || '—';
+      const assignee   = i.fields['System.AssignedTo']?.displayName || i.fields['System.AssignedTo'] || '—';
+      const bucketIdx  = BUCKETS.findIndex(b => agingDays < b.max);
+      if (bucketIdx >= 0) counts[bucketIdx]++;
+      const baseUrl = getCfg().baseUrl || '';
+      return { id: i.id, url: `${baseUrl}/_workitems/edit/${i.id}`, title: i.fields['System.Title'] || '', assignee, sprint, agingDays };
+    }).sort((a, b) => b.agingDays - a.agingDays);
+
+    usAging = {
+      state: usAgingState,
+      total: list.length,
+      list,   // full sorted list — frontend computes buckets with configurable thresholds
+    };
+  }
+
   const allSprints = Object.values(sprintMap);
   const data = {
     totalDelivered: allSprints.reduce((s, sp) => s + sp.delivered, 0),
@@ -228,6 +289,7 @@ async function fetchAzureReport(displayName, period, groupFields = []) {
     bugsOpen:   openBugs.length,
     bugsNew:    newBugs.length,
     bugsClosed: fixBugs.length,
+    usAging,
   };
 
   _writeCache('azure', displayName, period.month, data, cacheKey);
@@ -254,7 +316,8 @@ async function fetchSnReport(displayName, period) {
   const snGrp  = getProjectSnGroup(displayName);
   if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass || !snGrp?.assignmentGroup) return null;
 
-  const cached = _readCache('sn', displayName, period.month);
+  const snCacheKey = String(period.history.length);
+  const cached = _readCache('sn', displayName, period.month, snCacheKey);
   if (cached) return cached;
 
   const grp = snGrp.assignmentGroup.trim();
@@ -272,17 +335,21 @@ async function fetchSnReport(displayName, period) {
   const prbQuery              = `${grpFilter}^state!=106^state!=107`;
   const prbResolvedQuery      = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}`;
   const prbOpenedThisMonthQuery = `${grpFilter}^opened_at>=${start}^opened_at<=${end}`;
+  // task_sla: usa business_elapsed_percentage nativo do ServiceNow (calendário útil)
+  const taskSlaGrpFilter = isSysId ? `task.assignment_group=${grp}` : `task.assignment_group.name=${grp}`;
+  const taskSlaQuery     = `${taskSlaGrpFilter}^task.resolved_at>=${start}^task.resolved_at<=${end}`;
 
   console.log(`[SN] project="${displayName}" group="${grp}" isSysId=${isSysId}`);
   console.log(`[SN] incQuery: ${incQuery}`);
 
-  const [incRes, incClosedRes, incBacklogRes, prbRes, prbResolvedRes, prbOpenedThisMonthRes] = await Promise.all([
+  const [incRes, incClosedRes, incBacklogRes, prbRes, prbResolvedRes, prbOpenedThisMonthRes, taskSlaRes] = await Promise.all([
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,priority,cmdb_ci.name,u_additional_res_code,state&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN incidents error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incBacklogQuery)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,category,state,opened_at&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at&sysparm_limit=200`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedThisMonthQuery)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
+    snGet(snCfg, `table/task_sla?sysparm_query=${encodeURIComponent(taskSlaQuery)}&sysparm_fields=task,task.priority,business_elapsed_percentage&sysparm_limit=2000`).catch(() => ({ result: [] })),
   ]);
 
   const incidents              = incRes.result || [];
@@ -295,14 +362,49 @@ async function fetchSnReport(displayName, period) {
 
   let incAvgResolutionDays = 0;
   if (incClosedInPeriod.length > 0) {
+    let validCount = 0;
     const total = incClosedInPeriod.reduce((s, i) => {
       if (i.opened_at && i.resolved_at) {
+        validCount++;
         return s + Math.max(0, (new Date(i.resolved_at) - new Date(i.opened_at)) / 86400000);
       }
       return s;
     }, 0);
-    incAvgResolutionDays = Math.round(total / incClosedInPeriod.length);
+    incAvgResolutionDays = validCount > 0 ? Math.round(total / validCount) : 0;
   }
+
+  // SLA compliance via task_sla (business_elapsed_percentage nativo do ServiceNow)
+  // Agrupa por incidente (task.sys_id) e toma o maior % — se > 100 o incidente violou o SLA
+  const taskSlaItems = taskSlaRes.result || [];
+  const taskSlaMap   = {};
+  taskSlaItems.forEach(r => {
+    const taskRef = r.task;
+    const taskId  = typeof taskRef === 'object' ? taskRef.value : String(taskRef || '');
+    const pct     = parseFloat(r.business_elapsed_percentage) || 0;
+    const prioRaw = r['task.priority'];
+    const prio    = typeof prioRaw === 'object' ? String(prioRaw.value || '') : String(prioRaw || '');
+    if (!taskId) return;
+    if (!taskSlaMap[taskId] || pct > taskSlaMap[taskId].pct) {
+      taskSlaMap[taskId] = { pct, prio };
+    }
+  });
+
+  const slaByPriority = {
+    p1: { total: 0, breached: 0, withinSla: 0, pct: null },
+    p2: { total: 0, breached: 0, withinSla: 0, pct: null },
+    p3: { total: 0, breached: 0, withinSla: 0, pct: null },
+  };
+  Object.values(taskSlaMap).forEach(({ pct, prio }) => {
+    const key = prio === '1' ? 'p1' : prio === '2' ? 'p2' : prio === '3' ? 'p3' : null;
+    if (!key) return;
+    slaByPriority[key].total++;
+    if (pct > 100) slaByPriority[key].breached++;
+  });
+  ['p1', 'p2', 'p3'].forEach(k => {
+    const s   = slaByPriority[k];
+    s.withinSla = s.total - s.breached;
+    s.pct       = s.total > 0 ? Math.round(s.withinSla / s.total * 100) : null;
+  });
 
   // Histórico mensal — processado em lotes de 4 meses em paralelo (16 req/lote).
   // Reduz de 13 round-trips sequenciais para ~4, sem sobrecarregar o SN.
@@ -430,15 +532,15 @@ async function fetchSnReport(displayName, period) {
   const resolvedThisMonth = prbsResolvedInPeriod.length;
   const openedThisMonth   = prbsOpenedInPeriod.length;
 
-  const incidentTarget = snGrp?.incidentTarget ?? 24;
   const data = {
     incidents: {
       total:             incidents.length,
       closedThisMonth:   incClosedInPeriod.length,
       openBacklog:       incBacklog,
       avgResolutionDays: incAvgResolutionDays,
-      target:            incidentTarget,
       byPriority,
+      slaEnabled:    snGrp.slaEnabled === true,
+      slaByPriority,
       bySystem,
       bySystemMonthly,
       byGroupAlt,
@@ -457,25 +559,36 @@ async function fetchSnReport(displayName, period) {
     },
   };
 
-  _writeCache('sn', displayName, period.month, data);
+  _writeCache('sn', displayName, period.month, data, snCacheKey);
   return data;
 }
 
 // ── Main entry ─────────────────────────────────────────────────────────────────
 
-async function buildReport(displayName, month, groupFields = []) {
-  const period = buildPeriod(month);
-  const [azure, sn] = await Promise.all([
-    fetchAzureReport(displayName, period, groupFields),
+async function buildReport(displayName, month, groupFields = [], agingState = 'In Review', historyMonths = 13, deliveryStates = null) {
+  const period = buildPeriod(month, Math.min(24, Math.max(1, historyMonths)));
+
+  // Previous month period (for delta comparison)
+  const [y, m] = month.split('-').map(Number);
+  const prevDate      = new Date(y, m - 2, 1);
+  const prevMonthStr  = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+  const prevPeriod    = buildPeriod(prevMonthStr, 1);
+
+  const [azure, sn, prevAzure] = await Promise.all([
+    fetchAzureReport(displayName, period, groupFields, agingState, deliveryStates),
     fetchSnReport(displayName, period),
+    fetchAzureReport(displayName, prevPeriod, [], '', deliveryStates).catch(() => null),
   ]);
+
   return {
-    metadata:  { project: displayName, period: period.label, generatedAt: new Date().toLocaleString('pt-BR') },
-    hasSn:     !!sn,
-    delivery:  { totalUS: azure.totalUS, totalDelivered: azure.totalDelivered, sprints: azure.sprints, byTypes: azure.byTypes },
-    quality:   { bugsOpen: azure.bugsOpen, bugsNew: azure.bugsNew, bugsClosed: azure.bugsClosed },
-    incidents: sn?.incidents || null,
-    prbs:      sn?.prbs      || null,
+    metadata:     { project: displayName, period: period.label, generatedAt: new Date().toLocaleString('pt-BR'), generatedAtTs: Date.now() },
+    hasSn:        !!sn,
+    delivery:     { totalUS: azure.totalUS, totalDelivered: azure.totalDelivered, sprints: azure.sprints, byTypes: azure.byTypes, usAging: azure.usAging },
+    quality:      { bugsOpen: azure.bugsOpen, bugsNew: azure.bugsNew, bugsClosed: azure.bugsClosed },
+    prevDelivery: prevAzure ? { totalUS: prevAzure.totalUS, totalDelivered: prevAzure.totalDelivered } : null,
+    prevQuality:  prevAzure ? { bugsOpen: prevAzure.bugsOpen, bugsNew: prevAzure.bugsNew } : null,
+    incidents:    sn?.incidents || null,
+    prbs:         sn?.prbs      || null,
   };
 }
 
