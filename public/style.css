@@ -1144,9 +1144,11 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .report-picker-btn-cancel { background: var(--bg-el); border: 1px solid var(--bg-border); color: var(--text-2); padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .report-picker-btn-apply  { background: var(--c-blue); border: 1px solid transparent; color: #fff; padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .report-picker-btn-apply:disabled { opacity: .5; cursor: not-allowed; }
-/* ── btn-sn-config (report modal header) ───────────────────────────────────── */
+/* ── btn-sn-config / btn-ai-report (report modal header) ────────────────────── */
 .btn-sn-config { background: none; border: none; color: var(--text-faint); cursor: pointer; padding: 4px 6px; border-radius: 6px; display: flex; align-items: center; transition: color .15s, background .15s; }
 .btn-sn-config:hover { color: var(--text); background: var(--bg-el); }
+.btn-ai-report { background: none; border: 1px solid var(--c-blue); color: var(--c-blue); cursor: pointer; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; letter-spacing: .03em; transition: background .15s, color .15s; white-space: nowrap; }
+.btn-ai-report:hover { background: var(--c-blue); color: #fff; }
 
 /* ── SN Config Modal (individual por projeto) ───────────────────────────────── */
 .sn-config-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 820; align-items: center; justify-content: center; }

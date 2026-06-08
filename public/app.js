@@ -7,13 +7,13 @@ import { closeItemsModal, closeItemsModalOverlay, toggleItemsFilter, clearItemsF
 import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily } from './modules/burndown.js';
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
 import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDeliveryPlanMaximize, toggleDeliveryFilter, applyDeliveryFilter } from './modules/deliveryPlan.js';
-import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilotConnection, saveCopilotConfig, openCopilotChat, closeCopilotChat, closeCopilotChatOverlay, toggleCopilotChatMaximize, toggleCopilotMinimize, toggleCopilotMaximize, clearCopilotChat, openCopilotSettings, copilotInputKeydown, sendCopilotMessage } from './modules/copilot.js';
+import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilotConnection, saveCopilotConfig, openCopilotChat, closeCopilotChat, closeCopilotChatOverlay, toggleCopilotChatMaximize, toggleCopilotMinimize, toggleCopilotMaximize, clearCopilotChat, openCopilotSettings, copilotInputKeydown, sendCopilotMessage, openCopilotWithContext } from './modules/copilot.js';
 import { getAlias, applyAliases, startRename } from './modules/alias.js';
 import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from './modules/teamCapacity.js';
 import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback, openFeedbackSuccess, closeFeedbackSuccess, closeFeedbackSuccessOverlay } from './modules/feedback.js';
 import { openUAT, closeUAT, closeUATOverlay, toggleUATMax, refreshUAT, uatChangeSprint, uatTogglePlan, uatFilterPlan, uatClearPlanFilter } from './modules/uat.js';
-import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal } from './modules/report.js';
+import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot } from './modules/report.js';
 import { openSnConfig, closeSnConfig, closeSnConfigOverlay, snConfigTest, snConfigSaveGlobal, snConfigSaveProject } from './modules/snConfig.js';
 
 // Expor funções ao window para inline handlers no HTML
@@ -77,7 +77,8 @@ window.toggleCopilotMaximize     = toggleCopilotMaximize;
 window.clearCopilotChat          = clearCopilotChat;
 window.openCopilotSettings      = openCopilotSettings;
 window.copilotInputKeydown      = copilotInputKeydown;
-window.sendCopilotMessage       = sendCopilotMessage;
+window.sendCopilotMessage        = sendCopilotMessage;
+window.openCopilotWithContext    = openCopilotWithContext;
 window.startRename               = startRename;
 window.openTeamCapacity  = openTeamCapacity;
 window.showDashboardView = showDashboardView;
@@ -121,6 +122,7 @@ window.reportOpenDeliveryStatesPicker  = reportOpenDeliveryStatesPicker;
 window.reportOpenSlaPicker             = reportOpenSlaPicker;
 window.reportOpenIncidentsModal        = reportOpenIncidentsModal;
 window.reportCloseIncidentsModal       = reportCloseIncidentsModal;
+window.reportOpenCopilot               = reportOpenCopilot;
 window.reportOpenAgingPicker          = reportOpenAgingPicker;
 window.reportOpenIncidentVolumePicker = reportOpenIncidentVolumePicker;
 window.openReportSnConfig    = openReportSnConfig;

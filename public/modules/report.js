@@ -1,4 +1,5 @@
 // ── Monthly Review — modal ES module ─────────────────────────────────────────
+import { openCopilotWithContext } from './copilot.js';
 
 let _reportProject   = null;
 let _reportMonth     = null;
@@ -1418,6 +1419,106 @@ export function reportChangeMonth(month) {
 
 export function reportRefresh() {
   _load(true);
+}
+
+// ── Copilot integration ────────────────────────────────────────────────────────
+
+function _buildReportContext(payload) {
+  const { metadata, delivery, quality, incidents, prbs } = payload;
+
+  const ctx = {
+    fonte:    'Monthly Review Report',
+    projeto:  metadata?.project,
+    periodo:  metadata?.period,
+    geradoEm: metadata?.generatedAt,
+  };
+
+  if (delivery) {
+    const rate = delivery.totalUS > 0
+      ? Math.round(delivery.totalDelivered / delivery.totalUS * 100) + '%'
+      : 'N/A';
+    ctx.entrega = {
+      userStoriesNoPeriodo:  delivery.totalUS,
+      entregues:             delivery.totalDelivered,
+      taxaEntrega:           rate,
+      storyPoints:           delivery.totalSP           ?? null,
+      storyPointsEntregues:  delivery.totalSPDelivered  ?? null,
+      sprints: (delivery.sprints || []).map(s => ({
+        nome:             s.name,
+        entregues:        s.delivered,
+        pontos:           s.points,
+        pontosEntregues:  s.pointsDelivered,
+      })),
+    };
+  }
+
+  if (quality) {
+    ctx.qualidade = {
+      bugsAbertos:  quality.bugsOpen,
+      bugsNovos:    quality.bugsNew,
+      bugsFechados: quality.bugsClosed,
+    };
+  }
+
+  if (incidents) {
+    ctx.incidentes = {
+      totalNoPeriodo:     incidents.total,
+      target:             _incidentTarget > 0 ? _incidentTarget : null,
+      vsTarget:           _incidentTarget > 0
+        ? (incidents.total > _incidentTarget
+            ? `+${incidents.total - _incidentTarget} acima do target`
+            : `${_incidentTarget - incidents.total} abaixo do target`)
+        : null,
+      backlogAtual:         incidents.openBacklog,
+      mediaResolucaoDias:   incidents.avgResolutionDays,
+      porPrioridade:        incidents.byPriority,
+      sla: incidents.slaEnabled ? {
+        p1_pct: incidents.slaByPriority?.p1?.pct ?? null,
+        p2_pct: incidents.slaByPriority?.p2?.pct ?? null,
+        p3_pct: incidents.slaByPriority?.p3?.pct ?? null,
+      } : null,
+      topSistemas: (incidents.bySystem || []).slice(0, 5).map(s => ({
+        sistema: s.name, total: s.total, p1: s.p1, p2: s.p2,
+      })),
+      tendenciaMensal: (incidents.monthly || []).slice(-6).map(m => ({
+        mes:        m.label,
+        abertos:    m.opened,
+        fechados:   m.closed,
+        cancelados: m.cancelled || 0,
+        backlog:    m.openBacklog ?? null,
+      })),
+    };
+  }
+
+  if (prbs) {
+    ctx.problemas = {
+      abertos:             prbs.open,
+      abertosNoPeriodo:    prbs.openedThisMonth,
+      resolvidosNoPeriodo: prbs.resolvedThisMonth,
+      delta:               prbs.delta,
+      mediaIdadeDias:      prbs.avgAging,
+      lista: (prbs.list || []).slice(0, 10).map(p => ({
+        id:        p.id,
+        titulo:    p.title,
+        prioridade: p.priority,
+        idadeDias: p.agingDays,
+        estado:    p.state,
+      })),
+    };
+  }
+
+  const systemPrompt =
+    `Você é um analista sênior de operações de TI. Os dados abaixo são do Service Delivery Report do projeto "${ctx.projeto}" referente ao período "${ctx.periodo}". ` +
+    `Com base nesses dados, ajude a identificar riscos, tendências negativas e ações concretas a serem tomadas. ` +
+    `Seja objetivo, prático e responda sempre em português.`;
+
+  return `${systemPrompt}\n\n${JSON.stringify(ctx, null, 2)}`;
+}
+
+export async function reportOpenCopilot() {
+  if (!_lastPayload) return;
+  const contextStr = _buildReportContext(_lastPayload);
+  await openCopilotWithContext(contextStr);
 }
 
 export function reportOpenFieldPicker(idx) {
