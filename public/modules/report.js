@@ -409,14 +409,14 @@ function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
   const cW = W - pad.l - pad.r;
   const cH = H - pad.t - pad.b;
 
-  const maxVal = Math.max(...data.map(m => Math.max(m.opened || 0, m.closed || 0, m.openBacklog || 0)), target || 0, 1);
+  const maxVal = Math.max(...data.map(m => Math.max(m.opened || 0, m.closed || 0, m.cancelled || 0, m.openBacklog || 0)), target || 0, 1);
   const rawStep = maxVal / 4;
   const step = Math.max(1, Math.ceil(rawStep / 4) * 4);
   const yMax = Math.ceil(maxVal / step) * step;
 
   const grpW = cW / data.length;
-  const barW = Math.min(grpW * 0.28, 22);
-  const gap  = 5;
+  const barW = Math.min(grpW * 0.22, 16);
+  const gap  = 3;
 
   let bars = '', labels = '', gridLines = '', yLabels = '';
 
@@ -427,20 +427,25 @@ function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
   }
 
   data.forEach((m, i) => {
-    const cx       = pad.l + i * grpW + grpW / 2;
-    const opened   = m.opened || 0;
-    const closed   = m.closed || 0;
-    const hO       = (opened / yMax) * cH;
-    const hC       = (closed / yMax) * cH;
-    const isSel    = selectedMonth && m.label === selectedMonth;
+    const cx        = pad.l + i * grpW + grpW / 2;
+    const opened    = m.opened    || 0;
+    const closed    = m.closed    || 0;
+    const cancelled = m.cancelled || 0;
+    const hO  = (opened    / yMax) * cH;
+    const hC  = (closed    / yMax) * cH;
+    const hCa = (cancelled / yMax) * cH;
+    const isSel = selectedMonth && m.label === selectedMonth;
 
     // Fundo de destaque para o mês selecionado
     if (isSel) {
       bars += `<rect x="${(pad.l + i * grpW + 2).toFixed(1)}" y="${pad.t}" width="${(grpW - 4).toFixed(1)}" height="${cH}" fill="var(--bg-border)" rx="3" opacity="0.35"/>`;
     }
 
-    const xO = cx - barW - gap / 2;
-    const xC = cx + gap / 2;
+    const totalGrpW = 3 * barW + 2 * gap;
+    const xO  = cx - totalGrpW / 2;
+    const xC  = xO + barW + gap;
+    const xCa = xC + barW + gap;
+
     if (hO > 0) {
       bars += `<rect x="${xO.toFixed(1)}" y="${(pad.t + cH - hO).toFixed(1)}" width="${barW}" height="${hO.toFixed(1)}" fill="${isSel ? '#60a5fa' : '#93c5fd'}" rx="2"/>`;
       bars += `<text x="${(xO + barW / 2).toFixed(1)}" y="${(pad.t + cH - hO - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)">${opened}</text>`;
@@ -449,8 +454,12 @@ function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
       bars += `<rect x="${xC.toFixed(1)}" y="${(pad.t + cH - hC).toFixed(1)}" width="${barW}" height="${hC.toFixed(1)}" fill="${isSel ? '#10b981' : '#34d399'}" rx="2"/>`;
       bars += `<text x="${(xC + barW / 2).toFixed(1)}" y="${(pad.t + cH - hC - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)">${closed}</text>`;
     }
+    if (hCa > 0) {
+      bars += `<rect x="${xCa.toFixed(1)}" y="${(pad.t + cH - hCa).toFixed(1)}" width="${barW}" height="${hCa.toFixed(1)}" fill="${isSel ? '#fbbf24' : '#fde68a'}" rx="2"/>`;
+      bars += `<text x="${(xCa + barW / 2).toFixed(1)}" y="${(pad.t + cH - hCa - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)">${cancelled}</text>`;
+    }
 
-    const labelColor = isSel ? 'var(--text-muted)' : 'var(--text-faint)';
+    const labelColor  = isSel ? 'var(--text-muted)' : 'var(--text-faint)';
     const labelWeight = isSel ? 'font-weight="600"' : '';
     labels += `<text x="${cx.toFixed(1)}" y="${(H - pad.b + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="${labelColor}" ${labelWeight}>${_esc(_fmtMonth(m.label))}</text>`;
   });
@@ -461,7 +470,7 @@ function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
   })() : '';
 
   // Linha de backlog (mesma escala das barras)
-  const backlogVals = data.map(m => m.openBacklog ?? 0);
+  const backlogVals = data.map(m => Math.abs(m.openBacklog ?? 0));
   const bkPts = data.map((m, i) => {
     const cx = pad.l + i * grpW + grpW / 2;
     const y  = pad.t + cH - (backlogVals[i] / yMax) * cH;
@@ -479,6 +488,7 @@ function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
   const legendItems = [
     { type: 'rect', color: '#93c5fd', label: 'Abertos' },
     { type: 'rect', color: '#34d399', label: 'Fechados' },
+    { type: 'rect', color: '#fde68a', label: 'Cancelados' },
     { type: 'line', color: '#f97316', label: 'Backlog', dashed: true, dot: true },
     ...(target > 0 ? [{ type: 'line', color: '#ef4444', label: `Target (${target})`, dashed: true }] : []),
   ];
@@ -933,6 +943,8 @@ function _renderIncidents(inc) {
   const riskCls    = _incidentTarget > 0 ? (inc.total > _incidentTarget ? 'red' : inc.total > _incidentTarget * 0.8 ? 'yellow' : 'green') : '';
   const closedCls  = (inc.closedThisMonth || 0) > 0 ? 'green' : '';
   const backlogCls = (inc.openBacklog || 0) > 20 ? 'red' : (inc.openBacklog || 0) > 10 ? 'yellow' : 'green';
+  const _curMonth   = new Date().toISOString().slice(0, 7);
+  const backlogLabel = _reportMonth === _curMonth ? 'Backlog atual' : 'Backlog no Encerramento';
   const avgCls     = (inc.avgResolutionDays || 0) > 5 ? 'red' : (inc.avgResolutionDays || 0) > 2 ? 'yellow' : 'green';
 
   const monthly    = inc.monthly || [];
@@ -962,10 +974,10 @@ function _renderIncidents(inc) {
         <div class="report-prb-card-label">Encerrados no mês</div>
         <div class="report-prb-card-sub">Resolvidos no período</div>
       </div>
-      <div class="report-prb-card">
+      <div class="report-prb-card report-prb-card--clickable" onclick="reportOpenIncidentsModal()" title="Ver lista de incidentes">
         <div class="report-prb-card-val ${backlogCls}">${inc.openBacklog ?? 0}</div>
-        <div class="report-prb-card-label">Backlog atual</div>
-        <div class="report-prb-card-sub">Total em aberto</div>
+        <div class="report-prb-card-label">${backlogLabel}</div>
+        <div class="report-prb-card-sub">Clique para ver lista</div>
       </div>
       <div class="report-prb-card">
         <div class="report-prb-card-val ${avgCls}">${inc.avgResolutionDays ?? 0}d</div>
@@ -1240,8 +1252,10 @@ function _renderPRBs(prbs, incidents) {
 
   const openedCls = (prbs.openedThisMonth || 0) > 5 ? 'red' : (prbs.openedThisMonth || 0) > 0 ? 'yellow' : 'green';
   const resCls    = (prbs.resolvedThisMonth || 0) > 0 ? 'green' : '';
-  const accCls    = prbs.open > 10 ? 'red' : prbs.open > 3 ? 'yellow' : 'green';
-  const avgResCls = (prbs.avgResolutionDays || 0) > 30 ? 'red' : (prbs.avgResolutionDays || 0) > 14 ? 'yellow' : 'green';
+  const accCls       = prbs.open > 10 ? 'red' : prbs.open > 3 ? 'yellow' : 'green';
+  const avgResCls    = (prbs.avgResolutionDays || 0) > 30 ? 'red' : (prbs.avgResolutionDays || 0) > 14 ? 'yellow' : 'green';
+  const _curMonthPrb = new Date().toISOString().slice(0, 7);
+  const prbBacklogLabel = _reportMonth === _curMonthPrb ? 'Backlog atual' : 'Backlog no Encerramento';
 
   const hasPrbMonthly = prbs.monthly && prbs.monthly.length > 0;
 
@@ -1266,7 +1280,7 @@ function _renderPRBs(prbs, incidents) {
       </div>
       <div class="report-prb-card">
         <div class="report-prb-card-val ${accCls}">${prbs.open}</div>
-        <div class="report-prb-card-label">Backlog atual</div>
+        <div class="report-prb-card-label">${prbBacklogLabel}</div>
         <div class="report-prb-card-sub">Total em aberto</div>
       </div>
       <div class="report-prb-card">
@@ -2018,10 +2032,86 @@ function _applyChartPicker() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && document.getElementById('report-modal')?.classList.contains('open')) {
-    closeReport();
+  if (e.key === 'Escape') {
+    if (document.getElementById('report-inc-modal-overlay')) { _closeIncidentsModal(); return; }
+    if (document.getElementById('report-modal')?.classList.contains('open')) closeReport();
   }
 });
+
+// ── Incidents backlog modal ─────────────────────────────────────────────────
+
+function _closeIncidentsModal() {
+  document.getElementById('report-inc-modal-overlay')?.remove();
+}
+
+export function reportCloseIncidentsModal() { _closeIncidentsModal(); }
+
+function _buildIncidentsTable(items) {
+  const priLabel = p => ({ '1': 'P1', '2': 'P2', '3': 'P3', '4': 'P4' }[p] || p || '—');
+  const priCls   = p => ({ '1': 'p1', '2': 'p2', '3': 'p3', '4': 'p4' }[p] || 'p4');
+  const fmtDate  = d => {
+    if (!d) return '—';
+    const dt = new Date(d);
+    if (isNaN(dt)) return d;
+    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+  const rows = items.map(i => `
+    <tr>
+      <td class="inc-num"><a href="${i.url}" target="_blank" rel="noopener">${i.number || '—'}</a></td>
+      <td class="inc-desc">${i.description || '—'}</td>
+      <td><span class="report-inc-priority ${priCls(i.priority)}">${priLabel(i.priority)}</span></td>
+      <td>${i.state || '—'}</td>
+      <td style="white-space:nowrap">${fmtDate(i.openedAt)}</td>
+      <td>${i.category || '—'}</td>
+    </tr>`).join('');
+  return `<table class="report-inc-table">
+    <thead><tr>
+      <th>Número</th><th>Descrição</th><th>Prior.</th><th>Estado</th><th>Aberto em</th><th>Categoria</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+export async function reportOpenIncidentsModal() {
+  _closeIncidentsModal();
+
+  const overlay = document.createElement('div');
+  overlay.id        = 'report-inc-modal-overlay';
+  overlay.className = 'report-inc-modal-overlay open';
+  overlay.onclick   = e => { if (e.target === overlay) _closeIncidentsModal(); };
+
+  const panel = document.createElement('div');
+  panel.className = 'report-inc-modal-panel';
+  panel.innerHTML = `
+    <div class="report-inc-modal-header">
+      <div class="report-inc-modal-title">Backlog de Incidentes</div>
+      <button class="report-inc-modal-close" onclick="reportCloseIncidentsModal()">&#x2715;</button>
+    </div>
+    <div class="report-inc-modal-body">
+      <div class="report-loading" style="padding:32px 20px">Carregando...</div>
+    </div>`;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  try {
+    const r = await fetch(`/api/sn-incidents?project=${encodeURIComponent(_reportProject)}&month=${encodeURIComponent(_reportMonth || '')}`);
+    const { incidents, error } = await r.json();
+    const body = panel.querySelector('.report-inc-modal-body');
+    if (error) {
+      body.innerHTML = `<div class="report-inc-modal-empty">Erro: ${error}</div>`;
+    } else if (!incidents || incidents.length === 0) {
+      body.innerHTML = '<div class="report-inc-modal-empty">Nenhum incidente encontrado.</div>';
+    } else {
+      body.innerHTML = `
+        <div class="report-inc-modal-count">${incidents.length} incidente${incidents.length !== 1 ? 's' : ''}</div>
+        ${_buildIncidentsTable(incidents)}`;
+    }
+  } catch (e) {
+    const body = panel.querySelector('.report-inc-modal-body');
+    body.innerHTML = '<div class="report-inc-modal-empty">Erro ao buscar incidentes.</div>';
+  }
+}
 
 async function _load(refresh = false) {
   const body       = document.getElementById('report-modal-body');

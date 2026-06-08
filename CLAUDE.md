@@ -628,6 +628,9 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 141 | Donut ampliado (`r 44→62`, `stroke-width 22→26`); legenda empurrada para base do card via `flex-column` + `margin-top:auto` | Donut pequeno era difícil de visualizar; legenda flutuava no meio do card sem âncora visual — flex column com margin-top:auto fixa a legenda sempre na borda inferior independente do tamanho do SVG |
 | 142 | Barras horizontais/verticais usam mesma paleta `COLORS` do donut; picker adiciona opção "Cor única" com `<input type="color">` | Barras com cor única (#8b5cf6 fixo) impossibilitavam distinguir categorias visualmente — paleta multicolor por padrão; cor única útil quando o gráfico representa uma métrica homogênea (ex: todas as US são do mesmo tipo) |
 | 143 | `<title>` + `onmouseenter/onmouseleave` opacity nos segmentos do donut | Usuário não conseguia ver o valor de cada fatia sem consultar a legenda — tooltip nativo SVG `<title>` exibe `"Nome: N (XX%)"` sem JS extra; transição de opacidade dá feedback visual de qual segmento está sendo inspecionado |
+| 144 | Barra amarela de "Cancelados" no gráfico de histórico de incidentes | Incidentes cancelados (state=8) são uma categoria distinta de fechados — `incCancelledQ = state=8^closed_at>={hs}^closed_at<={he}`; barra amarela (`#fde68a`) como terceira barra do grupo; cancelados entram na regressão de backlog (reduzem backlog igual a fechados) |
+| 145 | `^resolved_atISEMPTY` no branch `closed_at` de `incClosedQ` (histórico) evita double-count | Incidentes que passam por Resolved (state=6) → Closed (state=7) têm ambos `resolved_at` e `closed_at`; sem `^resolved_atISEMPTY` no branch `closed_at`, esses incidentes eram contados duas vezes inflando `closed` e distorcendo toda a regressão de backlog |
+| 146 | `incBacklogQuery` para meses passados usa 3 partes via `^NQ` (abertos hoje + cancelados após corte + resolvidos após corte) | Sem `^state!=8` no branch `resolved_atISEMPTY`, incidentes cancelados (sem `resolved_at`) eram incluídos como backlog aberto, inflando o âncora da regressão; para meses passados não podemos usar `active=true` (campo de estado atual, não histórico) — 3 partes cobrem todos os casos corretamente sem double-count |
 
 ---
 
@@ -854,6 +857,94 @@ Seguem o mesmo padrão do PAT do Azure e das credenciais da IA:
 | `report.quality` | Qualidade | Quality | Calidad |
 | `report.noSn` | Service Now não configurado | Service Now not configured | Service Now no configurado |
 | `report.refresh` | Atualizar | Refresh | Actualizar |
+
+### Gráfico: Histórico de Volume de Incidentes (`_renderIncidentsVolumeChart`)
+
+Localização: `public/modules/report.js` — função `_renderIncidentsVolumeChart(monthly, months, target, selectedMonth)`
+
+#### Estrutura visual
+
+Cada mês exibe **3 barras agrupadas** centralizadas no eixo X + **linha de backlog** (laranja tracejada) + **linha de target** (vermelha tracejada, opcional):
+
+| Barra | Cor normal | Cor mês selecionado | Dado |
+|-------|-----------|---------------------|------|
+| Azul  | `#93c5fd` | `#60a5fa` | `opened` — incidentes abertos no mês |
+| Verde | `#34d399` | `#10b981` | `closed` — incidentes fechados/resolvidos no mês |
+| Amarela | `#fde68a` | `#fbbf24` | `cancelled` — incidentes cancelados no mês |
+
+O `maxVal` considera `Math.max(opened, closed, cancelled, openBacklog)` por mês + target, garantindo que nenhuma barra ou linha extrapole o eixo Y.
+
+#### Queries em `reportService.js` (histórico mensal — batches de 4)
+
+Para cada mês `m` do histórico (`period.history`), são executadas 3 queries em paralelo:
+
+```
+incOpenedQ    = assignment_group=X^opened_at>={hs}^opened_at<={he}
+incClosedQ    = assignment_group=X^resolved_at>={hs}^resolved_at<={he}
+              ^NQ assignment_group=X^closed_at>={hs}^closed_at<={he}^resolved_atISEMPTY^state!=8
+incCancelledQ = assignment_group=X^state=8^closed_at>={hs}^closed_at<={he}
+```
+
+- **`incClosedQ`** usa `^NQ` para capturar incidentes fechados diretamente (sem Resolved prévio).
+  O `^resolved_atISEMPTY` no branch `closed_at` evita double-count: incidentes que têm `resolved_at` já são contados pelo primeiro branch; o segundo branch só pega os que nunca foram resolvidos (caminho direto Open→Closed, state=7) e não são cancelados (state!=8).
+- **`incCancelledQ`** usa `state=8^closed_at` — cancelados têm `closed_at` mas não `resolved_at`.
+
+#### Linha de backlog — cálculo por regressão
+
+A linha laranja representa o **backlog aberto no final de cada mês** (incidentes acumulados, não resolvidos/cancelados). Não é consultada diretamente para cada mês — é calculada regressivamente a partir de uma âncora:
+
+```
+Âncora = openBacklog do ÚLTIMO mês do histórico (= mês selecionado no relatório)
+Para cada mês anterior (i), de trás para frente:
+  openBacklog[i] = openBacklog[i+1] - opened[i+1] + closed[i+1] + cancelled[i+1]
+```
+
+**Por que cancelados entram na fórmula:** tanto `closed` quanto `cancelled` reduzem o backlog — ao regredir no tempo, ambos precisam ser "desfeitos" somando de volta.
+
+**Sem `Math.max(0, ...)` na cadeia:** clamp quebraria meses anteriores ao primeiro negativo. O `Math.abs()` é aplicado **apenas na renderização** da linha SVG, para exibir valores negativos como positivos sem corromper a regressão.
+
+#### Âncora do backlog — query dependente do mês selecionado
+
+A âncora (`incBacklog`) é calculada pela query `incBacklogQuery`:
+
+**Mês atual** (`period.month === curMonth`):
+```
+assignment_group=X^active=true^state!=6^state!=7
+```
+Usa o estado real do sistema — `active=true` exclui resolvidos, fechados e cancelados automaticamente.
+
+**Meses passados** (ponto-no-tempo, 3 partes via `^NQ`):
+```
+Parte 1: assignment_group=X^opened_at<={end}^resolved_atISEMPTY^state!=8
+         → abertos até o fim do mês que ainda não foram resolvidos/cancelados até hoje
+
+Parte 2: assignment_group=X^opened_at<={end}^state=8^closed_at>{end}
+         → cancelados DEPOIS do fim do mês — estavam no backlog na data de corte
+
+Parte 3: assignment_group=X^opened_at<={end}^resolved_at>{end}
+         → resolvidos DEPOIS do fim do mês — estavam no backlog na data de corte
+```
+
+**Por que 3 partes são necessárias:**
+- Parte 1 sem `^state!=8`: incidentes cancelados (sem `resolved_at`) seriam incluídos como "abertos", inflando o âncora e fazendo toda a regressão ficar muito alta para o passado.
+- Parte 2 (`state=8^closed_at>{end}`): cobre incidentes que estavam no backlog e foram cancelados depois — sem esta parte perderíamos esses itens.
+- Parte 3: cobre incidentes resolvidos depois do corte — sem esta parte perderíamos todos que foram fechados após o mês selecionado.
+
+#### Fluxo de dados completo
+
+```
+reportService.js → fetchSnReport()
+  ├── incBacklogQuery          → incBacklog (âncora, único valor)
+  ├── [batches histórico]
+  │     ├── incOpenedQ         → opened por mês
+  │     ├── incClosedQ (^NQ)   → closed por mês (sem double-count)
+  │     └── incCancelledQ      → cancelled por mês
+  └── monthly[] → { label, opened, closed, cancelled, openBacklog }
+                  (openBacklog calculado por regressão após todos os batches)
+
+report.js → _renderIncidentsVolumeChart(monthly, ...)
+  └── 3 barras + linha backlog + linha target por mês
+```
 
 ---
 

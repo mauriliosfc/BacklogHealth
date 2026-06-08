@@ -330,8 +330,17 @@ async function fetchSnReport(displayName, period) {
   const end   = period.end   + 'T23:59:59Z';
 
   const incQuery              = `${grpFilter}^opened_at>=${start}^opened_at<=${end}`;
-  const incClosedQuery        = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}`;
-  const incBacklogQuery       = `${grpFilter}^active=true`;
+  const incClosedQuery        = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}^NQ${grpFilter}^closed_at>=${start}^closed_at<=${end}^resolved_atISEMPTY`;
+  // Mês atual → backlog ativo agora (active=true exclui cancelados e encerrados).
+  // Mês passado → ponto-no-tempo (3 partes via ^NQ):
+  //   1. Abertos ainda hoje e não cancelados (resolved_atISEMPTY^state!=8)
+  //   2. Cancelados DEPOIS do fim do mês — estavam no backlog (state=8^closed_at>end)
+  //   3. Resolvidos DEPOIS do fim do mês — estavam no backlog (resolved_at>end)
+  // A regressão do gráfico depende deste valor como âncora correta.
+  const curMonth        = new Date().toISOString().slice(0, 7);
+  const incBacklogQuery = period.month === curMonth
+    ? `${grpFilter}^active=true^state!=6^state!=7`
+    : `${grpFilter}^opened_at<=${end}^resolved_atISEMPTY^state!=8^NQ${grpFilter}^opened_at<=${end}^state=8^closed_at>${end}^NQ${grpFilter}^opened_at<=${end}^resolved_at>${end}`;
   const prbQuery              = `${grpFilter}^state!=106^state!=107`;
   const prbResolvedQuery      = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}`;
   const prbOpenedThisMonthQuery = `${grpFilter}^opened_at>=${start}^opened_at<=${end}`;
@@ -344,7 +353,7 @@ async function fetchSnReport(displayName, period) {
 
   const [incRes, incClosedRes, incBacklogRes, prbRes, prbResolvedRes, prbOpenedThisMonthRes, taskSlaRes] = await Promise.all([
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,priority,cmdb_ci.name,u_additional_res_code,state&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN incidents error]', e.message); return { result: [] }; }),
-    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
+    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at,closed_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incBacklogQuery)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,category,state,opened_at&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at&sysparm_limit=200`).catch(() => ({ result: [] })),
@@ -353,7 +362,8 @@ async function fetchSnReport(displayName, period) {
   ]);
 
   const incidents              = incRes.result || [];
-  const incClosedInPeriod      = incClosedRes.result || [];
+  const incClosedRaw           = incClosedRes.result || [];
+  const incClosedInPeriod      = [...new Map(incClosedRaw.map(i => [i.sys_id, i])).values()];
   const incBacklog             = (incBacklogRes.result || []).length;
   const prbs                   = prbRes.result || [];
   const prbsResolvedInPeriod   = prbResolvedRes.result || [];
@@ -364,9 +374,10 @@ async function fetchSnReport(displayName, period) {
   if (incClosedInPeriod.length > 0) {
     let validCount = 0;
     const total = incClosedInPeriod.reduce((s, i) => {
-      if (i.opened_at && i.resolved_at) {
+      const closedAt = i.resolved_at || i.closed_at;
+      if (i.opened_at && closedAt) {
         validCount++;
-        return s + Math.max(0, (new Date(i.resolved_at) - new Date(i.opened_at)) / 86400000);
+        return s + Math.max(0, (new Date(closedAt) - new Date(i.opened_at)) / 86400000);
       }
       return s;
     }, 0);
@@ -421,24 +432,28 @@ async function fetchSnReport(displayName, period) {
         const [hy, hm] = m.split('-').map(Number);
         const hs = new Date(hy, hm - 1, 1).toISOString().slice(0, 19) + 'Z';
         const he = new Date(hy, hm, 0, 23, 59, 59).toISOString().slice(0, 19) + 'Z';
-        const incOpenedQ   = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
-        const incClosedQ   = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
-        const prbOpenedQ   = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
-        const prbResolvedQ = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
-        const [rIncO, rIncC, rPrbO, rPrbR] = await Promise.all([
+        const incOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
+        const incClosedQ    = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}^NQ${grpFilter}^closed_at>=${hs}^closed_at<=${he}^resolved_atISEMPTY^state!=8`;
+        const incCancelledQ = `${grpFilter}^state=8^closed_at>=${hs}^closed_at<=${he}`;
+        const prbOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
+        const prbResolvedQ  = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
+        const [rIncO, rIncC, rIncCanc, rPrbO, rPrbR] = await Promise.all([
           snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incOpenedQ)}&sysparm_fields=sys_id,cmdb_ci.name,u_additional_res_code&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
+          snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incCancelledQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
         ]);
-        return { m, rIncO, rIncC, rPrbO, rPrbR };
+        return { m, rIncO, rIncC, rIncCanc, rPrbO, rPrbR };
       })
     );
     allHistoryResults.push(...batch);
   }
 
-  allHistoryResults.forEach(({ m, rIncO, rIncC, rPrbO, rPrbR }, mIdx) => {
-    const incOpened = rIncO.result || [];
+  allHistoryResults.forEach(({ m, rIncO, rIncC, rIncCanc, rPrbO, rPrbR }, mIdx) => {
+    const incOpened    = rIncO.result || [];
+    const incClosed    = (rIncC.result || []).length;
+    const incCancelled = (rIncCanc.result || []).length;
     incOpened.forEach(i => {
       const name = _snVal(i['cmdb_ci.name']) || 'Outros';
       if (!sysMonthData[name]) sysMonthData[name] = new Array(period.history.length).fill(0);
@@ -448,9 +463,10 @@ async function fetchSnReport(displayName, period) {
       altMonthData[alt][mIdx]++;
     });
     monthly.push({
-      label:  m,
-      opened: incOpened.length,
-      closed: (rIncC.result || []).length,
+      label:     m,
+      opened:    incOpened.length,
+      closed:    incClosed,
+      cancelled: incCancelled,
     });
     prbMonthly.push({
       label:    m,
@@ -459,6 +475,15 @@ async function fetchSnReport(displayName, period) {
     });
   });
 
+  // Backlog histórico de Incidentes — regressão a partir do backlog atual (sem clamp na cadeia)
+  // Cancelados saem do backlog assim como fechados: backlog[prev] = backlog[curr] − opened[curr] + closed[curr] + cancelled[curr]
+  // Math.abs() só é aplicado na renderização do gráfico para não corromper meses anteriores
+  monthly[monthly.length - 1].openBacklog = incBacklog;
+  for (let i = monthly.length - 2; i >= 0; i--) {
+    const next = monthly[i + 1];
+    monthly[i].openBacklog = next.openBacklog - next.opened + next.closed + (next.cancelled || 0);
+  }
+
   // Backlog histórico de PRBs — calculado de trás para frente a partir do backlog atual
   prbMonthly[prbMonthly.length - 1].openBacklog = prbs.length;
   for (let i = prbMonthly.length - 2; i >= 0; i--) {
@@ -466,12 +491,6 @@ async function fetchSnReport(displayName, period) {
     prbMonthly[i].openBacklog = Math.max(0, next.openBacklog - next.opened + next.resolved);
   }
 
-  // Backlog histórico de Incidentes — mesmo cálculo regressivo
-  monthly[monthly.length - 1].openBacklog = incBacklog;
-  for (let i = monthly.length - 2; i >= 0; i--) {
-    const next = monthly[i + 1];
-    monthly[i].openBacklog = Math.max(0, next.openBacklog - next.opened + next.closed);
-  }
 
   const byPriority = { p1: 0, p2: 0, p3: 0 };
   incidents.forEach(i => {
@@ -592,4 +611,49 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
   };
 }
 
-module.exports = { buildReport, buildPeriod, getLast6Months, cacheInvalidate };
+// ── Incident backlog list (for modal) ──────────────────────────────────────────
+
+async function fetchSnIncidentBacklog(displayName, month) {
+  const snCfg = getSnConfig();
+  const snGrp = getProjectSnGroup(displayName);
+  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass || !snGrp?.assignmentGroup) return null;
+
+  const grp       = snGrp.assignmentGroup.trim();
+  const isSysId   = /^[0-9a-f]{32}$/i.test(grp);
+  const grpFilter = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
+
+  const [y, m] = month.split('-').map(Number);
+  const endDate  = new Date(y, m, 0); // last day of month
+  const end      = endDate.toISOString().slice(0, 10) + 'T23:59:59Z';
+  const curMonth = new Date().toISOString().slice(0, 7);
+
+  // Exclude Resolved (6) and Closed (7) — these are not active backlog
+  const openStates = `^state!=6^state!=7`;
+
+  // Current month: active=true; past month (option B): opened before end AND (not resolved OR resolved after end)
+  const query = month === curMonth
+    ? `${grpFilter}^active=true${openStates}`
+    : `${grpFilter}^opened_at<=${end}^resolved_atISEMPTY${openStates}^NQ${grpFilter}^opened_at<=${end}^resolved_at>${end}${openStates}`;
+
+  try {
+    const res = await snGet(snCfg,
+      `table/incident?sysparm_query=${encodeURIComponent(query)}` +
+      `&sysparm_fields=number,short_description,priority,state,opened_at,category,sys_id` +
+      `&sysparm_display_value=all&sysparm_limit=500`
+    );
+    return (res.result || []).map(i => ({
+      number:      _snVal(i.number)            || String(i.number    || ''),
+      description: _snVal(i.short_description) || '',
+      priority:    _snRaw(i.priority)          || '',
+      state:       _snVal(i.state)             || '',
+      openedAt:    _snRaw(i.opened_at)         || String(i.opened_at || ''),
+      category:    _snVal(i.category)          || '',
+      url:         `https://${snCfg.instance}/incident.do?sys_id=${i.sys_id}`,
+    }));
+  } catch (e) {
+    console.error('[SN incident backlog error]', e.message);
+    return null;
+  }
+}
+
+module.exports = { buildReport, buildPeriod, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog };
