@@ -631,6 +631,8 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 144 | Barra amarela de "Cancelados" no gráfico de histórico de incidentes | Incidentes cancelados (state=8) são uma categoria distinta de fechados — `incCancelledQ = state=8^closed_at>={hs}^closed_at<={he}`; barra amarela (`#fde68a`) como terceira barra do grupo; cancelados entram na regressão de backlog (reduzem backlog igual a fechados) |
 | 145 | `^resolved_atISEMPTY` no branch `closed_at` de `incClosedQ` (histórico) evita double-count | Incidentes que passam por Resolved (state=6) → Closed (state=7) têm ambos `resolved_at` e `closed_at`; sem `^resolved_atISEMPTY` no branch `closed_at`, esses incidentes eram contados duas vezes inflando `closed` e distorcendo toda a regressão de backlog |
 | 146 | `incBacklogQuery` para meses passados usa 3 partes via `^NQ` (abertos hoje + cancelados após corte + resolvidos após corte) | Sem `^state!=8` no branch `resolved_atISEMPTY`, incidentes cancelados (sem `resolved_at`) eram incluídos como backlog aberto, inflando o âncora da regressão; para meses passados não podemos usar `active=true` (campo de estado atual, não histórico) — 3 partes cobrem todos os casos corretamente sem double-count |
+| 147 | `removedFromSprint` detecta dois casos: `state='Removed'` (existente) + `Was Ever` para itens com IterationPath alterado | Times removem itens de sprint de duas formas: mudando estado para Removed (detectado pelo loop do sprintMap) OU movendo para backlog/outra sprint (IterationPath muda — item desaparece da sprint); `Was Ever '{path}' AND IterationPath <> '{path}'` cobre o segundo caso sem double-count (itens Removed que ainda estão na sprint têm IterationPath = Sprint X, portanto excluídos pela condição `<>`) |
+| 148 | `Was Ever` queries rodadas em paralelo após `sprintMap` já construído, só quando `teamIterations.length > 0` | Projetos sem time configurado não têm `teamIterations` com paths completos; `Was Ever` requer o path completo da iteration; rodar em paralelo por sprint evita round-trips sequenciais; projetos sem time também não têm `sprintStartMap` (addedMidSprint = 0), então o gráfico de volatilidade já não tinha dados úteis nesses casos |
 
 ---
 
@@ -857,6 +859,60 @@ Seguem o mesmo padrão do PAT do Azure e das credenciais da IA:
 | `report.quality` | Qualidade | Quality | Calidad |
 | `report.noSn` | Service Now não configurado | Service Now not configured | Service Now no configurado |
 | `report.refresh` | Atualizar | Refresh | Actualizar |
+
+### Gráfico: Volatilidade do Backlog (`_renderVolatilityChart`)
+
+Localização: `public/modules/report.js` — `_renderVolatilityChart(sprints)`; dados produzidos por `fetchAzureReport` em `reportService.js`.
+
+#### Estrutura visual
+
+Gráfico de barras com **eixo duplo** (linha central = zero):
+- **Barras amarelas para cima** (`#f59e0b`) — US adicionadas após o início da sprint (`addedMidSprint`)
+- **Barras vermelhas para baixo** (`#ef4444`) — US removidas da sprint (`removedFromSprint`)
+
+#### Cálculo de `addedMidSprint`
+
+```js
+const addedLate = createdDate && sprintStart && createdDate > sprintStart ? 1 : 0;
+```
+
+Item criado (`System.CreatedDate`) depois da data de início da sprint (`sprintStartMap[sprintName]`). Requer `teamIterations` com datas de início — projetos sem time configurado têm `sprintStartMap` vazio e sempre retornam 0.
+
+#### Cálculo de `removedFromSprint` — dois casos
+
+**Caso 1 — state = "Removed"** (loop principal do `sprintMap`):
+```js
+const removed = i.fields['System.State'] === 'Removed' ? 1 : 0;
+sprintMap[sp].removedFromSprint += removed;
+```
+Item ainda está com `IterationPath` apontando para a sprint, mas com estado `Removed`.
+
+**Caso 2 — IterationPath alterado** (bloco `Was Ever`, após o loop):
+```js
+// Para cada sprint em teamIterations, em paralelo:
+azurePost(`/{proj}/_apis/wit/wiql`, {
+  query: `SELECT [System.Id] FROM WorkItems
+          WHERE [System.TeamProject] = '{proj}'
+            AND [System.WorkItemType] IN ('User Story','Product Backlog Item','Requirement')
+            AND [System.IterationPath] Was Ever '{it.path}'
+            AND [System.IterationPath] <> '{it.path}'`
+})
+// count = workItems.length → adicionado ao sprintMap[it.name].removedFromSprint
+```
+
+Item que foi planejado para a sprint mas foi movido para outra sprint ou de volta ao backlog (seu `IterationPath` atual não é mais o da sprint). Detectável apenas via `Was Ever` — sem esse operador, o item simplesmente "desaparece" dos dados da sprint.
+
+#### Por que não há double-count entre os dois casos
+
+- Caso 1 (state=Removed, IterationPath = Sprint X): a condição `AND [System.IterationPath] <> '{it.path}'` do `Was Ever` é **falsa** → não aparece no `Was Ever`
+- Caso 2 (IterationPath mudou): não tem `state = 'Removed'` no contexto da sprint (item já saiu) → não aparece no loop do `sprintMap` para essa sprint
+- Caso híbrido (movido para outra sprint E depois marcado Removed): IterationPath ≠ Sprint X → aparece no `Was Ever`, não no loop → contado uma vez ✅
+
+#### Limitação
+
+Projetos **sem time configurado** (`teamIterations = []`) não executam as queries `Was Ever` e também não têm `sprintStartMap`. O gráfico de volatilidade fica sem dados úteis nesses casos — ambas as métricas retornam 0.
+
+---
 
 ### Gráfico: Histórico de Volume de Incidentes (`_renderIncidentsVolumeChart`)
 

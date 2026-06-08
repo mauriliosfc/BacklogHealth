@@ -224,6 +224,31 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
     }
   });
 
+  // Detecta itens movidos para fora da sprint (IterationPath alterado — movidos ao backlog ou outra sprint).
+  // Complementa a detecção de state='Removed' já feita acima.
+  // Requer teamIterations com paths completos; projetos sem time configurado ficam sem esse dado.
+  if (teamIterations.length > 0) {
+    const movedOutResults = await Promise.all(
+      teamIterations.map(it =>
+        it.path
+          ? azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
+              query: `SELECT [System.Id] FROM WorkItems
+                      WHERE [System.TeamProject] = '${proj}'
+                        AND [System.WorkItemType] IN ${US_TYPES}
+                        AND [System.IterationPath] Was Ever '${it.path}'
+                        AND [System.IterationPath] <> '${it.path}'`,
+            }).catch(() => ({ workItems: [] }))
+          : Promise.resolve({ workItems: [] })
+      )
+    );
+    teamIterations.forEach((it, idx) => {
+      const count = (movedOutResults[idx]?.workItems || []).length;
+      if (count > 0 && sprintMap[it.name]) {
+        sprintMap[it.name].removedFromSprint += count;
+      }
+    });
+  }
+
   // Delivered items grouped by each requested field (one pass)
   const refs    = cleanGroupFields.length ? cleanGroupFields : [''];
   const rawMaps = {};
