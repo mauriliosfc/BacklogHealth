@@ -10,6 +10,8 @@ let _incidentMonths  = 5;        // months to show in the incidents section
 let _incidentTarget  = 24;       // target mensal de incidentes
 let _incidentGroupBy = 'cmdb_ci'; // 'cmdb_ci' | 'resolution_code'
 let _heatmapMax      = 0;        // 0 = escala automática (relativa ao max dos dados)
+let _heatmapTopN     = 9;        // 0 = mostrar todos; N = top N + "Outros"
+let _locationMonths  = 6;        // 1 | 3 | 6 — meses exibidos no gráfico de location
 let _agingBuckets    = [7, 14, 30, 60]; // thresholds for US aging buckets (days)
 let _deliveryStates  = ['Closed', 'Done', 'Resolved']; // states counted as delivered
 let _slaEnabled      = false;
@@ -53,6 +55,8 @@ async function _loadReportConfig() {
     if (data.incidentGroupBy)         _incidentGroupBy = data.incidentGroupBy;
     if (data.incidentTarget != null)  _incidentTarget  = data.incidentTarget;
     if (data.heatmapMax     != null)  _heatmapMax      = data.heatmapMax;
+    if (data.heatmapTopN    != null)  _heatmapTopN     = data.heatmapTopN;
+    if (data.locationMonths != null)  _locationMonths  = data.locationMonths;
     if (Array.isArray(data.agingBuckets) && data.agingBuckets.length === 4) _agingBuckets = data.agingBuckets;
     if (Array.isArray(data.deliveryStates) && data.deliveryStates.length)  _deliveryStates = data.deliveryStates;
     if (data.agingState)              _agingState      = data.agingState;
@@ -96,7 +100,7 @@ function _saveReportConfig() {
   fetch('/api/report-config', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ project: _reportProject, reportCharts: _reportCharts, incidentMonths: _incidentMonths, incidentTarget: _incidentTarget, incidentGroupBy: _incidentGroupBy, heatmapMax: _heatmapMax, agingState: _agingState, agingCharts: _agingCharts, agingBuckets: _agingBuckets, deliveryStates: _deliveryStates }),
+    body:    JSON.stringify({ project: _reportProject, reportCharts: _reportCharts, incidentMonths: _incidentMonths, incidentTarget: _incidentTarget, incidentGroupBy: _incidentGroupBy, heatmapMax: _heatmapMax, heatmapTopN: _heatmapTopN, locationMonths: _locationMonths, agingState: _agingState, agingCharts: _agingCharts, agingBuckets: _agingBuckets, deliveryStates: _deliveryStates }),
   }).catch(() => {});
 }
 
@@ -259,10 +263,11 @@ function _renderVolatilityChart(sprints) {
   ]);
 }
 
-function _renderTypeDonut(byType) {
-  if (!byType || !byType.length) return '<div class="report-empty-hint">Sem User Stories no período</div>';
+function _renderTypeDonut(byType, metricLabel) {
+  const emptyHint = metricLabel === 'Story Points' ? 'Sem Story Points no período' : 'Sem User Stories no período';
+  if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
-  if (!total) return '<div class="report-empty-hint">Sem User Stories no período</div>';
+  if (!total) return `<div class="report-empty-hint">${emptyHint}</div>`;
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
   const r = 62, cx = 80, cy = 78;
@@ -285,7 +290,7 @@ function _renderTypeDonut(byType) {
     accumulated += arc;
   });
   segs += `<text x="${cx}" y="${cy - 5}" text-anchor="middle" font-size="18" font-weight="800" fill="var(--text-1)">${total}</text>`;
-  segs += `<text x="${cx}" y="${cy + 13}" text-anchor="middle" font-size="10" fill="var(--text-faint)">User Stories</text>`;
+  segs += `<text x="${cx}" y="${cy + 13}" text-anchor="middle" font-size="10" fill="var(--text-faint)">${metricLabel || 'User Stories'}</text>`;
 
   const legendItems = byType.map((t, i) => {
     const pct = Math.round(t.count / total * 100);
@@ -300,10 +305,11 @@ function _renderTypeDonut(byType) {
     `</div>`;
 }
 
-function _renderTypeBar(byType, barColor) {
-  if (!byType || !byType.length) return '<div class="report-empty-hint">Sem User Stories no período</div>';
+function _renderTypeBar(byType, barColor, metricLabel) {
+  const emptyHint = metricLabel === 'Story Points' ? 'Sem Story Points no período' : 'Sem User Stories no período';
+  if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
-  if (!total) return '<div class="report-empty-hint">Sem User Stories no período</div>';
+  if (!total) return `<div class="report-empty-hint">${emptyHint}</div>`;
 
   const COLORS  = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
   const maxVal  = Math.max(...byType.map(t => t.count), 1);
@@ -351,10 +357,11 @@ function _renderTypeBar(byType, barColor) {
   </svg>`;
 }
 
-function _renderTypeBarVertical(byType, barColor) {
-  if (!byType || !byType.length) return '<div class="report-empty-hint">Sem User Stories no período</div>';
+function _renderTypeBarVertical(byType, barColor, metricLabel) {
+  const emptyHint = metricLabel === 'Story Points' ? 'Sem Story Points no período' : 'Sem User Stories no período';
+  if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
-  if (!total) return '<div class="report-empty-hint">Sem User Stories no período</div>';
+  if (!total) return `<div class="report-empty-hint">${emptyHint}</div>`;
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
   const W = 480, padT = 20, padB = 56, padL = 36, padR = 16;
@@ -447,17 +454,18 @@ function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
     const xC  = xO + barW + gap;
     const xCa = xC + barW + gap;
 
+    const mLbl = _fmtMonth(m.label);
     if (hO > 0) {
-      bars += `<rect x="${xO.toFixed(1)}" y="${(pad.t + cH - hO).toFixed(1)}" width="${barW}" height="${hO.toFixed(1)}" fill="${isSel ? '#60a5fa' : '#93c5fd'}" rx="2"/>`;
-      bars += `<text x="${(xO + barW / 2).toFixed(1)}" y="${(pad.t + cH - hO - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)">${opened}</text>`;
+      bars += `<rect x="${xO.toFixed(1)}" y="${(pad.t + cH - hO).toFixed(1)}" width="${barW}" height="${hO.toFixed(1)}" fill="${isSel ? '#60a5fa' : '#93c5fd'}" rx="2" ${_incOnclick('opened', m.label, '', '', `Abertos · ${mLbl}`)}/>`;
+      bars += `<text x="${(xO + barW / 2).toFixed(1)}" y="${(pad.t + cH - hO - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)" style="pointer-events:none">${opened}</text>`;
     }
     if (hC > 0) {
-      bars += `<rect x="${xC.toFixed(1)}" y="${(pad.t + cH - hC).toFixed(1)}" width="${barW}" height="${hC.toFixed(1)}" fill="${isSel ? '#10b981' : '#34d399'}" rx="2"/>`;
-      bars += `<text x="${(xC + barW / 2).toFixed(1)}" y="${(pad.t + cH - hC - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)">${closed}</text>`;
+      bars += `<rect x="${xC.toFixed(1)}" y="${(pad.t + cH - hC).toFixed(1)}" width="${barW}" height="${hC.toFixed(1)}" fill="${isSel ? '#10b981' : '#34d399'}" rx="2" ${_incOnclick('closed', m.label, '', '', `Fechados · ${mLbl}`)}/>`;
+      bars += `<text x="${(xC + barW / 2).toFixed(1)}" y="${(pad.t + cH - hC - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)" style="pointer-events:none">${closed}</text>`;
     }
     if (hCa > 0) {
-      bars += `<rect x="${xCa.toFixed(1)}" y="${(pad.t + cH - hCa).toFixed(1)}" width="${barW}" height="${hCa.toFixed(1)}" fill="${isSel ? '#fbbf24' : '#fde68a'}" rx="2"/>`;
-      bars += `<text x="${(xCa + barW / 2).toFixed(1)}" y="${(pad.t + cH - hCa - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)">${cancelled}</text>`;
+      bars += `<rect x="${xCa.toFixed(1)}" y="${(pad.t + cH - hCa).toFixed(1)}" width="${barW}" height="${hCa.toFixed(1)}" fill="${isSel ? '#fbbf24' : '#fde68a'}" rx="2" ${_incOnclick('cancelled', m.label, '', '', `Cancelados · ${mLbl}`)}/>`;
+      bars += `<text x="${(xCa + barW / 2).toFixed(1)}" y="${(pad.t + cH - hCa - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)" style="pointer-events:none">${cancelled}</text>`;
     }
 
     const labelColor  = isSel ? 'var(--text-muted)' : 'var(--text-faint)';
@@ -501,20 +509,21 @@ function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
 
 // ── Incident system charts ─────────────────────────────────────────────────────
 
-function _renderIncidentSystemBars(bySystem) {
+function _renderIncidentSystemBars(bySystem, reportMonth, groupby) {
   const all = bySystem || [];
   if (!all.length) return '<div class="report-empty-hint">Sem dados de IC para o período</div>';
   let items;
-  if (all.length <= 9) {
+  const cutoff = _heatmapTopN > 0 ? _heatmapTopN : Infinity;
+  if (all.length <= cutoff) {
     items = all;
   } else {
-    const top9  = all.slice(0, 9);
-    const rest  = all.slice(9);
+    const topN  = all.slice(0, cutoff);
+    const rest  = all.slice(cutoff);
     const outros = rest.reduce((acc, s) => ({
       name: 'Outros', total: acc.total + (s.total || 0),
       p1: acc.p1 + (s.p1 || 0), p2: acc.p2 + (s.p2 || 0), p3: acc.p3 + (s.p3 || 0),
     }), { name: 'Outros', total: 0, p1: 0, p2: 0, p3: 0 });
-    items = outros.total > 0 ? [...top9, outros] : top9;
+    items = outros.total > 0 ? [...topN, outros] : topN;
   }
 
   const W = 600, H = 280;
@@ -558,7 +567,13 @@ function _renderIncidentSystemBars(bySystem) {
 
     if (s.total > 0) {
       const topY = pad.t + chartH - (s.total / maxVal) * chartH;
-      bars += `<text x="${cx.toFixed(1)}" y="${(topY - 4).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-muted)">${s.total}</text>`;
+      bars += `<text x="${cx.toFixed(1)}" y="${(topY - 4).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-muted)" style="pointer-events:none">${s.total}</text>`;
+      // transparent overlay for click (skip "Outros" aggregate)
+      if (s.name !== 'Outros' && reportMonth) {
+        const oh = pad.t + chartH - topY;
+        const fv = s.rawValue || s.name;
+        bars += `<rect x="${bx.toFixed(1)}" y="${topY.toFixed(1)}" width="${bw}" height="${oh.toFixed(1)}" fill="transparent" ${_incOnclick('opened', reportMonth, groupby || 'cmdb_ci', fv, `${s.name} · ${_fmtMonth(reportMonth)}`)}/>`;
+      }
     }
 
     const name  = s.name.length > 14 ? s.name.slice(0, 13) + '…' : s.name;
@@ -579,21 +594,22 @@ function _renderIncidentSystemBars(bySystem) {
   ]);
 }
 
-function _renderIncidentHeatmap(bySystemMonthly, monthly, colLabel) {
+function _renderIncidentHeatmap(bySystemMonthly, monthly, colLabel, groupby) {
   const allMonths = monthly || [];
   const months = allMonths.slice(-_incidentMonths);
   const allSystems = bySystemMonthly || [];
   if (!allSystems.length || !months.length) return '<div class="report-empty-hint">Sem dados para o período</div>';
   let items;
-  if (allSystems.length <= 9) {
+  const cutoffH = _heatmapTopN > 0 ? _heatmapTopN : Infinity;
+  if (allSystems.length <= cutoffH) {
     items = allSystems;
   } else {
-    const top9 = allSystems.slice(0, 9);
-    const rest  = allSystems.slice(9);
-    const histLen0 = (top9[0]?.monthly || []).length;
+    const topN    = allSystems.slice(0, cutoffH);
+    const rest    = allSystems.slice(cutoffH);
+    const histLen0 = (topN[0]?.monthly || []).length;
     const outrosMonthly = Array(histLen0).fill(0);
     rest.forEach(s => (s.monthly || []).forEach((v, i) => { outrosMonthly[i] += v; }));
-    items = [...top9, { name: 'Outros', monthly: outrosMonthly }];
+    items = rest.length > 0 ? [...topN, { name: 'Outros', monthly: outrosMonthly }] : topN;
   }
 
   const histLen   = (items[0]?.monthly || []).length;
@@ -618,9 +634,13 @@ function _renderIncidentHeatmap(bySystemMonthly, monthly, colLabel) {
 
   const headerCells = monthLabels.map(l => `<th style="${th}">${_esc(l)}</th>`).join('');
   const rows = items.map(s => {
-    const cells = months.map((_, i) => {
+    const cells = months.map((m, i) => {
       const cnt = s.monthly[monthStart + i] || 0;
-      return `<td style="${td};background:${heatBg(cnt)}">${cnt > 0 ? cnt : ''}</td>`;
+      const fv = s.rawValue || s.name;
+      const clickable = cnt > 0 && s.name !== 'Outros' && groupby
+        ? _incOnclick('opened', m.label, groupby, fv, `${s.name} · ${_fmtMonth(m.label)}`)
+        : '';
+      return `<td style="${td};background:${heatBg(cnt)}${cnt > 0 && s.name !== 'Outros' ? ';cursor:pointer' : ''}" ${clickable}>${cnt > 0 ? cnt : ''}</td>`;
     }).join('');
     const name = s.name.length > 22 ? s.name.slice(0, 20) + '…' : s.name;
     return `<tr><td style="${nt}" title="${_esc(s.name)}">${_esc(name)}</td>${cells}</tr>`;
@@ -654,12 +674,21 @@ function _renderChartCell(chart, delivery, idx, sprints, incidents) {
     content = incidents
       ? _renderIncidentsVolumeChart(incidents.monthly, monthsLabel, _incidentTarget)
       : '<div class="report-empty-hint">Service Now not configured for this project</div>';
+  } else if (chart.type === 'incident-location') {
+    const monthsLabel = chart.months || 6;
+    title   = `Incidentes por Localização · ${monthsLabel} ${monthsLabel === 1 ? 'mês' : 'meses'}`;
+    content = incidents
+      ? _renderIncidentLocationChart(incidents.byLocationMonthly, incidents.monthly, monthsLabel)
+      : '<div class="report-empty-hint">Service Now not configured for this project</div>';
   } else {
-    title   = `US por ${_esc(chart.label || 'Tipo de Item')}`;
-    const data = (delivery.byTypes || {})[chart.ref || ''] || [];
-    content = chart.chartStyle === 'bar'          ? _renderTypeBar(data, chart.barColor)
-            : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical(data, chart.barColor)
-            : _renderTypeDonut(data);
+    const usePts      = chart.countBy === 'pts';
+    const metricLabel = usePts ? 'Story Points' : 'User Stories';
+    const bySource    = usePts ? (delivery.byTypesPts || {}) : (delivery.byTypes || {});
+    title   = `${metricLabel} por ${_esc(chart.label || 'Tipo de Item')}`;
+    const data = bySource[chart.ref || ''] || [];
+    content = chart.chartStyle === 'bar'          ? _renderTypeBar(data, chart.barColor, metricLabel)
+            : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical(data, chart.barColor, metricLabel)
+            : _renderTypeDonut(data, metricLabel);
   }
 
   const header = `<div class="report-field-picker-header">
@@ -1019,14 +1048,122 @@ function _renderIncidents(inc) {
       <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar agrupamento" onclick="reportOpenIncidentGroupByPicker()" draggable="false">⚙</button></div>
     </div>
     <div class="report-prb-chart-sub">Volume de incidentes por severidade</div>
-    ${_renderIncidentSystemBars(barData)}
+    ${_renderIncidentSystemBars(barData, _reportMonth, useAlt ? 'resolution_code' : 'cmdb_ci')}
     <div class="report-field-picker-header" style="margin-top:16px">
       <div class="report-donut-title-row"><div class="report-subsection-title">Heatmap: ${groupLabel} × Mês</div></div>
       <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar heatmap" onclick="reportOpenHeatmapPicker()" draggable="false">⚙</button></div>
     </div>
-    <div class="report-prb-chart-sub">Frequência de incidentes${_heatmapMax > 0 ? ` — escala fixa: máx ${_heatmapMax}` : ' — escala automática'}</div>
-    ${_renderIncidentHeatmap(heatmapData, inc.monthly, groupLabel)}
+    <div class="report-prb-chart-sub">Frequência de incidentes${_heatmapTopN > 0 ? ` — top ${_heatmapTopN}` : ' — todos os sistemas'}${_heatmapMax > 0 ? ` — escala fixa: máx ${_heatmapMax}` : ' — escala automática'}</div>
+    ${_renderIncidentHeatmap(heatmapData, inc.monthly, groupLabel, useAlt ? 'resolution_code' : 'cmdb_ci')}
+    <div class="report-field-picker-header" style="margin-top:16px">
+      <div class="report-donut-title-row"><div class="report-subsection-title">Incidentes por Localização</div></div>
+      <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar meses" onclick="reportOpenLocationPicker()" draggable="false">⚙</button></div>
+    </div>
+    <div class="report-prb-chart-sub">Incidentes abertos por localização · ${_locationMonths} ${_locationMonths === 1 ? 'mês' : 'meses'}</div>
+    ${_renderIncidentLocationChart(inc.byLocationMonthly, inc.monthly, _locationMonths)}
   </div>`;
+}
+
+// ── Incident by Location — grouped bar per month ───────────────────────────────
+
+function _renderIncidentLocationChart(byLocationMonthly, monthly, months) {
+  const allMonths = monthly || [];
+  const slicedM   = allMonths.slice(-months);
+  if (!slicedM.length || !byLocationMonthly || !byLocationMonthly.length) {
+    return '<div class="report-empty-hint">Sem dados de localização para o período</div>';
+  }
+
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+  const TOP    = 8;
+
+  // Top locations by total in the visible window
+  const histLen = (byLocationMonthly[0]?.monthly || []).length;
+  const mStart  = Math.max(0, histLen - months);
+  const visLocs = byLocationMonthly
+    .map(l => ({ ...l, visTotal: (l.monthly || []).slice(mStart).reduce((s, v) => s + v, 0) }))
+    .filter(l => l.visTotal > 0)
+    .sort((a, b) => b.visTotal - a.visTotal);
+
+  let locs;
+  if (visLocs.length <= TOP) {
+    locs = visLocs;
+  } else {
+    const topLocs = visLocs.slice(0, TOP);
+    const rest    = visLocs.slice(TOP);
+    const outrosMonthly = new Array(histLen).fill(0);
+    rest.forEach(l => (l.monthly || []).forEach((v, i) => { outrosMonthly[i] += v; }));
+    locs = [...topLocs, { name: 'Outros', monthly: outrosMonthly, visTotal: rest.reduce((s, l) => s + l.visTotal, 0) }];
+  }
+
+  const W = 600, padT = 20, padB = 50, padL = 36, padR = 16;
+  const cH = 180;
+  const H  = padT + cH + padB;
+  const cW = W - padL - padR;
+
+  // Max is the highest individual bar value (not the stacked total)
+  const maxVal = Math.max(
+    ...slicedM.flatMap((_, mi) => locs.map(l => (l.monthly || [])[mStart + mi] || 0)),
+    1
+  );
+
+  const rawStep = maxVal / 4;
+  const step    = Math.max(1, Math.ceil(rawStep));
+  const ticks   = [];
+  for (let v = 0; v <= maxVal; v += step) ticks.push(v);
+  if (ticks[ticks.length - 1] < maxVal) ticks.push(maxVal);
+
+  // Each month group occupies slotW; inside: locs.length bars with gap
+  const slotW    = cW / slicedM.length;
+  const barGap   = 2;
+  const barW     = Math.max(2, Math.min((slotW * 0.85) / locs.length - barGap, 24));
+  const grpW     = locs.length * (barW + barGap) - barGap;
+
+  let grid = '', bars = '', xlabels = '';
+
+  ticks.forEach(v => {
+    const y = padT + cH - (v / maxVal) * cH;
+    grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="var(--bg-border)" stroke-width="1" stroke-dasharray="3,3"/>`;
+    grid += `<text x="${padL - 4}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-faint)">${v}</text>`;
+  });
+
+  slicedM.forEach((m, mi) => {
+    const grpCx = padL + (mi + 0.5) * slotW;
+    const grpX0 = grpCx - grpW / 2;
+
+    locs.forEach((l, li) => {
+      const val   = (l.monthly || [])[mStart + mi] || 0;
+      const color = COLORS[li % COLORS.length];
+      const bx    = grpX0 + li * (barW + barGap);
+      const bH    = (val / maxVal) * cH;
+      const by    = padT + cH - bH;
+      const locClick = val > 0 && l.name !== 'Outros'
+        ? _incOnclick('opened', m.label, 'location', l.name, `${l.name} · ${_fmtMonth(m.label)}`) : '';
+      bars += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(bH, 0).toFixed(1)}" fill="${color}" opacity=".85" rx="2" ${locClick}>`;
+      bars += `<title>${_esc(l.name)}: ${val}</title></rect>`;
+      if (bH > 14) {
+        bars += `<text x="${(bx + barW / 2).toFixed(1)}" y="${(by + bH / 2 + 4).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-muted)">${val}</text>`;
+      } else if (val > 0) {
+        bars += `<text x="${(bx + barW / 2).toFixed(1)}" y="${(by - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)">${val}</text>`;
+      }
+    });
+
+    const lbl = _fmtMonth(m.label);
+    xlabels += `<text x="${grpCx.toFixed(1)}" y="${padT + cH + 14}" text-anchor="middle" font-size="9" fill="var(--text-faint)">${_esc(lbl)}</text>`;
+  });
+
+  const axes = `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + cH}" stroke="var(--bg-border)" stroke-width="1"/>
+    <line x1="${padL}" y1="${padT + cH}" x2="${W - padR}" y2="${padT + cH}" stroke="var(--bg-border)" stroke-width="1"/>`;
+
+  const legendItems = locs.map((l, li) =>
+    `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint)">` +
+    `<span style="width:10px;height:10px;border-radius:2px;background:${COLORS[li % COLORS.length]};display:inline-block;flex-shrink:0"></span>` +
+    `${_esc(l.name)}</span>`
+  ).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
+    ${grid}${axes}${bars}${xlabels}
+  </svg>
+  <div style="margin-top:6px;display:flex;justify-content:center;flex-wrap:wrap;gap:4px 12px;padding:0 4px">${legendItems}</div>`;
 }
 
 function _renderPrbStatusDonut(list) {
@@ -1532,9 +1669,10 @@ export function reportOpenFieldPicker(idx) {
   const currentRef      = currentChart?.ref        || '';
   const currentStyle    = currentChart?.chartStyle || 'donut';
   const currentBarColor = currentChart?.barColor   || '';
+  const currentCountBy  = currentChart?.countBy    || 'count';
   const isDonut         = !isEdit ? true : currentType === 'donut';
-  const isIncidents     = isEdit && currentType === 'incidents';
-  const currentMonths   = currentChart?.months || 5;
+  const isIncidents     = isEdit && (currentType === 'incidents' || currentType === 'incident-location');
+  const currentMonths   = currentChart?.months || (currentType === 'incident-location' ? 6 : 5);
   const isBarStyle      = isDonut && (currentStyle === 'bar' || currentStyle === 'bar-vertical');
 
   const backdrop = document.createElement('div');
@@ -1591,6 +1729,17 @@ export function reportOpenFieldPicker(idx) {
       <input type="number" id="report-inc-months" class="report-inc-months-input" min="1" max="12" value="${currentMonths}">
     </div>`;
 
+  // Metric — only for donut/grouping charts
+  const metricOpts = [
+    { val: 'count', label: 'Qtd. Histórias' },
+    { val: 'pts',   label: 'Story Points' },
+  ].map(o => `<button class="report-size-opt${currentCountBy === o.val ? ' active' : ''}" data-countby="${o.val}">${o.label}</button>`).join('');
+  const metricSection = `
+    <div id="report-metric-label"${!isDonut ? ' style="display:none"' : ''}>
+      <div class="report-field-picker-label">Métrica</div>
+    </div>
+    <div class="report-size-group" id="report-metric-group"${!isDonut ? ' style="display:none"' : ''}>${metricOpts}</div>`;
+
   // Bar color — only for bar/bar-vertical donut charts
   const barColorSection = `
     <div id="report-bar-color-section"${!isBarStyle ? ' style="display:none"' : ''}>
@@ -1609,6 +1758,7 @@ export function reportOpenFieldPicker(idx) {
     <div class="report-field-picker-title">${isEdit ? 'Configurar gráfico' : 'Novo gráfico'}</div>
     ${typeSection}
     ${fieldSection}
+    ${metricSection}
     ${styleSection}
     ${barColorSection}
     ${monthsSection}
@@ -1666,24 +1816,27 @@ export function reportOpenFieldPicker(idx) {
     typeSel?.addEventListener('change', () => {
       const t            = typeSel.value;
       const isDonutNow   = t === 'donut';
-      const isIncNow     = t === 'incidents';
+      const isIncNow     = t === 'incidents' || t === 'incident-location';
       const show = id => { const el = document.getElementById(id); if (el) el.style.display = ''; };
       const hide = id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
 
       if (isDonutNow) {
         show('report-field-label'); show('report-field-picker-body');
         show('report-style-label'); show('report-style-group');
+        show('report-metric-label'); show('report-metric-group');
         hide('report-months-section');
         hide('report-bar-color-section'); // hidden until bar style selected
         _loadPickerFields('');
       } else if (isIncNow) {
         hide('report-field-label'); hide('report-field-picker-body');
         hide('report-style-label'); hide('report-style-group');
+        hide('report-metric-label'); hide('report-metric-group');
         hide('report-bar-color-section');
         show('report-months-section');
       } else {
         hide('report-field-label'); hide('report-field-picker-body');
         hide('report-style-label'); hide('report-style-group');
+        hide('report-metric-label'); hide('report-metric-group');
         hide('report-bar-color-section');
         hide('report-months-section');
       }
@@ -1861,6 +2014,11 @@ export function reportOpenHeatmapPicker() {
   picker.innerHTML = `
     <div class="report-field-picker-title">Configurar — Heatmap de Incidentes</div>
     <div class="report-field-picker-label">
+      Sistemas exibidos
+      <span style="font-weight:400;opacity:.7;display:block;font-size:11px;margin-top:2px">0 = mostrar todos; N = top N + "Outros"</span>
+    </div>
+    <input type="number" id="report-heatmap-topn-input" class="report-inc-months-input" min="0" max="999" value="${_heatmapTopN}" placeholder="9">
+    <div class="report-field-picker-label" style="margin-top:12px">
       Máximo da escala de cor
       <span style="font-weight:400;opacity:.7;display:block;font-size:11px;margin-top:2px">0 = automático (relativo ao maior valor dos dados visíveis)</span>
     </div>
@@ -1876,10 +2034,55 @@ export function reportOpenHeatmapPicker() {
 }
 
 function _applyHeatmapPicker() {
-  _heatmapMax = Math.max(0, parseInt(document.getElementById('report-heatmap-max-input')?.value) || 0);
+  _heatmapTopN = Math.max(0, parseInt(document.getElementById('report-heatmap-topn-input')?.value) || 0);
+  _heatmapMax  = Math.max(0, parseInt(document.getElementById('report-heatmap-max-input')?.value)  || 0);
   _closeFieldPicker();
   _saveReportConfig();
   _rerender();
+}
+
+export function reportOpenLocationPicker() {
+  _closeFieldPicker();
+
+  const backdrop = document.createElement('div');
+  backdrop.id        = 'report-picker-backdrop';
+  backdrop.className = 'report-field-backdrop';
+  backdrop.onclick   = _closeFieldPicker;
+  document.body.appendChild(backdrop);
+
+  const picker = document.createElement('div');
+  picker.id        = 'report-field-picker';
+  picker.className = 'report-field-picker';
+
+  const monthOpts = [1, 3, 6].map(v =>
+    `<button class="report-size-opt${_locationMonths === v ? ' active' : ''}" data-locmonths="${v}">${v} ${v === 1 ? 'mês' : 'meses'}</button>`
+  ).join('');
+
+  picker.innerHTML = `
+    <div class="report-field-picker-title">Configurar — Incidentes por Localização</div>
+    <div class="report-field-picker-label">Meses exibidos</div>
+    <div class="report-size-group" id="report-loc-months-group">${monthOpts}</div>
+    <div class="report-field-picker-actions">
+      <button class="report-picker-btn-cancel" id="report-loc-cancel">Cancelar</button>
+      <button class="report-picker-btn-apply"  id="report-loc-apply">Aplicar</button>
+    </div>`;
+  document.body.appendChild(picker);
+
+  document.getElementById('report-loc-cancel').onclick = _closeFieldPicker;
+  document.getElementById('report-loc-apply').onclick  = () => {
+    const active = document.querySelector('#report-loc-months-group .report-size-opt.active');
+    _locationMonths = parseInt(active?.dataset.locmonths) || 6;
+    _closeFieldPicker();
+    _saveReportConfig();
+    _rerender();
+  };
+
+  picker.addEventListener('click', e => {
+    const opt = e.target.closest('.report-size-opt');
+    if (!opt) return;
+    picker.querySelectorAll('.report-size-opt').forEach(b => b.classList.remove('active'));
+    opt.classList.add('active');
+  });
 }
 
 let _agingPickerIdx = -1; // índice do gráfico de aging sendo configurado
@@ -2081,6 +2284,7 @@ function _applyChartPicker() {
                   || document.querySelector('#report-field-picker .report-size-opt[data-size].active')?.dataset.size
                   || 'md';
   const chartStyle    = document.querySelector('#report-style-group .report-size-opt.active')?.dataset.style || 'donut';
+  const countBy       = document.querySelector('#report-metric-group .report-size-opt.active')?.dataset.countby || 'count';
   const barColorMode  = document.getElementById('report-bar-color-mode')?.value;
   const barColor      = barColorMode === 'single' ? (document.getElementById('report-bar-color-input')?.value || '') : '';
   let needsRefetch = false;
@@ -2091,15 +2295,18 @@ function _applyChartPicker() {
     if (chart.type === 'incidents') {
       const months = Math.min(24, Math.max(1, parseInt(document.getElementById('report-inc-months')?.value) || 5));
       _reportCharts[_pickerIdx] = { type: 'incidents', size, months };
+    } else if (chart.type === 'incident-location') {
+      const months = Math.min(6, Math.max(1, parseInt(document.getElementById('report-inc-months')?.value) || 6));
+      _reportCharts[_pickerIdx] = { type: 'incident-location', size, months };
     } else if (chart.type === 'donut') {
       const sel = document.getElementById('report-field-sel');
       if (sel) {
         const ref   = sel.value;
         const label = ref ? (sel.options[sel.selectedIndex]?.text || ref) : 'Tipo de Item';
         needsRefetch = ref !== chart.ref;
-        _reportCharts[_pickerIdx] = { type: 'donut', ref, label, size, chartStyle, barColor };
+        _reportCharts[_pickerIdx] = { type: 'donut', ref, label, size, chartStyle, countBy, barColor };
       } else {
-        _reportCharts[_pickerIdx] = { ...chart, size, chartStyle, barColor };
+        _reportCharts[_pickerIdx] = { ...chart, size, chartStyle, countBy, barColor };
       }
     } else {
       // sprint or volatility — only size can change
@@ -2112,11 +2319,14 @@ function _applyChartPicker() {
     if (type === 'incidents') {
       const months = Math.min(24, Math.max(1, parseInt(document.getElementById('report-inc-months')?.value) || 5));
       _reportCharts.push({ type: 'incidents', size, months });
+    } else if (type === 'incident-location') {
+      const months = Math.min(6, Math.max(1, parseInt(document.getElementById('report-inc-months')?.value) || 6));
+      _reportCharts.push({ type: 'incident-location', size, months });
     } else if (type === 'donut') {
       const sel   = document.getElementById('report-field-sel');
       const ref   = sel?.value || '';
       const label = ref ? (sel?.options[sel?.selectedIndex]?.text || ref) : 'Tipo de Item';
-      _reportCharts.push({ type: 'donut', ref, label, size, chartStyle, barColor });
+      _reportCharts.push({ type: 'donut', ref, label, size, chartStyle, countBy, barColor });
       needsRefetch = true;
     } else {
       _reportCharts.push({ type, size });
@@ -2147,6 +2357,24 @@ function _closeIncidentsModal() {
 
 export function reportCloseIncidentsModal() { _closeIncidentsModal(); }
 
+export function reportExportIncidentsCSV() {
+  const tbl = document.querySelector('#report-inc-modal-overlay .report-inc-table');
+  if (!tbl) return;
+  const headers = Array.from(tbl.querySelectorAll('thead tr:first-child th')).map(th => th.textContent.trim());
+  const visibleRows = Array.from(tbl.querySelectorAll('tbody tr')).filter(tr => tr.style.display !== 'none');
+  const csvRows = [headers, ...visibleRows.map(tr =>
+    Array.from(tr.querySelectorAll('td')).map(td => `"${td.textContent.trim().replace(/"/g, '""')}"`)
+  )];
+  const csv = '\uFEFF' + csvRows.map(r => r.join(';')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `incidentes_${_reportProject || 'export'}_${_reportMonth || ''}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function _buildIncidentsTable(items) {
   const priLabel = p => ({ '1': 'P1', '2': 'P2', '3': 'P3', '4': 'P4' }[p] || p || '—');
   const priCls   = p => ({ '1': 'p1', '2': 'p2', '3': 'p3', '4': 'p4' }[p] || 'p4');
@@ -2158,24 +2386,75 @@ function _buildIncidentsTable(items) {
   };
   const rows = items.map(i => `
     <tr>
-      <td class="inc-num"><a href="${i.url}" target="_blank" rel="noopener">${i.number || '—'}</a></td>
-      <td class="inc-desc">${i.description || '—'}</td>
+      <td class="inc-num"><a href="${_esc(i.url)}" target="_blank" rel="noopener">${_esc(i.number) || '—'}</a></td>
+      <td class="inc-desc">${_esc(i.description) || '—'}</td>
       <td><span class="report-inc-priority ${priCls(i.priority)}">${priLabel(i.priority)}</span></td>
-      <td>${i.state || '—'}</td>
+      <td>${_esc(i.state) || '—'}</td>
       <td style="white-space:nowrap">${fmtDate(i.openedAt)}</td>
-      <td>${i.category || '—'}</td>
+      <td>${_esc(i.assignedTo) || '—'}</td>
+      <td>${_esc(i.resolutionCode) || '—'}</td>
+      <td>${_esc(i.affectedIC) || '—'}</td>
+      <td>${_esc(i.impactedPlants) || '—'}</td>
     </tr>`).join('');
+  // Unique values for select-filter columns: 2=Prior, 3=Estado, 5=Assigned to, 6=Res.Code, 7=IC Afetado, 8=Imp.Plants
+  const selectVals = {
+    2: [...new Set(items.map(i => priLabel(i.priority)).filter(Boolean))].sort(),
+    3: [...new Set(items.map(i => i.state  || '—'))].sort(),
+    5: [...new Set(items.map(i => i.assignedTo     || '—'))].sort(),
+    6: [...new Set(items.map(i => i.resolutionCode || '—'))].sort(),
+    7: [...new Set(items.map(i => i.affectedIC     || '—'))].sort(),
+    8: [...new Set(items.map(i => i.impactedPlants || '—'))].sort(),
+  };
+  const filterRow = `<tr class="inc-filter-row">${Array.from({ length: 9 }, (_, ci) => {
+    if (selectVals[ci]) {
+      const opts = selectVals[ci].map(v => `<option value="${_esc(v)}">${_esc(v)}</option>`).join('');
+      return `<th><select data-col="${ci}"><option value="">Todos</option>${opts}</select></th>`;
+    }
+    return `<th><input type="text" data-col="${ci}" placeholder="⌕" title="Filtrar"></th>`;
+  }).join('')}</tr>`;
   return `<table class="report-inc-table">
-    <thead><tr>
-      <th>Número</th><th>Descrição</th><th>Prior.</th><th>Estado</th><th>Aberto em</th><th>Categoria</th>
-    </tr></thead>
+    <thead>
+      <tr>
+        <th>Número</th><th>Descrição</th><th>Prior.</th><th>Estado</th><th>Aberto em</th>
+        <th>Assigned to</th><th>Res. Code</th><th>IC Afetado</th><th>Imp. Plants</th>
+      </tr>
+      ${filterRow}
+    </thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
 
-export async function reportOpenIncidentsModal() {
-  _closeIncidentsModal();
+function _initIncidentTableFilters(tbl) {
+  const controls = tbl.querySelectorAll('.inc-filter-row [data-col]');
+  function applyFilters() {
+    const filters = Array.from(controls).map(el => ({
+      col:   +el.dataset.col,
+      val:   el.value.trim().toLowerCase(),
+      exact: el.tagName === 'SELECT',
+    }));
+    tbl.querySelectorAll('tbody tr').forEach(row => {
+      const tds = row.querySelectorAll('td');
+      const show = filters.every(f => {
+        if (!f.val) return true;
+        const text = tds[f.col]?.textContent?.toLowerCase() || '';
+        return f.exact ? text === f.val : text.includes(f.val);
+      });
+      row.style.display = show ? '' : 'none';
+    });
+  }
+  controls.forEach(ctrl => {
+    ctrl.addEventListener('change', applyFilters);
+    if (ctrl.tagName === 'INPUT') ctrl.addEventListener('input', applyFilters);
+  });
+}
 
+function _incOnclick(mode, month, filterField, filterValue, title) {
+  const json = JSON.stringify({ mode, month, filterField, filterValue, title }).replace(/'/g, '&#39;');
+  return `data-inc='${json}' onclick="reportOpenIncidentFilter(this)" style="cursor:pointer"`;
+}
+
+async function _showIncidentsModal(title, fetchParams) {
+  _closeIncidentsModal();
   const overlay = document.createElement('div');
   overlay.id        = 'report-inc-modal-overlay';
   overlay.className = 'report-inc-modal-overlay open';
@@ -2185,18 +2464,20 @@ export async function reportOpenIncidentsModal() {
   panel.className = 'report-inc-modal-panel';
   panel.innerHTML = `
     <div class="report-inc-modal-header">
-      <div class="report-inc-modal-title">Backlog de Incidentes</div>
-      <button class="report-inc-modal-close" onclick="reportCloseIncidentsModal()">&#x2715;</button>
+      <div class="report-inc-modal-title">${_esc(title)}</div>
+      <div class="report-inc-modal-actions">
+        <button class="report-inc-export-btn" id="report-inc-export-btn" onclick="reportExportIncidentsCSV()" title="Exportar para Excel (CSV)">&#x2193; Exportar</button>
+        <button class="report-inc-modal-close" onclick="reportCloseIncidentsModal()">&#x2715;</button>
+      </div>
     </div>
     <div class="report-inc-modal-body">
       <div class="report-loading" style="padding:32px 20px">Carregando...</div>
     </div>`;
-
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 
   try {
-    const r = await fetch(`/api/sn-incidents?project=${encodeURIComponent(_reportProject)}&month=${encodeURIComponent(_reportMonth || '')}`);
+    const r = await fetch(`/api/sn-incidents?${fetchParams}`);
     const { incidents, error } = await r.json();
     const body = panel.querySelector('.report-inc-modal-body');
     if (error) {
@@ -2204,14 +2485,26 @@ export async function reportOpenIncidentsModal() {
     } else if (!incidents || incidents.length === 0) {
       body.innerHTML = '<div class="report-inc-modal-empty">Nenhum incidente encontrado.</div>';
     } else {
-      body.innerHTML = `
-        <div class="report-inc-modal-count">${incidents.length} incidente${incidents.length !== 1 ? 's' : ''}</div>
-        ${_buildIncidentsTable(incidents)}`;
+      body.innerHTML = `<div class="report-inc-modal-count">${incidents.length} incidente${incidents.length !== 1 ? 's' : ''}</div>${_buildIncidentsTable(incidents)}`;
+      _initIncidentTableFilters(body.querySelector('.report-inc-table'));
     }
-  } catch (e) {
-    const body = panel.querySelector('.report-inc-modal-body');
-    body.innerHTML = '<div class="report-inc-modal-empty">Erro ao buscar incidentes.</div>';
+  } catch {
+    panel.querySelector('.report-inc-modal-body').innerHTML = '<div class="report-inc-modal-empty">Erro ao buscar incidentes.</div>';
   }
+}
+
+export function reportOpenIncidentFilter(el) {
+  const raw = typeof el === 'string' ? el : (el?.dataset?.inc || el?.getAttribute?.('data-inc') || '');
+  if (!raw) return;
+  let mode, month, filterField, filterValue, title;
+  try { ({ mode, month, filterField, filterValue, title } = JSON.parse(raw)); } catch { return; }
+  const params = new URLSearchParams({ project: _reportProject, month, mode, filterField, filterValue });
+  _showIncidentsModal(title || 'Incidentes', params.toString());
+}
+
+export async function reportOpenIncidentsModal() {
+  const params = new URLSearchParams({ project: _reportProject, month: _reportMonth || '', mode: 'backlog', filterField: '', filterValue: '' });
+  _showIncidentsModal('Backlog de Incidentes', params.toString());
 }
 
 async function _load(refresh = false) {

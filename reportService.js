@@ -250,20 +250,27 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   }
 
   // Delivered items grouped by each requested field (one pass)
-  const refs    = cleanGroupFields.length ? cleanGroupFields : [''];
-  const rawMaps = {};
-  refs.forEach(r => { rawMaps[r] = {}; });
+  const refs       = cleanGroupFields.length ? cleanGroupFields : [''];
+  const rawMaps    = {};
+  const rawPtsMaps = {};
+  refs.forEach(r => { rawMaps[r] = {}; rawPtsMaps[r] = {}; });
 
   filteredDelivItems.forEach(i => {
     refs.forEach(r => {
-      const t = (r ? i.fields[r] : null) || i.fields['System.WorkItemType'] || '(sem tipo)';
-      rawMaps[r][t] = (rawMaps[r][t] || 0) + 1;
+      const t   = (r ? i.fields[r] : null) || i.fields['System.WorkItemType'] || '(sem tipo)';
+      const pts = i.fields['Microsoft.VSTS.Scheduling.StoryPoints'] || 0;
+      rawMaps[r][t]    = (rawMaps[r][t]    || 0) + 1;
+      rawPtsMaps[r][t] = (rawPtsMaps[r][t] || 0) + pts;
     });
   });
 
-  const byTypes = {};
+  const byTypes    = {};
+  const byTypesPts = {};
   Object.entries(rawMaps).forEach(([r, map]) => {
     byTypes[r] = Object.entries(map).sort((a, b) => b[1] - a[1]).map(([type, count]) => ({ type, count }));
+  });
+  Object.entries(rawPtsMaps).forEach(([r, map]) => {
+    byTypesPts[r] = Object.entries(map).sort((a, b) => b[1] - a[1]).map(([type, count]) => ({ type, count }));
   });
 
   // Filter aging items by all team iteration paths (not just period — item may be in an old sprint)
@@ -311,6 +318,7 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
     totalUS:        allSprints.reduce((s, sp) => s + sp.total, 0),
     sprints:        allSprints,
     byTypes,
+    byTypesPts,
     bugsOpen:   openBugs.length,
     bugsNew:    newBugs.length,
     bugsClosed: fixBugs.length,
@@ -377,7 +385,7 @@ async function fetchSnReport(displayName, period) {
   console.log(`[SN] incQuery: ${incQuery}`);
 
   const [incRes, incClosedRes, incBacklogRes, prbRes, prbResolvedRes, prbOpenedThisMonthRes, taskSlaRes] = await Promise.all([
-    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,priority,cmdb_ci.name,u_additional_res_code,state&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN incidents error]', e.message); return { result: [] }; }),
+    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,priority,cmdb_ci.name,u_additional_res_code,location.name,state&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN incidents error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at,closed_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incBacklogQuery)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,category,state,opened_at&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
@@ -448,7 +456,9 @@ async function fetchSnReport(displayName, period) {
   const monthly      = [];
   const prbMonthly   = [];
   const sysMonthData = {}; // { ciName: [count per history index] }
-  const altMonthData = {}; // { resCode: [count per history index] }
+  const altMonthData  = {}; // { resCode: [count per history index] }
+  const altRawValues  = {}; // { displayValue: rawValue } — mapeamento para filtro SN
+  const locMonthData  = {}; // { locationName: [count per history index] }
 
   const allHistoryResults = [];
   for (let bStart = 0; bStart < period.history.length; bStart += HISTORY_BATCH) {
@@ -463,7 +473,7 @@ async function fetchSnReport(displayName, period) {
         const prbOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
         const prbResolvedQ  = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
         const [rIncO, rIncC, rIncCanc, rPrbO, rPrbR] = await Promise.all([
-          snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incOpenedQ)}&sysparm_fields=sys_id,cmdb_ci.name,u_additional_res_code&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
+          snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incOpenedQ)}&sysparm_fields=sys_id,cmdb_ci.name,u_additional_res_code,location.name&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incCancelledQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
@@ -483,9 +493,14 @@ async function fetchSnReport(displayName, period) {
       const name = _snVal(i['cmdb_ci.name']) || 'Outros';
       if (!sysMonthData[name]) sysMonthData[name] = new Array(period.history.length).fill(0);
       sysMonthData[name][mIdx]++;
-      const alt = _snVal(i['u_additional_res_code']) || 'N/A';
+      const alt    = _snVal(i['u_additional_res_code']) || 'N/A';
+      const altRaw = _snRaw(i['u_additional_res_code']) || alt;
       if (!altMonthData[alt]) altMonthData[alt] = new Array(period.history.length).fill(0);
       altMonthData[alt][mIdx]++;
+      altRawValues[alt] = altRaw;
+      const loc = _snVal(i['location.name']) || 'Não informado';
+      if (!locMonthData[loc]) locMonthData[loc] = new Array(period.history.length).fill(0);
+      locMonthData[loc][mIdx]++;
     });
     monthly.push({
       label:     m,
@@ -542,8 +557,9 @@ async function fetchSnReport(displayName, period) {
 
   const altSysMap = {};
   incidents.forEach(i => {
-    const name = _snVal(i['u_additional_res_code']) || 'N/A';
-    if (!altSysMap[name]) altSysMap[name] = { name, total: 0, p1: 0, p2: 0, p3: 0 };
+    const name    = _snVal(i['u_additional_res_code']) || 'N/A';
+    const rawName = _snRaw(i['u_additional_res_code']) || name;
+    if (!altSysMap[name]) altSysMap[name] = { name, rawValue: rawName, total: 0, p1: 0, p2: 0, p3: 0 };
     const p = _snRaw(i.priority);
     altSysMap[name].total++;
     if (p === '1') altSysMap[name].p1++;
@@ -552,6 +568,10 @@ async function fetchSnReport(displayName, period) {
   });
   const byGroupAlt = Object.values(altSysMap).sort((a, b) => b.total - a.total);
   const byGroupAltMonthly = Object.entries(altMonthData)
+    .map(([name, counts]) => ({ name, rawValue: altRawValues[name] || name, monthly: counts, total: counts.reduce((s, c) => s + c, 0) }))
+    .sort((a, b) => b.total - a.total);
+
+  const byLocationMonthly = Object.entries(locMonthData)
     .map(([name, counts]) => ({ name, monthly: counts, total: counts.reduce((s, c) => s + c, 0) }))
     .sort((a, b) => b.total - a.total);
 
@@ -589,6 +609,7 @@ async function fetchSnReport(displayName, period) {
       bySystemMonthly,
       byGroupAlt,
       byGroupAltMonthly,
+      byLocationMonthly,
       monthly,
     },
     prbs: {
@@ -627,7 +648,7 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
   return {
     metadata:     { project: displayName, period: period.label, generatedAt: new Date().toLocaleString('pt-BR'), generatedAtTs: Date.now() },
     hasSn:        !!sn,
-    delivery:     { totalUS: azure.totalUS, totalDelivered: azure.totalDelivered, sprints: azure.sprints, byTypes: azure.byTypes, usAging: azure.usAging },
+    delivery:     { totalUS: azure.totalUS, totalDelivered: azure.totalDelivered, sprints: azure.sprints, byTypes: azure.byTypes, byTypesPts: azure.byTypesPts, usAging: azure.usAging },
     quality:      { bugsOpen: azure.bugsOpen, bugsNew: azure.bugsNew, bugsClosed: azure.bugsClosed },
     prevDelivery: prevAzure ? { totalUS: prevAzure.totalUS, totalDelivered: prevAzure.totalDelivered } : null,
     prevQuality:  prevAzure ? { bugsOpen: prevAzure.bugsOpen, bugsNew: prevAzure.bugsNew } : null,
@@ -638,7 +659,7 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
 
 // ── Incident backlog list (for modal) ──────────────────────────────────────────
 
-async function fetchSnIncidentBacklog(displayName, month) {
+async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', filterField = '', filterValue = '' } = {}) {
   const snCfg = getSnConfig();
   const snGrp = getProjectSnGroup(displayName);
   if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass || !snGrp?.assignmentGroup) return null;
@@ -648,32 +669,49 @@ async function fetchSnIncidentBacklog(displayName, month) {
   const grpFilter = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
 
   const [y, m] = month.split('-').map(Number);
-  const endDate  = new Date(y, m, 0); // last day of month
-  const end      = endDate.toISOString().slice(0, 10) + 'T23:59:59Z';
+  const start    = new Date(y, m - 1, 1).toISOString().slice(0, 19) + 'Z';
+  const endDate  = new Date(y, m, 0, 23, 59, 59);
+  const end      = endDate.toISOString().slice(0, 19) + 'Z';
   const curMonth = new Date().toISOString().slice(0, 7);
 
-  // Exclude Resolved (6) and Closed (7) — these are not active backlog
-  const openStates = `^state!=6^state!=7`;
+  // Optional extra filter by system/location field
+  const fieldFrag = filterField === 'cmdb_ci'         ? `^cmdb_ci.name=${filterValue}`
+                  : filterField === 'resolution_code' ? `^u_additional_res_code=${filterValue}`
+                  : filterField === 'location'        ? `^location.name=${filterValue}`
+                  : '';
 
-  // Current month: active=true; past month (option B): opened before end AND (not resolved OR resolved after end)
-  const query = month === curMonth
-    ? `${grpFilter}^active=true${openStates}`
-    : `${grpFilter}^opened_at<=${end}^resolved_atISEMPTY${openStates}^NQ${grpFilter}^opened_at<=${end}^resolved_at>${end}${openStates}`;
+  let query;
+  if (mode === 'opened') {
+    query = `${grpFilter}^opened_at>=${start}^opened_at<=${end}${fieldFrag}`;
+  } else if (mode === 'closed') {
+    query = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}${fieldFrag}^NQ${grpFilter}^closed_at>=${start}^closed_at<=${end}^resolved_atISEMPTY^state!=8${fieldFrag}`;
+  } else if (mode === 'cancelled') {
+    query = `${grpFilter}^state=8^closed_at>=${start}^closed_at<=${end}${fieldFrag}`;
+  } else {
+    // backlog — active at end of month
+    const openStates = `^state!=6^state!=7`;
+    query = month === curMonth
+      ? `${grpFilter}^active=true${openStates}${fieldFrag}`
+      : `${grpFilter}^opened_at<=${end}^resolved_atISEMPTY${openStates}${fieldFrag}^NQ${grpFilter}^opened_at<=${end}^resolved_at>${end}${openStates}${fieldFrag}`;
+  }
 
   try {
     const res = await snGet(snCfg,
       `table/incident?sysparm_query=${encodeURIComponent(query)}` +
-      `&sysparm_fields=number,short_description,priority,state,opened_at,category,sys_id` +
+      `&sysparm_fields=number,short_description,priority,state,opened_at,assigned_to,u_additional_res_code,cmdb_ci.name,location.name,sys_id` +
       `&sysparm_display_value=all&sysparm_limit=500`
     );
     return (res.result || []).map(i => ({
-      number:      _snVal(i.number)            || String(i.number    || ''),
-      description: _snVal(i.short_description) || '',
-      priority:    _snRaw(i.priority)          || '',
-      state:       _snVal(i.state)             || '',
-      openedAt:    _snRaw(i.opened_at)         || String(i.opened_at || ''),
-      category:    _snVal(i.category)          || '',
-      url:         `https://${snCfg.instance}/incident.do?sys_id=${i.sys_id}`,
+      number:         _snRaw(i.number) || _snVal(i.number) || '',
+      description:    _snVal(i.short_description)         || '',
+      priority:       _snRaw(i.priority)                  || '',
+      state:          _snVal(i.state)                     || '',
+      openedAt:       _snRaw(i.opened_at)                 || String(i.opened_at || ''),
+      assignedTo:     _snVal(i['assigned_to'])            || '—',
+      resolutionCode: _snVal(i['u_additional_res_code'])  || '—',
+      affectedIC:     _snVal(i['cmdb_ci.name'])           || '—',
+      impactedPlants: _snVal(i['location.name'])          || '—',
+      url:            `https://${snCfg.instance}/incident.do?sys_id=${_snRaw(i.sys_id) || i.sys_id}`,
     }));
   } catch (e) {
     console.error('[SN incident backlog error]', e.message);

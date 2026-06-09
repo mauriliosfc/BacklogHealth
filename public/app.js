@@ -13,7 +13,7 @@ import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from './modules/teamCapacity.js';
 import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback, openFeedbackSuccess, closeFeedbackSuccess, closeFeedbackSuccessOverlay } from './modules/feedback.js';
 import { openUAT, closeUAT, closeUATOverlay, toggleUATMax, refreshUAT, uatChangeSprint, uatTogglePlan, uatFilterPlan, uatClearPlanFilter } from './modules/uat.js';
-import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot } from './modules/report.js';
+import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportOpenLocationPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot, reportOpenIncidentFilter, reportExportIncidentsCSV } from './modules/report.js';
 import { openSnConfig, closeSnConfig, closeSnConfigOverlay, snConfigTest, snConfigSaveGlobal, snConfigSaveProject } from './modules/snConfig.js';
 
 // Expor funções ao window para inline handlers no HTML
@@ -117,11 +117,14 @@ window.reportDrop            = reportDrop;
 window.reportDragEnd            = reportDragEnd;
 window.reportOpenIncidentGroupByPicker = reportOpenIncidentGroupByPicker;
 window.reportOpenHeatmapPicker         = reportOpenHeatmapPicker;
+window.reportOpenLocationPicker        = reportOpenLocationPicker;
 window.reportSaveNotes                 = reportSaveNotes;
 window.reportOpenDeliveryStatesPicker  = reportOpenDeliveryStatesPicker;
 window.reportOpenSlaPicker             = reportOpenSlaPicker;
 window.reportOpenIncidentsModal        = reportOpenIncidentsModal;
 window.reportCloseIncidentsModal       = reportCloseIncidentsModal;
+window.reportOpenIncidentFilter        = reportOpenIncidentFilter;
+window.reportExportIncidentsCSV        = reportExportIncidentsCSV;
 window.reportOpenCopilot               = reportOpenCopilot;
 window.reportOpenAgingPicker          = reportOpenAgingPicker;
 window.reportOpenIncidentVolumePicker = reportOpenIncidentVolumePicker;
