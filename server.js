@@ -728,12 +728,15 @@ ${context || 'No project data available at this moment.'}`;
 
     // ── GET /api/sn-incidents?project=NAME&month=YYYY-MM ──────────────────
     if (req.method === 'GET' && url.startsWith('/api/sn-incidents')) {
-      const qp      = new URLSearchParams(url.split('?')[1] || '');
-      const project = qp.get('project') || '';
-      const month   = qp.get('month')   || new Date().toISOString().slice(0, 7);
+      const qp          = new URLSearchParams(url.split('?')[1] || '');
+      const project     = qp.get('project')     || '';
+      const month       = qp.get('month')       || new Date().toISOString().slice(0, 7);
+      const mode        = qp.get('mode')        || 'backlog';
+      const filterField = qp.get('filterField') || '';
+      const filterValue = qp.get('filterValue') || '';
       try {
         const { fetchSnIncidentBacklog } = require('./reportService');
-        const incidents = await fetchSnIncidentBacklog(project, month);
+        const incidents = await fetchSnIncidentBacklog(project, month, { mode, filterField, filterValue });
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ incidents }));
       } catch (e) {
