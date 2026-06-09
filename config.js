@@ -1,11 +1,7 @@
-const fs       = require("fs");
-const nodePath  = require("path");
+const fs          = require("fs");
+const { CONFIG_PATH } = require('./utils/paths');
 
-const PORT        = 3030;
-// Quando rodando como .exe (PKG), __dirname aponta para o filesystem virtual
-// somente leitura. Salvar config.json ao lado do executável em vez disso.
-const CONFIG_DIR  = process.pkg ? nodePath.dirname(process.execPath) : __dirname;
-const CONFIG_PATH = nodePath.join(CONFIG_DIR, "config.json");
+const PORT = 3030;
 
 let cfg = {};
 
