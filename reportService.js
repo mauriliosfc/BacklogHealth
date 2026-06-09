@@ -5,10 +5,7 @@ const { azureGet, azurePost } = require('./azureClient');
 const { paginatedItems } = require('./utils/paginate');
 const { snGet } = require('./servicenowClient');
 
-const CACHE_DIR = nodePath.join(
-  process.pkg ? nodePath.dirname(process.execPath) : __dirname,
-  'cache'
-);
+const { CACHE_DIR } = require('./utils/paths');
 
 function _ensureCache() {
   if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });

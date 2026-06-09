@@ -1,825 +1,246 @@
-const dns      = require("dns");
-const http     = require("http");
-const fs       = require("fs");
-const nodePath = require("path");
-dns.setDefaultResultOrder("ipv4first");
+const dns      = require('dns');
+const http     = require('http');
+const fs       = require('fs');
+const nodePath = require('path');
+dns.setDefaultResultOrder('ipv4first');
 
-const { PORT, loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg, getSnConfig, saveSnConfig, getProjectSnGroup } = require("./config");
-const { createIssue } = require("./githubClient");
-const { buildReport, getLast6Months } = require("./reportService");
-const { snGet } = require("./servicenowClient");
-const { rawAzureGet, azureGet }                   = require("./azureClient");
-const { fetchProject, fetchProjectDetail, buildCardHTML, fetchUATPlans } = require("./projectService");
-const { fetchTeamCapacity } = require("./teamCapacityService");
-const { chatCompletion, testConnection } = require("./aiClient");
+const { PORT, loadConfig, getCfg, getDisplayName } = require('./config');
+const { HttpError, readBody } = require('./handlers/utils');
+const state     = require('./handlers/state');
+const dashH     = require('./handlers/dashboard');
+const projH     = require('./handlers/projects');
+const azureH    = require('./handlers/azure');
+const aiH       = require('./handlers/ai');
+const reportH   = require('./handlers/report');
+const snH       = require('./handlers/sn');
+const feedbackH = require('./handlers/feedback');
 
-// ── Template rendering ────────────────────────────────────────────────────────
+const PUBLIC_DIR = nodePath.join(__dirname, 'public');
 
-const VIEWS_DIR  = nodePath.join(__dirname, "views");
-const PUBLIC_DIR = nodePath.join(__dirname, "public");
+// ── Response helpers ──────────────────────────────────────────────────────────
 
-const templates = {
-  dashboard: fs.readFileSync(nodePath.join(VIEWS_DIR, "dashboard.html"), "utf8"),
-  setup:     fs.readFileSync(nodePath.join(VIEWS_DIR, "setup.html"),     "utf8"),
-};
-
-
-function renderTemplate(html, vars) {
-  return html.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
-    const val = vars[key.trim()];
-    return val == null ? "" : String(val);
-  });
-}
-
-function renderDashboard(results) {
-  const cfg = getCfg();
-  const count = results.filter(r => !r.error).length;
-  const baseUrl = cfg.baseUrl || `https://dev.azure.com/${cfg.org}`;
-  return renderTemplate(templates.dashboard, {
-    ORG:         cfg.org,
-    SUBTITLE:    `${count} project${count !== 1 ? 's' : ''} · ${cfg.org || 'Azure DevOps'}`,
-    LAST_UPDATE: new Date().toLocaleString("pt-BR"),
-    CARDS:       buildCardHTML(results, baseUrl),
-  });
-}
-
-function renderSetup(prefill = {}) {
-  const orgDisplay = prefill.baseUrl && prefill.baseUrl.includes("visualstudio.com")
-    ? prefill.baseUrl
-    : (prefill.org || "");
-  const pat  = (prefill.pat  || "").replace(/"/g, "&quot;");
-  const isSettings = !!(prefill.org);
-
-  // Converter projects para mapa { "ProjectName|TeamName": "User Story", "SimpleProject": "Task", ... }
-  const projectsMap = {};
-  if (prefill.projects && Array.isArray(prefill.projects)) {
-    prefill.projects.forEach(p => {
-      const name = typeof p === 'string' ? p : p.name;
-      const team = typeof p === 'string' ? undefined : p.team;
-      const workItemType = typeof p === 'string' ? 'User Story' : (p.workItemType || 'User Story');
-      const key = team ? `${name}|${team}` : name;
-      projectsMap[key] = workItemType;
-    });
+async function json(res, fn) {
+  try {
+    const data = await fn();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(data));
+  } catch (e) {
+    const status = e instanceof HttpError ? e.status : 500;
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
   }
-  const selectedProjectsJson = JSON.stringify(projectsMap).replace(/</g, "\\u003c");
-
-  return renderTemplate(templates.setup, {
-    TITLE:                  isSettings ? "Configurações" : "Configuração inicial",
-    SUBTITLE:               isSettings
-      ? "Atualize suas credenciais e projetos monitorados"
-      : "Configure suas credenciais do Azure DevOps para começar",
-    ORG_VALUE:              orgDisplay.replace(/"/g, "&quot;"),
-    PAT_VALUE:              pat,
-    SELECTED_PROJECTS_JSON: selectedProjectsJson,
-    BACK_LINK:              isSettings
-      ? '<a class="su-back-link" href="/" data-i18n="setup_back">← Back to Dashboard</a>'
-      : "",
-    AUTO_LOAD_SCRIPT:       isSettings ? "window.addEventListener('load', loadProjects);" : "",
-  });
 }
 
-// ── HTTP helpers ──────────────────────────────────────────────────────────────
-
-function readBody(req) {
-  return new Promise(resolve => {
-    let body = "";
-    req.on("data", chunk => body += chunk);
-    req.on("end", () => resolve(body));
-  });
+async function page(res, fn) {
+  try {
+    const html = await fn();
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(html);
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end(e.message);
+  }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
   const configured = loadConfig();
-  let cachedHTML = "";
 
   if (configured) {
-    console.log("🔄 Buscando dados do Azure DevOps...");
-    const cfg = getCfg();
-    const results = await Promise.all(cfg.projects.map(fetchProject));
-    cachedHTML = renderDashboard(results);
-    console.log("✅ Dados carregados! Iniciando servidor...");
+    console.log('🔄 Buscando dados do Azure DevOps...');
+    await dashH.buildAndCache();
+    console.log('✅ Dados carregados! Iniciando servidor...');
   } else {
-    console.log("⚙️  Configuração não encontrada. Iniciando tela de setup...");
+    console.log('⚙️  Configuração não encontrada. Iniciando tela de setup...');
   }
 
   const server = http.createServer(async (req, res) => {
     const url = req.url;
 
-    // ── Arquivos estáticos ─────────────────────────────────────────────────
-    const urlPath = url.split("?")[0];
+    // ── Static files ──────────────────────────────────────────────────────
+    const urlPath    = url.split('?')[0];
     const staticPath = nodePath.join(PUBLIC_DIR, urlPath);
     if (fs.existsSync(staticPath) && fs.statSync(staticPath).isFile()) {
-      const ext = nodePath.extname(staticPath);
-      const mimeTypes = { ".css": "text/css", ".js": "application/javascript", ".json": "application/json", ".svg": "image/svg+xml" };
-      res.writeHead(200, { "Content-Type": (mimeTypes[ext] || "text/plain") + "; charset=utf-8" });
+      const ext       = nodePath.extname(staticPath);
+      const mimeTypes = { '.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json', '.svg': 'image/svg+xml' };
+      res.writeHead(200, { 'Content-Type': (mimeTypes[ext] || 'text/plain') + '; charset=utf-8' });
       res.end(fs.readFileSync(staticPath));
       return;
     }
 
     // ── GET /api/projects ─────────────────────────────────────────────────
-    if (url.startsWith("/api/projects")) {
-      const qp = new URLSearchParams(url.split("?")[1] || "");
-      const qOrg = qp.get("org")?.trim();
-      const qPat = qp.get("pat")?.trim();
-      if (!qOrg || !qPat) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "org e pat são obrigatórios" }));
-        return;
-      }
-      try {
-        const auth = Buffer.from(`:${qPat}`).toString("base64");
-        const { baseUrl } = parseOrgInput(qOrg);
-        // Fetch all projects with $skip pagination (API defaults to 100, max $top=200)
-        const PAGE = 200;
-        let allProjectNames = [];
-        let skip = 0;
-        while (true) {
-          const result = await rawAzureGet(
-            `${baseUrl}/_apis/projects?api-version=7.0&$top=${PAGE}&$skip=${skip}&stateFilter=wellFormed`,
-            auth
-          );
-          if (skip === 0) {
-            if (result.status === 401 || result.status === 203) {
-              res.writeHead(401, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ error: "PAT inválido ou sem permissão. Verifique o token e as permissões necessárias." }));
-              return;
-            }
-            if (result.status === 404) {
-              res.writeHead(404, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ error: `Organização não encontrada: "${qOrg}". Verifique o nome na URL do Azure DevOps.` }));
-              return;
-            }
-            if (result.status !== 200) {
-              res.writeHead(result.status, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ error: `Erro da API Azure DevOps: HTTP ${result.status}` }));
-              return;
-            }
-          }
-          const page = (result.data.value || []).map(p => p.name);
-          allProjectNames = allProjectNames.concat(page);
-          if (page.length < PAGE) break;
-          skip += PAGE;
-        }
-        const projectNames = allProjectNames.sort((a, b) => a.localeCompare(b));
-        // Fetch teams for each project in parallel to detect multi-team projects
-        const projects = await Promise.all(projectNames.map(async name => {
-          try {
-            const tr = await rawAzureGet(
-              `${baseUrl}/_apis/projects/${encodeURIComponent(name)}/teams?api-version=7.0`,
-              auth
-            );
-            if (tr.status === 200 && tr.data.value && tr.data.value.length > 1) {
-              return { name, teams: tr.data.value.map(t => t.name) };
-            }
-          } catch (_) {}
-          return { name, teams: [] };
-        }));
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ projects }));
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Falha ao conectar com o Azure DevOps: " + (e.code || e.message) }));
-      }
-      return;
+    if (url.startsWith('/api/projects')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => projH.listProjects({ org: qp.get('org')?.trim(), pat: qp.get('pat')?.trim() }));
     }
 
     // ── POST /api/remove-project ───────────────────────────────────────────
-    if (req.method === "POST" && url === "/api/remove-project") {
+    if (req.method === 'POST' && url === '/api/remove-project') {
       const body = await readBody(req);
       const { project } = JSON.parse(body || '{}');
-      const cfg = getCfg();
-      cfg.projects = (cfg.projects || []).filter(p => getDisplayName(p) !== project);
-      saveConfig(cfg);
-      const results = await Promise.all(cfg.projects.map(fetchProject));
-      cachedHTML = renderDashboard(results);
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true }));
-      return;
+      return json(res, () => projH.removeProject({ project }));
     }
 
     // ── POST /setup ────────────────────────────────────────────────────────
-    if (req.method === "POST" && url === "/setup") {
-      const body = await readBody(req);
+    if (req.method === 'POST' && url === '/setup') {
+      const body   = await readBody(req);
       const params = new URLSearchParams(body);
-      const rawOrg = params.get("org")?.trim();
-      const pat = params.get("pat")?.trim();
-      const projectsRaw = params.get("projects") || "";
-
-      // Formato: "Project1:User Story,Project2:Task:TeamName"
-      const existingForMerge = getCfg();
-      const projects = projectsRaw.split(/[\n,]+/)
-        .map(p => p.trim())
-        .filter(Boolean)
-        .map(p => {
-          const [name, workItemType, ...teamParts] = p.split(':');
-          const team = teamParts.join(':').trim() || undefined;
-          // Preserve per-project servicenow config if it exists
-          const prevProj = (existingForMerge.projects || []).find(ep => ep.name === name.trim() && (ep.team || undefined) === team);
-          return {
-            name: name.trim(),
-            workItemType: (workItemType || 'User Story').trim(),
-            ...(team ? { team } : {}),
-            ...(prevProj?.servicenow ? { servicenow: prevProj.servicenow } : {}),
-          };
-        });
-
-      if (!rawOrg || !pat || !projects.length) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Preencha todos os campos obrigatórios." }));
-        return;
-      }
-
-      const { org, baseUrl } = parseOrgInput(rawOrg);
-      const existing = getCfg();
-      saveConfig({ ...existing, org, baseUrl, pat, projects });
-
-      try {
-        console.log("🔄 Buscando dados dos projetos configurados...");
-        const cfg = getCfg();
-        const results = await Promise.all(cfg.projects.map(fetchProject));
-        cachedHTML = renderDashboard(results);
-        console.log("✅ Configuração salva e dados carregados!");
-      } catch (e) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Erro ao buscar dados: " + e.message }));
-        return;
-      }
-
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true }));
-      return;
+      return json(res, () => projH.setup({
+        rawOrg:      params.get('org')?.trim(),
+        pat:         params.get('pat')?.trim(),
+        projectsRaw: params.get('projects') || '',
+      }));
     }
 
     // ── GET /settings ──────────────────────────────────────────────────────
-    if (url === "/settings") {
+    if (url === '/settings') {
       const cfg = getCfg();
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(renderSetup({ org: cfg.org || "", pat: cfg.pat || "", projects: cfg.projects || [] }));
-      return;
+      return page(res, () => dashH.renderSetup({ org: cfg.org || '', pat: cfg.pat || '', projects: cfg.projects || [] }));
     }
 
-    // ── Sem config → setup ────────────────────────────────────────────────
+    // ── No config → setup ─────────────────────────────────────────────────
     const cfg = getCfg();
     if (!cfg.org || !cfg.pat || !cfg.projects?.length) {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(renderSetup());
-      return;
+      return page(res, () => dashH.renderSetup());
     }
 
     // ── GET /refresh ───────────────────────────────────────────────────────
-    if (url === "/refresh") {
-      const results = await Promise.all(cfg.projects.map(fetchProject));
-      cachedHTML = renderDashboard(results);
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(cachedHTML);
-      return;
+    if (url === '/refresh') {
+      return page(res, async () => { await dashH.buildAndCache(); return state.html; });
     }
 
-    // ── GET /api/team-capacity?project=NAME ───────────────────────────────
+    // ── GET /api/team-capacity ─────────────────────────────────────────────
     if (url.startsWith('/api/team-capacity')) {
-      const qp      = new URLSearchParams(url.split('?')[1] || '');
-      const project = qp.get('project') || null;
-      try {
-        const data = await fetchTeamCapacity(project);
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify(data));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => azureH.getTeamCapacity({ project: qp.get('project') }));
     }
 
-    // ── GET /api/uat?project=NAME ─────────────────────────────────────────
+    // ── GET /api/uat ───────────────────────────────────────────────────────
     if (url.startsWith('/api/uat')) {
-      const qp      = new URLSearchParams(url.split('?')[1] || '');
-      const project = qp.get('project');
-      try {
-        const data = await fetchUATPlans(project);
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify(data));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => azureH.getUAT({ project: qp.get('project') }));
     }
 
-    // ── GET /detail?project=NAME ───────────────────────────────────────────
-    if (url.startsWith("/detail?")) {
-      const project = new URLSearchParams(url.slice(8)).get("project");
-      const displayNames = cfg.projects.map(p => getDisplayName(p));
+    // ── GET /detail ────────────────────────────────────────────────────────
+    if (url.startsWith('/detail?')) {
+      const project = new URLSearchParams(url.slice(8)).get('project');
+      const displayNames = (cfg.projects || []).map(p => getDisplayName(p));
       if (!project || !displayNames.includes(project)) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Projeto não encontrado" }));
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Projeto não encontrado' }));
         return;
       }
-      const data = await fetchProjectDetail(project);
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify(data));
-      return;
+      return json(res, () => azureH.getDetail({ project }));
     }
 
     // ── POST /ai/context ───────────────────────────────────────────────────
     if (req.method === 'POST' && url === '/ai/context') {
-      const cfg = getCfg();
-      const displayNames = (cfg.projects || []).map(p => getDisplayName(p));
       const body = await readBody(req);
       const { filters = {} } = JSON.parse(body || '{}');
-      try {
-        const details = await Promise.all(displayNames.map(id => fetchProjectDetail(id)));
-        const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
-        const CLOSED   = ['Closed', 'Done', 'Resolved'];
-        const ACTIVE   = ['Active', 'In Progress', 'Doing', 'Committed'];
-        const r1 = v => Math.round(v * 10) / 10;
-
-        const projects = details.map(data => {
-          const { project, items, taskItems, bugItems, iterMap, workItemType } = data;
-          const isTaskMode = workItemType === 'Task';
-
-          // normaliza filtro: localStorage guarda path completo, usamos só último segmento
-          const activeFilter = (filters[project] || []).map(f => f.split('\\').pop());
-          const hasFilter    = activeFilter.length > 0;
-          const spName       = iter => (iter || '').split('\\').pop();
-          const inFilter     = sp => !hasFilter || activeFilter.includes(sp);
-
-          // filtra itens pelo sprint filter
-          const filteredItems = items.filter(i => inFilter(spName(i.iteration)));
-          const filteredTasks = taskItems.filter(t => inFilter(spName(t.iteration)));
-          const filteredBugs  = bugItems.filter(b => inFilter(spName(b.iteration)));
-
-          // itens principais (US ou Task conforme modo)
-          const ITEM_TYPES = isTaskMode ? ['Task'] : US_TYPES;
-          const mainItems  = filteredItems.filter(i => ITEM_TYPES.includes(i.type));
-          const mainTotal  = mainItems.length;
-
-          // ── Resumo Geral (igual ao detail modal) ──────────────────────────
-          const totalPts    = filteredItems.reduce((s, i) => s + (i.pts || 0), 0);
-          const donePts     = filteredItems.filter(i => CLOSED.includes(i.state)).reduce((s, i) => s + (i.pts || 0), 0);
-          const inProgress  = filteredItems.filter(i => ACTIVE.includes(i.state)).length;
-          const newCount    = filteredItems.filter(i => i.state === 'New').length;
-          const noEst       = mainItems.filter(i => !i.pts).length;
-          const taskHrs     = r1(filteredTasks.reduce((s, t) => s + (t.completedWork || 0), 0));
-          const bugHrs      = r1(filteredBugs.reduce((s, b)  => s + (b.completedWork || 0), 0));
-          const openBugsCount = items.filter(i => i.type === 'Bug' && ['Active','In Progress','New'].includes(i.state) && inFilter(spName(i.iteration))).length;
-
-          // ── Indicadores de Saúde ──────────────────────────────────────────
-          const mainClosed  = mainItems.filter(i => CLOSED.includes(i.state)).length;
-          const mainUAT     = mainItems.filter(i => i.state === 'UAT').length;
-          const mainNoEst   = mainItems.filter(i => !i.pts).length;
-          const totalHrs    = taskHrs + bugHrs;
-          const health = {
-            completionRate:    mainTotal ? Math.round(mainClosed / mainTotal * 100) : 0,
-            inUAT_pct:         mainTotal ? Math.round(mainUAT   / mainTotal * 100) : 0,
-            inUAT_count:       mainUAT,
-            bugRate_pct:       totalHrs  ? Math.round(bugHrs    / totalHrs  * 100) : 0,
-            estimateCoverage:  mainTotal ? Math.round((mainTotal - mainNoEst) / mainTotal * 100) : 0,
-          };
-
-          // ── US por Status ─────────────────────────────────────────────────
-          const byStatus = {};
-          mainItems.forEach(i => { byStatus[i.state] = (byStatus[i.state] || 0) + 1; });
-          const byStatusArr = Object.entries(byStatus).sort((a, b) => b[1] - a[1]).map(([status, count]) => ({ status, count }));
-
-          // ── US por Responsável ────────────────────────────────────────────
-          const byAssignee = {};
-          mainItems.forEach(i => { const n = i.assigned || 'Sem responsável'; byAssignee[n] = (byAssignee[n] || 0) + 1; });
-          const byAssigneeArr = Object.entries(byAssignee).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([assignee, count]) => ({ assignee, count }));
-
-          // ── Distribuição por Sprint ───────────────────────────────────────
-          const sprintMap = {};
-          filteredItems.forEach(i => {
-            const sp = spName(i.iteration) || 'Sem Sprint';
-            if (!sprintMap[sp]) sprintMap[sp] = { us: 0, usClosed: 0, pts: 0, taskHrs: 0, bugHrs: 0 };
-            if (ITEM_TYPES.includes(i.type)) {
-              sprintMap[sp].us++;
-              if (CLOSED.includes(i.state)) sprintMap[sp].usClosed++;
-            }
-            sprintMap[sp].pts += i.pts || 0;
-          });
-          filteredTasks.forEach(t => { const sp = spName(t.iteration) || 'Sem Sprint'; if (sprintMap[sp]) sprintMap[sp].taskHrs += t.completedWork || 0; });
-          filteredBugs.forEach(b  => { const sp = spName(b.iteration)  || 'Sem Sprint'; if (sprintMap[sp]) sprintMap[sp].bugHrs  += b.completedWork || 0; });
-
-          const currentEntry      = Object.entries(iterMap).find(([, v]) => v.isCurrent);
-          const currentSprintName = currentEntry?.[0] ? spName(currentEntry[0]) : null;
-
-          const sprintDistribution = Object.entries(sprintMap)
-            .map(([sprint, s]) => {
-              const meta = Object.entries(iterMap).find(([k]) => spName(k) === sprint);
-              return {
-                sprint,
-                isCurrent: meta?.[1]?.isCurrent || false,
-                start: meta?.[1]?.start || null,
-                end:   meta?.[1]?.end   || null,
-                totalUS:       s.us,
-                completedUS:   s.usClosed,
-                completionPct: s.us ? Math.round(s.usClosed / s.us * 100) : 0,
-                storyPoints:   r1(s.pts),
-                taskHrs:       r1(s.taskHrs),
-                bugHrs:        r1(s.bugHrs),
-              };
-            })
-            .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-
-          // ── Sprint atual — itens detalhados ───────────────────────────────
-          const effectiveSprint = hasFilter
-            ? (activeFilter.includes(currentSprintName) ? currentSprintName : activeFilter[activeFilter.length - 1])
-            : currentSprintName;
-          const currentSprintItems = effectiveSprint
-            ? mainItems.filter(i => spName(i.iteration) === effectiveSprint)
-                       .map(i => ({ title: i.title, state: i.state, pts: i.pts, assignee: i.assigned }))
-            : [];
-
-          // ── Itens problemáticos ───────────────────────────────────────────
-          const openMain    = mainItems.filter(i => !CLOSED.includes(i.state));
-          const noEstItems  = openMain.filter(i => !i.pts) .map(i => ({ title: i.title, sprint: spName(i.iteration), assignee: i.assigned }));
-          const noRespItems = openMain.filter(i => !i.assigned).map(i => ({ title: i.title, sprint: spName(i.iteration), pts: i.pts }));
-          const openBugs    = items.filter(i => i.type === 'Bug' && ['Active','In Progress','New'].includes(i.state) && inFilter(spName(i.iteration)))
-                                   .map(i => ({ title: i.title, state: i.state, sprint: spName(i.iteration) }));
-
-          return {
-            name: project,
-            workItemType,
-            activeSprintFilter: hasFilter ? activeFilter : null,
-            summary: {
-              totalItems:   filteredItems.length,
-              userStories:  mainTotal,
-              storyPoints:  r1(totalPts),
-              deliveredPts: r1(donePts),
-              inProgress,
-              new:          newCount,
-              noEstimate:   noEst,
-              taskHrs,
-              bugHrs,
-              openBugs:     openBugsCount,
-            },
-            healthIndicators: health,
-            byStatus:     byStatusArr,
-            byAssignee:   byAssigneeArr,
-            sprintDistribution,
-            currentSprint: effectiveSprint ? {
-              name:  effectiveSprint,
-              start: currentEntry?.[1]?.start || null,
-              end:   currentEntry?.[1]?.end   || null,
-              items: currentSprintItems,
-            } : null,
-            noEstimateItems:  noEstItems.slice(0, 30),
-            noAssigneeItems:  noRespItems.slice(0, 30),
-            openBugs:         openBugs.slice(0, 30),
-          };
-        });
-
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ projects }));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
+      return json(res, () => azureH.getContext({ filters }));
     }
 
     // ── GET /ai/config ─────────────────────────────────────────────────────
     if (req.method === 'GET' && url === '/ai/config') {
-      const ai = getAiCfg();
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({
-        configured:  !!(ai?.endpoint && ai?.apiKey && ai?.model),
-        endpoint:    ai?.endpoint    || '',
-        apiKey:      ai?.apiKey      || '',
-        model:       ai?.model       || '',
-        apiVersion:  ai?.apiVersion  || '',
-      }));
-      return;
+      return json(res, () => aiH.getAiConfig());
     }
 
     // ── POST /ai/config ────────────────────────────────────────────────────
     if (req.method === 'POST' && url === '/ai/config') {
       const body = await readBody(req);
-      const p = JSON.parse(body);
-      if (!p.endpoint || !p.apiKey || !p.model) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'endpoint, apiKey e model são obrigatórios.' }));
-        return;
-      }
-      saveAiConfig({ endpoint: p.endpoint.trim(), apiKey: p.apiKey.trim(), model: p.model.trim(), apiVersion: (p.apiVersion || '').trim() });
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true }));
-      return;
+      return json(res, () => aiH.saveAiCfg(JSON.parse(body)));
     }
 
     // ── POST /ai/test ──────────────────────────────────────────────────────
     if (req.method === 'POST' && url === '/ai/test') {
       const body = await readBody(req);
-      const p = JSON.parse(body);
-      if (!p.endpoint || !p.apiKey || !p.model) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Preencha todos os campos obrigatórios.' }));
-        return;
-      }
-      try {
-        await testConnection({ endpoint: p.endpoint.trim(), apiKey: p.apiKey.trim(), model: p.model.trim(), apiVersion: (p.apiVersion || '').trim() });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (e) {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
+      return json(res, () => aiH.testAiConnection(JSON.parse(body)));
     }
 
     // ── POST /ai/chat ──────────────────────────────────────────────────────
     if (req.method === 'POST' && url === '/ai/chat') {
-      const ai = getAiCfg();
-      if (!ai?.endpoint || !ai?.apiKey || !ai?.model) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'IA não configurada.' }));
-        return;
-      }
       const body = await readBody(req);
-      const { message, history = [], context = '' } = JSON.parse(body);
-      const systemPrompt = `You are Copilot Project, an AI assistant specialized in technology project management using Agile/Scrum methodology.
-
-Your role is to help the team and project managers to:
-- Analyze backlog health and identify risks (items without estimate, without assignee, excess open bugs)
-- Monitor sprint progress and delivery capacity
-- Suggest concrete and prioritized actions to improve project health
-- Answer questions about sprints, User Stories, bugs and metrics from Azure DevOps
-- Support daily standups, retrospectives and sprint planning with data-driven insights
-
-Behavior guidelines:
-- Always respond in the same language the user writes (Portuguese, English or Spanish)
-- Be direct and objective — avoid long introductions
-- When identifying a problem, always suggest a concrete action
-- Use the dashboard data to support your answers with real numbers
-- When data is insufficient to answer, say so clearly and suggest what information would be needed
-- Do not invent data — only use what is provided in the context below
-
-Current dashboard data:
-${context || 'No project data available at this moment.'}`;
-
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        ...history,
-        { role: 'user', content: message }
-      ];
-      try {
-        const reply = await chatCompletion(ai, messages);
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ reply }));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
+      return json(res, () => aiH.chat(JSON.parse(body)));
     }
 
     // ── POST /api/feedback ─────────────────────────────────────────────────
     if (req.method === 'POST' && url === '/api/feedback') {
-      const gh = getGithubCfg();
-      if (!gh?.token || !gh?.repo) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'GitHub feedback not configured. Ask the administrator to configure it in Settings.' }));
-        return;
-      }
       const body = await readBody(req);
-      const { type, title, description } = JSON.parse(body);
-      if (!title?.trim() || !description?.trim()) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Title and description are required.' }));
-        return;
-      }
-      const labelMap = { bug: 'bug', suggestion: 'enhancement', help: 'question' };
-      const labels = labelMap[type] ? [labelMap[type]] : [];
-      const typeEmoji = { bug: '🐛', suggestion: '💡', help: '❓', other: '📝' }[type] || '📝';
-      const typeLabel = { bug: 'Bug Report', suggestion: 'Suggestion', help: 'Help Request', other: 'Other' }[type] || 'Feedback';
-      const cfg = getCfg();
-      const issueTitle = `${typeEmoji} [${typeLabel}] ${title.trim()}`;
-      const issueBody = `## ${typeEmoji} ${typeLabel}\n\n${description.trim()}\n\n---\n*Sent via **Backlog Health Dashboard** · ${new Date().toISOString().split('T')[0]} · Org: \`${cfg.org || 'N/A'}\`*`;
-      try {
-        const issue = await createIssue({ token: gh.token, repo: gh.repo, title: issueTitle, body: issueBody, labels });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, url: issue.html_url }));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
+      return json(res, () => feedbackH.submitFeedback(JSON.parse(body)));
     }
 
-    // ── GET /api/report-config?project=NAME ──────────────────────────────
-    if (req.method === 'GET' && url.startsWith('/api/report-config')) {
-      const qp      = new URLSearchParams(url.split('?')[1] || '');
-      const project = qp.get('project') || '';
-      const pcfg    = cfg.projects.find(p => getDisplayName(p) === project);
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ reportCharts: pcfg?.reportCharts || null, groupFields: pcfg?.reportGroupFields || null, incidentMonths: pcfg?.incidentMonths || 5, incidentTarget: pcfg?.incidentTarget ?? 24, incidentGroupBy: pcfg?.incidentGroupBy || 'cmdb_ci', heatmapMax: pcfg?.heatmapMax ?? 0, agingState: pcfg?.agingState || 'In Review', agingCharts: pcfg?.agingCharts || null, agingBuckets: pcfg?.agingBuckets || null, deliveryStates: pcfg?.deliveryStates || null }));
-      return;
-    }
-
-    // ── POST /api/report-config ───────────────────────────────────────────
-    if (req.method === 'POST' && url === '/api/report-config') {
-      const body = await readBody(req);
-      const { project, reportCharts, incidentMonths, incidentTarget, incidentGroupBy, heatmapMax, agingState, agingCharts, agingBuckets, deliveryStates } = JSON.parse(body || '{}');
-      const pcfg = cfg.projects.find(p => getDisplayName(p) === project);
-      if (pcfg) {
-        if (Array.isArray(reportCharts)) { pcfg.reportCharts = reportCharts; delete pcfg.reportGroupFields; }
-        if (incidentMonths  !== undefined) pcfg.incidentMonths  = Math.min(24, Math.max(1, parseInt(incidentMonths) || 5));
-        if (incidentTarget  !== undefined) pcfg.incidentTarget  = Math.max(0, parseInt(incidentTarget) || 0);
-        if (incidentGroupBy !== undefined) pcfg.incidentGroupBy = incidentGroupBy;
-        if (heatmapMax      !== undefined) pcfg.heatmapMax      = Math.max(0, parseInt(heatmapMax) || 0);
-        if (agingState  !== undefined)              pcfg.agingState  = agingState;
-        if (Array.isArray(agingCharts))  pcfg.agingCharts  = agingCharts;
-        if (Array.isArray(agingBuckets)) pcfg.agingBuckets = agingBuckets.map(v => Math.max(1, parseInt(v) || 1));
-        if (Array.isArray(deliveryStates) && deliveryStates.length) pcfg.deliveryStates = deliveryStates;
-        saveConfig(cfg);
+    // ── GET /api/report-config (must precede /api/report) ─────────────────
+    if (url.startsWith('/api/report-config')) {
+      if (req.method === 'GET') {
+        const qp = new URLSearchParams(url.split('?')[1] || '');
+        return json(res, () => reportH.getReportConfig({ project: qp.get('project') || '' }));
       }
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true }));
-      return;
-    }
-
-    // ── GET /api/report-fields?project=NAME ──────────────────────────────
-    if (req.method === 'GET' && url.startsWith('/api/report-fields')) {
-      const qp      = new URLSearchParams(url.split('?')[1] || '');
-      const project = qp.get('project') || '';
-      try {
-        const pcfg    = cfg.projects.find(p => getDisplayName(p) === project);
-        const proj    = pcfg?.name || project;
-        const r       = await azureGet(`${encodeURIComponent(proj)}/_apis/wit/fields?api-version=7.0`);
-        const STANDARD = new Set([
-          'System.AreaPath',
-          'System.IterationPath',
-          'System.WorkItemType',
-          'System.State',
-          'System.AssignedTo',
-          'System.Tags',
-          'Microsoft.VSTS.Common.Priority',
-          'Microsoft.VSTS.Common.ValueArea',
-          'Microsoft.VSTS.Common.Activity',
-        ]);
-        const fields  = (r.value || [])
-          .filter(f => f.referenceName.startsWith('Custom.') || STANDARD.has(f.referenceName))
-          .map(f => ({ ref: f.referenceName, label: f.name }))
-          .sort((a, b) => a.label.localeCompare(b.label));
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ fields }));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
-    }
-
-    // ── GET /api/us-states?project=NAME ──────────────────────────────────
-    if (req.method === 'GET' && url.startsWith('/api/us-states')) {
-      const qp      = new URLSearchParams(url.split('?')[1] || '');
-      const project = qp.get('project') || '';
-      try {
-        const pcfg = cfg.projects.find(p => getDisplayName(p) === project);
-        const proj = pcfg?.name || project;
-        const type = pcfg?.workItemType || 'User Story';
-        const r    = await azureGet(`${encodeURIComponent(proj)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/states?api-version=7.0`);
-        const states = (r.value || []).map(s => s.name);
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ states }));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
-    }
-
-    // ── GET /api/report?project=NAME&month=YYYY-MM ────────────────────────
-    if (req.method === 'GET' && url.startsWith('/api/report')) {
-      const qp         = new URLSearchParams(url.split('?')[1] || '');
-      const project        = qp.get('project') || (cfg.projects[0] ? getDisplayName(cfg.projects[0]) : '');
-      const groupFields    = (qp.get('groupFields') || '').split(',').filter(f => f);
-      const agingState     = qp.get('agingState') || 'In Review';
-      const pcfgReport     = cfg.projects.find(p => getDisplayName(p) === project);
-      const incidentMonths = Math.min(24, Math.max(1, parseInt(qp.get('incidentMonths') || pcfgReport?.incidentMonths) || 13));
-      const nMonths        = Math.max(6, incidentMonths);
-      const months         = getLast6Months(nMonths);
-      const month          = months.includes(qp.get('month')) ? qp.get('month') : months[0];
-      const deliveryStates = qp.get('deliveryStates')
-        ? qp.get('deliveryStates').split(',').filter(s => s)
-        : (pcfgReport?.deliveryStates || null);
-      if (qp.get('refresh') === '1') {
-        const { cacheInvalidate } = require('./reportService');
-        const DEFAULT_DONE = ['Closed', 'Done', 'Resolved'];
-        const isDefaultDelivery = !deliveryStates || (deliveryStates.length === DEFAULT_DONE.length && deliveryStates.every(s => DEFAULT_DONE.includes(s)));
-        cacheInvalidate(
-          project, month,
-          [...groupFields.slice().sort(), agingState, ...(isDefaultDelivery ? [] : [deliveryStates.slice().sort().join(',')])].join('|'),
-          String(incidentMonths)
-        );
-      }
-      try {
-        const payload = await buildReport(project, month, groupFields, agingState, incidentMonths, deliveryStates);
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ payload, months, month }));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
-    }
-
-    // ── GET /api/sn-incidents?project=NAME&month=YYYY-MM ──────────────────
-    if (req.method === 'GET' && url.startsWith('/api/sn-incidents')) {
-      const qp          = new URLSearchParams(url.split('?')[1] || '');
-      const project     = qp.get('project')     || '';
-      const month       = qp.get('month')       || new Date().toISOString().slice(0, 7);
-      const mode        = qp.get('mode')        || 'backlog';
-      const filterField = qp.get('filterField') || '';
-      const filterValue = qp.get('filterValue') || '';
-      try {
-        const { fetchSnIncidentBacklog } = require('./reportService');
-        const incidents = await fetchSnIncidentBacklog(project, month, { mode, filterField, filterValue });
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ incidents }));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
-    }
-
-    // ── GET /api/sn-config ─────────────────────────────────────────────────
-    if (req.method === 'GET' && url.startsWith('/api/sn-config')) {
-      try {
-        const qp      = new URLSearchParams(url.split('?')[1] || '');
-        const project = qp.get('project') || '';
-        const sn      = getSnConfig();
-        const resp    = { instance: sn?.instance || '', user: sn?.user || '', hasPass: !!(sn?.pass) };
-        if (project) {
-          const grp = getProjectSnGroup(project);
-          resp.assignmentGroup     = grp?.assignmentGroup     || '';
-          resp.assignmentGroupName = grp?.assignmentGroupName || '';
-          resp.slaEnabled          = grp?.slaEnabled          === true;
-          resp.slaThresholds       = grp?.slaThresholds       || null;
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify(resp));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
-    }
-
-    // ── POST /api/sn-config ────────────────────────────────────────────────
-    if (req.method === 'POST' && url === '/api/sn-config') {
-      try {
+      if (req.method === 'POST') {
         const body = await readBody(req);
-        const p    = JSON.parse(body || '{}');
-        // Only update pass if explicitly provided (non-empty)
-        const snGlobal = {
-          ...(p.instance !== undefined ? { instance: String(p.instance).trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '') } : {}),
-          ...(p.user     !== undefined ? { user: String(p.user).trim() } : {}),
-          ...(p.pass                   ? { pass: p.pass }                : {}),
-        };
-        const projectGroup = p.project ? {
-          projectName:         p.project,
-          assignmentGroup:     p.assignmentGroup     !== undefined ? (p.assignmentGroup     || '') : undefined,
-          assignmentGroupName: p.assignmentGroupName !== undefined ? (p.assignmentGroupName || '') : undefined,
-          slaEnabled:          p.slaEnabled          !== undefined ? p.slaEnabled           : undefined,
-          slaThresholds:       p.slaThresholds       || null,
-        } : null;
-        saveSnConfig(snGlobal, projectGroup);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
+        return json(res, () => reportH.saveReportConfig(JSON.parse(body || '{}')));
       }
-      return;
+    }
+
+    // ── GET /api/report-fields ─────────────────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/report-fields')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => azureH.getReportFields({ project: qp.get('project') || '' }));
+    }
+
+    // ── GET /api/us-states ─────────────────────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/us-states')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => azureH.getUSStates({ project: qp.get('project') || '' }));
+    }
+
+    // ── GET /api/report ────────────────────────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/report')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => reportH.getReport({
+        project:        qp.get('project') || '',
+        month:          qp.get('month')   || '',
+        groupFields:    (qp.get('groupFields') || '').split(',').filter(f => f),
+        agingState:     qp.get('agingState') || 'In Review',
+        incidentMonths: qp.get('incidentMonths'),
+        deliveryStates: qp.get('deliveryStates') ? qp.get('deliveryStates').split(',').filter(s => s) : null,
+        refresh:        qp.get('refresh') === '1',
+      }));
+    }
+
+    // ── GET /api/sn-incidents ──────────────────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/sn-incidents')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => reportH.getIncidents({
+        project:     qp.get('project')     || '',
+        month:       qp.get('month')       || new Date().toISOString().slice(0, 7),
+        mode:        qp.get('mode')        || 'backlog',
+        filterField: qp.get('filterField') || '',
+        filterValue: qp.get('filterValue') || '',
+      }));
+    }
+
+    // ── GET/POST /api/sn-config ────────────────────────────────────────────
+    if (url.startsWith('/api/sn-config')) {
+      if (req.method === 'GET') {
+        const qp = new URLSearchParams(url.split('?')[1] || '');
+        return json(res, () => snH.getSnCfg({ project: qp.get('project') || '' }));
+      }
+      if (req.method === 'POST') {
+        const body = await readBody(req);
+        return json(res, () => snH.saveSnCfg(JSON.parse(body || '{}')));
+      }
     }
 
     // ── POST /api/sn-test ──────────────────────────────────────────────────
     if (req.method === 'POST' && url === '/api/sn-test') {
       const body = await readBody(req);
-      const p    = JSON.parse(body || '{}');
-      if (!p.instance || !p.user || !p.pass) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'instance, user and pass are required.' }));
-        return;
-      }
-      try {
-        await snGet({ instance: p.instance.trim(), user: p.user.trim(), pass: p.pass }, 'table/incident?sysparm_limit=1&sysparm_fields=sys_id');
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (e) {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-      return;
+      return json(res, () => snH.testSn(JSON.parse(body || '{}')));
     }
 
     // ── GET / — dashboard ──────────────────────────────────────────────────
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(cachedHTML);
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(state.html);
   });
 
   server.listen(PORT, () => {
