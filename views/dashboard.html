@@ -366,6 +366,7 @@
       <div class="modal-actions">
         <select id="report-month-sel" class="report-month-sel" onchange="reportChangeMonth(this.value)"></select>
         <button class="modal-refresh" id="report-refresh-btn" type="button" onclick="reportRefresh()" title="Refresh">↻</button>
+        <button class="btn-ai-report" type="button" onclick="reportOpenCopilot()" title="Analisar com IA">✦ IA</button>
         <button class="btn-sn-config" type="button" onclick="openReportSnConfig()" title="Configurar Service Now">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 5a3 3 0 100 6A3 3 0 008 5zm0 4.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/><path d="M14.45 9.05l-.9-.52a5.84 5.84 0 000-1.06l.9-.52a.75.75 0 00.27-1.02l-1-1.73a.75.75 0 00-1.02-.28l-.9.52a5.93 5.93 0 00-.92-.53V2.75A.75.75 0 0010 2H6a.75.75 0 00-.75.75V3.9a5.93 5.93 0 00-.92.53l-.9-.52a.75.75 0 00-1.02.28l-1 1.73a.75.75 0 00.27 1.02l.9.52a5.84 5.84 0 000 1.06l-.9.52a.75.75 0 00-.27 1.02l1 1.73a.75.75 0 001.02.28l.9-.52c.29.2.6.37.92.53v1.17c0 .41.34.75.75.75h4a.75.75 0 00.75-.75v-1.17c.32-.16.63-.33.92-.53l.9.52a.75.75 0 001.02-.28l1-1.73a.75.75 0 00-.27-1.02z"/></svg>
         </button>
@@ -423,10 +424,6 @@
         <div class="snm-field">
           <label class="snm-label">NOME DE EXIBIÇÃO</label>
           <input type="text" id="snm-ag-name" class="snm-input-full" placeholder="ex: TI - Suporte Alpha" autocomplete="off">
-        </div>
-        <div class="snm-field">
-          <label class="snm-label">TARGET MENSAL DE INCIDENTES</label>
-          <input type="number" id="snm-incident-target" class="snm-input-full" placeholder="ex: 24" min="0" autocomplete="off">
         </div>
         <div class="snm-actions-row">
           <button class="snm-btn snm-btn-primary" onclick="snConfigSaveProject()">Salvar grupo</button>

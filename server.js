@@ -614,19 +614,25 @@ ${context || 'No project data available at this moment.'}`;
       const project = qp.get('project') || '';
       const pcfg    = cfg.projects.find(p => getDisplayName(p) === project);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ reportCharts: pcfg?.reportCharts || null, groupFields: pcfg?.reportGroupFields || null, incidentMonths: pcfg?.incidentMonths || 5, incidentGroupBy: pcfg?.incidentGroupBy || 'cmdb_ci' }));
+      res.end(JSON.stringify({ reportCharts: pcfg?.reportCharts || null, groupFields: pcfg?.reportGroupFields || null, incidentMonths: pcfg?.incidentMonths || 5, incidentTarget: pcfg?.incidentTarget ?? 24, incidentGroupBy: pcfg?.incidentGroupBy || 'cmdb_ci', heatmapMax: pcfg?.heatmapMax ?? 0, agingState: pcfg?.agingState || 'In Review', agingCharts: pcfg?.agingCharts || null, agingBuckets: pcfg?.agingBuckets || null, deliveryStates: pcfg?.deliveryStates || null }));
       return;
     }
 
     // ── POST /api/report-config ───────────────────────────────────────────
     if (req.method === 'POST' && url === '/api/report-config') {
       const body = await readBody(req);
-      const { project, reportCharts, incidentMonths, incidentGroupBy } = JSON.parse(body || '{}');
+      const { project, reportCharts, incidentMonths, incidentTarget, incidentGroupBy, heatmapMax, agingState, agingCharts, agingBuckets, deliveryStates } = JSON.parse(body || '{}');
       const pcfg = cfg.projects.find(p => getDisplayName(p) === project);
       if (pcfg) {
         if (Array.isArray(reportCharts)) { pcfg.reportCharts = reportCharts; delete pcfg.reportGroupFields; }
-        if (incidentMonths  !== undefined) pcfg.incidentMonths  = Math.min(13, Math.max(1, parseInt(incidentMonths) || 5));
+        if (incidentMonths  !== undefined) pcfg.incidentMonths  = Math.min(24, Math.max(1, parseInt(incidentMonths) || 5));
+        if (incidentTarget  !== undefined) pcfg.incidentTarget  = Math.max(0, parseInt(incidentTarget) || 0);
         if (incidentGroupBy !== undefined) pcfg.incidentGroupBy = incidentGroupBy;
+        if (heatmapMax      !== undefined) pcfg.heatmapMax      = Math.max(0, parseInt(heatmapMax) || 0);
+        if (agingState  !== undefined)              pcfg.agingState  = agingState;
+        if (Array.isArray(agingCharts))  pcfg.agingCharts  = agingCharts;
+        if (Array.isArray(agingBuckets)) pcfg.agingBuckets = agingBuckets.map(v => Math.max(1, parseInt(v) || 1));
+        if (Array.isArray(deliveryStates) && deliveryStates.length) pcfg.deliveryStates = deliveryStates;
         saveConfig(cfg);
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -666,21 +672,73 @@ ${context || 'No project data available at this moment.'}`;
       return;
     }
 
+    // ── GET /api/us-states?project=NAME ──────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/us-states')) {
+      const qp      = new URLSearchParams(url.split('?')[1] || '');
+      const project = qp.get('project') || '';
+      try {
+        const pcfg = cfg.projects.find(p => getDisplayName(p) === project);
+        const proj = pcfg?.name || project;
+        const type = pcfg?.workItemType || 'User Story';
+        const r    = await azureGet(`${encodeURIComponent(proj)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/states?api-version=7.0`);
+        const states = (r.value || []).map(s => s.name);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ states }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
     // ── GET /api/report?project=NAME&month=YYYY-MM ────────────────────────
     if (req.method === 'GET' && url.startsWith('/api/report')) {
       const qp         = new URLSearchParams(url.split('?')[1] || '');
-      const project    = qp.get('project') || (cfg.projects[0] ? getDisplayName(cfg.projects[0]) : '');
-      const months     = getLast6Months();
-      const month      = months.includes(qp.get('month')) ? qp.get('month') : months[0];
-      const groupFields = (qp.get('groupFields') || '').split(',');
+      const project        = qp.get('project') || (cfg.projects[0] ? getDisplayName(cfg.projects[0]) : '');
+      const groupFields    = (qp.get('groupFields') || '').split(',').filter(f => f);
+      const agingState     = qp.get('agingState') || 'In Review';
+      const pcfgReport     = cfg.projects.find(p => getDisplayName(p) === project);
+      const incidentMonths = Math.min(24, Math.max(1, parseInt(qp.get('incidentMonths') || pcfgReport?.incidentMonths) || 13));
+      const nMonths        = Math.max(6, incidentMonths);
+      const months         = getLast6Months(nMonths);
+      const month          = months.includes(qp.get('month')) ? qp.get('month') : months[0];
+      const deliveryStates = qp.get('deliveryStates')
+        ? qp.get('deliveryStates').split(',').filter(s => s)
+        : (pcfgReport?.deliveryStates || null);
       if (qp.get('refresh') === '1') {
         const { cacheInvalidate } = require('./reportService');
-        cacheInvalidate(project, month, groupFields.slice().sort().join('|'));
+        const DEFAULT_DONE = ['Closed', 'Done', 'Resolved'];
+        const isDefaultDelivery = !deliveryStates || (deliveryStates.length === DEFAULT_DONE.length && deliveryStates.every(s => DEFAULT_DONE.includes(s)));
+        cacheInvalidate(
+          project, month,
+          [...groupFields.slice().sort(), agingState, ...(isDefaultDelivery ? [] : [deliveryStates.slice().sort().join(',')])].join('|'),
+          String(incidentMonths)
+        );
       }
       try {
-        const payload = await buildReport(project, month, groupFields);
+        const payload = await buildReport(project, month, groupFields, agingState, incidentMonths, deliveryStates);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ payload, months, month }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    // ── GET /api/sn-incidents?project=NAME&month=YYYY-MM ──────────────────
+    if (req.method === 'GET' && url.startsWith('/api/sn-incidents')) {
+      const qp          = new URLSearchParams(url.split('?')[1] || '');
+      const project     = qp.get('project')     || '';
+      const month       = qp.get('month')       || new Date().toISOString().slice(0, 7);
+      const mode        = qp.get('mode')        || 'backlog';
+      const filterField = qp.get('filterField') || '';
+      const filterValue = qp.get('filterValue') || '';
+      try {
+        const { fetchSnIncidentBacklog } = require('./reportService');
+        const incidents = await fetchSnIncidentBacklog(project, month, { mode, filterField, filterValue });
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ incidents }));
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: e.message }));
@@ -699,7 +757,8 @@ ${context || 'No project data available at this moment.'}`;
           const grp = getProjectSnGroup(project);
           resp.assignmentGroup     = grp?.assignmentGroup     || '';
           resp.assignmentGroupName = grp?.assignmentGroupName || '';
-          resp.incidentTarget      = grp?.incidentTarget      ?? null;
+          resp.slaEnabled          = grp?.slaEnabled          === true;
+          resp.slaThresholds       = grp?.slaThresholds       || null;
         }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(resp));
@@ -721,7 +780,13 @@ ${context || 'No project data available at this moment.'}`;
           ...(p.user     !== undefined ? { user: String(p.user).trim() } : {}),
           ...(p.pass                   ? { pass: p.pass }                : {}),
         };
-        const projectGroup = p.project ? { projectName: p.project, assignmentGroup: p.assignmentGroup || '', assignmentGroupName: p.assignmentGroupName || '', incidentTarget: p.incidentTarget != null ? Number(p.incidentTarget) : undefined } : null;
+        const projectGroup = p.project ? {
+          projectName:         p.project,
+          assignmentGroup:     p.assignmentGroup     !== undefined ? (p.assignmentGroup     || '') : undefined,
+          assignmentGroupName: p.assignmentGroupName !== undefined ? (p.assignmentGroupName || '') : undefined,
+          slaEnabled:          p.slaEnabled          !== undefined ? p.slaEnabled           : undefined,
+          slaThresholds:       p.slaThresholds       || null,
+        } : null;
         saveSnConfig(snGlobal, projectGroup);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));

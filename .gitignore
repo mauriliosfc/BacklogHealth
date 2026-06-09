@@ -8,3 +8,6 @@ wrapper/obj/
 
 # Pasta interna do Claude Code
 .claude/
+
+# Cache de relatórios (gerado em runtime, TTL 6h)
+cache/

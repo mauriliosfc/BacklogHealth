@@ -47,12 +47,11 @@ async function _loadSnData(project) {
   if (elPass) elPass.value = '';
   if (elPass && globalCfg.hasPass) elPass.placeholder = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (salvo)';
 
-  const elAg   = document.getElementById('snm-ag');
-  const elAgN  = document.getElementById('snm-ag-name');
-  const elTgt  = document.getElementById('snm-incident-target');
+  const elAg  = document.getElementById('snm-ag');
+  const elAgN = document.getElementById('snm-ag-name');
   if (elAg)  elAg.value  = projCfg.assignmentGroup     || '';
   if (elAgN) elAgN.value = projCfg.assignmentGroupName || '';
-  if (elTgt) elTgt.value = projCfg.incidentTarget != null ? projCfg.incidentTarget : '';
+
 }
 
 export async function snConfigTest() {
@@ -106,13 +105,10 @@ export async function snConfigSaveProject() {
   const project             = _snProject;
   const assignmentGroup     = document.getElementById('snm-ag').value.trim();
   const assignmentGroupName = document.getElementById('snm-ag-name').value.trim();
-  const tgtRaw              = document.getElementById('snm-incident-target')?.value.trim();
-  const incidentTarget      = tgtRaw !== '' && tgtRaw != null ? Number(tgtRaw) : null;
   const st = document.getElementById('snm-proj-status');
   if (!project) { _setStatus(st, 'error', 'Nenhum projeto selecionado.'); return; }
   _setStatus(st, '', 'Salvando…');
   const body = { project, assignmentGroup, assignmentGroupName };
-  if (incidentTarget !== null) body.incidentTarget = incidentTarget;
   try {
     const r = await fetch('/api/sn-config', {
       method: 'POST',

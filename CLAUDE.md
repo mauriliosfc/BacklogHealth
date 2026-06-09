@@ -628,6 +628,19 @@ O botão **🗑️** no cabeçalho de cada card permite remover o projeto do mon
 | 141 | Donut ampliado (`r 44→62`, `stroke-width 22→26`); legenda empurrada para base do card via `flex-column` + `margin-top:auto` | Donut pequeno era difícil de visualizar; legenda flutuava no meio do card sem âncora visual — flex column com margin-top:auto fixa a legenda sempre na borda inferior independente do tamanho do SVG |
 | 142 | Barras horizontais/verticais usam mesma paleta `COLORS` do donut; picker adiciona opção "Cor única" com `<input type="color">` | Barras com cor única (#8b5cf6 fixo) impossibilitavam distinguir categorias visualmente — paleta multicolor por padrão; cor única útil quando o gráfico representa uma métrica homogênea (ex: todas as US são do mesmo tipo) |
 | 143 | `<title>` + `onmouseenter/onmouseleave` opacity nos segmentos do donut | Usuário não conseguia ver o valor de cada fatia sem consultar a legenda — tooltip nativo SVG `<title>` exibe `"Nome: N (XX%)"` sem JS extra; transição de opacidade dá feedback visual de qual segmento está sendo inspecionado |
+| 144 | Barra amarela de "Cancelados" no gráfico de histórico de incidentes | Incidentes cancelados (state=8) são uma categoria distinta de fechados — `incCancelledQ = state=8^closed_at>={hs}^closed_at<={he}`; barra amarela (`#fde68a`) como terceira barra do grupo; cancelados entram na regressão de backlog (reduzem backlog igual a fechados) |
+| 145 | `^resolved_atISEMPTY` no branch `closed_at` de `incClosedQ` (histórico) evita double-count | Incidentes que passam por Resolved (state=6) → Closed (state=7) têm ambos `resolved_at` e `closed_at`; sem `^resolved_atISEMPTY` no branch `closed_at`, esses incidentes eram contados duas vezes inflando `closed` e distorcendo toda a regressão de backlog |
+| 146 | `incBacklogQuery` para meses passados usa 3 partes via `^NQ` (abertos hoje + cancelados após corte + resolvidos após corte) | Sem `^state!=8` no branch `resolved_atISEMPTY`, incidentes cancelados (sem `resolved_at`) eram incluídos como backlog aberto, inflando o âncora da regressão; para meses passados não podemos usar `active=true` (campo de estado atual, não histórico) — 3 partes cobrem todos os casos corretamente sem double-count |
+| 147 | `removedFromSprint` detecta dois casos: `state='Removed'` (existente) + `Was Ever` para itens com IterationPath alterado | Times removem itens de sprint de duas formas: mudando estado para Removed (detectado pelo loop do sprintMap) OU movendo para backlog/outra sprint (IterationPath muda — item desaparece da sprint); `Was Ever '{path}' AND IterationPath <> '{path}'` cobre o segundo caso sem double-count (itens Removed que ainda estão na sprint têm IterationPath = Sprint X, portanto excluídos pela condição `<>`) |
+| 148 | `Was Ever` queries rodadas em paralelo após `sprintMap` já construído, só quando `teamIterations.length > 0` | Projetos sem time configurado não têm `teamIterations` com paths completos; `Was Ever` requer o path completo da iteration; rodar em paralelo por sprint evita round-trips sequenciais; projetos sem time também não têm `sprintStartMap` (addedMidSprint = 0), então o gráfico de volatilidade já não tinha dados úteis nesses casos |
+| 149 | `data-inc='{"mode":...}'` + `_incOnclick` helper para barras clicáveis nos charts de incidentes | Onclick em SVG não suporta objetos JS como parâmetros inline; serializar como JSON em `data-inc` (aspas duplas seguras dentro de atributo com aspas simples) e parsear no handler centraliza a lógica e permite qualquer combinação de parâmetros sem N funções diferentes |
+| 150 | `rawValue` em `byGroupAlt`/`byGroupAltMonthly` + `altRawValues` map em `fetchSnReport` | `u_additional_res_code` é reference/choice field: `_snVal` retorna display_value mas o filtro SN exige o raw value; mapear `displayValue → rawValue` durante o batch histórico e embedar em cada entry garante filtro correto sem round-trip extra |
+| 151 | Gráfico de localização como bloco fixo abaixo do heatmap com picker de `_locationMonths` (1/3/6) | Adicionar como chart configurável na grid exigia o usuário abrí-lo manualmente e o payload cacheado não tinha `byLocationMonthly`; bloco fixo com picker próprio mantém paridade com o heatmap sem fragmentar a experiência |
+| 152 | Heatmap top N configurável via `_heatmapTopN` (0 = todos os sistemas) | Top 9 fixo impossibilitava ver sistemas menos frequentes; picker no `⚙` do heatmap com opções 5/9/15/20/Todos persiste em `config.json` via `reportSaveConfig`; `0` como sentinela de "sem corte" evita lógica especial |
+| 153 | Modal de incidentes: colunas Assigned to, Res. Code, IC Afetado, Imp. Plants em vez de Categoria | Categoria SN não agrega valor analítico para o time; os quatro campos novos (assigned_to, u_additional_res_code, cmdb_ci.name, location.name) são os mesmos já usados nos charts — consistência entre modal e gráficos; `sysparm_fields` do `fetchSnIncidentBacklog` expandido |
+| 154 | Filtros in-grid com `<select>` para colunas categóricas e `<input>` para textuais no modal de incidentes | Colunas de texto livre (Número, Descrição, Aberto em) beneficiam de busca por substring; colunas de baixa cardinalidade (Prior., Estado, Assigned to, Res. Code, IC Afetado, Imp. Plants) beneficiam de match exato via dropdown populado com valores únicos dos dados carregados |
+| 155 | Exportar CSV com BOM UTF-8 e separador `;` — respeita filtros ativos lendo DOM da tabela | Gerar CSV no backend exigiria novo endpoint; ler `tbody tr` visíveis no DOM é mais simples e exporta exatamente o que o usuário está vendo (respeitando filtros aplicados); BOM `\uFEFF` garante abertura com encoding correto no Excel em PT-BR; `;` como separador segue convenção local |
+| 156 | `_snRaw(i.number)` e `_snRaw(i.sys_id)` em `fetchSnIncidentBacklog` | Com `sysparm_display_value=all`, campos que normalmente são strings podem retornar como objetos `{value, display_value}`; usar `_snRaw` (que prefere `.value`) para `number` e `sys_id` previne `[object Object]` no texto do link e na URL do Service Now |
 
 ---
 
@@ -855,6 +868,148 @@ Seguem o mesmo padrão do PAT do Azure e das credenciais da IA:
 | `report.noSn` | Service Now não configurado | Service Now not configured | Service Now no configurado |
 | `report.refresh` | Atualizar | Refresh | Actualizar |
 
+### Gráfico: Volatilidade do Backlog (`_renderVolatilityChart`)
+
+Localização: `public/modules/report.js` — `_renderVolatilityChart(sprints)`; dados produzidos por `fetchAzureReport` em `reportService.js`.
+
+#### Estrutura visual
+
+Gráfico de barras com **eixo duplo** (linha central = zero):
+- **Barras amarelas para cima** (`#f59e0b`) — US adicionadas após o início da sprint (`addedMidSprint`)
+- **Barras vermelhas para baixo** (`#ef4444`) — US removidas da sprint (`removedFromSprint`)
+
+#### Cálculo de `addedMidSprint`
+
+```js
+const addedLate = createdDate && sprintStart && createdDate > sprintStart ? 1 : 0;
+```
+
+Item criado (`System.CreatedDate`) depois da data de início da sprint (`sprintStartMap[sprintName]`). Requer `teamIterations` com datas de início — projetos sem time configurado têm `sprintStartMap` vazio e sempre retornam 0.
+
+#### Cálculo de `removedFromSprint` — dois casos
+
+**Caso 1 — state = "Removed"** (loop principal do `sprintMap`):
+```js
+const removed = i.fields['System.State'] === 'Removed' ? 1 : 0;
+sprintMap[sp].removedFromSprint += removed;
+```
+Item ainda está com `IterationPath` apontando para a sprint, mas com estado `Removed`.
+
+**Caso 2 — IterationPath alterado** (bloco `Was Ever`, após o loop):
+```js
+// Para cada sprint em teamIterations, em paralelo:
+azurePost(`/{proj}/_apis/wit/wiql`, {
+  query: `SELECT [System.Id] FROM WorkItems
+          WHERE [System.TeamProject] = '{proj}'
+            AND [System.WorkItemType] IN ('User Story','Product Backlog Item','Requirement')
+            AND [System.IterationPath] Was Ever '{it.path}'
+            AND [System.IterationPath] <> '{it.path}'`
+})
+// count = workItems.length → adicionado ao sprintMap[it.name].removedFromSprint
+```
+
+Item que foi planejado para a sprint mas foi movido para outra sprint ou de volta ao backlog (seu `IterationPath` atual não é mais o da sprint). Detectável apenas via `Was Ever` — sem esse operador, o item simplesmente "desaparece" dos dados da sprint.
+
+#### Por que não há double-count entre os dois casos
+
+- Caso 1 (state=Removed, IterationPath = Sprint X): a condição `AND [System.IterationPath] <> '{it.path}'` do `Was Ever` é **falsa** → não aparece no `Was Ever`
+- Caso 2 (IterationPath mudou): não tem `state = 'Removed'` no contexto da sprint (item já saiu) → não aparece no loop do `sprintMap` para essa sprint
+- Caso híbrido (movido para outra sprint E depois marcado Removed): IterationPath ≠ Sprint X → aparece no `Was Ever`, não no loop → contado uma vez ✅
+
+#### Limitação
+
+Projetos **sem time configurado** (`teamIterations = []`) não executam as queries `Was Ever` e também não têm `sprintStartMap`. O gráfico de volatilidade fica sem dados úteis nesses casos — ambas as métricas retornam 0.
+
+---
+
+### Gráfico: Histórico de Volume de Incidentes (`_renderIncidentsVolumeChart`)
+
+Localização: `public/modules/report.js` — função `_renderIncidentsVolumeChart(monthly, months, target, selectedMonth)`
+
+#### Estrutura visual
+
+Cada mês exibe **3 barras agrupadas** centralizadas no eixo X + **linha de backlog** (laranja tracejada) + **linha de target** (vermelha tracejada, opcional):
+
+| Barra | Cor normal | Cor mês selecionado | Dado |
+|-------|-----------|---------------------|------|
+| Azul  | `#93c5fd` | `#60a5fa` | `opened` — incidentes abertos no mês |
+| Verde | `#34d399` | `#10b981` | `closed` — incidentes fechados/resolvidos no mês |
+| Amarela | `#fde68a` | `#fbbf24` | `cancelled` — incidentes cancelados no mês |
+
+O `maxVal` considera `Math.max(opened, closed, cancelled, openBacklog)` por mês + target, garantindo que nenhuma barra ou linha extrapole o eixo Y.
+
+#### Queries em `reportService.js` (histórico mensal — batches de 4)
+
+Para cada mês `m` do histórico (`period.history`), são executadas 3 queries em paralelo:
+
+```
+incOpenedQ    = assignment_group=X^opened_at>={hs}^opened_at<={he}
+incClosedQ    = assignment_group=X^resolved_at>={hs}^resolved_at<={he}
+              ^NQ assignment_group=X^closed_at>={hs}^closed_at<={he}^resolved_atISEMPTY^state!=8
+incCancelledQ = assignment_group=X^state=8^closed_at>={hs}^closed_at<={he}
+```
+
+- **`incClosedQ`** usa `^NQ` para capturar incidentes fechados diretamente (sem Resolved prévio).
+  O `^resolved_atISEMPTY` no branch `closed_at` evita double-count: incidentes que têm `resolved_at` já são contados pelo primeiro branch; o segundo branch só pega os que nunca foram resolvidos (caminho direto Open→Closed, state=7) e não são cancelados (state!=8).
+- **`incCancelledQ`** usa `state=8^closed_at` — cancelados têm `closed_at` mas não `resolved_at`.
+
+#### Linha de backlog — cálculo por regressão
+
+A linha laranja representa o **backlog aberto no final de cada mês** (incidentes acumulados, não resolvidos/cancelados). Não é consultada diretamente para cada mês — é calculada regressivamente a partir de uma âncora:
+
+```
+Âncora = openBacklog do ÚLTIMO mês do histórico (= mês selecionado no relatório)
+Para cada mês anterior (i), de trás para frente:
+  openBacklog[i] = openBacklog[i+1] - opened[i+1] + closed[i+1] + cancelled[i+1]
+```
+
+**Por que cancelados entram na fórmula:** tanto `closed` quanto `cancelled` reduzem o backlog — ao regredir no tempo, ambos precisam ser "desfeitos" somando de volta.
+
+**Sem `Math.max(0, ...)` na cadeia:** clamp quebraria meses anteriores ao primeiro negativo. O `Math.abs()` é aplicado **apenas na renderização** da linha SVG, para exibir valores negativos como positivos sem corromper a regressão.
+
+#### Âncora do backlog — query dependente do mês selecionado
+
+A âncora (`incBacklog`) é calculada pela query `incBacklogQuery`:
+
+**Mês atual** (`period.month === curMonth`):
+```
+assignment_group=X^active=true^state!=6^state!=7
+```
+Usa o estado real do sistema — `active=true` exclui resolvidos, fechados e cancelados automaticamente.
+
+**Meses passados** (ponto-no-tempo, 3 partes via `^NQ`):
+```
+Parte 1: assignment_group=X^opened_at<={end}^resolved_atISEMPTY^state!=8
+         → abertos até o fim do mês que ainda não foram resolvidos/cancelados até hoje
+
+Parte 2: assignment_group=X^opened_at<={end}^state=8^closed_at>{end}
+         → cancelados DEPOIS do fim do mês — estavam no backlog na data de corte
+
+Parte 3: assignment_group=X^opened_at<={end}^resolved_at>{end}
+         → resolvidos DEPOIS do fim do mês — estavam no backlog na data de corte
+```
+
+**Por que 3 partes são necessárias:**
+- Parte 1 sem `^state!=8`: incidentes cancelados (sem `resolved_at`) seriam incluídos como "abertos", inflando o âncora e fazendo toda a regressão ficar muito alta para o passado.
+- Parte 2 (`state=8^closed_at>{end}`): cobre incidentes que estavam no backlog e foram cancelados depois — sem esta parte perderíamos esses itens.
+- Parte 3: cobre incidentes resolvidos depois do corte — sem esta parte perderíamos todos que foram fechados após o mês selecionado.
+
+#### Fluxo de dados completo
+
+```
+reportService.js → fetchSnReport()
+  ├── incBacklogQuery          → incBacklog (âncora, único valor)
+  ├── [batches histórico]
+  │     ├── incOpenedQ         → opened por mês
+  │     ├── incClosedQ (^NQ)   → closed por mês (sem double-count)
+  │     └── incCancelledQ      → cancelled por mês
+  └── monthly[] → { label, opened, closed, cancelled, openBacklog }
+                  (openBacklog calculado por regressão após todos os batches)
+
+report.js → _renderIncidentsVolumeChart(monthly, ...)
+  └── 3 barras + linha backlog + linha target por mês
+```
+
 ---
 
 ## 💬 Copilot Project — Arquitetura da feature de IA
@@ -966,6 +1121,18 @@ Por projeto, o endpoint retorna:
 - [x] Barras (horizontal + vertical) usam paleta `COLORS` multicolor por padrão; picker oferece opção "Cor única" com `<input type="color">`
 - [x] Tooltip no hover de cada segmento do donut — `<title>` SVG nativo + transição de opacidade 70%
 
+**Review Mensal — charts interativos e modal de incidentes**
+- [x] Barras clicáveis em todos os gráficos de incidentes (volume, sistema/res.code, heatmap, localização) — abre modal filtrado pelo contexto da barra clicada via `_incOnclick` helper + `data-inc` JSON attribute
+- [x] `pointer-events:none` em labels SVG sobre barras clicáveis — evita que o texto intercepte o evento de click
+- [x] Fix filtro `resolution_code` no gráfico de sistema e heatmap — `rawValue` armazenado em `byGroupAlt`/`byGroupAltMonthly`/`altRawValues`; `_incOnclick` usa `s.rawValue || s.name` como `filterValue`
+- [x] Gráfico de localização — barras agrupadas por mês (N barras por mês, uma por planta); bloco fixo abaixo do heatmap com picker de período (1/3/6 meses); ocupa 100% da largura
+- [x] Heatmap top N configurável — picker no `⚙` com opções 5/9/15/20/Todos; 0 = mostrar todos os sistemas; persiste em config
+- [x] Modal de incidentes: colunas redesenhadas — Categoria removida; Assigned to, Res. Code, IC Afetado e Imp. Plants adicionadas; `sysparm_fields` expandido em `fetchSnIncidentBacklog`
+- [x] Filtros in-grid no modal de incidentes — `<select>` populado com valores únicos para colunas categóricas (Prior., Estado, Assigned to, Res. Code, IC Afetado, Imp. Plants); `<input type="text">` para Número e Descrição; exportação respeita filtros ativos
+- [x] Botão "Exportar" no header do modal de incidentes — `reportExportIncidentsCSV()` gera CSV com BOM UTF-8, separador `;`, apenas linhas visíveis; filename inclui projeto e mês
+- [x] Fix `[object Object]` no link do modal — `_snRaw` aplicado a `number` e `sys_id` em `fetchSnIncidentBacklog` para garantir strings mesmo com `sysparm_display_value=all`
+- [x] Modal de incidentes ampliado — `max-width: 900px → 1300px`, `width: 90% → 96%`, `max-height: 80vh → 85vh`
+
 **Backlog geral**
 - [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
 - [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
@@ -980,4 +1147,4 @@ Por projeto, o endpoint retorna:
 
 ---
 
-*Documentação atualizada em Junho/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado), botão Daily por card (openDailyForProject — abre direto no slide do projeto), **Review Mensal — Service Delivery Report** (servicenowClient.js, reportService.js, modal in-app, snConfig.js, credenciais SN + assignmentGroup + incidentTarget por projeto, `/api/report` JSON, agrupamento configurável cmdb_ci/u_additional_res_code, TOP 9 + Outros, barras verticais rgba, contadores em fatias/segmentos, legendas SVG → HTML, evolução PRB reposicionada, `_snVal`/`_snRaw` + display_value=all, cache por groupField), **Review Mensal — refactor e UX** (refactor `report.js` (`_PRB_STATES`, `_fmtMonth`, `_loadReportConfig`, SVGs display:block), paralelização histórico SN em batches de 4, seção Delivery unificada com Quality → "AMS Sprint Delivery" 8 cards, gráficos de entrega movidos para Delivery (draggable+resizable), `byTypes` todas as USs, barras verticais SVG, campos standard em `/api/report-fields`, donut ampliado + legenda ancorada na base, paleta multicolor nas barras + cor única via color picker, tooltip hover no donut via `<title>`)*
+*Documentação atualizada em Junho/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado), botão Daily por card (openDailyForProject — abre direto no slide do projeto), **Review Mensal — Service Delivery Report** (servicenowClient.js, reportService.js, modal in-app, snConfig.js, credenciais SN + assignmentGroup + incidentTarget por projeto, `/api/report` JSON, agrupamento configurável cmdb_ci/u_additional_res_code, TOP 9 + Outros, barras verticais rgba, contadores em fatias/segmentos, legendas SVG → HTML, evolução PRB reposicionada, `_snVal`/`_snRaw` + display_value=all, cache por groupField), **Review Mensal — refactor e UX** (refactor `report.js` (`_PRB_STATES`, `_fmtMonth`, `_loadReportConfig`, SVGs display:block), paralelização histórico SN em batches de 4, seção Delivery unificada com Quality → "AMS Sprint Delivery" 8 cards, gráficos de entrega movidos para Delivery (draggable+resizable), `byTypes` todas as USs, barras verticais SVG, campos standard em `/api/report-fields`, donut ampliado + legenda ancorada na base, paleta multicolor nas barras + cor única via color picker, tooltip hover no donut via `<title>`), **Review Mensal — charts interativos e modal de incidentes** (barras clicáveis em todos os charts de incidentes via `_incOnclick`/`data-inc`, fix filtro resolution_code com `rawValue`, gráfico de localização agrupado por mês, heatmap top N configurável, modal de incidentes redesenhado com colunas Assigned to/Res.Code/IC Afetado/Imp.Plants, filtros in-grid select+input, botão Exportar CSV, fix `[object Object]` no link SN)*

@@ -124,6 +124,34 @@ export function openCopilotChat() {
   document.getElementById('copilot-input').focus();
 }
 
+// ── Abre o chat com contexto pré-injetado (ex: Monthly Review Report) ─────────
+// Não chama /ai/context — o contextStr já contém os dados estruturados.
+// Reinicia o histórico para conversa focada no relatório.
+export async function openCopilotWithContext(contextStr) {
+  const resp = await fetch('/ai/config');
+  const { configured } = await resp.json();
+  if (!configured) { openCopilotConfig(); return; }
+
+  _history        = [];
+  _richContext    = contextStr;
+  _contextLoading = false;
+
+  const messages = document.getElementById('copilot-chat-messages');
+  messages.innerHTML = '<div class="copilot-welcome">' + t('ai_welcome') + '</div>';
+
+  const badge = document.createElement('div');
+  badge.className = 'copilot-ctx-status';
+  badge.textContent = '✅ Dados do Monthly Review carregados. Pode perguntar!';
+  messages.appendChild(badge);
+  setTimeout(() => badge.remove(), 4000);
+
+  const panel = document.getElementById('copilot-chat-panel');
+  panel.classList.remove('minimized');
+  document.getElementById('btnCopilotChatMin').textContent = '\u2212';
+  panel.classList.add('open');
+  document.getElementById('copilot-input').focus();
+}
+
 export function clearCopilotChat() {
   _history = [];
   _richContext = null;
