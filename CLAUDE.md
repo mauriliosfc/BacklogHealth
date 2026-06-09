@@ -3,6 +3,7 @@
 > Dashboard Node.js local para monitoramento de saúde de backlogs no Azure DevOps.
 > Zero dependências externas em runtime — apenas módulos nativos do Node.js.
 > Histórico completo de decisões: [`docs/decisions.md`](docs/decisions.md)
+> **Nota:** `docs/decisions.md` não é carregado automaticamente. Consulte-o explicitamente quando precisar entender o contexto histórico de uma decisão antes de alterá-la (ex: "por que o filtro de sprint funciona assim?", "por que esse campo não usa `_links`?").
 
 ---
 
