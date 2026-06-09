@@ -1169,4 +1169,57 @@ Por projeto, o endpoint retorna:
 
 ---
 
+## 🧪 Política de Testes
+
+### Regra obrigatória
+
+Todo código novo que **não requeira teste de integração** deve ser implementado junto com testes unitários.
+Ao implementar, o Claude deve sempre:
+1. Criar os testes no mesmo passo da implementação
+2. Rodar `npm test` para confirmar que tudo passa
+3. Avisar o usuário que os testes foram criados
+
+### Scripts disponíveis
+
+```bash
+npm test                # roda todos os testes uma vez
+npm run test:watch      # re-executa ao salvar (modo desenvolvimento)
+npm run test:coverage   # exibe percentual de cobertura por arquivo
+```
+
+### O que testar com unitários (sem necessidade de integração)
+
+| O que | Onde colocar |
+|---|---|
+| Funções puras (sem I/O, sem HTTP) | `tests/unit/` |
+| Handlers em `handlers/` | `tests/unit/handlers/` — mockar dependências com `jest.mock()` |
+| Utilitários em `utils/` (health, paginate, iterMap) | `tests/unit/utils/` |
+| Funções puras de `config.js` (parseOrgInput, getDisplayName, getProjectConfig) | `tests/unit/config.test.js` |
+
+### O que requer integração (não escrever unitários por enquanto)
+
+- `server.js` — roteamento HTTP (usar supertest + nock quando implementar)
+- `azureClient.js`, `servicenowClient.js` — chamadas HTTPS reais
+- `projectService.js`, `reportService.js`, `teamCapacityService.js` — dependem de HTTP
+- `handlers/dashboard.js` — depende de fs (templates) e fetchProject (HTTP)
+
+### Convenções
+
+- `describe('nomeFuncao')` com blocos por função/cenário
+- Mensagens de teste em português
+- `jest.mock()` no topo do arquivo, `beforeEach` para setup de estado
+- Framework: **Jest** (`jest.config.js` na raiz, `clearMocks: true`)
+
+### Estado atual (2026-06-09): 163 testes, 9 suites, todos passando
+
+| Arquivo | Cobertura |
+|---|---|
+| `utils/health.js`, `utils/paginate.js`, `handlers/utils.js` | 100% |
+| `handlers/ai.js`, `handlers/sn.js` | 100% linhas |
+| `handlers/azure.js`, `handlers/projects.js` | ~97–99% |
+| `config.js` (funções puras) | 50% |
+| `handlers/` total | ~89% |
+
+---
+
 *Documentação atualizada em Junho/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado), botão Daily por card (openDailyForProject — abre direto no slide do projeto), **Review Mensal — Service Delivery Report** (servicenowClient.js, reportService.js, modal in-app, snConfig.js, credenciais SN + assignmentGroup + incidentTarget por projeto, `/api/report` JSON, agrupamento configurável cmdb_ci/u_additional_res_code, TOP 9 + Outros, barras verticais rgba, contadores em fatias/segmentos, legendas SVG → HTML, evolução PRB reposicionada, `_snVal`/`_snRaw` + display_value=all, cache por groupField), **Review Mensal — refactor e UX** (refactor `report.js` (`_PRB_STATES`, `_fmtMonth`, `_loadReportConfig`, SVGs display:block), paralelização histórico SN em batches de 4, seção Delivery unificada com Quality → "AMS Sprint Delivery" 8 cards, gráficos de entrega movidos para Delivery (draggable+resizable), `byTypes` todas as USs, barras verticais SVG, campos standard em `/api/report-fields`, donut ampliado + legenda ancorada na base, paleta multicolor nas barras + cor única via color picker, tooltip hover no donut via `<title>`), **Review Mensal — charts interativos e modal de incidentes** (barras clicáveis em todos os charts de incidentes via `_incOnclick`/`data-inc`, fix filtro resolution_code com `rawValue`, gráfico de localização agrupado por mês, heatmap top N configurável, modal de incidentes redesenhado com colunas Assigned to/Res.Code/IC Afetado/Imp.Plants, filtros in-grid select+input, botão Exportar CSV, fix `[object Object]` no link SN), **Phase 0 — Electron preparation** (`utils/paths.js` caminhos graváveis centralizados, `handlers/` 9 módulos de domínio, `server.js` thin router ~190 linhas)*
