@@ -1,6 +1,9 @@
 # Credenciais — NUNCA subir para o repositório
 config.json
 
+# Dependências
+node_modules/
+
 # Build
 dist/
 wrapper/bin/
@@ -11,3 +14,6 @@ wrapper/obj/
 
 # Cache de relatórios (gerado em runtime, TTL 6h)
 cache/
+
+# Cobertura de testes (gerado pelo Jest)
+coverage/

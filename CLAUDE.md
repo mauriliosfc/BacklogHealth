@@ -1,1172 +1,276 @@
-# 📋 Backlog Health Dashboard — Documentação
+# Backlog Health Dashboard — Guia de Código
 
-> Criado com auxílio do Claude (Anthropic) | Março/2026 — Atualizado Junho/2026 (Team Capacity, redesign, Copilot melhorias, UX, itemsModal reutilizável, stats clicáveis dashboard/detail/daily, filtro de status, refresh na Daily, **Review Mensal — Service Delivery Report integrado ao sistema**)
-
----
-
-## 🎯 Objetivo
-
-Automatizar a rotina de validação de backlog de projetos no **Azure DevOps**, eliminando a necessidade de acessar cada projeto manualmente. O resultado é um dashboard local que exibe o status de saúde de todos os projetos de forma visual e consolidada, com filtros por sprint, atualização automática, painel de detalhes, gráfico de burndown por sprint e apresentação de Daily Standup.
+> Dashboard Node.js local para monitoramento de saúde de backlogs no Azure DevOps.
+> Zero dependências externas em runtime — apenas módulos nativos do Node.js.
+> Histórico completo de decisões: [`docs/decisions.md`](docs/decisions.md)
+> **Nota:** `docs/decisions.md` não é carregado automaticamente. Consulte-o explicitamente quando precisar entender o contexto histórico de uma decisão antes de alterá-la (ex: "por que o filtro de sprint funciona assim?", "por que esse campo não usa `_links`?").
 
 ---
 
-## 🏗️ Arquitetura
+## Arquitetura
 
 ### Estrutura de arquivos
 
 ```
 dash_azure_gestao_pessoal/
-├── server.js           ← entry point: HTTP server, rotas, serve public/ dinamicamente
-├── config.js           ← loadConfig, saveConfig, getCfg, getAuth, parseOrgInput, getProjectConfig
-├── azureClient.js      ← azureGet, azurePost, rawAzureGet (usa cfg.baseUrl)
-├── projectService.js   ← fetchProject, fetchProjectDetail, buildCardHTML
-├── teamCapacityService.js ← fetchTeamCapacity (tasks por dev/sprint, CompletedWork/RemainingWork)
-├── handlers/           ← handlers de domínio — funções puras async, reutilizáveis por HTTP ou Electron IPC
-│   ├── utils.js        ← HttpError, httpError(), readBody() — utilitários compartilhados
-│   ├── state.js        ← singleton cachedHTML (compartilhado entre dashboard e refresh sem prop drilling)
-│   ├── dashboard.js    ← renderDashboard, renderSetup, buildAndCache (lê templates de views/)
-│   ├── projects.js     ← listProjects, setup, removeProject
-│   ├── azure.js        ← getDetail, getTeamCapacity, getUAT, getReportFields, getUSStates, getContext
-│   ├── ai.js           ← getAiConfig, saveAiCfg, testAiConnection, chat
-│   ├── report.js       ← getReportConfig, saveReportConfig, getReport, getIncidents
-│   ├── sn.js           ← getSnCfg, saveSnCfg, testSn
-│   └── feedback.js     ← submitFeedback
+├── server.js              ← thin router ~190 linhas + helpers json()/page()
+├── config.js              ← loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getProjectConfig
+├── azureClient.js         ← azureGet, azurePost, rawAzureGet (usa cfg.baseUrl)
+├── projectService.js      ← fetchProject, fetchProjectDetail, buildCardHTML, fetchUATPlans
+├── teamCapacityService.js ← fetchTeamCapacity
+├── reportService.js       ← buildReport, fetchAzureReport, fetchSnReport, cacheInvalidate (cache JSON 6h)
+├── servicenowClient.js    ← snGet (HTTPS Basic auth, mesma estrutura do azureClient)
+├── aiClient.js            ← chatCompletion, testConnection (Foundry / Azure OpenAI / genérico)
+├── handlers/              ← funções puras async — sem req/res, reutilizáveis por HTTP ou Electron IPC
+│   ├── utils.js           ← HttpError, httpError(), readBody()
+│   ├── state.js           ← singleton cachedHTML (getter/setter)
+│   ├── dashboard.js       ← renderDashboard, renderSetup, buildAndCache
+│   ├── projects.js        ← listProjects, setup, removeProject
+│   ├── azure.js           ← getDetail, getTeamCapacity, getUAT, getReportFields, getUSStates, getContext
+│   ├── ai.js              ← getAiConfig, saveAiCfg, testAiConnection, chat
+│   ├── report.js          ← getReportConfig, saveReportConfig, getReport, getIncidents
+│   ├── sn.js              ← getSnCfg, saveSnCfg, testSn
+│   └── feedback.js        ← submitFeedback
 ├── utils/
-│   ├── health.js       ← calcHealth (fonte única, importado por projectService)
-│   ├── paginate.js     ← paginatedItems (lotes de 200)
-│   └── iterMap.js      ← fetchIterMap (busca sprints/iterations)
+│   ├── paths.js           ← DATA_DIR, CONFIG_PATH, CACHE_DIR (prioridade: ELECTRON_DATA_DIR → pkg → __dirname)
+│   ├── health.js          ← calcHealth (compartilhado com frontend via mesma lógica)
+│   ├── paginate.js        ← paginatedItems (lotes de 200)
+│   └── iterMap.js         ← fetchIterMap (classificationnodes + fallback team)
 ├── public/
-│   ├── style.css       ← todo o CSS (setup + dashboard, sem duplicatas)
-│   ├── app.js          ← entry point ES Module: importa módulos, expõe window globals
-│   ├── i18n/
-│   │   ├── pt.json     ← traduções em Português
-│   │   ├── en.json     ← traduções em Inglês (padrão)
-│   │   └── es.json     ← traduções em Espanhol
+│   ├── style.css          ← todo o CSS (dark/light, zero duplicatas)
+│   ├── app.js             ← entry point ES Module: importa módulos, expõe window globals
+│   ├── i18n/              ← pt.json, en.json (padrão), es.json
 │   └── modules/
-│       ├── constants.js  ← US_TYPES, TASK_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes(), getEstimateField()
-│       ├── health.js     ← calcHealth (browser, mesma lógica do backend)
-│       ├── utils.js      ← fmtD, buildSprintData
-│       ├── theme.js      ← setTheme, toggleTheme
-│       ├── timer.js      ← startTimer, doRefresh
-│       ├── filters.js    ← applyFilter, initFilters, toggleDropdown, toggleUS, initHealthBadges
-│       ├── i18n.js       ← initI18n, t, setLocale, getLocale, getDateLocale, applyTranslations
-│       ├── detail.js     ← loadDetailData, buildDetailHTML, buildTimeline
-│       ├── daily.js      ← openDaily, buildDailySlide
-│       ├── burndown.js   ← openBurndown, buildBurndownChart, openBurndownFromDaily
-│       ├── deliveryPlan.js ← openDeliveryPlan, buildDeliveryPlan, filtros de projeto
-│       ├── alias.js      ← getAlias, setAlias, applyAliases, startRename (apelidos de projeto)
-│       ├── teamCapacity.js ← openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject
-│       ├── copilot.js    ← openCopilot, sendCopilotMessage, _loadRichContext, _buildContext (fallback DOM)
-│       └── report.js     ← renderReport, changeProject, changeMonth, refreshReport, getLast6Months (Review Mensal)
-├── aiClient.js         ← chatCompletion, testConnection (Azure AI Foundry / Azure OpenAI / OpenAI-compat)
-├── servicenowClient.js ← snGet (cliente HTTPS para a Table API do Service Now, padrão idêntico ao azureClient.js)
-├── reportService.js    ← buildReport, buildPeriod, cacheInvalidate (coleta Azure + SN, KPIs, cache por projeto/mês)
-├── cache/              ← pasta criada automaticamente; arquivos JSON com TTL de 6h (sn_{proj}_{month}.json, azure_{proj}_{month}.json)
+│       ├── constants.js   ← US_TYPES, getItemTypes(), getEstimateField()
+│       ├── health.js      ← calcHealth (browser)
+│       ├── utils.js       ← fmtD, buildSprintData
+│       ├── filters.js     ← applyFilter, initFilters, openCardStat
+│       ├── detail.js      ← loadDetailData, buildDetailHTML, openDetailStat
+│       ├── daily.js       ← openDaily, openDailyForProject, refreshDaily
+│       ├── burndown.js    ← openBurndown, openBurndownFromDaily
+│       ├── teamCapacity.js← openTeamCapacity, showDashboardView
+│       ├── copilot.js     ← openCopilot, sendCopilotMessage, _loadRichContext
+│       ├── report.js      ← openReport, renderReport, reportChangeMonth, reportRefresh
+│       ├── snConfig.js    ← modal de configuração SN acessível pelo Report Modal
+│       ├── itemsModal.js  ← openItemsModal({ title, items, showPts, defaultFilters })
+│       ├── alias.js       ← getAlias, setAlias, applyAliases
+│       ├── deliveryPlan.js← openDeliveryPlan, buildDeliveryPlan
+│       ├── theme.js       ← setTheme, toggleTheme
+│       ├── timer.js       ← startTimer, doRefresh
+│       └── i18n.js        ← initI18n, t(), setLocale, applyTranslations
 ├── views/
-│   ├── dashboard.html  ← template HTML do dashboard com tokens {{ORG}}, {{CARDS}}, etc.
-│   ├── setup.html      ← template HTML do setup com tokens de configuração
-│   └── report.html     ← template HTML do Review Mensal com tokens {{PAYLOAD}}, {{PROJECTS}}, {{PROJECT}}, {{MONTH}}, {{PERIOD}}
-├── wrapper/
-│   ├── BacklogHealth.csproj  ← projeto C# WPF (.NET Framework 4.8)
-│   └── MainWindow.xaml.cs    ← inicia server.exe, aguarda porta 3030, abre WebView2
-├── dist/app/           ← pasta de distribuição (não versionada)
-│   ├── BacklogHealth.exe     ← wrapper nativo Windows (~14KB)
-│   ├── server.exe            ← Node.js + app empacotados (~36MB)
-│   └── *.dll / runtimes/     ← DLLs do WebView2
-└── config.json         ← credenciais (gerado automaticamente, não versionado)
+│   ├── dashboard.html     ← template com tokens {{ORG}}, {{CARDS}}, etc.
+│   ├── setup.html         ← template da tela de configuração
+│   └── report.html        ← template do Review Mensal
+├── tests/
+│   ├── unit/
+│   │   ├── config.test.js
+│   │   ├── handlers/      ← ai, azure, projects, report, sn, utils (163 testes)
+│   │   └── utils/         ← health, paginate
+│   └── integration/       ← planejado: supertest + nock
+├── wrapper/               ← C# WPF .NET 4.8 — inicia server.exe, abre WebView2
+├── dist/app/              ← BacklogHealth.exe + server.exe (não versionado)
+└── config.json            ← credenciais (gerado automaticamente, não versionado)
 ```
 
-### Fluxo de dados
+### Camadas
 
 ```
-server.js (entry point)
-        │
-        ├── config.js          → gerencia config.json (org, baseUrl, pat, projects) + parseOrgInput
-        │                         + getSnConfig, saveSnConfig, getProjectSnGroup (credenciais Service Now)
-        │
-        ├── azureClient.js     → chamadas HTTPS para a API REST do Azure DevOps
-        │       ├── Projects API    → lista todos os projetos acessíveis pelo PAT
-        │       ├── WIQL Query      → busca IDs de work items (state NOT IN Done/Removed)
-        │       ├── Work Items API  → detalhes em lotes de 200 (até 500 itens)
-        │       └── Iterations API  → sprints com datas (tenta "{projeto} Team" → "{projeto}")
-        │
-        ├── utils/             → utilitários compartilhados
-        │       ├── health.js  → calcHealth (thresholds de saúde)
-        │       ├── paginate.js→ paginatedItems (abstrai loop de lotes)
-        │       └── iterMap.js → fetchIterMap (abstrai fallback de team name)
-        │
-        ├── projectService.js  → lógica de negócio + renderização dos cards HTML
-        │       ├── fetchProject       → dashboard principal (WIQL + paginação + iterMap em paralelo)
-        │       └── fetchProjectDetail → detail modal (3 WIQLs + iterMap em paralelo, 3 paginações em paralelo)
-        │
-        ├── aiClient.js        → cliente HTTP para provedores de IA
-        │       ├── buildUrl     → detecta Foundry / Azure OpenAI / genérico e constrói URL correta
-        │       ├── buildHeaders → header api-key (Azure) ou Authorization Bearer (genérico)
-        │       ├── buildBody    → injeta system prompt como prefixo no Foundry; max_tokens para outros
-        │       └── extractContent → parseia Responses API (Foundry) ou Chat Completions
-        │
-        ├── servicenowClient.js → chamadas HTTPS para a Table API do Service Now
-        │       └── snGet        → GET autenticado (Basic auth), retorna result ou lança erro tipado
-        │
-        ├── reportService.js   → coleta dados Azure + Service Now, calcula KPIs do Review Mensal
-        │       ├── buildReport        → entrada principal: busca cache ou coleta dados em paralelo
-        │       ├── buildPeriod        → gera período { month, label, start, end, history[5] }
-        │       ├── fetchAzureReport   → work items Done + Bugs via WIQL (usa paginatedItems existente)
-        │       ├── fetchSnReport      → incidents + history + PRBs via snGet (só se assignmentGroup configurado)
-        │       ├── buildPayload       → monta objeto final { metadata, delivery, quality, incidents, prbs }
-        │       └── cacheInvalidate    → remove cache azure_ e sn_ do projeto/mês (usado pelo botão Atualizar)
-        │
-        └── Servidor HTTP local (porta 3030)
-                ├── GET /                    → dashboard principal (HTML cacheado)
-                ├── GET /refresh             → rebusca dados e retorna HTML atualizado
-                ├── GET /settings            → tela de configurações (pré-preenchida)
-                ├── GET /api/projects        → lista projetos disponíveis para o PAT informado
-                ├── POST /setup              → salva config.json e retorna JSON {ok:true} (preserva ai, github, servicenow)
-                ├── GET /detail?project=NAME → JSON com items, taskItems, bugItems, iterMap
-                ├── GET /api/team-capacity?project=NAME → JSON com developers, sprints, CompletedWork/RemainingWork
-                ├── GET /ai/config           → retorna config completa da IA (endpoint, apiKey, model, apiVersion)
-                ├── POST /ai/config          → salva credenciais da IA em config.json
-                ├── POST /ai/test            → testa conexão com o provedor de IA
-                ├── POST /ai/context         → retorna contexto rico dos projetos (respeita filtros de sprint)
-                ├── POST /ai/chat            → envia mensagem para a IA e retorna resposta
-                ├── GET /report?project=NAME&month=YYYY-MM → Review Mensal (HTML com payload injetado)
-                ├── GET /report?project=NAME&month=YYYY-MM&refresh=1 → força recoleta (invalida cache)
-                ├── GET /api/sn-config?project=NAME → retorna config SN global + assignmentGroup do projeto (senha nunca exposta)
-                ├── POST /api/sn-config      → salva credenciais SN globais e/ou assignmentGroup por projeto
-                ├── POST /api/sn-test        → testa conexão com o Service Now
-                ├── GET /modules/*.js        → ES modules servidos dinamicamente de public/
-                └── GET /i18n/*.json         → arquivos de tradução servidos de public/i18n/
+Requisição HTTP → server.js (parse params) → handler puro → helpers json()/page()
+                                                  ↓
+                               config.js · azureClient · projectService
+                               reportService · servicenowClient · aiClient
+                                                  ↓
+                                   utils/ (health · paginate · iterMap · paths)
 ```
 
 ---
 
-## ⚙️ Configuração
+## Padrões e Convenções
 
-| Parâmetro | Valor |
-|-----------|-------|
-| Porta local | `3030` |
-| Arquivo de configuração | `config.json` (gerado automaticamente na primeira execução) |
-| Autenticação | PAT (Personal Access Token) |
-| Hot reload | `nodemon server.js` |
+### handlers/ — camada de domínio
 
-As credenciais são configuradas pela **tela de setup** na primeira execução e salvas em `config.json`. Não há valores hardcoded no código.
+Funções puras `async` sem `req`/`res`. Erros HTTP lançam `HttpError(status, msg)` de `handlers/utils.js`.
+Os mesmos handlers serão chamados pelo Electron via IPC sem alteração.
 
-> ℹ️ **Permissões do PAT necessárias:**
-> - `Work Items (Read)` — obrigatório para leitura de work items e backlogs
-> - `Project and Team (Read)` — recomendado para listagem de projetos e dados de sprint
-
----
-
-## 📦 Dependências
-
-- **Node.js v18+** — instalado via `winget install OpenJS.NodeJS.LTS`
-- **nodemon** — instalado via `npm install -g nodemon` (hot reload ao salvar)
-- Sem pacotes externos no runtime — usa apenas módulos nativos (`http`, `https`, `dns`, `child_process`)
-
-> **Nota:** `dns.setDefaultResultOrder("ipv4first")` é aplicado no início do script para evitar timeout em redes sem conectividade IPv6 (o DNS do Azure DevOps retorna endereços IPv6 primeiro).
-
----
-
-## 🚀 Como executar
-
-```bash
-# Com hot reload (recomendado para desenvolvimento — não reabre o navegador a cada reinício):
-nodemon server.js
-
-# Sem hot reload (abre o navegador automaticamente):
-node server.js
-
-# O servidor sobe em:
-# http://localhost:3030
+```js
+const { httpError } = require('./utils');
+if (!project) httpError(400, 'project required');
 ```
 
-## 📦 Como gerar o executável de distribuição
+### server.js — thin router
 
-```bash
-# Gera dist/app/server.exe (Node.js + app empacotados, ~37MB)
-npm run build
+Dois helpers eliminam try/catch por rota:
+
+```js
+async function json(res, fn) { /* await fn(), HttpError → status HTTP */ }
+async function page(res, fn) { /* idem para HTML */ }
 ```
 
-A pasta `dist/app/` deve conter:
-- `server.exe` — gerado pelo PKG (`npm run build`)
-- `BacklogHealth.exe` — wrapper C# WPF, compilado via MSBuild do projeto `wrapper/BacklogHealth.csproj`
-- `*.dll` / `runtimes/` — DLLs do WebView2 (não são regeneradas, já estão na pasta)
+**Atenção:** `/api/report-config` deve ser testado **antes** de `/api/report` (ambiguidade de `startsWith`).
 
-> **Importante:** o script `build` no `package.json` usa `--output dist/app/server.exe`. O wrapper C# lê `server.exe` do mesmo diretório em que está (`exeDir`), então ambos devem estar em `dist/app/`.
-> Para distribuir, zipar toda a pasta `dist/app/` — o usuário executa `BacklogHealth.exe`.
+### state.js — cachedHTML compartilhado
 
----
+`handlers/state.js` — getter/setter para `cachedHTML`. Compartilhado entre `dashboard.js`, `projects.js` e futuro IPC sem prop drilling.
 
-## 📊 Dashboard Principal — O que é exibido
+### utils/paths.js — caminhos graváveis
 
-Todos os indicadores do dashboard principal são calculados considerando apenas **User Stories** (tipos: `User Story`, `Product Backlog Item`, `Requirement`).
+Fonte única de verdade. Prioridade: `ELECTRON_DATA_DIR` env var → `process.pkg` dir → `__dirname`.
+**Nunca** computar caminhos inline — sempre importar:
+```js
+const { CONFIG_PATH, CACHE_DIR } = require('./utils/paths');
+```
 
-| Métrica | Descrição |
-|---------|-----------|
-| **User Stories** | Total de US incluindo fechadas (Closed/Done/Resolved) |
-| **Sem Estimativa** | US abertas sem Story Points |
-| **Sem Responsável** | US abertas sem Assigned To |
-| **Bugs Abertos** | Bugs com estado Active, In Progress ou New |
+### Frontend — ES Modules nativos
 
-| Métrica | Alerta | Crítico |
-|--------|--------|---------|
-| US sem estimativa (Story Points) | > 30% do total de US abertas | > 50% do total de US abertas |
-| US sem responsável | > 20% do total de US abertas | — |
-| Bugs ativos | > 5 | > 10 |
+`public/modules/*.js` usam `import/export` nativos (sem bundler, sem build step).
+`public/app.js` importa tudo e expõe ao `window.*` para handlers inline (`onclick="fn()"`).
 
-### Status de saúde
-- 🟢 **Saudável** — backlog bem estruturado
-- 🟡 **Atenção** — pontos de melhoria identificados
-- 🔴 **Crítico** — ação imediata necessária
+### Templates HTML
 
-> Passe o mouse sobre o badge de saúde para ver o motivo detalhado do alerta.
+`views/*.html` com tokens `{{TOKEN}}`. Lidos uma vez no startup via `fs.readFileSync`.
+`renderTemplate(html, vars)` faz substituição simples — sem engine de template, sem nova dependência.
 
-### Seção "Visualizar User Stories"
-Cada card possui um botão toggle expansível que exibe apenas User Stories agrupadas por sprint, ordenadas cronologicamente (mais antiga primeiro). A tabela contém: Título, Status, Estimativa e Responsável. O contador de US é atualizado em tempo real ao filtrar por sprint.
+### Salvar config — preservar campos existentes
 
----
+`POST /setup` e qualquer função de save **sempre** faz spread do config existente:
+```js
+saveConfig({ ...getCfg(), org, baseUrl, pat, projects });
+```
+Garante que `ai`, `github`, `servicenow` não sejam perdidos ao reconfigurar projetos.
 
-## 🎨 Sistema de Temas
-
-- **Botão ☀️/🌙** no header alterna entre tema escuro e claro
-- **Persistência no `localStorage`** — tema sobrevive a F5, auto-refresh e reabertura do browser
-- **Sem flash (FOUC)** — script inline no `<head>` aplica o tema antes da página renderizar
-- **Tema escuro** é o padrão (`:root`)
-- **Tema claro** sobrescreve via `[data-theme="light"]`
-
----
-
-## 🔄 Atualização de dados
-
-- **Botão ↻ Atualizar** — rebusca os dados sem recarregar a página
-- **Auto-refresh** — timer regressivo de 5 minutos visível no header
-- **Durante atualização** — conteúdo fica com opacidade reduzida
-- **Após refresh** — filtros ativos são restaurados automaticamente
-
----
-
-## 🔍 Filtro por Sprint / Iteration
-
-Cada card de projeto possui um dropdown customizado com:
-
-- **Checkbox por sprint** — seleção múltipla
-- **Datas de início e fim** exibidas abaixo de cada opção
-- **Sprint atual destacada em verde** com sufixo "📅 atual"
-- **Sem seleção = todas as sprints**
-- **Botão "✕ Limpar seleção"** dentro do painel
-- **Filtros persistidos no `localStorage`** — sobrevivem a F5 e ao auto-refresh
-
-### Como o filtro funciona
-Ao selecionar sprints, o dashboard recalcula em tempo real:
-- Linhas da tabela (mostra/oculta por `data-iteration`)
-- Cabeçalhos de grupo
-- Stats: User Stories, Sem Estimativa, Sem Responsável, Bugs
-- Badge de saúde (🟢 🟡 🔴)
-
----
-
-## 📅 Apresentação de Daily Standup
-
-Acessado pelo botão **📅 Apresentar daily** no header, ou pelo botão **☰** na coluna Ações da tabela Distribuição por Sprint no modal de detalhes.
-
-- Modal em carrossel — um slide por projeto monitorado
-- Cada slide exibe dados **filtrados pela sprint atual** do projeto (ou pela sprint selecionada quando aberto via botão ☰)
-- **Conteúdo por slide:**
-  - Nome do projeto + badge de saúde (com tooltip)
-  - Nome da sprint atual + período (data início – data fim)
-  - Botão **📊 Burndown** para abrir o gráfico da sprint atual
-  - Stats: User Stories, Sem Estimativa, Sem Responsável, Bugs Abertos
-  - Stat **Bugs Abertos é clicável** — abre modal com lista de bugs da sprint (ver seção abaixo)
-  - Tabela de User Stories da sprint atual (Título, Status, Estimativa, Responsável)
-- Navegação por botões (← Anterior / Próximo →) ou teclas `←` `→`
-- Fecha com ✕ ou tecla `Escape`
-- **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
-
-### Modal de Itens da Daily (componente reutilizável)
-
-Todos os 4 stats do slide da Daily Standup são clicáveis e abrem o **Items Modal** (`#items-modal`), um componente genérico definido em `public/modules/itemsModal.js`.
-
-| Stat clicado | Itens exibidos | Coluna Pts? |
-|---|---|---|
-| **User Stories** | Todos os `mainItems` da sprint | Sim |
-| **No Estimate** | US abertas sem Story Points | Sim |
-| **No Assignee** | US abertas sem responsável | Sim |
-| **Open Bugs** | Todos os bugs (filtro inicial: Active/In Progress/New) | Não |
-
-- Modal sobreposto ao daily (z-index: 700), fecha com ✕, clique fora ou `Escape`
-- **Filtro de status** — dropdown com checkboxes por estado; pre-selecionado via `defaultFilters`; para bugs os estados ativos são pré-selecionados mas o usuário pode remover o filtro para ver todos
-- **Tabela:** ID (link clicável), Título, Status (badge colorido), Pts (opcional), Responsável
-- **Cores dos badges** — azul (Active/In Progress), verde (Closed/Done/Resolved), vermelho (Blocked), cinza (demais)
-- Dados provêm do `data-items` do card (`id`, `title`, `url`, `state`, `assignedTo` adicionados ao itemsJson no `projectService.js`)
-
-#### API do `itemsModal.js`
+### itemsModal — componente genérico
 
 ```js
 openItemsModal({ title, items, showPts?, defaultFilters? })
-// defaultFilters: string[] — estados pré-selecionados no filtro de status (ex: ACTIVE_BUG_STATES)
-
-closeItemsModal()
-closeItemsModalOverlay(event)
-toggleItemsFilterDropdown()   // abre/fecha o dropdown de filtro de status
-toggleItemsFilter(state)      // marca/desmarca um estado no filtro
-clearItemsFilter()            // limpa todos os filtros de status
+// items: [{ id, title, url, state, assignedTo, pts }]
+// defaultFilters: estados pré-selecionados (ex: ACTIVE_BUG_STATES)
 ```
 
-Para usar em qualquer outro contexto, basta importar `openItemsModal` e passar os itens desejados.
+O listener global de `filters.js` exclui `.items-filter-select` do fechamento automático — não remover essa verificação.
+
+### work item types por projeto
+
+`workItemType`: `'User Story'` (padrão) ou `'Task'`.
+- Frontend: `getItemTypes(wt)` e `getEstimateField(wt)` em `constants.js`
+- Backend: `getProjectConfig(identifier)` em `config.js`
+- Métricas calculadas apenas dos `mainItems` — **nunca** incluir Bugs nos indicadores
+
+### URLs de work items
+
+Construir como `${baseUrl}/_workitems/edit/${id}`.
+**Nunca** usar `_links.html` da API — quando `&fields=` é usado, `_links` é omitido da resposta.
+
+### Service Now — normalização de campos
+
+Com `sysparm_display_value=all`, campos relacionais retornam `{value, display_value}`:
+- `_snVal(v)` → extrai `display_value || value` (para labels visuais e agrupamento)
+- `_snRaw(v)` → extrai `value` (para filtros de query e IDs)
+
+Usar `_snRaw` em `number` e `sys_id` para evitar `[object Object]` nos links.
+
+### config.json — estrutura
+
+```json
+{
+  "org": "myorg", "pat": "...", "baseUrl": "https://dev.azure.com/myorg",
+  "projects": [{ "name": "Alpha", "workItemType": "User Story", "team": "opcional",
+                 "servicenow": { "assignmentGroup": "sys_id", "assignmentGroupName": "..." } }],
+  "ai": { "endpoint": "...", "apiKey": "...", "model": "...", "apiVersion": "..." },
+  "servicenow": { "instance": "empresa.service-now.com", "user": "...", "pass": "..." }
+}
+```
 
 ---
 
-## 📊 Dashboard de Detalhes do Projeto
+## Testes
 
-Acessado pelo botão **📊 Detalhes do projeto** em cada card.
+### Regra obrigatória
 
-- Busca dados via `/detail?project=NAME` com múltiplas queries ao Azure DevOps
-- **Respeita os filtros de sprint ativos** na tela principal — todos os indicadores são filtrados por sprint no cliente antes de agregar
-- Modal com botão **↻** para atualizar os dados sem fechar o modal
-- Modal com botão **⤢ Maximizar / ⤡ Restaurar**
-- Fecha com ✕, clique fora do modal ou tecla `Escape`
+Todo código novo sem necessidade de integração deve ter testes unitários.
+Ao implementar: **criar testes, rodar `npm test`, avisar o usuário**.
 
-### Seções do painel de detalhes
+### Scripts
 
-| Seção | Conteúdo |
-|-------|----------|
-| **Resumo Geral** | Total itens, User Stories, Story Points, Pts Entregues, Em Andamento, Novos, Sem Estimativa, Hrs Tasks, Hrs Bugs |
-| **Indicadores de Saúde** | Taxa de Conclusão (US), Em UAT (US), Taxa de Bugs (hrs bugs/total hrs), Cobertura de Estimativas (US), Esforço Economizado (tasks) |
-| **US por Status** | Barras horizontais com todos os estados — filtrado apenas por User Stories |
-| **US por Responsável** | Barras horizontais com membros da equipe — filtrado apenas por User Stories |
-| **Distribuição por Sprint** | Tabela: Sprint, Período, User Stories, Story Points, Concluídos (%), Em UAT (%), Ações (botão burndown 📊 + botão ver sprint ☰) — ordenada por data crescente; seletor de colunas visíveis via dropdown com ícone ⊞ no cabeçalho da seção |
-| **Cronograma de Sprints** | Gantt visual com blocos posicionados por data, barra proporcional à qtd de US, marcador "hoje" |
+```bash
+npm test                # roda tudo uma vez
+npm run test:watch      # modo watch (re-executa ao salvar)
+npm run test:coverage   # exibe cobertura por arquivo
+```
 
-### Cálculo dos indicadores de saúde
+### Onde colocar
 
-| Indicador | Fórmula |
-|-----------|---------|
-| Taxa de Conclusão | US com estado Closed/Done/Resolved ÷ total de US |
-| Em UAT | US com estado UAT ÷ total de US |
-| Taxa de Bugs | Hrs Bugs ÷ (Hrs Tasks + Hrs Bugs) |
-| Cobertura de Estimativas | US com Story Points ÷ total de US |
-| Esforço Economizado | (OriginalEstimate − CompletedWork) ÷ OriginalEstimate × 100 — positivo = economizou horas; negativo = estourou; `—` quando sem dados |
-
-### Queries ao Azure DevOps no `/detail`
-
-As 3 queries WIQL + fetchIterMap rodam em paralelo. Em seguida, as 3 paginações também rodam em paralelo.
-
-| Query | Filtro | Finalidade |
-|-------|--------|------------|
-| WIQL principal | State NOT IN (Done, Removed) | Items incluindo Closed para indicadores e distribuição |
-| WIQL tasks | Sem filtro de estado | CompletedWork + IterationPath para Hrs Tasks |
-| WIQL bugs | Sem filtro de estado | CompletedWork + IterationPath + contagem total |
-
----
-
-## 📈 Gráfico de Burndown por Sprint
-
-Acessado via botão **📊** na coluna "Ações" da tabela de Distribuição por Sprint, ou via botão **📊 Burndown** no slide da Daily Standup.
-
-- **Modal expandível** com as mesmas opções dos outros modais (maximizar, fechar, Escape)
-- **Gráfico SVG** sem dependências externas
-- **Linha ideal** (tracejada cinza): decaimento linear do total de US até zero ao longo do período
-- **Linha real** (verde): progresso de US concluídas até a data atual
-- **Marcador "hoje"** (vermelho): visível apenas quando hoje está dentro do período da sprint
-- **Cards de resumo:** Total US, Concluídas, Restantes, Progresso %
-
-### Como o burndown é calculado
-
-| Dado | Fonte |
-|------|-------|
-| Total de US | `data-sprints` serializado na tabela de distribuição |
-| US concluídas | US com estado Closed/Done/Resolved na sprint |
-| Datas da sprint | `iterMap` retornado pelo endpoint `/detail` |
-| Progresso real | Distribuição linear das US concluídas até hoje |
-
-> **Nota:** O gráfico representa o progresso de User Stories (não Story Points). A linha real é uma estimativa linear — não reflete a ordem exata em que os itens foram concluídos.
-
----
-
-## 🔌 APIs do Azure DevOps utilizadas
-
-| API | Endpoint | Finalidade |
-|-----|----------|------------|
-| Projects | `/_apis/projects` | Lista todos os projetos acessíveis pelo PAT |
-| Teams | `/_apis/projects/{project}/teams` | Lista times por projeto (detecta multi-time no setup) |
-| WIQL | `/{project}/_apis/wit/wiql` | Consulta work items por critérios |
-| Work Items | `/{project}/_apis/wit/workitems?ids=...` | Detalhes dos items em lotes de 200 (até 500) |
-| Classification Nodes | `/{project}/_apis/wit/classificationnodes/iterations?$depth=10` | Árvore completa de sprints com datas (independe de time) |
-| Team Iterations | `/{project}/{team}/_apis/work/teamsettings/iterations` | Sprints do time com `timeFrame:"current"` (usado quando time está configurado) |
-
-> **Nota:** O `fetchIterMap` usa a seguinte precedência: (1) endpoint de time específico se `team` estiver configurado; (2) `classificationnodes/iterations` para cobertura total; (3) fallback por convenção de nome (`{projeto} Team`).
-
----
-
-## 🔧 Modo de item por projeto (User Story vs Task)
-
-Cada projeto pode ser configurado na tela de setup com um **tipo de item principal**:
-
-| Modo | Tipos monitorados | Campo de estimativa | Label no card |
-|------|------------------|---------------------|---------------|
-| **User Story** (padrão) | User Story, Product Backlog Item, Requirement | Story Points | "User Stories" |
-| **Task** | Task | RemainingWork (fallback: OriginalEstimate) | "Tasks" |
-
-- O `workItemType` é salvo em `config.json` por projeto e lido via `getProjectConfig()` em `config.js`
-- `projectService.js` adapta a query WIQL e os campos buscados conforme o modo
-- O card HTML recebe `data-workitemtype` para que `filters.js` e `detail.js` adaptem métricas no cliente
-- O modal de detalhes, o Daily Standup e os labels do dashboard principal exibem "Tasks" / "Horas" em vez de "User Stories" / "Story Points" quando em modo Task
-- `getItemTypes(workItemType)` e `getEstimateField(workItemType)` em `constants.js` são a fonte única dessa lógica no frontend
-
----
-
-## 🗓️ Delivery Plan
-
-Acessado pelo botão **🗓️ Delivery Plan** no header, ao lado do botão de Daily Standup.
-
-- **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
-- **Timeline compartilhada** — todos os projetos exibidos em linhas sobrepostas no mesmo eixo de tempo
-- Cada linha exibe o nome do projeto (coluna fixa à esquerda, `position: sticky`) e os blocos de sprint posicionados proporcionalmente por data
-- **Dentro de cada bloco:** nome da sprint + datas de início/fim no formato `dd/mm` (sem ano) em segunda linha; tooltip com data completa
-- **Cores por estado** — passada (cinza), atual (verde), futura (azul); adaptadas ao tema claro/escuro via classes CSS
-- **Marcador "hoje"** como linha vertical em cada linha de projeto
-- **Filtro de projetos** — painel com checkboxes para mostrar/ocultar projetos individualmente, com "Selecionar todos" e "Limpar"
-- **Herda filtros de sprint** do dashboard principal — se um projeto tiver sprints filtradas, apenas essas sprints aparecem no Delivery Plan
-- Dados lidos do atributo `data-itermap` dos cards (sem nova chamada à API)
-
----
-
-## ➕ Como adicionar/remover projetos monitorados
-
-Clique no botão **⚙️** no header do dashboard para acessar a tela de configurações. Lá você pode:
-- Alterar a organização ou o PAT
-- Recarregar a lista de projetos disponíveis
-- Marcar/desmarcar os projetos a monitorar (busca com autocomplete)
-
-As alterações são salvas em `config.json` e o dashboard é atualizado automaticamente.
-
-> **Remoção rápida:** cada card do dashboard tem um botão 🗑️ que remove o projeto do monitoramento diretamente, sem precisar entrar na tela de configurações.
-
----
-
-## 👥 Monitoramento por Time (Multi-time)
-
-Projetos do Azure DevOps com **mais de um time** são expandidos automaticamente na tela de configuração: cada time aparece como uma entrada separada no formato `Projeto — Nome do Time`.
-
-- A seleção é feita por time, não por projeto — cada entrada monitora apenas as sprints e work items daquele time
-- O **display name** do projeto no dashboard é `"Projeto - Nome do Time"` (com hífen)
-- O campo `team` é salvo em `config.json` por entrada: `{ name: "AMS", team: "AMS Backend", workItemType: "User Story" }`
-- O `fetchIterMap` usa o endpoint específico do time (`teamsettings/iterations`) quando `team` está definido, garantindo `timeFrame:"current"` preciso
-- Os work items são filtrados no servidor para exibir apenas os que pertencem às sprints do time configurado
-- A identificação única usada em `data-project`, `/detail?project=` e filtros é o **display name** (`"AMS - AMS Backend"`)
-
-### Estrutura da chave no setup
-
-| Contexto | Formato da chave |
+| Tipo | Pasta |
 |---|---|
-| Checkbox no DOM | `"AMS\|AMS Backend"` (pipe como separador) |
-| Enviado ao servidor (`POST /setup`) | `"AMS:User Story:AMS Backend"` |
-| Salvo em `config.json` | `{ name, workItemType, team }` |
-| Display name no dashboard | `"AMS - AMS Backend"` |
+| Handlers (`handlers/`) | `tests/unit/handlers/` |
+| Utilitários (`utils/`) | `tests/unit/utils/` |
+| Funções puras de `config.js` | `tests/unit/config.test.js` |
+| Integração HTTP (futuro) | `tests/integration/` |
+
+### Convenções
+
+- `jest.mock()` no topo do arquivo, `beforeEach` para setup de estado
+- Mensagens de teste em português
+- Framework: Jest (`jest.config.js` na raiz, `clearMocks: true`)
+
+### Estado atual: 163 testes, 9 suites, todos passando
+
+| Arquivo | Cobertura |
+|---|---|
+| `utils/health.js`, `utils/paginate.js`, `handlers/utils.js` | 100% |
+| `handlers/ai.js`, `handlers/sn.js` | 100% linhas |
+| `handlers/azure.js`, `handlers/projects.js` | ~97–99% |
+| `config.js` (funções puras) | 50% |
+| `handlers/` total | ~89% |
 
 ---
 
-## ✏️ Apelidos de Projeto (Alias)
+## Decisões arquiteturais chave
 
-O usuário pode customizar o nome exibido de qualquer projeto diretamente no dashboard, sem alterar a configuração do servidor.
+> Histórico completo: [`docs/decisions.md`](docs/decisions.md)
 
-- Botão **✏️** aparece ao passar o mouse no cabeçalho do card
-- Clique abre um campo de edição inline; **Enter** salva, **Escape** cancela
-- O apelido é salvo em `localStorage['projectAliases']` como `{ "displayName": "AliasCustomizado" }`
-- Apagando o campo (texto vazio) restaura o nome original
-- O nome original é sempre preservado internamente — usado em chamadas de API, filtros, `data-project` e identificação no servidor
-- O apelido é aplicado em: **dashboard principal**, **modal de detalhes**, **Daily Standup** e **Delivery Plan**
-- `applyAliases()` é chamado na inicialização e após cada refresh automático (já que o `#content` é reconstruído)
-
----
-
-## 🗑️ Remoção Rápida de Projeto
-
-O botão **🗑️** no cabeçalho de cada card permite remover o projeto do monitoramento sem abrir a tela de configurações.
-
-- Exibe confirmação antes de executar
-- Chama `POST /api/remove-project` com o display name do projeto
-- O servidor remove a entrada de `config.json`, reconstrói o HTML cacheado e retorna `{ ok: true }`
-- O card é removido do DOM imediatamente após confirmação do servidor
-
----
-
-## 💬 Histórico de decisões
-
-| # | Decisão | Motivo |
-|---|---------|--------|
-| 1 | Artifact React → script local | CORS bloqueava chamadas diretas ao Azure DevOps |
-| 2 | Sem pacotes externos | Zero dependências, roda em qualquer Node.js |
-| 3 | `/refresh` retorna HTML completo | Atualiza conteúdo sem recarregar a página |
-| 4 | `localStorage` para filtros | Persistência sem backend, zero custo |
-| 5 | `/detail` endpoint separado | Busca todos os estados sem impactar performance do dashboard principal |
-| 6 | `{projeto} Team` sem usar `_apis/teams` | PAT não tem permissão de leitura de times |
-| 7 | `nodemon` com `NO_OPEN_BROWSER=1` | Evita abrir nova aba do navegador a cada hot reload |
-| 8 | CSS Custom Properties para temas | Permite trocar todo o visual com um único atributo `data-theme` |
-| 9 | Script inline no `<head>` para tema | Evita FOUC (flash do tema errado antes do JS carregar) |
-| 10 | Credenciais em `config.json` | Segurança e portabilidade — cada usuário configura suas próprias credenciais |
-| 11 | Tela de setup com autocomplete | Valida PAT antes de salvar e lista projetos reais disponíveis |
-| 12 | `dns.setDefaultResultOrder("ipv4first")` | Azure DevOps retorna IPv6 primeiro; sem IPv6 na rede causava ETIMEDOUT |
-| 13 | Métricas baseadas apenas em User Stories | Alinhamento com a realidade do backlog — Tasks e Bugs distorcem os indicadores |
-| 14 | Queries separadas para Tasks/Bugs (sem filtro de estado) | CompletedWork e contagem total precisam incluir itens já fechados |
-| 15 | Filtragem por sprint no cliente (detail) | Evita passar parâmetros de sprint para o servidor — dados brutos com IterationPath são filtrados no JS |
-| 16 | `SELECTED_SET` para seleção de projetos no setup | Seleções persistiam ao filtrar a lista — DOM era reconstruído e perdia o estado dos checkboxes ocultos |
-| 17 | Separação em módulos (config, azureClient, projectService, server) | Arquivo único de 1500+ linhas dificultava manutenção — cada módulo tem responsabilidade clara |
-| 18 | CSS e JS do browser em `public/` servidos como arquivos estáticos | Permite syntax highlighting no editor; navegador faz cache automaticamente |
-| 19 | HTML em `views/` com tokens `{{TOKEN}}` e `renderTemplate` simples | Separa estrutura de apresentação da lógica sem adicionar dependência de template engine |
-| 20 | Templates lidos uma vez no startup (`fs.readFileSync`) | Evita I/O a cada request em ambiente de desenvolvimento local |
-| 21 | Incluir US Closed no total do dashboard principal | Total de US deve refletir o escopo completo do projeto, não apenas os itens abertos |
-| 22 | Paginação em lotes de 200 (até 500 itens) no `fetchProject` | Limite de 100 itens fazia US Closed excluírem US abertas do resultado quando o projeto tinha muitos itens |
-| 23 | Bugs contados apenas com estado Active/In Progress/New | Bugs fechados não representam risco ativo — incluí-los distorcia o indicador de saúde |
-| 24 | Tooltip no badge de saúde com motivo do alerta | Usuário precisava entender o motivo sem abrir os detalhes — título HTML com a lista de razões resolve sem adicionar complexidade |
-| 25 | Daily Standup como carrossel de slides | Facilita a apresentação em reuniões — um projeto por vez, navegável por teclado |
-| 26 | Daily filtra dados pela sprint atual | A daily é focada no que está acontecendo agora — mostrar todas as sprints misturaria contextos |
-| 27 | Burndown em SVG puro sem bibliotecas | Zero dependências — gerado diretamente no browser com `viewBox` e `polyline` |
-| 28 | `data-sprints` serializado na tabela de distribuição | Permite abrir o burndown de qualquer sprint sem nova chamada ao servidor quando os dados já estão carregados no modal de detalhes |
-| 29 | `openBurndownFromDaily` faz fetch ao abrir | Daily não tem `iterMap` com datas — buscar os dados sob demanda é mais simples que pré-carregar para todos os projetos |
-| 30 | `_showBurndownModal` como helper compartilhado | `openBurndown` (tabela) e `openBurndownFromDaily` (daily) precisam da mesma lógica de exibição — centralizar evita duplicação |
-| 31 | ES Modules nativos no browser (`type="module"`) | Elimina escopo global monolítico de 866 linhas — cada módulo tem escopo próprio, zero bundler, zero dependências |
-| 32 | `app.js` como entry point que expõe `window.X` | HTML usa inline handlers (`onclick="fn()"`); ES modules têm escopo local — expor ao window mantém compatibilidade sem alterar templates |
-| 33 | `utils/` no backend (health, paginate, iterMap) | Lógica de paginação e iterMap estava duplicada em `fetchProject` e `fetchProjectDetail`; `calcHealth` estava duplicado entre servidor e cliente |
-| 34 | `buildSprintData` em `utils.js` (frontend) | Computação de `bySprint` estava duplicada em `buildDetailHTML` e `openBurndownFromDaily` — fonte única garante consistência |
-| 35 | Remoção de `allWiql`/`allItems` | Query era usada para "Itens por Tipo" que foi removido — eliminar reduz uma chamada à API por abertura do modal de detalhes |
-| 36 | Paralelização das queries no `fetchProjectDetail` | 3 WIQLs + iterMap agora rodam em paralelo; em seguida 3 paginações em paralelo — reduz tempo de carregamento proporcional ao número de queries |
-| 37 | `server.js` serve `public/` dinamicamente | Lista estática de arquivos precisaria de atualização manual a cada novo módulo — handler dinâmico resolve qualquer arquivo de `public/` sem manutenção |
-| 38 | Wrapper WebView2 (C# WPF .NET Framework 4.8) | Usuário final precisa de um `.exe` para clicar e rodar — WebView2 abre janela nativa sem instalar Node.js, .NET ou browser; .NET Framework 4.8 já vem no Windows 10/11 |
-| 39 | `server.exe` gerado via PKG | Empacota Node.js runtime + toda a aplicação em um único executável — zero instalação para o usuário final |
-| 40 | i18n com JSON por idioma + `data-i18n` + `t()` | Suporte a PT/EN/ES sem bibliotecas externas — arquivos JSON em `public/i18n/`, atributos `data-i18n` no HTML, função `t(key, vars)` em `i18n.js` compartilhado |
-| 41 | Idioma padrão: inglês (`en`) | Aplicação usada por times com usuários internacionais — inglês como padrão garante melhor acessibilidade; preferência persiste no `localStorage('lang')` |
-| 42 | `parseOrgInput` em `config.js` | Organizações com URL `xxx.visualstudio.com` (legado VSTS) têm estrutura de URL diferente de `dev.azure.com/org` — detectar e normalizar automaticamente elimina fricção na configuração |
-| 43 | `baseUrl` salvo no `config.json` | Permite que `azureClient.js` use a URL base correta sem precisar redetectar o formato a cada chamada — compatibilidade retroativa: configs sem `baseUrl` recebem `dev.azure.com/{org}` |
-| 44 | `noEst` no detalhe filtrado por `usItems` | Tasks não têm Story Points por design — contá-las em "Sem Estimativa" distorcia o indicador de cobertura de estimativas |
-| 45 | Delivery Plan como modal com timeline compartilhada | Necessidade de visualizar o cronograma de todos os projetos em uma única tela — `data-itermap` nos cards evita nova chamada à API; filtros de sprint do dashboard são herdados via `localStorage` |
-| 46 | Classes CSS para estados de sprint (`.tl-block--past/future/current`, `.dp-block--past/future/current`) | Cores hardcoded no JS não respondem ao tema — classes CSS com overrides `[data-theme="light"]` garantem contraste adequado em ambos os temas |
-| 47 | Datas de início/fim em formato curto (`dd/mm`) dentro dos blocos de sprint | Exibir dia e mês dentro do bloco ocupa pouco espaço e dispensa hover; `fmtD` mantém o ano no tooltip para referência completa |
-| 48 | Botão Refresh com ícone apenas (`↻`) | Reduz espaço no header; `title` traduzido via `data-i18n-title` mantém acessibilidade; `timer.js` atualiza o `title` durante o refresh em vez do `textContent` |
-| 49 | `workItemType` por projeto (`User Story` ou `Task`) | Times que trabalham com Tasks em vez de User Stories precisam de estimativas em horas (RemainingWork/OriginalEstimate) em vez de Story Points — modo configurável na tela de setup; `getItemTypes()` e `getEstimateField()` em `constants.js` centralizam a lógica |
-| 50 | `getProjectConfig()` em `config.js` | `fetchProjectDetail` precisa saber o `workItemType` do projeto ao ser chamado — buscar da config evita passar o tipo como parâmetro pela cadeia de chamadas |
-| 51 | `data-workitemtype` no card HTML | `filters.js` e `detail.js` precisam saber o modo do projeto no cliente sem nova chamada ao servidor — atributo no DOM resolve sem estado global |
-| 52 | `aiClient.js` separado do `server.js` | Lógica de detecção de provedor (Foundry vs Azure OpenAI vs genérico), construção de URL/headers/body e parsing de resposta ficaria grande demais inline — módulo próprio mantém `server.js` focado em roteamento |
-| 53 | Sistema prompt injetado como prefixo da mensagem do usuário (Foundry) | Azure AI Foundry agents rejeitam `instructions`, `temperature`, `model` e role `system` na Responses API — única forma de passar contexto é prefixar a última mensagem do usuário |
-| 54 | Contexto reenviado a cada mensagem (não apenas na primeira) | Foundry agents não persistem system context entre turnos de uma mesma sessão — sem reenviar, a IA perde acesso aos dados dos projetos a partir da segunda mensagem |
-| 55 | `/ai/context` computa a mesma estrutura do modal de detalhes | Usuário precisava que a IA respondesse com a mesma riqueza de dados do "Detalhes do Projeto" — reusar `fetchProjectDetail` e agregar no servidor garante consistência sem duplicar lógica |
-| 56 | Filtros de sprint normalizados no servidor (`f.split('\\').pop()`) | `localStorage` armazena o caminho completo da iteration (`Projeto\\Sprint 108`); API do Azure DevOps usa o mesmo formato — comparar apenas o último segmento resolve a divergência sem alterar o formato salvo |
-| 57 | `_loadRichContext` em `copilot.js` exibe indicador de carregamento | Buscar detalhes de todos os projetos pode levar vários segundos — feedback visual imediato evita que o usuário envie mensagem antes dos dados estarem disponíveis e receba resposta genérica |
-| 58 | `_buildContext()` como fallback DOM-based | Se `/ai/context` falhar, o chat ainda funciona com dados já presentes nos `data-*` dos cards do dashboard — degradação graciosa sem bloquear o usuário |
-| 59 | Botão ☰ "Ver sprint" na tabela de Distribuição por Sprint | Permite abrir o Daily Standup de qualquer sprint diretamente do modal de detalhes, sem precisar usar o carrossel do header — abre o modal focado no projeto e sprint selecionados |
-| 60 | `buildDailySlide(card, forcedSprintKey)` com parâmetro opcional | Reutiliza toda a lógica do slide da daily com override de sprint — sem `forcedSprintKey` o comportamento original é preservado; com ele, nome/datas são lidos do `data-itermap` do card |
-| 61 | `Microsoft.VSTS.Common.StackRank` no Daily Standup | US na daily eram exibidas sem ordem definida — buscar o campo `Order` da API e adicionar `data-order` nos `<tr>` permite ordenação crescente por backlog order sem custo adicional |
-| 62 | `classificationnodes/iterations` como fonte primária do `fetchIterMap` | Projetos com múltiplos times retornavam sprints sem data pois o endpoint `teamsettings/iterations` é específico por time — `classificationnodes` retorna toda a árvore de iterations independente de time com permissão apenas de `Work Items (Read)` |
-| 63 | Monitoramento por time com campo `team` em `config.json` | Projetos com N times precisam de visibilidade isolada por time — expandir no setup como `Projeto — Time` e filtrar items por `iterMap` do time no servidor resolve sem nova API |
-| 64 | Display name como identificador único em ambiente multi-time | `name` sozinho é ambíguo quando há duas entradas do mesmo projeto — usar `"Projeto - Time"` como `data-project` e chave em `/detail?project=` garante unicidade sem alterar nomes no Azure DevOps |
-| 65 | `getDisplayName(p)` exportado de `config.js` | Cálculo do display name estava sendo duplicado em `server.js`, `projectService.js` e `config.js` — fonte única evita divergência |
-| 66 | Alias de projeto em `localStorage` via `alias.js` | Nome técnico do projeto (ex: `"AMS - AMS Backend"`) pode ser difícil de comunicar — alias no cliente preserva a chave interna e substitui apenas a camada visual sem alterar server, filtros ou API |
-| 67 | `applyAliases()` chamado após refresh | O refresh reconstrói `#content` do zero, perdendo os `textContent` alterados — chamar `applyAliases()` em `timer.js` após `initFilters()` garante que aliases persistam entre atualizações |
-| 68 | `POST /api/remove-project` como endpoint de remoção rápida | Remover projeto exige editar `config.json` e reconstruir cache — endpoint dedicado encapsula essa lógica e permite remoção direta do card sem abrir o setup |
-| 69 | `data-i18n-title` em todos os tooltips do dashboard | Tooltips hardcoded em português não respondem à troca de idioma — `applyTranslations()` já processa `data-i18n-title`, bastava adicionar o atributo e as keys nos JSONs |
-| 70 | Toggle grid/lista na `.cards-toolbar` acima dos cards | Botão de alternância de layout estava na topbar misturado com controles globais — movê-lo para uma barra dedicada acima dos cards torna a ação mais próxima do conteúdo que afeta |
-| 71 | Team Capacity como view alternativa no `main-content` | Tela independente sem modal evita sobrepor o dashboard — show/hide de `#tc-view` vs `#content` + `.cards-toolbar` mantém o layout da sidebar sem nova rota ou reload |
-| 72 | `style.display = 'block'` explícito no `#tc-view` | `style.display = ''` remove o inline style mas o CSS `#tc-view { display: none }` ainda vence — atribuir `'block'` garante que o elemento apareça independente da folha de estilo |
-| 73 | `localStorage['activeView']` salvo antes do `location.reload()` no `setLocale()` | Troca de idioma recarrega a página e perdia a view TC ativa — salvar antes do reload e restaurar em `app.js` após inicialização preserva o contexto do usuário |
-| 74 | `GET /ai/config` retorna credenciais completas | Endpoint retornava apenas `{ configured: bool }` — formulário de configuração abria sempre vazio, obrigando re-digitação após restart; retornar endpoint/apiKey/model/apiVersion permite pré-preenchimento |
-| 75 | Daily Standup e Delivery Plan abrem maximizados por padrão | Modais eram abertos em tamanho reduzido exigindo clique manual em "Maximizar" a cada uso — `classList.add('maximized')` no `open` e ícone já iniciado como ⤡ eliminam esse passo repetitivo |
-| 76 | Título "Health Intelligence" removido da topbar; meta info movida para sidebar | Topbar com título duplicava a identidade visual já presente na sidebar logo — remover libera espaço e concentra branding no sidebar; `{{SUBTITLE}}` (N projects · Org) fica visível sem ocupar área de ação |
-| 77 | `.sidebar-logo-row` como wrapper interno + `.sidebar-logo` como coluna | Sidebar logo usava `flex-row` direto — para posicionar o meta abaixo do ícone+texto precisava de nível extra sem quebrar o alinhamento horizontal do ícone com o nome |
-| 78 | `min-width: 0` em `.cards-grid > *` | CSS Grid com `1fr` não restringe o tamanho mínimo dos filhos por padrão — sem `min-width: 0` os cards transbordavam à direita no modo grid |
-| 79 | Remoção de `overflow: hidden` do `.cards-grid .card` | Adicionado para conter overflow dos cards, mas cortava o dropdown de seleção de sprint (`position: absolute`) — `min-width: 0` resolve o overflow sem afetar elementos posicionados |
-| 80 | `.select-panel` com `z-index: 400` + `.drop-up` variant | Dropdown de sprint ficava cortado pelo card vizinho e inacessível quando havia muitas sprints — z-index alto garante sobreposição; `drop-up` abre para cima quando o espaço abaixo é insuficiente |
-| 81 | Nomes de sprint exibidos com `.split("\\").pop()` | Iteration paths no Azure DevOps seguem o formato `Projeto\Time\Sprint` — exibir o caminho completo misturava o nome do time no label; `.pop()` extrai apenas o segmento final |
-| 82 | `npm run build` com `--output dist/app/server.exe` | Script anterior gerava `dist/BacklogHealth.exe` (raiz errada) — wrapper C# espera `server.exe` no mesmo diretório que ele (`dist/app/`); corrigir o output path garante que o build seja diretamente utilizável |
-| 83 | Stats do card em grade 2×3: Scope row (US · SP · Progress) + Problems row (Bugs · Sem Estimativa · Sem Responsável) | Quatro stats em linha única ficavam apertados no modo grid; separar em duas linhas temáticas melhora leitura e permite adicionar Story Points e Project Progress sem sobrecarga visual |
-| 84 | Story Points somados de todos os `mainItems` (independente de sprint) | SP representa o escopo total do projeto, não apenas da sprint filtrada — coerente com o Project Progress que também usa o total do backlog |
-| 85 | Project Progress = US fechadas ÷ total de US do backlog | Diferente do burndown (por sprint), o Progress mostra o avanço geral do projeto — inclui US Closed para refletir o histórico completo |
-| 86 | Token GitHub hardcoded em `config.json`, sem UI de configuração para o usuário | Feedback vai para um repo centralizado do desenvolvedor — expor configuração ao usuário criaria risco de substituição indevida do token e complexidade desnecessária na UI |
-| 87 | Endpoint `POST /api/feedback` cria GitHub Issue com label baseado no tipo | Mapear tipo do form (bug/suggestion/help/other) para label do GitHub permite filtrar issues por categoria no repositório sem pós-processamento manual |
-| 88 | Modal de sucesso separado após criar a issue | Fechar o form e abrir um segundo modal com link clicável para o GitHub é mais limpo do que exibir uma mensagem inline e fechar automaticamente após 3s — o usuário pode navegar até a issue no próprio tempo |
-| 89 | Coluna "Em UAT %" na tabela de Distribuição por Sprint | Visibilidade do % de US em UAT por sprint sem abrir o modal de detalhes completo — `usUAT` acumulado em `buildSprintData` junto com `usClosed`, mantendo fonte única de dados |
-| 90 | Seletor de colunas como dropdown com ícone ⊞ no cabeçalho da seção | Checkboxes inline ocupavam espaço permanente e eram visualmente poluídos — dropdown posicionado à direita do título da seção mantém a área limpa; estado persistido em `localStorage['sprintColVisibility']` |
-| 91 | `AbortController` para listeners do seletor de colunas | Cada abertura do modal de detalhes recria o HTML e registrava novos listeners no `document` para fechar o dropdown — `AbortController` descarta os listeners anteriores sem acúmulo |
-| 92 | Indicador "Esforço Economizado" em `buildDetailHTML` | `(OriginalEstimate − CompletedWork) / OriginalEstimate × 100` mede eficiência das tasks: positivo = economizou, negativo = estourou; `OriginalEstimate` adicionado ao `workFields` do `fetchProjectDetail` e mapeado em `taskItems` |
-| 93 | Override manual de `OriginalEstimate` com edição inline no anel | Azure DevOps nem sempre tem `OriginalEstimate` preenchido — campo inline no sub-texto do anel "Esforço Economizado" (clique no ícone ✏) salva override em `localStorage['origEstOverride::NomeProjeto']`; limpar volta ao valor calculado da API; ícone azul indica override ativo |
-| 94 | `POST /setup` preserva campos existentes do `config.json` via spread | `saveConfig({ org, baseUrl, pat, projects })` criava objeto do zero, descartando `ai`, `github` e qualquer outro campo já salvo — toda reconfiguração de projetos apagava as credenciais da IA; corrigido com `{ ...existing, org, baseUrl, pat, projects }` |
-| 95 | `id`, `title`, `url`, `assignedTo` adicionados ao `itemsJson` em `projectService.js` | Modal de bugs da Daily precisava exibir nome, link e responsável de cada bug — campos inexistentes no payload mínimo original (que só tinha `type`, `state`, `iteration`, `pts`, `assigned` booleano) |
-| 96 | `itemsJson` escapa `'` com `&#39;` além de `<` | `data-items='...'` usa aspas simples como delimitador de atributo — títulos de work items com apóstrofo quebravam o JSON silenciosamente; `itermap` já fazia o mesmo escape |
-| 97 | `_slidesData[]` acumulado em `buildDailySlide` e resetado em `openDaily`/`openDailyForSprint` | Items Modal precisa saber os dados de cada slide sem nova chamada à API — array paralelo a `_dailySlides` preenchido em ordem durante o `.map()` garante índice correto sem prop drilling |
-| 98 | `itemsModal.js` como componente genérico em vez de modal acoplado ao daily | Bugs modal foi o primeiro uso; User Stories, No Estimate e No Assignee precisavam do mesmo padrão — componente isolado com API `openItemsModal({ title, items, showPts, defaultFilters })` permite reuso em qualquer contexto futuro sem duplicar HTML/CSS/lógica |
-| 99 | `defaultFilters` em vez de `toggleBtn` no `itemsModal` | O toggle "Active only / Show all" foi substituído por um filtro de status genérico com checkboxes — mais flexível e consistente com o padrão de outros dropdowns da aplicação; `defaultFilters: string[]` pré-seleciona estados sem acoplar lógica de negócio ao modal |
-| 100 | `openDailyStat(stat)` como ponto de entrada único para todos os stats clicáveis | Quatro `onclick` diferentes no HTML gerado apontariam para quatro funções no `window` — um único dispatcher com string (`'us'`, `'noEst'`, `'noResp'`, `'bugs'`) reduz a superfície da API global e facilita adicionar novos stats futuros |
-| 101 | Filtro de status com dropdown de checkboxes no `itemsModal.js` | Substituiu o toggle binário "Active only / Show all" — dropdown com todos os estados presentes nos itens permite qualquer combinação de filtros sem novo código por chamador; `defaultFilters` pré-seleciona os estados relevantes (ex: bugs ativos) |
-| 102 | Fix: listener global do `filters.js` fechava o dropdown do `itemsModal` imediatamente | `filters.js` tem `document.addEventListener('click', ...)` que fecha todos `.select-panel.open` quando o clique não está dentro de `.custom-select`; o container do items modal usa `.items-filter-select` (sem `.custom-select`) — adicionada verificação `!e.target.closest('.items-filter-select')` para excluí-lo do fechamento automático |
-| 103 | `openCardStat(statEl, stat)` em `filters.js` para stats clicáveis no dashboard principal | Todos os 4 stats do card (User Stories, Bugs, No Estimate, No Assignee) agora abrem o `itemsModal`; a função lê `data-items` do card, aplica o filtro de sprint ativo do `localStorage` e computa o subconjunto correto — centralizado em `filters.js` pois já tem acesso a `getItemTypes`, `CLOSED_STATES` e `ACTIVE_BUG_STATES` |
-| 104 | `openDetailStat(stat)` e `_ctx` em `detail.js` para stats clicáveis no modal de detalhes | Cards do Resumo Geral (User Stories, Novos, Sem Estimativa) no modal de detalhes agora abrem o `itemsModal`; `_ctx` armazena `{ filtered, workItemType }` após `loadDetailData` para que `openDetailStat` acesse os itens já filtrados por sprint sem nova chamada à API |
-| 105 | `refreshDaily()` em `daily.js` — recarrega dados do Azure sem fechar a Daily | Botão `↻` no header do daily chama `doRefresh()` (que já busca dados frescos e reconstrói `#content`), depois reconstrói os slides com os novos cards preservando o índice atual; botão fica desabilitado durante o refresh |
-| 106 | `_buildDailyTrack()` + estado `_dailyMode/_dailyForcedProject/_dailyForcedSprint` em `daily.js` | `openDaily` e `openDailyForSprint` tinham lógica de construção de slides duplicada; `_buildDailyTrack()` centraliza a construção respeitando o modo atual — necessário para `refreshDaily()` reconstruir corretamente independente de como a daily foi aberta |
-| 107 | Stats Progress (closedCount/total) e Story Points removidos do card do dashboard | Informações redundantes com a barra de percentual e o modal de detalhes — simplifica o card e melhora legibilidade; `card-pts` e `card-progress` removidos do HTML gerado e dos cálculos em `applyFilter` |
-| 108 | Filtro de sprint do dashboard redesenhado para match com o `itemsModal` | Trigger usa underline (`border-bottom`) em vez de caixa com borda completa; label uppercase/bold; painel com `border-radius: 8px` completo e `top: calc(100% + 6px)` — consistência visual entre todos os dropdowns da aplicação |
-| 109 | URL do work item em `itemsJson` construída a partir de `baseUrl` em vez de `_links` | `paginatedItems` usa `&fields=` na query da API — quando campos são explicitados o Azure DevOps omite `_links` da resposta; construir `${baseUrl}/_workitems/edit/${id}` diretamente garante URL válida sem custo de payload extra; padrão já usado nas linhas da tabela (`wiUrl`) |
-| 110 | Link clicável na coluna ID do `itemsModal` — `color: var(--c-blue)` | `.daily-id-cell a` (classe reutilizada do daily) tinha `color: var(--text-faint)` que deixava o link invisível; override específico `.items-modal-table .daily-id-cell a` aplica cor azul sem afetar o estilo da daily |
-| 111 | `_fetchTestPoints` com `isRecursive=true` e paginação própria | Test points ficam aninhados em suites filhas — sem `isRecursive=true` apenas o suite raiz era retornado; paginação de 1000/req com limite de 10.000 cobre projetos grandes sem risco de loop infinito |
-| 112 | Campo `testCaseReference` (não `testCase`) na Testplan API | A Testplan API v7.0 retorna `testCaseReference` com `id` e `name` do caso de teste — `testCase` estava undefined, causando nomes `"—"` no painel; descoberto via `console.log` do primeiro ponto e removido após fix |
-| 113 | Contadores dos cards independentes, barra com exclusividade mútua | Usuário quer "Em andamento" = todos os planos Active (inclusive os que têm falhas); barra precisa somar 100% — dois conjuntos de variáveis: `plansDone/Failed/WIP/NotStarted` para os cards, `barDone/Failed/WIP/NotStarted` com prioridade exclusiva para os segmentos da barra |
-| 114 | Pills com toggle para filtro de resultado dos TCs | `<select>` nativo era inconsistente com o padrão de dropdowns da app; pills permitem ativar/desativar múltiplos outcomes sem abrir dropdown — `uatFilterPlan` agora opera sobre um `Set` por plano; `uatClearPlanFilter` reseta para "todos" |
-| 115 | `#ID` como link no header do acordeão, removendo botão `↗` separado | ID numérico do plano como link discreto (cor `text-faint`) com separador `|` antes do título integra navegação ao Azure DevOps sem ocupar espaço extra no header-right; botão seta era redundante e poluía visualmente |
-| 116 | `localStorage['uatSprint::NomeProjeto']` para persistência do filtro | Padrão já adotado em outros modais (`tcProject`, `sprintColVisibility`) — chave namespaced por projeto evita colisão entre projetos distintos |
-| 117 | `testPlanCount` adicionado ao `fetchProject` via `Promise.all` | Contagem de testplans no card principal precisava de uma chamada extra à API; rodar em paralelo com `paginatedItems` e `fetchIterMap` não aumenta o tempo de carregamento; `.catch(() => null)` garante que falha na API de testplans não quebre o dashboard |
-| 118 | `openDailyForProject(projectName)` em `daily.js` + botão "Daily" no card | Abrir o Daily Standup pelo header sempre iniciava no primeiro projeto; botão por card permite entrar direto no slide do projeto desejado; abre em modo `'all'` (navegação entre projetos preservada) e posiciona o carrossel via `findIndex` sem nova chamada à API |
-| 119 | Review Mensal convertido de SSR para SPA — `/report` serve HTML estático; `/api/report` retorna JSON | Template server-side (`views/report.html`) impossibilitava renderização incremental e reuso de módulos existentes — converter para modal no `dashboard.html` com `report.js` como ES Module garante mesma arquitetura dos demais modais (UAT, Daily, etc.) sem troca de página |
-| 120 | `snConfig.js` como módulo dedicado para configurar Service Now — modal in-app | Configuração de SN era feita apenas na tela de Setup; ter um modal acessível a partir do Report Modal permite ajustar `assignmentGroup` e credenciais sem sair do contexto — mesmo padrão de `open/close/overlay/Escape` do restante da app |
-| 121 | `Report Modal` no `dashboard.html` com `openReport(project)` — não mais `window.location.href='/report'` | Navegação por URL trocava de página e perdia o contexto do dashboard — modal in-app mantém estado, filtros e outras views intactos; abre direto no projeto do card clicado sem resetar para o primeiro |
-| 122 | Agrupamento de incidentes configurável (`cmdb_ci` vs `u_additional_res_code`) — seletor "Agrupar" na toolbar | Diferentes projetos usam métricas distintas para análise de incidentes; persiste `incidentGroupBy` em `config.json` via `POST /api/report-config` — mesmo padrão do `incidentMonths` já existente |
-| 123 | TOP 9 + "Outros" para gráfico de incidentes e heatmap | Mais de 9 sistemas gerava barras/colunas ilegíveis — agregar o restante em "Outros" mantém o visual limpo sem perder a totalidade; corte feito no frontend (top 9 por volume) com soma de `p1/p2/p3/total` para barra e soma de arrays mensais para heatmap |
-| 124 | Gráfico de incidentes por sistema reescrito como barras verticais agrupadas | Barras horizontais com rótulos longos eram difíceis de comparar — barras verticais com labels no eixo X rotacionados (-42°) comportam melhor no espaço fixo e seguem convenção de gráficos de colunas temporais/por categoria |
-| 125 | Paleta rgba semitransparente no gráfico TOP 9 — mesma do heatmap | Cores sólidas saturadas geravam alto contraste indesejado; rgba com alpha 0.35–0.65 alinha visualmente com o heatmap e reduz fadiga visual sem perder distinção entre segmentos P1/P2/P3/Outros |
-| 126 | Contadores numéricos dentro de segmentos/fatias (`angle > 0.3` rad; `h > 12px`) | Ler contagens exigia consultar a legenda — exibir o número diretamente no shape elimina esse custo; threshold evita texto em slices/barras pequenos que causariam overflow; `fill: var(--text-muted)` sem negrito para não competir com o label |
-| 127 | Legendas dos charts SVG extraídas para HTML — funções retornam `{ svgHtml, legendHtml }` | Renderizar texto longo dentro de `<svg>` não quebra linha e pode vazar do viewBox; `<div>` HTML com `flex-wrap` centraliza e reflow automaticamente independente do tamanho da tela |
-| 128 | Gráfico de evolução PRB reposicionado antes do donut/aging | Fluxo de leitura natural: primeiro a tendência temporal (o que mudou ao longo dos meses), depois o detalhe estático do estado atual — mover o chart de evolução para cima segue a lógica de funil de análise |
-| 129 | `_snVal(v)` / `_snRaw(v)` + `sysparm_display_value=all` no `reportService.js` | Com `display_value=all` a Table API do SN retorna objetos `{value, display_value}` para todos os campos relacionais — sem normalização o campo `u_additional_res_code` vira `"[object Object]"` e todos os incidentes agrupam na mesma chave; `_snVal` extrai `display_value || value` para labels; `_snRaw` extrai `value` para campos coded (priority `=== '1'`) |
-| 130 | `byGroupAlt` / `byGroupAltMonthly` no payload de incidents — dados de agrupamento alternativo pré-computados no backend | Trocar o groupBy no frontend sem nova chamada ao servidor exigiria reprocessar os dados brutos no cliente — computar ambos os agrupamentos no `fetchSnReport` e incluir no payload permite troca instantânea entre `cmdb_ci` e `u_additional_res_code` sem round-trip |
-| 131 | Cache key com sufixo `groupFields` em `reportService.js` | Trocar o groupField altera a query ao Azure (pois `groupFields` determina quais campos são buscados); sufixo na chave do cache file garante que caches de diferentes configurações coexistam sem invalidação desnecessária |
-| 132 | `_fetchTeamSprintsForPeriod` — filtragem de work items por sprints do time no período | Relatório de entrega sem filtro por time incluía items de sprints de outros times no mesmo projeto — buscar `teamsettings/iterations` e filtrar por `IterationPath` limita os resultados ao escopo correto da squad |
-| 133 | Refactor `report.js`: `_PRB_STATES` module-level, `_fmtMonth`, `_loadReportConfig`/`_saveReportConfig`, `display:block` em SVGs, legendas como HTML | Múltiplas duplicações e inconsistências identificadas em revisão de código — fonte única de configuração de estados PRB, helper de formatação de mês elimina 4 blocos repetidos, renome torna a responsabilidade das funções explícita |
-| 134 | Loop sequencial de histórico SN (`13 rounds`) → batches paralelos de 4 via `HISTORY_BATCH` | Monthly Review sem cache fazia 13 rounds sequenciais de 4 requisições SN cada (~52 req totais); batches paralelos reduzem de ~13 para ~4 rounds (~3× mais rápido) sem alterar o total de requisições |
-| 135 | Seção Delivery padronizada com `report-prb-cards` (4 colunas) — mesmo padrão de Incidents/PRBs | Seção usava layout diferente dos demais; unificar o padrão visual reduz CSS específico e cria consistência — `totalUS`, `totalDelivered`, `totalSP`, `totalSPDelivered` com cores semânticas |
-| 136 | Gráficos de Delivery (SP vs Entregues, Volatilidade, donuts configuráveis) movidos para dentro da seção Delivery | Gráficos ficavam numa grid separada abaixo de Quality — movê-los para Delivery cria uma seção coesa de análise de entrega; `_renderFixedChartCell` descartado pois todos os gráficos usam o mesmo `_renderChartCell` (drag + resize + ⚙) |
-| 137 | `byTypes` em `fetchAzureReport` considera todas as USs do período (não só `DONE_STATES`) | Guard `if (!DONE_STATES.includes(...)) return` excluía US abertas dos gráficos de agrupamento — remover o filtro reflete o escopo real do backlog no período |
-| 138 | Seção Quality eliminada; indicadores de bugs incorporados à seção Delivery renomeada "AMS Sprint Delivery" | Separar Delivery e Quality criava duas seções para o mesmo contexto de sprint — unificar em 8 cards (4 entrega + 4 bugs) numa única seção reduz scroll e coloca os indicadores de qualidade junto ao contexto de entrega que os gerou |
-| 139 | `_renderTypeBarVertical` — terceiro estilo visual para gráficos de agrupamento (barras verticais SVG) | Barras horizontais são boas para rótulos longos; barras verticais se encaixam melhor quando há poucas categorias e labels curtos — oferecer os dois estilos deixa o usuário escolher conforme os dados |
-| 140 | `/api/report-fields` expandido com campos standard (`System.State`, `System.AssignedTo`, `Microsoft.VSTS.Common.Priority` etc.) | Filtro anterior só retornava `Custom.*` + 3 campos exatos; times que usam campos padrão do Azure DevOps para classificar USs não tinham como criar gráficos de agrupamento por esses campos |
-| 141 | Donut ampliado (`r 44→62`, `stroke-width 22→26`); legenda empurrada para base do card via `flex-column` + `margin-top:auto` | Donut pequeno era difícil de visualizar; legenda flutuava no meio do card sem âncora visual — flex column com margin-top:auto fixa a legenda sempre na borda inferior independente do tamanho do SVG |
-| 142 | Barras horizontais/verticais usam mesma paleta `COLORS` do donut; picker adiciona opção "Cor única" com `<input type="color">` | Barras com cor única (#8b5cf6 fixo) impossibilitavam distinguir categorias visualmente — paleta multicolor por padrão; cor única útil quando o gráfico representa uma métrica homogênea (ex: todas as US são do mesmo tipo) |
-| 143 | `<title>` + `onmouseenter/onmouseleave` opacity nos segmentos do donut | Usuário não conseguia ver o valor de cada fatia sem consultar a legenda — tooltip nativo SVG `<title>` exibe `"Nome: N (XX%)"` sem JS extra; transição de opacidade dá feedback visual de qual segmento está sendo inspecionado |
-| 144 | Barra amarela de "Cancelados" no gráfico de histórico de incidentes | Incidentes cancelados (state=8) são uma categoria distinta de fechados — `incCancelledQ = state=8^closed_at>={hs}^closed_at<={he}`; barra amarela (`#fde68a`) como terceira barra do grupo; cancelados entram na regressão de backlog (reduzem backlog igual a fechados) |
-| 145 | `^resolved_atISEMPTY` no branch `closed_at` de `incClosedQ` (histórico) evita double-count | Incidentes que passam por Resolved (state=6) → Closed (state=7) têm ambos `resolved_at` e `closed_at`; sem `^resolved_atISEMPTY` no branch `closed_at`, esses incidentes eram contados duas vezes inflando `closed` e distorcendo toda a regressão de backlog |
-| 146 | `incBacklogQuery` para meses passados usa 3 partes via `^NQ` (abertos hoje + cancelados após corte + resolvidos após corte) | Sem `^state!=8` no branch `resolved_atISEMPTY`, incidentes cancelados (sem `resolved_at`) eram incluídos como backlog aberto, inflando o âncora da regressão; para meses passados não podemos usar `active=true` (campo de estado atual, não histórico) — 3 partes cobrem todos os casos corretamente sem double-count |
-| 147 | `removedFromSprint` detecta dois casos: `state='Removed'` (existente) + `Was Ever` para itens com IterationPath alterado | Times removem itens de sprint de duas formas: mudando estado para Removed (detectado pelo loop do sprintMap) OU movendo para backlog/outra sprint (IterationPath muda — item desaparece da sprint); `Was Ever '{path}' AND IterationPath <> '{path}'` cobre o segundo caso sem double-count (itens Removed que ainda estão na sprint têm IterationPath = Sprint X, portanto excluídos pela condição `<>`) |
-| 148 | `Was Ever` queries rodadas em paralelo após `sprintMap` já construído, só quando `teamIterations.length > 0` | Projetos sem time configurado não têm `teamIterations` com paths completos; `Was Ever` requer o path completo da iteration; rodar em paralelo por sprint evita round-trips sequenciais; projetos sem time também não têm `sprintStartMap` (addedMidSprint = 0), então o gráfico de volatilidade já não tinha dados úteis nesses casos |
-| 149 | `data-inc='{"mode":...}'` + `_incOnclick` helper para barras clicáveis nos charts de incidentes | Onclick em SVG não suporta objetos JS como parâmetros inline; serializar como JSON em `data-inc` (aspas duplas seguras dentro de atributo com aspas simples) e parsear no handler centraliza a lógica e permite qualquer combinação de parâmetros sem N funções diferentes |
-| 150 | `rawValue` em `byGroupAlt`/`byGroupAltMonthly` + `altRawValues` map em `fetchSnReport` | `u_additional_res_code` é reference/choice field: `_snVal` retorna display_value mas o filtro SN exige o raw value; mapear `displayValue → rawValue` durante o batch histórico e embedar em cada entry garante filtro correto sem round-trip extra |
-| 151 | Gráfico de localização como bloco fixo abaixo do heatmap com picker de `_locationMonths` (1/3/6) | Adicionar como chart configurável na grid exigia o usuário abrí-lo manualmente e o payload cacheado não tinha `byLocationMonthly`; bloco fixo com picker próprio mantém paridade com o heatmap sem fragmentar a experiência |
-| 152 | Heatmap top N configurável via `_heatmapTopN` (0 = todos os sistemas) | Top 9 fixo impossibilitava ver sistemas menos frequentes; picker no `⚙` do heatmap com opções 5/9/15/20/Todos persiste em `config.json` via `reportSaveConfig`; `0` como sentinela de "sem corte" evita lógica especial |
-| 153 | Modal de incidentes: colunas Assigned to, Res. Code, IC Afetado, Imp. Plants em vez de Categoria | Categoria SN não agrega valor analítico para o time; os quatro campos novos (assigned_to, u_additional_res_code, cmdb_ci.name, location.name) são os mesmos já usados nos charts — consistência entre modal e gráficos; `sysparm_fields` do `fetchSnIncidentBacklog` expandido |
-| 154 | Filtros in-grid com `<select>` para colunas categóricas e `<input>` para textuais no modal de incidentes | Colunas de texto livre (Número, Descrição, Aberto em) beneficiam de busca por substring; colunas de baixa cardinalidade (Prior., Estado, Assigned to, Res. Code, IC Afetado, Imp. Plants) beneficiam de match exato via dropdown populado com valores únicos dos dados carregados |
-| 155 | Exportar CSV com BOM UTF-8 e separador `;` — respeita filtros ativos lendo DOM da tabela | Gerar CSV no backend exigiria novo endpoint; ler `tbody tr` visíveis no DOM é mais simples e exporta exatamente o que o usuário está vendo (respeitando filtros aplicados); BOM `\uFEFF` garante abertura com encoding correto no Excel em PT-BR; `;` como separador segue convenção local |
-| 156 | `_snRaw(i.number)` e `_snRaw(i.sys_id)` em `fetchSnIncidentBacklog` | Com `sysparm_display_value=all`, campos que normalmente são strings podem retornar como objetos `{value, display_value}`; usar `_snRaw` (que prefere `.value`) para `number` e `sys_id` previne `[object Object]` no texto do link e na URL do Service Now |
-| 157 | `utils/paths.js` como fonte única de caminhos graváveis — `DATA_DIR`, `CONFIG_PATH`, `CACHE_DIR` | `config.js` e `reportService.js` calculavam o path de dados cada um do seu jeito (com `process.pkg` inline); centralizar em `utils/paths.js` com prioridade `ELECTRON_DATA_DIR → process.pkg → __dirname` permite que o Electron injete `ELECTRON_DATA_DIR` via env var sem alterar nenhum outro módulo — mudança de um lugar só para suportar o novo runtime |
-| 158 | `handlers/` como camada de domínio — funções puras `async` sem `req/res` | Handlers em `server.js` acoplavam lógica de negócio ao transporte HTTP (req/res); extrair para funções puras permite que o Electron chame os mesmos handlers via IPC sem duplicar lógica; erros de negócio lançam `HttpError(status, msg)`, capturado pela camada de transporte |
-| 159 | `handlers/state.js` como singleton para `cachedHTML` | `cachedHTML` era variável de closure em `main()`, inacessível a handlers externos; singleton com getter/setter torna o estado compartilhável entre `dashboard.js`, `projects.js` (que precisa atualizar o HTML após setup/remoção) e futuras conexões IPC sem prop drilling |
-| 160 | `json(res, fn)` e `page(res, fn)` como helpers de resposta em `server.js` | Cada rota repetia try/catch + writeHead + JSON.stringify; dois helpers de 10 linhas eliminam esse boilerplate e centralizam o mapeamento `HttpError → status HTTP`; `page()` usa `await fn()` para suportar handlers síncronos e assíncronos uniformemente |
-| 161 | `server.js` reduzido a ~190 linhas de roteamento puro | 830 linhas misturando roteamento, lógica de negócio e renderização; após extração para `handlers/`, `server.js` só parseia params da URL, chama handler e delega resposta — responsabilidade única e alinhada com a futura substituição por Electron IPC |
+| # | Decisão | Por quê importa hoje |
+|---|---|---|
+| 13 | Métricas baseadas **apenas em User Stories** (não Tasks/Bugs) | Toda nova métrica deve seguir essa regra |
+| 17 | Separação em módulos com responsabilidade única | Define onde cada novo código vai |
+| 18 | CSS/JS em `public/` como arquivos estáticos | Padrão para qualquer novo módulo frontend |
+| 19 | `views/` com tokens `{{TOKEN}}` + `renderTemplate` | Padrão para qualquer novo template HTML |
+| 31 | ES Modules nativos no browser | Zero bundler — importar via `import`, expor via `window.*` no `app.js` |
+| 32 | `app.js` expõe `window.X` | Necessário para `onclick` inline nos templates — sempre adicionar exports aqui |
+| 33 | `utils/` backend compartilhado | Lógica reutilizável vai em `utils/`, não duplicada nos services |
+| 37 | `server.js` serve `public/` dinamicamente | Novos arquivos em `public/` ficam disponíveis automaticamente |
+| 94 | `POST /setup` preserva campos via spread | Crítico: reconfigurar projetos não pode apagar credenciais de IA/SN |
+| 98 | `itemsModal` como componente genérico | Reutilizar para qualquer lista de work items — não criar modais paralelos |
+| 102 | `.items-filter-select` excluído do listener global | Fix que não deve ser revertido — fecha o dropdown imediatamente sem isso |
+| 109 | URL via `baseUrl/_workitems/edit/${id}` | `_links` é omitido quando `&fields=` é usado na API |
+| 131 | Cache key com sufixo `groupFields` | Configs diferentes coexistem — não simplificar a chave |
+| 157 | `utils/paths.js` fonte única de caminhos | Electron injetará `ELECTRON_DATA_DIR` — mudar em um só lugar |
+| 158 | `handlers/` como domínio puro | Preparação Electron: handlers chamáveis por IPC sem alteração |
+| 159 | `state.js` singleton para `cachedHTML` | Compartilhado entre handlers — não converter em variável local |
+| 160 | `json(res, fn)` e `page(res, fn)` | Padrão para toda nova rota em `server.js` |
+| 161 | `server.js` ~190 linhas de roteamento puro | Manter thin — lógica de negócio fica nos `handlers/` |
 
 ---
 
-## 🧪 UAT Dashboard
+## Backlog pendente
 
-Acessado pelo botão **UAT** no rodapé de cada card do dashboard.
+**Testes**
+- [ ] Testes de integração — `server.js` com supertest + nock
+- [ ] `utils/iterMap.js` — testes unitários com azureClient mockado
 
-- **Abre maximizado por padrão** — botão ⤡ Restaurar disponível para reduzir
-- **Filtro de Sprint** — dropdown com todas as iterations dos testplans; preferência persistida em `localStorage['uatSprint::NomeProjeto']`
-- **Card de resumo** com:
-  - Nome do projeto (alias) + sprint atual + período + dias restantes + badge de risco
-  - Percentual de conclusão (planos concluídos ÷ total) em destaque
-  - Barra de progresso segmentada (verde/vermelho/amarelo/cinza) por planos
-  - Seção **"Indicadores por Testplan"** com 4 cards: Concluídos · Em andamento · Com falha · Total
-- **Label "Testplans Detail"** separa o card de resumo da lista de planos
-- **Acordeão por testplan** — expande/colapsa com lazy-render do detalhe; scroll automático ao expandir
-  - Header: ícone pasta + `#ID` (link clicável para o Azure DevOps) + separador `|` + nome + badge de estado + contagem TCs + % + toggle
-  - Barra fina 4 cores (aprovados/falhos/bloqueados/pendentes) em TCs
-  - Detalhe: filtro de resultado por **pills** com toggle (Passou / Falhou / Bloqueado / Pendente) + botão Limpar
-  - Tabela de TCs: ID (`TC-{id}`), badge de prioridade (P1–P4), nome, tester, badge de resultado
+**Phase 1 — Electron**
+- [ ] Electron wrapper (IPC em vez de HTTP, `ELECTRON_DATA_DIR` via env var)
 
-### Indicadores por Testplan — lógica de classificação
-
-| Indicador | Critério |
-|-----------|---------|
-| **Concluídos** | `passCount === totalCount && failCount === 0 && totalCount > 0` |
-| **Em andamento** | `state === 'Active'` (independente do resultado) |
-| **Com falha** | `failCount > 0` (independente do estado) |
-| **Total** | todos os planos da sprint filtrada |
-
-> Os contadores dos cards são independentes (um plano Active com falhas conta em "Em andamento" E "Com falha"). A barra de progresso usa categorias mutuamente exclusivas (prioridade: Concluído > Falho > Ativo > Não iniciado) para que os segmentos somem 100%.
-
-### Endpoint `/api/uat`
-
-```
-GET /api/uat?project=NomeProjeto
-```
-
-Retorna por projeto:
-```json
-{
-  "plans": [{
-    "id": 123,
-    "name": "Sprint 108 UAT",
-    "iteration": "Projeto\\Sprint 108",
-    "state": "Active",
-    "startDate": "2026-05-12",
-    "endDate": "2026-05-26",
-    "url": "https://dev.azure.com/org/projeto/_testPlans/execute?planId=123",
-    "passCount": 14,
-    "failCount": 2,
-    "blockedCount": 0,
-    "notExecutedCount": 5,
-    "totalCount": 21,
-    "points": [{ "id": 1, "testCaseId": 456, "name": "Login com credenciais válidas", "tester": "Fulano", "outcome": "passed", "priority": 2 }]
-  }]
-}
-```
-
-### Fluxo de dados no backend
-
-- `fetchUATPlans(identifier)` em `projectService.js` — busca todos os planos via `/_apis/testplan/plans`
-- `_fetchTestPoints(project, planId, suiteId)` — pagina test points com `isRecursive=true` (lotes de 1000, até 10.000)
-- Campo correto da API: `pt.testCaseReference` (não `pt.testCase`) para nome e ID do caso de teste
-- `testPlanCount` adicionado ao retorno de `fetchProject` para exibição no card principal (contagem de planos ativos)
+**Features**
+- [ ] Histórico de saúde do backlog (comparar com semanas anteriores)
+- [ ] Filtro por responsável além do filtro por sprint
+- [ ] Burndown baseado em datas reais de conclusão (histórico de estado)
+- [ ] Streaming de respostas da IA (SSE)
+- [ ] Troca de idioma sem reload (templates reativos ao locale)
+- [ ] Meta contratual de incidentes configurável por projeto
+- [ ] Adicionar anexo de imagem ao feedback (GitHub `Contents API`)
+- [ ] Migrar para Azure Function + Static Web App para acesso remoto
 
 ---
 
-## 👥 Team Capacity & Performance
-
-Acessado pelo link **Team Capacity** na sidebar. Substitui a view de cards no `main-content` sem recarregar a página.
-
-- **Vista isolada** — `#content` e `.cards-toolbar` ficam ocultos; `#tc-view` é exibido com `display: block`
-- **Seletor de projeto** no cabeçalho — persiste em `localStorage['tcProject']`
-- **Cards de squad** no topo:
-  - **Squad Capacity** — soma das capacidades configuradas por dev (em horas)
-  - **Backlog Demand** — soma de `CompletedWork + RemainingWork` de todos os devs na sprint atual
-  - **Overload Delta** — diferença Demand − Capacity (positivo = sobrecarga)
-- **Cards por desenvolvedor** listam todos que tiveram atividade de tasks nas últimas sprints:
-  - Avatar com iniciais, nome, badge de status (HEALTHY / AT RISK / NO CAPACITY)
-  - Slider (0–160h, step 4) + input numérico sincronizados bidirecionalmente via `_applyCapacityChange()`
-  - Capacidade salva em `localStorage['tc::devName::sprintName']`
-  - Stats: Capacidade, Utilização %, Lançado, Restante
-  - Gráfico de tendência das últimas N sprints (barras div, sem SVG)
-- **Retorno ao dashboard** via link Dashboard na sidebar ou `showDashboardView()`
-- **Troca de idioma** preserva a view TC — `setLocale()` salva `localStorage['activeView']` antes do reload; `app.js` restaura chamando `openTeamCapacity()` na inicialização
-
-### Cálculo das métricas
-
-| Métrica | Fórmula |
-|---------|---------|
-| Backlog Demand | Σ (CompletedWork + RemainingWork) por dev na sprint atual |
-| Utilização | CompletedWork ÷ Capacity × 100% |
-| Status HEALTHY | Utilização ≤ 100% e Capacity > 0 |
-| Status AT RISK | Utilização > 100% |
-| Status NO CAPACITY | Capacity = 0 |
-
-### Endpoint `/api/team-capacity`
-
-Retorna por projeto:
-```json
-{
-  "project": "NomeProjeto",
-  "currentSprint": "Sprint 108",
-  "recentSprints": ["Sprint 106", "Sprint 107", "Sprint 108"],
-  "developers": [{
-    "name": "Fulano",
-    "currentSprint": { "completedWork": 24, "remainingWork": 8, "taskCount": 5 },
-    "history": [{ "sprint": "Sprint 106", "completedWork": 30 }, ...]
-  }]
-}
-```
-
----
-
-## 📋 Review Mensal — Service Delivery Report
-
-Acessado pelo botão **Review Mensal** em cada card do dashboard principal. Abre a rota `/report?project=NOME` diretamente no projeto do card clicado, sem resetar para o primeiro projeto — mesmo padrão do botão Daily (`openDailyForProject`).
-
-### Botão no card
-
-```js
-// projectService.js — buildCardHTML
-// Adicionado na mesma linha dos botões Daily e UAT:
-<button
-  class="card-action-btn"
-  onclick="window.location.href='/report?project=${encodeURIComponent(proj.name)}'"
-  data-i18n="btn.monthlyReview"
-  title="Review Mensal do projeto">
-  Review Mensal
-</button>
-```
-
-### Credenciais do Service Now
-
-Seguem o mesmo padrão do PAT do Azure e das credenciais da IA:
-
-- **Credenciais globais** (`instance`, `user`, `pass`) — salvas uma vez na raiz do `config.json`, configuradas na tela de Settings
-- **`assignmentGroup` por projeto** — salvo dentro de cada objeto de projeto em `config.json`, idêntico ao campo `team` existente
-- **Senha nunca exposta** — `GET /api/sn-config` retorna `hasPass: true/false`, nunca o valor
-- **Projeto sem `assignmentGroup`** — relatório exibe apenas dados do Azure DevOps, sem quebrar
-
-### Estrutura do `config.json` com Service Now
-
-```json
-{
-  "org": "sua-org",
-  "pat": "seu-pat-azure",
-  "projects": [
-    {
-      "name": "Projeto Alpha",
-      "team": "Alpha Team",
-      "servicenow": {
-        "assignmentGroup": "sys_id_grupo_alpha",
-        "assignmentGroupName": "TI - Suporte Alpha"
-      }
-    }
-  ],
-  "ai": { "...": "..." },
-  "github": { "...": "..." },
-  "servicenow": {
-    "instance": "suaempresa.service-now.com",
-    "user": "usuario-sn",
-    "pass": "senha-ou-token"
-  }
-}
-```
-
-> **Importante:** `POST /setup` preserva os campos `servicenow` global e por projeto ao salvar — igual ao comportamento já existente para `ai` e `github`.
-
-### Payload do relatório
-
-```js
-// Estrutura injetada em window.__REPORT_PAYLOAD__ no report.html
-{
-  metadata:  { project, period, generatedAt },
-  hasSn:     true | false,   // false = SN não configurado para o projeto
-  delivery: {
-    totalDelivered: Number,
-    sprints: [{ name, delivered, points }]
-  },
-  quality: {
-    bugsTotal: Number,
-    bugsOpen:  Number
-  },
-  incidents: {              // null se hasSn = false
-    total: Number,
-    target: 24,             // meta contratual (futuramente por projeto)
-    byPriority: { p1, p2, p3 },
-    bySystem:   [{ name, count }],   // top 5
-    monthly:    [{ label, opened, closed }]   // últimos 5 meses
-  },
-  prbs: {                   // null se hasSn = false
-    open: Number,
-    avgAging: Number,
-    list: [{ id, title, priority, category, agingDays, state }]
-  }
-}
-```
-
-### Navegação do relatório
-
-- **Seletor de projeto** — troca o projeto sem sair da tela (`changeProject`)
-- **Seletor de mês** — últimos 6 meses disponíveis (`changeMonth`)
-- **Botão ↻ Atualizar** — invalida o cache e recoleta os dados (`refresh=1`)
-- **Indicador de atualização** — exibe `metadata.generatedAt` na toolbar
-
-### Cache local
-
-- Arquivos JSON em `/cache/` com TTL de 6 horas
-- Nomenclatura: `azure_{projeto}_{YYYY-MM}.json` e `sn_{projeto}_{YYYY-MM}.json`
-- Criado automaticamente na primeira execução
-- Invalidado pelo botão Atualizar ou via `cacheInvalidate(project, month)`
-
-### Chaves i18n adicionadas
-
-| Chave | PT | EN | ES |
-|---|---|---|---|
-| `btn.monthlyReview` | Review Mensal | Monthly Review | Revisión Mensual |
-| `report.executiveSummary` | Resumo executivo | Executive summary | Resumen ejecutivo |
-| `report.incidents` | Incidentes | Incidents | Incidentes |
-| `report.prbs` | PRBs — Problemas | PRBs — Problems | PRBs — Problemas |
-| `report.delivery` | Entrega | Delivery | Entrega |
-| `report.quality` | Qualidade | Quality | Calidad |
-| `report.noSn` | Service Now não configurado | Service Now not configured | Service Now no configurado |
-| `report.refresh` | Atualizar | Refresh | Actualizar |
-
-### Gráfico: Volatilidade do Backlog (`_renderVolatilityChart`)
-
-Localização: `public/modules/report.js` — `_renderVolatilityChart(sprints)`; dados produzidos por `fetchAzureReport` em `reportService.js`.
-
-#### Estrutura visual
-
-Gráfico de barras com **eixo duplo** (linha central = zero):
-- **Barras amarelas para cima** (`#f59e0b`) — US adicionadas após o início da sprint (`addedMidSprint`)
-- **Barras vermelhas para baixo** (`#ef4444`) — US removidas da sprint (`removedFromSprint`)
-
-#### Cálculo de `addedMidSprint`
-
-```js
-const addedLate = createdDate && sprintStart && createdDate > sprintStart ? 1 : 0;
-```
-
-Item criado (`System.CreatedDate`) depois da data de início da sprint (`sprintStartMap[sprintName]`). Requer `teamIterations` com datas de início — projetos sem time configurado têm `sprintStartMap` vazio e sempre retornam 0.
-
-#### Cálculo de `removedFromSprint` — dois casos
-
-**Caso 1 — state = "Removed"** (loop principal do `sprintMap`):
-```js
-const removed = i.fields['System.State'] === 'Removed' ? 1 : 0;
-sprintMap[sp].removedFromSprint += removed;
-```
-Item ainda está com `IterationPath` apontando para a sprint, mas com estado `Removed`.
-
-**Caso 2 — IterationPath alterado** (bloco `Was Ever`, após o loop):
-```js
-// Para cada sprint em teamIterations, em paralelo:
-azurePost(`/{proj}/_apis/wit/wiql`, {
-  query: `SELECT [System.Id] FROM WorkItems
-          WHERE [System.TeamProject] = '{proj}'
-            AND [System.WorkItemType] IN ('User Story','Product Backlog Item','Requirement')
-            AND [System.IterationPath] Was Ever '{it.path}'
-            AND [System.IterationPath] <> '{it.path}'`
-})
-// count = workItems.length → adicionado ao sprintMap[it.name].removedFromSprint
-```
-
-Item que foi planejado para a sprint mas foi movido para outra sprint ou de volta ao backlog (seu `IterationPath` atual não é mais o da sprint). Detectável apenas via `Was Ever` — sem esse operador, o item simplesmente "desaparece" dos dados da sprint.
-
-#### Por que não há double-count entre os dois casos
-
-- Caso 1 (state=Removed, IterationPath = Sprint X): a condição `AND [System.IterationPath] <> '{it.path}'` do `Was Ever` é **falsa** → não aparece no `Was Ever`
-- Caso 2 (IterationPath mudou): não tem `state = 'Removed'` no contexto da sprint (item já saiu) → não aparece no loop do `sprintMap` para essa sprint
-- Caso híbrido (movido para outra sprint E depois marcado Removed): IterationPath ≠ Sprint X → aparece no `Was Ever`, não no loop → contado uma vez ✅
-
-#### Limitação
-
-Projetos **sem time configurado** (`teamIterations = []`) não executam as queries `Was Ever` e também não têm `sprintStartMap`. O gráfico de volatilidade fica sem dados úteis nesses casos — ambas as métricas retornam 0.
-
----
-
-### Gráfico: Histórico de Volume de Incidentes (`_renderIncidentsVolumeChart`)
-
-Localização: `public/modules/report.js` — função `_renderIncidentsVolumeChart(monthly, months, target, selectedMonth)`
-
-#### Estrutura visual
-
-Cada mês exibe **3 barras agrupadas** centralizadas no eixo X + **linha de backlog** (laranja tracejada) + **linha de target** (vermelha tracejada, opcional):
-
-| Barra | Cor normal | Cor mês selecionado | Dado |
-|-------|-----------|---------------------|------|
-| Azul  | `#93c5fd` | `#60a5fa` | `opened` — incidentes abertos no mês |
-| Verde | `#34d399` | `#10b981` | `closed` — incidentes fechados/resolvidos no mês |
-| Amarela | `#fde68a` | `#fbbf24` | `cancelled` — incidentes cancelados no mês |
-
-O `maxVal` considera `Math.max(opened, closed, cancelled, openBacklog)` por mês + target, garantindo que nenhuma barra ou linha extrapole o eixo Y.
-
-#### Queries em `reportService.js` (histórico mensal — batches de 4)
-
-Para cada mês `m` do histórico (`period.history`), são executadas 3 queries em paralelo:
-
-```
-incOpenedQ    = assignment_group=X^opened_at>={hs}^opened_at<={he}
-incClosedQ    = assignment_group=X^resolved_at>={hs}^resolved_at<={he}
-              ^NQ assignment_group=X^closed_at>={hs}^closed_at<={he}^resolved_atISEMPTY^state!=8
-incCancelledQ = assignment_group=X^state=8^closed_at>={hs}^closed_at<={he}
-```
-
-- **`incClosedQ`** usa `^NQ` para capturar incidentes fechados diretamente (sem Resolved prévio).
-  O `^resolved_atISEMPTY` no branch `closed_at` evita double-count: incidentes que têm `resolved_at` já são contados pelo primeiro branch; o segundo branch só pega os que nunca foram resolvidos (caminho direto Open→Closed, state=7) e não são cancelados (state!=8).
-- **`incCancelledQ`** usa `state=8^closed_at` — cancelados têm `closed_at` mas não `resolved_at`.
-
-#### Linha de backlog — cálculo por regressão
-
-A linha laranja representa o **backlog aberto no final de cada mês** (incidentes acumulados, não resolvidos/cancelados). Não é consultada diretamente para cada mês — é calculada regressivamente a partir de uma âncora:
-
-```
-Âncora = openBacklog do ÚLTIMO mês do histórico (= mês selecionado no relatório)
-Para cada mês anterior (i), de trás para frente:
-  openBacklog[i] = openBacklog[i+1] - opened[i+1] + closed[i+1] + cancelled[i+1]
-```
-
-**Por que cancelados entram na fórmula:** tanto `closed` quanto `cancelled` reduzem o backlog — ao regredir no tempo, ambos precisam ser "desfeitos" somando de volta.
-
-**Sem `Math.max(0, ...)` na cadeia:** clamp quebraria meses anteriores ao primeiro negativo. O `Math.abs()` é aplicado **apenas na renderização** da linha SVG, para exibir valores negativos como positivos sem corromper a regressão.
-
-#### Âncora do backlog — query dependente do mês selecionado
-
-A âncora (`incBacklog`) é calculada pela query `incBacklogQuery`:
-
-**Mês atual** (`period.month === curMonth`):
-```
-assignment_group=X^active=true^state!=6^state!=7
-```
-Usa o estado real do sistema — `active=true` exclui resolvidos, fechados e cancelados automaticamente.
-
-**Meses passados** (ponto-no-tempo, 3 partes via `^NQ`):
-```
-Parte 1: assignment_group=X^opened_at<={end}^resolved_atISEMPTY^state!=8
-         → abertos até o fim do mês que ainda não foram resolvidos/cancelados até hoje
-
-Parte 2: assignment_group=X^opened_at<={end}^state=8^closed_at>{end}
-         → cancelados DEPOIS do fim do mês — estavam no backlog na data de corte
-
-Parte 3: assignment_group=X^opened_at<={end}^resolved_at>{end}
-         → resolvidos DEPOIS do fim do mês — estavam no backlog na data de corte
-```
-
-**Por que 3 partes são necessárias:**
-- Parte 1 sem `^state!=8`: incidentes cancelados (sem `resolved_at`) seriam incluídos como "abertos", inflando o âncora e fazendo toda a regressão ficar muito alta para o passado.
-- Parte 2 (`state=8^closed_at>{end}`): cobre incidentes que estavam no backlog e foram cancelados depois — sem esta parte perderíamos esses itens.
-- Parte 3: cobre incidentes resolvidos depois do corte — sem esta parte perderíamos todos que foram fechados após o mês selecionado.
-
-#### Fluxo de dados completo
-
-```
-reportService.js → fetchSnReport()
-  ├── incBacklogQuery          → incBacklog (âncora, único valor)
-  ├── [batches histórico]
-  │     ├── incOpenedQ         → opened por mês
-  │     ├── incClosedQ (^NQ)   → closed por mês (sem double-count)
-  │     └── incCancelledQ      → cancelled por mês
-  └── monthly[] → { label, opened, closed, cancelled, openBacklog }
-                  (openBacklog calculado por regressão após todos os batches)
-
-report.js → _renderIncidentsVolumeChart(monthly, ...)
-  └── 3 barras + linha backlog + linha target por mês
-```
-
----
-
-## 💬 Copilot Project — Arquitetura da feature de IA
-
-### Provedores suportados
-
-| Provedor | Detecção | Formato do body | Extração da resposta |
-|----------|----------|-----------------|---------------------|
-| **Azure AI Foundry** | `services.ai.azure.com` na URL | `{ input: [...] }` — system injetado como prefixo da última msg user | `json.output[].content[].text` (Responses API) |
-| **Azure OpenAI** | `openai.azure.com` na URL | `{ messages, max_tokens, temperature }` | `json.choices[0].message.content` |
-| **OpenAI / genérico** | demais URLs | idem Azure OpenAI + `model` no body | idem |
-
-### Estrutura do contexto (`/ai/context`)
-
-Por projeto, o endpoint retorna:
-
-```json
-{
-  "name": "NomeProjeto",
-  "workItemType": "User Story",
-  "activeSprintFilter": ["Sprint 108"],
-  "summary": { "totalItems": 42, "userStories": 30, "storyPoints": 120, ... },
-  "healthIndicators": { "completionRate": 70, "inUAT_pct": 5, "bugRate_pct": 12, "estimateCoverage": 90 },
-  "byStatus": [{ "status": "Active", "count": 12 }, ...],
-  "byAssignee": [{ "assignee": "Fulano", "count": 8 }, ...],
-  "sprintDistribution": [{ "sprint": "Sprint 107", "totalUS": 10, "completedUS": 10, "completionPct": 100, ... }],
-  "currentSprint": { "name": "Sprint 108", "start": "2026-03-31", "end": "2026-04-13", "items": [...] },
-  "noEstimateItems": [{ "title": "...", "sprint": "Sprint 108", "assignee": "..." }],
-  "noAssigneeItems": [...],
-  "openBugs": [...]
-}
-```
-
----
-
-## 🛣️ Próximos passos sugeridos
-
-- [x] Suporte a múltiplos times por projeto — seleção individual no setup, filtro de items por time no servidor
-- [x] Alias de projeto — renomear nome exibido sem alterar configuração do servidor
-- [x] Remoção rápida de projeto via botão 🗑️ no card
-- [x] Ordenação de US por campo `Order` (StackRank) no Daily Standup
-- [x] `classificationnodes/iterations` para cobertura de sprints em projetos multi-time
-- [x] Tooltips i18n — todos os `title` do dashboard agora respondem à troca de idioma
-- [x] Toggle grid/lista movido para toolbar acima dos cards
-- [x] Tela Team Capacity & Performance — métricas por dev, configuração de capacidade, tendência de entrega
-- [x] Copilot AI painel flutuante arrastável com minimize/maximize
-- [x] Credenciais do Copilot AI persistidas — formulário pré-preenchido após restart
-- [x] Daily Standup e Delivery Plan abrem maximizados por padrão
-- [x] Topbar limpa — meta info (N projects · Org) movida para sidebar abaixo do logo
-- [x] Cards do dashboard não cortam mais à direita no modo grid (`min-width: 0`)
-- [x] Dropdown de sprint com scroll e comportamento drop-up quando espaço é insuficiente
-- [x] Nomes de sprint exibidos sem prefixo de time (`.split("\\").pop()`)
-- [x] Tela de setup com título "Setup" em todos os idiomas
-- [x] Build corrigido: `npm run build` gera `dist/app/server.exe` (path correto para o wrapper)
-- [x] Stats do card em grade 2×3 — Story Points e Project Progress adicionados; layout reorganizado em linha Scope + linha Problems
-- [x] Feature de Feedback — link na sidebar, formulário (tipo/título/descrição), cria GitHub Issue, modal de sucesso com link clicável
-- [x] Coluna "Em UAT %" na tabela de Distribuição por Sprint
-- [x] Seletor de colunas visíveis na tabela de Distribuição por Sprint (dropdown ⊞, persistido em localStorage)
-- [x] Indicador "Esforço Economizado" nos Health Indicators — `(OriginalEstimate − CompletedWork) / OriginalEstimate × 100`
-- [x] Override manual de `OriginalEstimate` via edição inline no anel de Esforço Economizado (ícone ✏, persistido em localStorage por projeto)
-- [x] Fix: credenciais do Copilot AI perdidas ao reconfigurar projetos via setup (`POST /setup` agora preserva campos `ai` e `github` do `config.json`)
-- [x] Modal de itens reutilizável (`itemsModal.js`) — todos os 4 stats da Daily (User Stories, No Estimate, No Assignee, Bugs) são clicáveis; modal genérico com API `openItemsModal({ title, items, showPts, defaultFilters })`
-- [x] Filtro de status com dropdown de checkboxes no `itemsModal` — substitui toggle binário; `defaultFilters` pré-seleciona estados relevantes
-- [x] Stats clicáveis no dashboard principal — todos os 4 stats do card abrem `itemsModal` via `openCardStat` em `filters.js`
-- [x] Stats clicáveis no modal de detalhes — User Stories, Novos e Sem Estimativa do Resumo Geral abrem `itemsModal` via `openDetailStat` em `detail.js`
-- [x] Botão `↻` Refresh na Daily Standup — recarrega dados do Azure sem fechar o modal, preserva slide atual
-- [x] Stats Progress (closedCount/total) e Story Points removidos do card do dashboard — layout mais limpo
-- [x] Filtro de sprint do dashboard redesenhado para match visual com o filtro do `itemsModal` (underline, label uppercase, painel arredondado)
-- [x] Link clicável na coluna ID do `itemsModal` — fix na construção da URL (`baseUrl/_workitems/edit/id`) e estilo azul
-- [x] UAT Dashboard — modal por projeto com card de resumo, acordeão por testplan, filtro de sprint persistido, indicadores por plano, pills de resultado
-- [x] Botão "Daily" no card do dashboard — abre Daily Standup direto no slide do projeto via `openDailyForProject`, sem resetar para o primeiro projeto
-
-**Review Mensal — implementado**
-- [x] `servicenowClient.js` — cliente HTTPS Service Now (snGet, Basic auth, padrão azureClient.js)
-- [x] `config.js` — funções `getSnConfig`, `saveSnConfig`, `getProjectSnGroup`
-- [x] Tela de Settings — seção Service Now: credenciais globais + botão Testar + botão Salvar (collapsible na `su-left`)
-- [x] `POST /setup` — preserva campo `servicenow` por projeto no merge (lookup pelo `name+team` no existing config)
-- [x] `reportService.js` — `buildReport`, `fetchAzureReport`, `fetchSnReport`, cache JSON por projeto/mês (TTL 6h)
-- [x] Rotas no `server.js` — `GET /api/report` (JSON), `GET /api/report-config`, `POST /api/report-config`, `GET /api/report-fields`, `GET /api/sn-config`, `POST /api/sn-config`, `POST /api/sn-test`
-- [x] `public/modules/report.js` — modal in-app (ES Module); `openReport`, `renderReport`, `reportChangeMonth`, `reportRefresh`; charts SVG+CSS (zero deps)
-- [x] `public/modules/snConfig.js` — modal de configuração SN acessível a partir do Report Modal (credenciais globais + assignmentGroup por projeto + incidentTarget)
-- [x] Report Modal adicionado ao `dashboard.html` — mesmo padrão dos outros modais; abre direto no projeto via `openReport(project)`
-- [x] `public/style.css` — classes `.report-*`, `.sn-config-*` (dark mode automático via CSS vars)
-- [x] i18n — chaves `btn.monthlyReview`, `sn_*` em `pt.json`, `en.json`, `es.json`
-- [x] Botão **Monthly Review** no `buildCardHTML` — mesma linha de Daily e UAT, chama `openReport(project)`
-
-**Review Mensal — melhorias de charts e dados**
-- [x] Agrupamento de incidentes configurável — seletor "Agrupar" na toolbar: `cmdb_ci` (IC Afetado) ou `u_additional_res_code` (Additional Resolution Code); persiste em `config.json` via `POST /api/report-config`
-- [x] `_snVal(v)` / `_snRaw(v)` + `sysparm_display_value=all` — normaliza campos relacionais SN que retornam `{value, display_value}` com a Table API; `byGroupAlt` / `byGroupAltMonthly` pré-computados no backend para troca sem round-trip
-- [x] TOP 9 + "Outros" — gráfico de incidentes por sistema e heatmap agora agrupam do 10º sistema em diante em "Outros" (soma de `total/p1/p2/p3` no bar; soma de arrays mensais no heatmap)
-- [x] Gráfico TOP 9 reescrito como barras verticais com paleta rgba semitransparente — labels no eixo X rotacionados -42°; mesma paleta do heatmap (rgba 0.35–0.65 alpha por severidade)
-- [x] Contadores numéricos dentro de segmentos/fatias dos charts PRB (`angle > 0.3` rad; `h > 12px`); `fill: var(--text-muted)` sem negrito
-- [x] Legendas dos charts SVG (PRB donut + aging) extraídas para HTML — funções retornam `{ svgHtml, legendHtml }`; renderizado como `div` flex-wrap centralizado abaixo de cada SVG
-- [x] Gráfico de evolução PRB reposicionado antes do donut/aging — fluxo de leitura: tendência temporal → detalhe de estado atual
-- [x] `incidentTarget` por projeto — meta contratual configurável pelo modal snConfig; salvo em `config.json`; `null` usa padrão 24
-- [x] `_fetchTeamSprintsForPeriod` — filtragem de work items por sprints do time no período do relatório
-- [x] Cache key com sufixo `groupFields` — caches de diferentes configurações coexistem sem invalidação cruzada
-
-**Review Mensal — refactor e UX (sessão atual)**
-- [x] Refactor `report.js`: `_PRB_STATES` module-level constant; `_fmtMonth(label)` helper elimina 4 blocos duplicados; `_loadReportConfig`/`_saveReportConfig` renomeados; `display:block` em todos os SVGs; legendas extraídas para HTML (`_legendHtml`)
-- [x] Loop sequencial histórico SN → batches paralelos de 4 (`HISTORY_BATCH=4`) — ~3× mais rápido sem cache
-- [x] Seção Delivery padronizada com `report-prb-cards` — mesmo padrão visual de Incidents/PRBs
-- [x] Gráficos de Delivery movidos para dentro da seção Delivery — todos draggable + resizable via `_renderChartCell` (sem `_renderFixedChartCell` separado)
-- [x] `byTypes` considera todas as USs do período (removido filtro `DONE_STATES`) — título "US por" em vez de "Entregas por"
-- [x] Seção Quality eliminada; indicadores de bugs incorporados à seção Delivery — renomeada "AMS Sprint Delivery" (8 cards: 4 entrega + 4 bugs)
-- [x] `_renderTypeBarVertical` — barras verticais SVG como terceiro estilo visual para gráficos de agrupamento
-- [x] `/api/report-fields` expandido com campos standard do Azure DevOps (`System.State`, `System.AssignedTo`, `Microsoft.VSTS.Common.Priority`, `System.IterationPath`, `System.WorkItemType`, `Microsoft.VSTS.Common.Activity`)
-- [x] Donut ampliado (`r 44→62`); legenda ancorada na base do card via `flex-column` + `margin-top:auto`; label central "User Stories"
-- [x] Barras (horizontal + vertical) usam paleta `COLORS` multicolor por padrão; picker oferece opção "Cor única" com `<input type="color">`
-- [x] Tooltip no hover de cada segmento do donut — `<title>` SVG nativo + transição de opacidade 70%
-
-**Review Mensal — charts interativos e modal de incidentes**
-- [x] Barras clicáveis em todos os gráficos de incidentes (volume, sistema/res.code, heatmap, localização) — abre modal filtrado pelo contexto da barra clicada via `_incOnclick` helper + `data-inc` JSON attribute
-- [x] `pointer-events:none` em labels SVG sobre barras clicáveis — evita que o texto intercepte o evento de click
-- [x] Fix filtro `resolution_code` no gráfico de sistema e heatmap — `rawValue` armazenado em `byGroupAlt`/`byGroupAltMonthly`/`altRawValues`; `_incOnclick` usa `s.rawValue || s.name` como `filterValue`
-- [x] Gráfico de localização — barras agrupadas por mês (N barras por mês, uma por planta); bloco fixo abaixo do heatmap com picker de período (1/3/6 meses); ocupa 100% da largura
-- [x] Heatmap top N configurável — picker no `⚙` com opções 5/9/15/20/Todos; 0 = mostrar todos os sistemas; persiste em config
-- [x] Modal de incidentes: colunas redesenhadas — Categoria removida; Assigned to, Res. Code, IC Afetado e Imp. Plants adicionadas; `sysparm_fields` expandido em `fetchSnIncidentBacklog`
-- [x] Filtros in-grid no modal de incidentes — `<select>` populado com valores únicos para colunas categóricas (Prior., Estado, Assigned to, Res. Code, IC Afetado, Imp. Plants); `<input type="text">` para Número e Descrição; exportação respeita filtros ativos
-- [x] Botão "Exportar" no header do modal de incidentes — `reportExportIncidentsCSV()` gera CSV com BOM UTF-8, separador `;`, apenas linhas visíveis; filename inclui projeto e mês
-- [x] Fix `[object Object]` no link do modal — `_snRaw` aplicado a `number` e `sys_id` em `fetchSnIncidentBacklog` para garantir strings mesmo com `sysparm_display_value=all`
-- [x] Modal de incidentes ampliado — `max-width: 900px → 1300px`, `width: 90% → 96%`, `max-height: 80vh → 85vh`
-
-**Phase 0 — Electron preparation (refactor interno)**
-- [x] `utils/paths.js` — caminhos graváveis centralizados com prioridade `ELECTRON_DATA_DIR → process.pkg → dev root`
-- [x] `config.js` e `reportService.js` migrados para `utils/paths.js` — sem mais `process.pkg` inline espalhado
-- [x] `handlers/` — 9 arquivos de domínio (dashboard, projects, azure, ai, report, sn, feedback, state, utils) com funções puras async
-- [x] `handlers/state.js` singleton para `cachedHTML` compartilhado
-- [x] `server.js` reduzido a ~190 linhas — roteamento puro com `json(res, fn)` e `page(res, fn)` helpers
-
-**Backlog geral**
-- [ ] Adicionar anexo de imagem ao feedback (upload para repo GitHub via `Contents API`) — requer PAT com `contents:write`
-- [ ] Adicionar PAT com permissão `Project and Team (Read)` para usar `_apis/teams` corretamente
-- [ ] Migrar para **Azure Function + Static Web App** para acesso remoto sem rodar localmente
-- [ ] Integrar com **Power BI** para histórico e relatórios gerenciais
-- [ ] Adicionar filtro por responsável além do filtro por sprint
-- [ ] Adicionar histórico de saúde do backlog (comparar com semanas anteriores)
-- [ ] Burndown baseado em datas reais de conclusão (via histórico de estado do Azure DevOps)
-- [ ] Streaming de respostas da IA (SSE) para reduzir tempo de espera percebido
-- [ ] Troca de idioma sem reload (templates reativos ao locale via `data-i18n` no HTML gerado dinamicamente)
-- [ ] Meta contratual de incidentes configurável por projeto (hoje fixo em 24 no `reportService.js`)
-
----
-
-*Documentação atualizada em Junho/2026 — Team Capacity & Performance, redesign do dashboard, Copilot painel flutuante + credenciais persistidas, modais maximizados por padrão, topbar limpa, correções UX (grid overflow, dropdown drop-up, sprint labels, build path), stats 2×3, feature de Feedback via GitHub Issues, coluna "Em UAT %" + seletor de colunas na Sprint Distribution, indicador "Esforço Economizado" com override manual, fix persistência credenciais Copilot, `itemsModal.js` componente reutilizável, filtro de status com checkboxes, stats clicáveis no dashboard principal + modal de detalhes + daily standup, botão Refresh na Daily, remoção de Progress e Story Points do card, redesign filtro de sprint (underline), link clicável na coluna ID do itemsModal, UAT Dashboard (modal por projeto, acordeão por testplan, card de resumo com indicadores de plano, filtro de sprint persistido, pills de resultado), botão Daily por card (openDailyForProject — abre direto no slide do projeto), **Review Mensal — Service Delivery Report** (servicenowClient.js, reportService.js, modal in-app, snConfig.js, credenciais SN + assignmentGroup + incidentTarget por projeto, `/api/report` JSON, agrupamento configurável cmdb_ci/u_additional_res_code, TOP 9 + Outros, barras verticais rgba, contadores em fatias/segmentos, legendas SVG → HTML, evolução PRB reposicionada, `_snVal`/`_snRaw` + display_value=all, cache por groupField), **Review Mensal — refactor e UX** (refactor `report.js` (`_PRB_STATES`, `_fmtMonth`, `_loadReportConfig`, SVGs display:block), paralelização histórico SN em batches de 4, seção Delivery unificada com Quality → "AMS Sprint Delivery" 8 cards, gráficos de entrega movidos para Delivery (draggable+resizable), `byTypes` todas as USs, barras verticais SVG, campos standard em `/api/report-fields`, donut ampliado + legenda ancorada na base, paleta multicolor nas barras + cor única via color picker, tooltip hover no donut via `<title>`), **Review Mensal — charts interativos e modal de incidentes** (barras clicáveis em todos os charts de incidentes via `_incOnclick`/`data-inc`, fix filtro resolution_code com `rawValue`, gráfico de localização agrupado por mês, heatmap top N configurável, modal de incidentes redesenhado com colunas Assigned to/Res.Code/IC Afetado/Imp.Plants, filtros in-grid select+input, botão Exportar CSV, fix `[object Object]` no link SN), **Phase 0 — Electron preparation** (`utils/paths.js` caminhos graváveis centralizados, `handlers/` 9 módulos de domínio, `server.js` thin router ~190 linhas)*
+*Stack: Node.js v18+ · Zero dependências runtime · Jest · PKG · WebView2 (.NET 4.8)*

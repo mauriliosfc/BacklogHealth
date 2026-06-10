@@ -1104,12 +1104,12 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .report-field-remove-btn { background: none; border: none; color: var(--text-faint); font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 6px; transition: background .15s, color .15s; }
 .report-field-remove-btn:hover { background: var(--c-red-bg); color: var(--c-red2); }
 /* Donut grid */
-.report-donuts-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }
+.report-donuts-grid { display: flex; flex-wrap: wrap; gap: 20px; }
 .report-donut-cell { background: var(--bg-card); border: 1px solid var(--bg-border); border-radius: 14px; padding: 22px 24px; display: flex; flex-direction: column; gap: 16px; transition: opacity .2s, box-shadow .2s; cursor: grab; }
 .report-donut-cell:active { cursor: grabbing; }
-.report-donut-cell-sm { grid-column: span 2; }
-.report-donut-cell-md { grid-column: span 3; }
-.report-donut-cell-lg { grid-column: span 6; }
+.report-donut-cell-sm { flex: 1 1 calc(33.33% - 14px); min-width: 220px; }
+.report-donut-cell-md { flex: 1 1 calc(50% - 10px); min-width: 300px; }
+.report-donut-cell-lg { flex: 1 1 100%; }
 .report-donut-cell.report-dragging { opacity: .4; box-shadow: none; }
 .report-donut-cell.report-drag-over { box-shadow: 0 0 0 2px var(--c-blue); border-color: var(--c-blue); }
 .report-donut-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -1122,7 +1122,7 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .report-size-opt:hover { border-color: var(--c-blue-bd); color: var(--text-1); }
 .report-size-opt.active { background: var(--c-blue); border-color: var(--c-blue); color: #fff; }
 /* Add chart */
-.report-add-chart-section { grid-column: span 2; display: flex; align-items: center; justify-content: center; min-height: 120px; border: 2px dashed var(--bg-border); border-radius: 14px; }
+.report-add-chart-section { flex: 1 1 calc(33.33% - 14px); min-width: 120px; display: flex; align-items: center; justify-content: center; min-height: 120px; border: 2px dashed var(--bg-border); border-radius: 14px; }
 .report-add-chart-btn { background: none; border: none; color: var(--text-faint); font-size: 14px; font-weight: 600; cursor: pointer; padding: 12px 20px; border-radius: 10px; transition: background .15s, color .15s; }
 .report-add-chart-btn:hover { background: var(--hover-bg); color: var(--text-1); }
 .report-field-picker-btn { background: none; border: none; color: var(--text-faint); font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 6px; transition: background .15s, color .15s; }

@@ -23,7 +23,7 @@ function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarge
   const pcfg = (cfg.projects || []).find(p => getDisplayName(p) === project);
   if (pcfg) {
     if (Array.isArray(reportCharts))  { pcfg.reportCharts = reportCharts; delete pcfg.reportGroupFields; }
-    if (incidentMonths  !== undefined) pcfg.incidentMonths  = Math.min(24, Math.max(1, parseInt(incidentMonths) || 5));
+    if (incidentMonths  !== undefined) { const m = parseInt(incidentMonths); pcfg.incidentMonths = Math.min(24, Math.max(1, Number.isNaN(m) ? 5 : m)); }
     if (incidentTarget  !== undefined) pcfg.incidentTarget  = Math.max(0, parseInt(incidentTarget) || 0);
     if (incidentGroupBy !== undefined) pcfg.incidentGroupBy = incidentGroupBy;
     if (heatmapMax      !== undefined) pcfg.heatmapMax      = Math.max(0, parseInt(heatmapMax) || 0);
