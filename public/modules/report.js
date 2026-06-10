@@ -305,7 +305,7 @@ function _renderTypeDonut(byType, metricLabel) {
     `</div>`;
 }
 
-function _renderTypeBar(byType, barColor, metricLabel) {
+function _renderTypeBar(byType, barColor, metricLabel, size) {
   const emptyHint = metricLabel === 'Story Points' ? 'Sem Story Points no período' : 'Sem User Stories no período';
   if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
@@ -319,7 +319,7 @@ function _renderTypeBar(byType, barColor, metricLabel) {
   const padR    = 40;  // value label space
   const padT    = 10;
   const padB    = 28;  // axis labels
-  const W       = 420;
+  const W       = size === 'lg' ? 800 : size === 'md' ? 460 : 420;
   const innerH  = byType.length * (barH + gap) - gap;
   const H       = padT + innerH + padB;
   const trackW  = W - padL - padR;
@@ -352,19 +352,20 @@ function _renderTypeBar(byType, barColor, metricLabel) {
   const axes = `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + innerH}" stroke="var(--bg-border)" stroke-width="1"/>
     <line x1="${padL}" y1="${padT + innerH}" x2="${W - padR}" y2="${padT + innerH}" stroke="var(--bg-border)" stroke-width="1"/>`;
 
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
     ${gridLines}${axes}${bars}${labels}
   </svg>`;
 }
 
-function _renderTypeBarVertical(byType, barColor, metricLabel) {
+function _renderTypeBarVertical(byType, barColor, metricLabel, size) {
   const emptyHint = metricLabel === 'Story Points' ? 'Sem Story Points no período' : 'Sem User Stories no período';
   if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
   if (!total) return `<div class="report-empty-hint">${emptyHint}</div>`;
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
-  const W = 480, padT = 20, padB = 56, padL = 36, padR = 16;
+  const W = size === 'lg' ? 800 : size === 'md' ? 480 : 400;
+  const padT = 20, padB = 56, padL = 36, padR = 16;
   const maxVal = Math.max(...byType.map(t => t.count), 1);
   const cW     = W - padL - padR;
   const cH     = 160;
@@ -403,7 +404,7 @@ function _renderTypeBarVertical(byType, barColor, metricLabel) {
   const axes = `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + cH}" stroke="var(--bg-border)" stroke-width="1"/>
     <line x1="${padL}" y1="${padT + cH}" x2="${W - padR}" y2="${padT + cH}" stroke="var(--bg-border)" stroke-width="1"/>`;
 
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
     ${grid}${axes}${bars}${xlabels}
   </svg>`;
 }
@@ -686,8 +687,8 @@ function _renderChartCell(chart, delivery, idx, sprints, incidents) {
     const bySource    = usePts ? (delivery.byTypesPts || {}) : (delivery.byTypes || {});
     title   = `${metricLabel} por ${_esc(chart.label || 'Tipo de Item')}`;
     const data = bySource[chart.ref || ''] || [];
-    content = chart.chartStyle === 'bar'          ? _renderTypeBar(data, chart.barColor, metricLabel)
-            : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical(data, chart.barColor, metricLabel)
+    content = chart.chartStyle === 'bar'          ? _renderTypeBar(data, chart.barColor, metricLabel, size)
+            : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical(data, chart.barColor, metricLabel, size)
             : _renderTypeDonut(data, metricLabel);
   }
 
