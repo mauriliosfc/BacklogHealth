@@ -1,6 +1,9 @@
 # Credenciais — NUNCA subir para o repositório
 config.json
 
+# Dependências
+node_modules/
+
 # Build
 dist/
 wrapper/bin/
