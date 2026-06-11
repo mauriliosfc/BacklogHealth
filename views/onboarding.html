@@ -1,0 +1,1951 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backlog Health — Setup</title>
+<style>
+/* ── TOKENS ── */
+:root {
+  --bg-page:#020617;--bg-card:#0f172a;--bg-border:#1e293b;--bg-el:#1e293b;--bg-el2:#334155;
+  --text-1:#f1f5f9;--text-2:#cbd5e1;--text-muted:#94a3b8;--text-faint:#64748b;
+  --c-blue:#60a5fa;--c-blue-bg:#1e3a5f;--c-blue-bd:#2d5a8e;
+  --c-green:#22c55e;--c-green-bg:#14532d;--c-green-bd:#166534;
+  --c-yellow:#f59e0b;--c-yellow-bg:#422006;
+  --c-red:#ef4444;--c-red-bg:#450a0a;
+  --c-purple:#a78bfa;--c-purple-bg:#2e1065;--c-purple-bd:rgba(167,139,250,.35);
+  --hover-bg:rgba(255,255,255,.04);--shadow:0 4px 24px rgba(0,0,0,.45);
+  --r-sm:6px;--r-md:10px;--r-lg:14px;--r-xl:18px;--t:.18s ease;
+}
+[data-theme="light"]{
+  --bg-page:#f0f4f8;--bg-card:#fff;--bg-border:#e2e8f0;--bg-el:#f8fafc;--bg-el2:#e2e8f0;
+  --text-1:#0f172a;--text-2:#1e293b;--text-muted:#475569;--text-faint:#94a3b8;
+  --c-blue:#2563eb;--c-blue-bg:#dbeafe;--c-blue-bd:#93c5fd;
+  --c-green:#16a34a;--c-green-bg:#dcfce7;--c-green-bd:#86efac;
+  --c-yellow:#d97706;--c-yellow-bg:#fef3c7;
+  --c-red:#dc2626;--c-red-bg:#fee2e2;
+  --c-purple:#7c3aed;--c-purple-bg:#f5f3ff;--c-purple-bd:#c4b5fd;
+  --hover-bg:rgba(0,0,0,.04);--shadow:0 4px 24px rgba(0,0,0,.1);
+}
+
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;min-height:100vh}
+body{
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  background:var(--bg-page);color:var(--text-1);font-size:14px;line-height:1.5;
+  overflow-x:hidden;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input{font-family:inherit}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--bg-el2);border-radius:99px}
+
+/* ── ANIMATED BG ── */
+.bg-glow{
+  position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;
+}
+.bg-glow::before{
+  content:'';position:absolute;top:-20%;left:-10%;
+  width:60%;height:60%;
+  background:radial-gradient(ellipse at center,rgba(96,165,250,.06) 0%,transparent 70%);
+  animation:bgPulse 8s ease-in-out infinite;
+}
+.bg-glow::after{
+  content:'';position:absolute;bottom:-20%;right:-10%;
+  width:50%;height:50%;
+  background:radial-gradient(ellipse at center,rgba(167,139,250,.04) 0%,transparent 70%);
+  animation:bgPulse 8s ease-in-out infinite reverse;
+  animation-delay:4s;
+}
+.bg-grid{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px);
+  background-size:48px 48px;
+}
+[data-theme="light"] .bg-grid{
+  background-image:
+    linear-gradient(rgba(0,0,0,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,0,0,.03) 1px,transparent 1px);
+}
+@keyframes bgPulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
+
+/* ── THEME TOGGLE ── */
+.theme-btn{
+  position:fixed;top:16px;right:18px;z-index:100;
+  width:36px;height:36px;border-radius:var(--r-md);
+  background:var(--bg-card);border:1px solid var(--bg-border);
+  color:var(--text-muted);display:flex;align-items:center;justify-content:center;
+  transition:all var(--t);
+}
+.theme-btn:hover{background:var(--bg-el);color:var(--text-1)}
+.theme-btn .icon-dark{display:block}
+.theme-btn .icon-light{display:none}
+[data-theme="light"] .theme-btn .icon-dark{display:none}
+[data-theme="light"] .theme-btn .icon-light{display:block}
+
+/* ── SCREENS WRAPPER ── */
+#app{
+  position:relative;z-index:1;
+  min-height:100vh;display:flex;flex-direction:column;
+}
+
+/* ── SCREEN TRANSITIONS ── */
+.screen{
+  display:none;
+  opacity:0;
+  transform:translateY(10px);
+  transition:opacity .3s ease,transform .3s ease;
+  flex:1;
+}
+.screen.active{
+  display:flex;
+  opacity:1;
+  transform:translateY(0);
+}
+
+/* ── STEP INDICATOR ── */
+.step-bar{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:24px 0 0;flex-shrink:0;
+}
+.step-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--bg-el2);transition:all .3s ease;
+}
+.step-dot.active{
+  width:24px;border-radius:4px;background:var(--c-blue);
+}
+.step-dot.done{background:var(--c-blue);opacity:.45}
+.step-label{
+  font-size:12px;color:var(--text-faint);font-weight:500;
+  letter-spacing:.4px;
+}
+
+/* ── STEP AREA (screens 1-3) ── */
+.step-area{
+  display:flex;flex-direction:column;align-items:center;
+  flex:1;padding:0 20px 40px;max-width:900px;width:100%;margin:0 auto;
+}
+.step-header{margin:28px 0 24px;text-align:center}
+.step-breadcrumb{font-size:11px;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px}
+.step-title{font-size:22px;font-weight:700;color:var(--text-1);margin-bottom:6px}
+.step-subtitle{font-size:14px;color:var(--text-muted);max-width:520px;margin:0 auto}
+
+/* ── FOOTER BUTTONS ── */
+.step-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  width:100%;margin-top:28px;gap:12px;
+}
+
+/* ── BUTTON STYLES ── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:10px 20px;border-radius:var(--r-md);font-size:14px;font-weight:600;
+  transition:all var(--t);border:1px solid transparent;cursor:pointer;
+  white-space:nowrap;
+}
+.btn-primary{
+  background:linear-gradient(135deg,#3b82f6,#6d28d9);color:#fff;
+  box-shadow:0 2px 12px rgba(59,130,246,.25);
+}
+.btn-primary:hover:not(:disabled){
+  background:linear-gradient(135deg,#2563eb,#5b21b6);
+  box-shadow:0 4px 20px rgba(59,130,246,.4);transform:translateY(-1px);
+}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-ghost{
+  background:transparent;color:var(--text-muted);
+  border-color:var(--bg-border);
+}
+.btn-ghost:hover{background:var(--hover-bg);color:var(--text-1)}
+.btn-sm{padding:7px 14px;font-size:13px}
+.btn-full{width:100%}
+.btn-link{
+  background:none;border:none;color:var(--text-faint);
+  font-size:13px;font-weight:400;text-decoration:underline;cursor:pointer;
+  transition:color var(--t);
+}
+.btn-link:hover{color:var(--text-muted)}
+
+/* ── TOAST ── */
+.toast-container{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  z-index:9999;display:flex;flex-direction:column;align-items:center;gap:8px;
+  pointer-events:none;
+}
+.toast{
+  background:var(--bg-card);border:1px solid var(--bg-border);
+  border-radius:var(--r-lg);padding:10px 18px;
+  font-size:13px;color:var(--text-1);
+  box-shadow:var(--shadow);
+  animation:toastIn .3s ease,toastOut .3s ease 2.2s forwards;
+  pointer-events:auto;
+}
+.toast.warn{border-color:var(--c-yellow);background:var(--c-yellow-bg);color:var(--c-yellow)}
+.toast.error{border-color:var(--c-red);background:var(--c-red-bg);color:var(--c-red)}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(10px)}}
+
+/* ════════════════════════════════
+   SCREEN 0 — WELCOME
+════════════════════════════════ */
+#screen0{
+  min-height:100vh;align-items:center;justify-content:center;
+  flex-direction:column;padding:40px 20px;
+}
+.welcome-wrap{
+  display:grid;grid-template-columns:1fr 1fr;gap:48px;
+  max-width:920px;width:100%;align-items:center;
+}
+@media(max-width:720px){
+  .welcome-wrap{grid-template-columns:1fr;max-width:440px;text-align:center}
+  .bullet-list{align-items:center}
+}
+
+/* left col */
+.brand-col{display:flex;flex-direction:column;gap:20px}
+.brand-logo-wrap{display:flex;align-items:center;gap:16px}
+@media(max-width:720px){.brand-logo-wrap{justify-content:center}}
+.brand-logo-icon{
+  width:64px;height:64px;border-radius:20px;flex-shrink:0;
+  background:linear-gradient(135deg,#3b82f6,#7c3aed);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 32px rgba(59,130,246,.35);
+}
+.brand-name{
+  font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1;
+  background:linear-gradient(135deg,#60a5fa,#a78bfa);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.brand-tagline{font-size:15px;color:var(--text-muted);line-height:1.6;max-width:380px}
+.bullet-list{display:flex;flex-direction:column;gap:11px;margin-top:4px}
+.bullet-item{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text-2)}
+.bullet-icon{
+  width:30px;height:30px;border-radius:var(--r-sm);background:var(--bg-el);
+  border:1px solid var(--bg-border);display:flex;align-items:center;justify-content:center;
+  color:var(--c-blue);flex-shrink:0;
+}
+.version-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;border-radius:99px;background:var(--bg-el);border:1px solid var(--bg-border);
+  font-size:11px;color:var(--text-faint);font-weight:500;
+  align-self:flex-start;
+}
+@media(max-width:720px){.version-badge{align-self:center}}
+
+/* right col — CTA card */
+.cta-card{
+  background:var(--bg-card);border:1px solid var(--bg-border);
+  border-radius:var(--r-xl);padding:32px;
+  box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:20px;
+}
+.cta-title{font-size:18px;font-weight:700;color:var(--text-1)}
+.cta-sub{font-size:13px;color:var(--text-muted)}
+.privacy-note{
+  display:flex;align-items:flex-start;gap:8px;
+  font-size:12px;color:var(--text-faint);line-height:1.5;
+  padding-top:4px;border-top:1px solid var(--bg-border);
+}
+.privacy-note svg{flex-shrink:0;margin-top:1px}
+
+/* ── LANGUAGE SELECTOR ── */
+.lang-selector{display:flex;flex-direction:column;gap:8px}
+.lang-label{font-size:11px;color:var(--text-faint);font-weight:500;text-align:center;letter-spacing:.2px}
+.lang-btns{display:flex;gap:8px}
+.ob-lang-btn{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:8px 10px;border-radius:var(--r-md);
+  background:var(--bg-el);border:1.5px solid var(--bg-border);
+  color:var(--text-muted);font-size:13px;font-weight:600;
+  cursor:pointer;transition:all var(--t);white-space:nowrap;
+}
+.ob-lang-btn:hover{background:var(--hover-bg);border-color:var(--c-blue-bd);color:var(--text-1)}
+.ob-lang-btn.active{
+  background:var(--c-blue-bg);border-color:var(--c-blue);color:var(--c-blue);
+}
+.ob-lang-btn .lang-check{
+  width:14px;height:14px;border-radius:50%;
+  background:var(--c-blue);display:none;
+  align-items:center;justify-content:center;flex-shrink:0;margin-left:2px;
+}
+.ob-lang-btn.active .lang-check{display:flex}
+.lang-sep{height:1px;background:var(--bg-border)}
+
+/* ════════════════════════════════
+   SCREEN 1 — WHAT TO MONITOR
+════════════════════════════════ */
+#screen1{flex-direction:column;align-items:center}
+.monitor-cards{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:14px;width:100%;
+}
+@media(max-width:720px){.monitor-cards{grid-template-columns:1fr}}
+
+.monitor-card{
+  background:var(--bg-card);border:2px solid var(--bg-border);
+  border-radius:var(--r-lg);padding:22px;cursor:pointer;
+  transition:all .2s ease;position:relative;
+  display:flex;flex-direction:column;gap:12px;
+  user-select:none;
+}
+.monitor-card:hover{background:var(--bg-el);transform:translateY(-2px);box-shadow:var(--shadow)}
+.monitor-card.selected-blue{border-color:var(--c-blue);background:var(--c-blue-bg)}
+.monitor-card.selected-purple{border-color:var(--c-purple);background:var(--c-purple-bg)}
+.monitor-card.selected-both{
+  border-color:var(--c-blue);
+  background:linear-gradient(135deg,rgba(30,58,95,.8),rgba(46,16,101,.8));
+}
+.mc-checkmark{
+  position:absolute;top:12px;right:12px;
+  width:20px;height:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg-el2);transition:all .2s ease;
+}
+.selected-blue .mc-checkmark,.selected-both .mc-checkmark{background:var(--c-blue)}
+.selected-purple .mc-checkmark{background:var(--c-purple)}
+.mc-icon{
+  width:44px;height:44px;border-radius:var(--r-md);
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg-el);border:1px solid var(--bg-border);flex-shrink:0;
+}
+.mc-icon-az{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.2);color:var(--c-blue)}
+.mc-icon-sn{background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.2);color:var(--c-purple)}
+.mc-icon-both{
+  background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(167,139,250,.12));
+  border-color:rgba(96,165,250,.2);
+}
+.mc-title{font-size:15px;font-weight:700;color:var(--text-1)}
+.mc-desc{font-size:13px;color:var(--text-muted);line-height:1.5}
+.mc-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+.mc-tag{
+  font-size:11px;padding:2px 7px;border-radius:99px;
+  background:var(--bg-el2);color:var(--text-faint);font-weight:500;
+}
+.badge-rec{
+  display:inline-flex;align-items:center;padding:3px 9px;
+  border-radius:99px;background:var(--c-green-bg);border:1px solid var(--c-green-bd);
+  color:var(--c-green);font-size:11px;font-weight:700;letter-spacing:.4px;
+  text-transform:uppercase;align-self:flex-start;
+}
+.hint-both{
+  text-align:center;font-size:12px;color:var(--c-blue);
+  margin-top:6px;opacity:0;transition:opacity .3s;
+}
+.hint-both.visible{opacity:1}
+
+/* ════════════════════════════════
+   SCREEN 2 — CONFIGURE
+════════════════════════════════ */
+#screen2{flex-direction:column;align-items:center}
+.config-panels{display:flex;flex-direction:column;gap:18px;width:100%}
+.config-panel{
+  background:var(--bg-card);border:1px solid var(--bg-border);
+  border-radius:var(--r-lg);padding:24px;
+  border-left:3px solid var(--bg-border);
+}
+.config-panel-az{border-left-color:var(--c-blue)}
+.config-panel-sn{border-left-color:var(--c-purple)}
+.panel-title{
+  display:flex;align-items:center;gap:10px;
+  font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:18px;
+}
+.panel-title-icon{
+  width:30px;height:30px;border-radius:var(--r-sm);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;
+}
+.pt-az{background:rgba(59,130,246,.15);color:var(--c-blue)}
+.pt-sn{background:rgba(167,139,250,.15);color:var(--c-purple)}
+
+/* form fields */
+.field{margin-bottom:16px;position:relative}
+.field:last-of-type{margin-bottom:0}
+.field-label{
+  display:flex;align-items:center;gap:5px;
+  font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:6px;
+}
+.tooltip-btn{
+  width:15px;height:15px;border-radius:50%;background:var(--bg-el2);
+  color:var(--text-faint);font-size:10px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all var(--t);border:1px solid var(--bg-border);
+  flex-shrink:0;
+}
+.tooltip-btn:hover{background:var(--c-blue-bg);color:var(--c-blue);border-color:var(--c-blue-bd)}
+.field-input{
+  width:100%;padding:9px 12px;
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  border-radius:var(--r-md);color:var(--text-1);font-size:14px;
+  transition:border-color var(--t),box-shadow var(--t);outline:none;
+}
+.field-input:focus{border-color:var(--c-blue);box-shadow:0 0 0 3px rgba(96,165,250,.12)}
+.field-input::placeholder{color:var(--text-faint)}
+.input-wrap{display:flex}
+.input-prefix{
+  padding:9px 12px;background:var(--bg-el2);border:1px solid var(--bg-border);
+  border-right:none;border-radius:var(--r-md) 0 0 var(--r-md);
+  font-size:13px;color:var(--text-faint);white-space:nowrap;display:flex;align-items:center;
+}
+.input-wrap .field-input{border-radius:0 var(--r-md) var(--r-md) 0}
+.pw-wrap{position:relative}
+.pw-wrap .field-input{padding-right:40px}
+.pw-toggle{
+  position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  color:var(--text-faint);transition:color var(--t);display:flex;align-items:center;
+}
+.pw-toggle:hover{color:var(--text-muted)}
+.field-helper{
+  display:flex;align-items:center;gap:4px;
+  margin-top:6px;font-size:12px;color:var(--c-blue);cursor:pointer;
+}
+.field-helper:hover{text-decoration:underline}
+
+/* inline popover */
+.popover{
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  border-radius:var(--r-md);padding:14px;margin-top:8px;
+  font-size:12px;color:var(--text-2);line-height:1.6;
+  display:none;animation:fadeIn .2s ease;
+}
+.popover.open{display:block}
+.popover-title{font-weight:700;color:var(--text-1);margin-bottom:6px;font-size:13px}
+.popover ol{padding-left:16px}
+.popover li{margin-bottom:3px}
+.popover code{background:var(--bg-el2);padding:1px 5px;border-radius:3px}
+
+/* test connection button + status */
+.btn-test{
+  width:100%;padding:10px;border-radius:var(--r-md);
+  border:1px solid var(--bg-border);background:var(--bg-el);
+  color:var(--text-muted);font-size:13px;font-weight:600;
+  margin-top:18px;transition:all var(--t);display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.btn-test-az:hover:not(.testing){border-color:var(--c-blue);color:var(--c-blue);background:var(--c-blue-bg)}
+.btn-test-sn:hover:not(.testing){border-color:var(--c-purple);color:var(--c-purple);background:var(--c-purple-bg)}
+.btn-test.testing{opacity:.6;cursor:not-allowed}
+.conn-status{
+  margin-top:10px;padding:8px 12px;border-radius:var(--r-md);
+  font-size:12px;font-weight:600;display:none;align-items:center;gap:7px;
+}
+.conn-status.success{display:flex;background:var(--c-green-bg);border:1px solid var(--c-green-bd);color:var(--c-green)}
+.conn-status.error{display:flex;background:var(--c-red-bg);border:1px solid rgba(239,68,68,.3);color:var(--c-red)}
+
+.skip-note{
+  padding:10px 14px;border-radius:var(--r-md);
+  background:var(--c-yellow-bg);border:1px solid rgba(245,158,11,.25);
+  color:var(--c-yellow);font-size:12px;margin-top:16px;
+  display:none;align-items:flex-start;gap:8px;line-height:1.5;width:100%;
+}
+.skip-note.visible{display:flex}
+
+/* ════════════════════════════════
+   SCREEN 3 — PROJECTS
+════════════════════════════════ */
+#screen3{flex-direction:column;align-items:center}
+.search-bar-wrap{position:relative;width:100%;margin-bottom:14px}
+.search-icon{
+  position:absolute;left:11px;top:50%;transform:translateY(-50%);
+  color:var(--text-faint);pointer-events:none;
+}
+.search-bar{
+  width:100%;padding:9px 12px 9px 35px;
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  border-radius:var(--r-md);color:var(--text-1);font-size:14px;outline:none;
+  transition:border-color var(--t);
+}
+.search-bar:focus{border-color:var(--c-blue)}
+.search-bar::placeholder{color:var(--text-faint)}
+
+.projects-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+  width:100%;
+}
+@media(max-width:720px){.projects-grid{grid-template-columns:1fr}}
+
+.proj-card{
+  background:var(--bg-card);border:2px solid var(--bg-border);
+  border-radius:var(--r-lg);padding:14px 14px 12px;
+  cursor:pointer;transition:all .2s ease;
+  display:flex;flex-direction:column;gap:8px;
+}
+.proj-card:hover{background:var(--bg-el);transform:translateY(-1px)}
+.proj-card.selected{border-color:var(--c-blue);background:var(--c-blue-bg)}
+.proj-card-head{display:flex;align-items:center;gap:10px}
+.proj-icon{
+  width:34px;height:34px;border-radius:var(--r-sm);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:800;color:#fff;
+}
+.proj-name{font-size:13px;font-weight:700;color:var(--text-1);flex:1;line-height:1.3}
+.proj-check{
+  width:18px;height:18px;border-radius:50%;flex-shrink:0;
+  border:2px solid var(--bg-el2);background:transparent;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;
+}
+.proj-card.selected .proj-check{
+  background:var(--c-blue);border-color:var(--c-blue);
+}
+.proj-meta{font-size:11px;color:var(--text-faint)}
+
+/* project config row */
+.proj-config{
+  padding:10px 12px;border-radius:var(--r-sm);
+  background:var(--bg-el2);border:1px solid var(--bg-border);
+  display:none;flex-direction:column;gap:8px;margin-top:2px;
+}
+.proj-card.selected .proj-config{display:flex}
+.proj-config-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)}
+.type-toggle{display:flex;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--bg-border)}
+.type-btn{
+  padding:4px 9px;font-size:11px;font-weight:600;color:var(--text-faint);
+  background:var(--bg-el);transition:all var(--t);cursor:pointer;border:none;
+}
+.type-btn.active{background:var(--c-blue-bg);color:var(--c-blue)}
+.proj-team-input{
+  flex:1;padding:4px 8px;background:var(--bg-el);
+  border:1px solid var(--bg-border);border-radius:var(--r-sm);
+  color:var(--text-1);font-size:12px;outline:none;
+}
+.proj-team-input::placeholder{color:var(--text-faint)}
+
+/* multi-team expand */
+.proj-teams-badge{
+  display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
+  border-radius:99px;background:var(--bg-el2);color:var(--text-faint);
+  font-size:10px;font-weight:600;flex-shrink:0;
+}
+.proj-card.has-teams-sel .proj-teams-badge{
+  background:var(--c-blue-bg);color:var(--c-blue);border:1px solid var(--c-blue-bd);
+}
+.proj-chevron{color:var(--text-faint);transition:transform .2s;flex-shrink:0}
+.proj-card.teams-open .proj-chevron{transform:rotate(180deg)}
+.proj-teams-body{padding:6px 0 2px;display:none;flex-direction:column;gap:4px;width:100%}
+.proj-card.teams-open .proj-teams-body{display:flex}
+.proj-team-row{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 10px;border-radius:var(--r-sm);
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  cursor:pointer;transition:all .15s;
+}
+.proj-team-row:hover{background:var(--bg-el2)}
+.proj-team-row.sel{border-color:var(--c-blue);background:var(--c-blue-bg)}
+.proj-team-check{
+  width:16px;height:16px;border-radius:3px;flex-shrink:0;
+  border:2px solid var(--bg-el2);background:transparent;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;
+}
+.proj-team-row.sel .proj-team-check{background:var(--c-blue);border-color:var(--c-blue)}
+.proj-team-label{font-size:12px;font-weight:600;color:var(--text-1);flex:1}
+.proj-team-wit{display:none;align-items:center;gap:6px}
+.proj-team-row.sel .proj-team-wit{display:flex}
+
+/* empty state & show more */
+.proj-empty{
+  width:100%;text-align:center;padding:40px 20px;
+  color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:12px;
+}
+.show-more-wrap{text-align:center;margin-top:10px}
+.proj-count-bar{
+  font-size:12px;color:var(--text-muted);text-align:center;margin-top:10px;
+  padding-top:10px;border-top:1px solid var(--bg-border);width:100%;
+}
+
+/* SN-only mode */
+.sn-groups-list{display:flex;flex-direction:column;gap:8px;width:100%}
+.sn-group-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;background:var(--bg-card);
+  border:1px solid var(--bg-border);border-radius:var(--r-md);
+  cursor:pointer;transition:all var(--t);
+}
+.sn-group-item:hover{background:var(--bg-el)}
+.sn-group-item.selected{border-color:var(--c-purple);background:var(--c-purple-bg)}
+.sn-group-check{
+  width:18px;height:18px;border-radius:4px;flex-shrink:0;
+  border:2px solid var(--bg-el2);background:transparent;
+  display:flex;align-items:center;justify-content:center;transition:all .2s;
+}
+.sn-group-item.selected .sn-group-check{background:var(--c-purple);border-color:var(--c-purple)}
+.sn-group-name{font-size:13px;font-weight:600;color:var(--text-1);flex:1}
+.sn-group-id{font-size:11px;color:var(--text-faint);font-family:monospace}
+.sn-add-az-card{
+  padding:14px;background:var(--bg-card);border:1px dashed var(--bg-border);
+  border-radius:var(--r-lg);margin-top:14px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+}
+.sn-add-az-text{font-size:13px;color:var(--text-muted)}
+
+/* ════════════════════════════════
+   SCREEN 4 — DONE
+════════════════════════════════ */
+#screen4{
+  flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;padding:40px 20px;
+}
+.done-wrap{
+  display:flex;flex-direction:column;align-items:center;
+  gap:20px;max-width:680px;width:100%;
+}
+.checkmark-wrap{
+  width:72px;height:72px;position:relative;
+}
+.checkmark-circle{
+  fill:none;stroke:var(--c-green);stroke-width:2.5;
+  stroke-dasharray:283;stroke-dashoffset:283;
+  animation:drawCircle .5s ease .1s forwards;
+}
+.checkmark-check{
+  fill:none;stroke:var(--c-green);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:50;stroke-dashoffset:50;
+  animation:drawCheck .4s ease .55s forwards;
+}
+@keyframes drawCircle{to{stroke-dashoffset:0}}
+@keyframes drawCheck{to{stroke-dashoffset:0}}
+
+.done-title{font-size:26px;font-weight:800;color:var(--text-1);text-align:center}
+.done-sub{font-size:14px;color:var(--text-muted);text-align:center}
+.done-pills{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.done-pill{
+  display:flex;align-items:center;gap:5px;
+  padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;
+  background:var(--c-green-bg);border:1px solid var(--c-green-bd);color:var(--c-green);
+}
+
+.preview-cards{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:14px;width:100%;
+}
+@media(max-width:720px){.preview-cards{grid-template-columns:1fr}}
+.preview-card{
+  background:var(--bg-card);border:1px solid var(--bg-border);
+  border-radius:var(--r-lg);padding:16px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.preview-card-title{font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px}
+.preview-visual{
+  height:72px;border-radius:var(--r-sm);
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  display:flex;align-items:flex-end;gap:4px;padding:10px 10px 0;overflow:hidden;
+}
+.bar{border-radius:3px 3px 0 0;flex:1;background:var(--c-blue-bg);border:1px solid var(--c-blue-bd)}
+.bar-green{background:var(--c-green-bg);border-color:var(--c-green-bd)}
+.bar-purple{background:var(--c-purple-bg);border-color:var(--c-purple-bd)}
+.preview-visual-chat{
+  height:72px;border-radius:var(--r-sm);
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  padding:8px;display:flex;flex-direction:column;gap:5px;justify-content:flex-end;
+}
+.chat-bubble{
+  border-radius:var(--r-sm);padding:4px 8px;font-size:10px;
+  color:var(--text-faint);max-width:85%;
+}
+.cb-user{background:var(--c-blue-bg);align-self:flex-end}
+.cb-ai{background:var(--bg-el2);align-self:flex-start}
+
+.done-btns{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+
+/* ── UTILS ── */
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{
+  width:16px;height:16px;border-radius:50%;
+  border:2px solid currentColor;border-top-color:transparent;
+  animation:spin .6s linear infinite;flex-shrink:0;
+}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="bg-glow" aria-hidden="true"></div>
+<div class="bg-grid" aria-hidden="true"></div>
+
+<!-- theme toggle -->
+<button class="theme-btn" onclick="toggleTheme()" aria-label="Toggle theme">
+  <span class="icon-dark">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+    </svg>
+  </span>
+  <span class="icon-light">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+  </span>
+</button>
+
+<!-- toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<div id="app">
+
+  <!-- ══════════════════════════════
+       SCREEN 0 — WELCOME
+  ══════════════════════════════ -->
+  <div class="screen active" id="screen0">
+    <div class="welcome-wrap">
+
+      <!-- left: brand -->
+      <div class="brand-col">
+        <div class="brand-logo-wrap">
+          <div class="brand-logo-icon" aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+              <path d="M5 22 Q8 10 17 10 Q26 10 29 22" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+              <path d="M10 22 L13 16 L17 20 L20 13 L24 22" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <circle cx="17" cy="25" r="2.5" fill="white" opacity=".85"/>
+            </svg>
+          </div>
+          <div>
+            <div class="brand-name">Backlog Health</div>
+          </div>
+        </div>
+        <div class="brand-tagline" data-i18n="ob_welcome_subtitle">Full visibility of your team, from backlog to incident.</div>
+        <div class="bullet-list">
+          <div class="bullet-item">
+            <div class="bullet-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
+              </svg>
+            </div>
+            <span data-i18n="ob_bullet_health">Backlog health in real time</span>
+          </div>
+          <div class="bullet-item">
+            <div class="bullet-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+            </div>
+            <span data-i18n="ob_bullet_delivery">Delivery plan and burndown by sprint</span>
+          </div>
+          <div class="bullet-item">
+            <div class="bullet-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <span data-i18n="ob_bullet_incidents">Integrated ServiceNow incidents</span>
+          </div>
+        </div>
+        <div class="version-badge">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          v1.8.2
+        </div>
+      </div>
+
+      <!-- right: CTA card -->
+      <div class="cta-card">
+        <div>
+          <div class="cta-title" data-i18n="ob_welcome_title">Welcome!</div>
+          <div class="cta-sub" style="margin-top:5px" data-i18n="ob_welcome_cta_sub">Let's set up your environment. Takes less than 2 minutes.</div>
+        </div>
+
+        <!-- language selector -->
+        <div class="lang-selector">
+          <div class="lang-label" data-i18n="ob_lang_label">Language / Idioma / Idioma</div>
+          <div class="lang-btns">
+            <button class="ob-lang-btn" data-lang="pt" onclick="window.setLocale('pt')" aria-pressed="false">
+              &#x1F1E7;&#x1F1F7; <span>Português</span>
+              <span class="lang-check">
+                <svg width="8" height="8" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </button>
+            <button class="ob-lang-btn" data-lang="en" onclick="window.setLocale('en')" aria-pressed="false">
+              &#x1F1FA;&#x1F1F8; <span>English</span>
+              <span class="lang-check">
+                <svg width="8" height="8" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </button>
+            <button class="ob-lang-btn" data-lang="es" onclick="window.setLocale('es')" aria-pressed="false">
+              &#x1F1EA;&#x1F1F8; <span>Español</span>
+              <span class="lang-check">
+                <svg width="8" height="8" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div class="lang-sep"></div>
+
+        <button class="btn btn-primary btn-full" onclick="goTo(1)" style="padding:13px 20px;font-size:15px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>
+          </svg>
+          <span data-i18n="ob_welcome_cta">Get Started</span>
+        </button>
+
+        <div class="privacy-note">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+          <span data-i18n="ob_welcome_privacy">Your data stays on your computer only. Nothing is sent to external servers.</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SCREEN 1 — WHAT TO MONITOR
+  ══════════════════════════════ -->
+  <div class="screen" id="screen1" style="flex-direction:column">
+    <div class="step-bar">
+      <div class="step-dot active" id="sd1-1"></div>
+      <div class="step-dot" id="sd1-2"></div>
+      <div class="step-dot" id="sd1-3"></div>
+      <span class="step-label" data-i18n="ob_step1_of3">Step 1 of 3</span>
+    </div>
+    <div class="step-area">
+      <div class="step-header">
+        <div class="step-breadcrumb" data-i18n="ob_initial_setup">Initial setup</div>
+        <div class="step-title" data-i18n="ob_step1_title">What do you want to monitor?</div>
+        <div class="step-subtitle" data-i18n="ob_step1_sub">Select the integrations you use. You can add more later in Settings.</div>
+      </div>
+
+      <div class="monitor-cards" id="monitorCards">
+
+        <!-- Card A: Azure -->
+        <div class="monitor-card" id="cardA" onclick="selectMonitor('A')">
+          <div class="mc-checkmark" id="checkA">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="mc-icon mc-icon-az">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+            </svg>
+          </div>
+          <div class="mc-title" data-i18n="ob_card_az_title">Azure DevOps Backlog</div>
+          <div class="mc-desc" data-i18n="ob_card_az_desc">Track backlog health, burndown, delivery plan and team capacity per sprint.</div>
+          <div class="mc-tags">
+            <span class="mc-tag">User Stories</span>
+            <span class="mc-tag">Sprints</span>
+            <span class="mc-tag">Burndown</span>
+            <span class="mc-tag">UAT</span>
+          </div>
+        </div>
+
+        <!-- Card B: SN -->
+        <div class="monitor-card" id="cardB" onclick="selectMonitor('B')">
+          <div class="mc-checkmark" id="checkB">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="mc-icon mc-icon-sn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.0 1.18 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14v2.92z" transform="scale(.9) translate(1.2,1.2)"/>
+            </svg>
+          </div>
+          <div class="mc-title" data-i18n="ob_card_sn_title">ServiceNow Incidents</div>
+          <div class="mc-desc" data-i18n="ob_card_sn_desc">Monitor incidents by group, priority and linked project in Monthly Review.</div>
+          <div class="mc-tags">
+            <span class="mc-tag">P1/P2/P3</span>
+            <span class="mc-tag">Assignment Groups</span>
+            <span class="mc-tag">SLA</span>
+            <span class="mc-tag">Monthly Review</span>
+          </div>
+        </div>
+
+        <!-- Card C: Both (pre-selected) -->
+        <div class="monitor-card selected-both" id="cardC" onclick="selectMonitor('C')">
+          <div class="mc-checkmark" id="checkC" style="background:var(--c-blue)">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="display:flex;align-items:center;gap:0">
+            <div class="mc-icon mc-icon-both" style="width:38px;height:38px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+              </svg>
+            </div>
+            <div class="mc-icon mc-icon-sn" style="width:38px;height:38px;margin-left:-10px;border-color:rgba(167,139,250,.3)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.0 1.18 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14v2.92z" transform="scale(.85) translate(1.8,1.8)"/>
+              </svg>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="mc-title" data-i18n="ob_card_both_title">Azure DevOps + ServiceNow</div>
+            <div class="badge-rec" data-i18n="ob_card_rec">Recommended</div>
+          </div>
+          <div class="mc-desc" data-i18n="ob_card_both_desc">Full view: backlog health correlated with production incidents.</div>
+          <div class="mc-tags">
+            <span class="mc-tag" data-i18n="ob_card_both_tag">All features</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="hint-both" id="hintBoth" data-i18n="ob_hint_both">This is equivalent to Azure + ServiceNow combined. Consider using the combined option.</div>
+
+      <div class="step-footer" style="margin-top:24px">
+        <button class="btn btn-ghost" onclick="goTo(0)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span data-i18n="ob_back_btn">Back</span>
+        </button>
+        <button class="btn btn-primary" id="btnContinue1" onclick="goTo(2)">
+          <span data-i18n="ob_continue_btn">Continue</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SCREEN 2 — CONFIGURE
+  ══════════════════════════════ -->
+  <div class="screen" id="screen2" style="flex-direction:column;overflow-y:auto">
+    <div class="step-bar">
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+      <div class="step-dot"></div>
+      <span class="step-label" data-i18n="ob_step2_of3">Step 2 of 3</span>
+    </div>
+    <div class="step-area">
+      <div class="step-header">
+        <div class="step-breadcrumb" data-i18n="ob_initial_setup">Initial setup</div>
+        <div class="step-title" data-i18n="ob_step2_title">Configure connections</div>
+        <div class="step-subtitle" id="configSubtitle" data-i18n="ob_step2_sub">Configure your integrations below.</div>
+      </div>
+
+      <div class="config-panels" id="configPanels">
+
+        <!-- Azure panel -->
+        <div class="config-panel config-panel-az" id="panelAz">
+          <div class="panel-title">
+            <div class="panel-title-icon pt-az">Az</div>
+            Azure DevOps
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="azOrg">
+              <span data-i18n="ob_az_org_label">Organization</span>
+              <button class="tooltip-btn" onclick="toggleTip('tipOrg')" type="button">?</button>
+            </label>
+            <input class="field-input" id="azOrg" type="text" placeholder="e.g. my-company" autocomplete="off" spellcheck="false">
+            <div class="popover" id="tipOrg">
+              <div class="popover-title">How to find your organization?</div>
+              <ol>
+                <li>Go to <strong>dev.azure.com</strong> in your browser</li>
+                <li>The org name appears right after the first slash in the URL</li>
+                <li>Example: <code>dev.azure.com/<strong>my-company</strong></code></li>
+              </ol>
+            </div>
+            <div class="field-helper" onclick="toggleTip('tipOrg')">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              How to find my organization?
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="azPat">
+              <span data-i18n="ob_az_pat_label">Personal Access Token (PAT)</span>
+              <button class="tooltip-btn" onclick="toggleTip('tipPat')" type="button">?</button>
+            </label>
+            <div class="pw-wrap">
+              <input class="field-input" id="azPat" type="password" placeholder="paste your PAT here" autocomplete="off" spellcheck="false">
+              <button class="pw-toggle" onclick="togglePw('azPat',this)" type="button" aria-label="Show password">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+            <div class="popover" id="tipPat">
+              <div class="popover-title">How to generate a PAT?</div>
+              <ol>
+                <li>Go to <strong>dev.azure.com</strong> and sign in</li>
+                <li>Click your <strong>profile icon</strong> (top right)</li>
+                <li>Select <strong>Personal Access Tokens</strong></li>
+                <li>Create a token with <strong>Work Items (Read)</strong> and <strong>Project and Team (Read)</strong> permissions</li>
+                <li>Copy and paste the token above</li>
+              </ol>
+            </div>
+            <div class="field-helper" onclick="toggleTip('tipPat')">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span data-i18n="ob_az_pat_help">How to generate a PAT?</span>
+            </div>
+          </div>
+
+          <button class="btn-test btn-test-az" id="btnTestAz" onclick="testAzure()" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span data-i18n="ob_az_test_btn">Test connection</span>
+          </button>
+          <div class="conn-status" id="statusAz">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span id="statusAzText"></span>
+          </div>
+        </div>
+
+        <!-- SN panel -->
+        <div class="config-panel config-panel-sn" id="panelSn">
+          <div class="panel-title">
+            <div class="panel-title-icon pt-sn">SN</div>
+            ServiceNow
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="snInstance">
+              <span data-i18n="ob_sn_instance_label">Instance</span>
+              <button class="tooltip-btn" onclick="toggleTip('tipSn')" type="button">?</button>
+            </label>
+            <div class="input-wrap">
+              <div class="input-prefix">https://</div>
+              <input class="field-input" id="snInstance" type="text" placeholder="company.service-now.com" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="popover" id="tipSn">
+              <div class="popover-title">How to find my instance?</div>
+              <p>The instance name is the subdomain of your ServiceNow URL. Example: if you access <strong>accenture.service-now.com</strong>, enter <strong>accenture.service-now.com</strong>.</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="snUser">
+              <span data-i18n="ob_sn_user_label">Username</span>
+            </label>
+            <input class="field-input" id="snUser" type="text" placeholder="service account username" autocomplete="off" spellcheck="false">
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="snPass">
+              <span data-i18n="ob_sn_pass_label">Password / Token</span>
+            </label>
+            <div class="pw-wrap">
+              <input class="field-input" id="snPass" type="password" placeholder="your password or access token" autocomplete="off" spellcheck="false">
+              <button class="pw-toggle" onclick="togglePw('snPass',this)" type="button" aria-label="Show password">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <button class="btn-test btn-test-sn" id="btnTestSn" onclick="testSN()" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span data-i18n="ob_sn_test_btn">Test connection</span>
+          </button>
+          <div class="conn-status" id="statusSn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span id="statusSnText"></span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="skip-note" id="skipNote">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span data-i18n="ob_skip_note">Connection not tested. You can configure credentials later in Settings.</span>
+      </div>
+
+      <div class="step-footer" style="margin-top:24px">
+        <button class="btn btn-ghost" onclick="goTo(1)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <span data-i18n="ob_back_btn">Back</span>
+        </button>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn-link" onclick="skipConfig()"><span data-i18n="ob_skip_later">Skip for now</span></button>
+          <button class="btn btn-primary" onclick="goTo(3)">
+            <span data-i18n="ob_continue_btn">Continue</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SCREEN 3 — PROJECTS
+  ══════════════════════════════ -->
+  <div class="screen" id="screen3" style="flex-direction:column;overflow-y:auto">
+    <div class="step-bar">
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+      <span class="step-label" data-i18n="ob_step3_of3">Step 3 of 3</span>
+    </div>
+    <div class="step-area">
+      <div class="step-header">
+        <div class="step-breadcrumb" data-i18n="ob_initial_setup">Initial setup</div>
+        <div class="step-title" id="s3title" data-i18n="ob_step3_title">Select your projects</div>
+        <div class="step-subtitle" id="s3sub" data-i18n="ob_step3_sub">Choose which Azure DevOps projects to monitor.</div>
+      </div>
+
+      <!-- AZURE: project list -->
+      <div id="azProjectsSection" style="width:100%">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;background:var(--c-blue-bg);border:1px solid var(--c-blue-bd);color:var(--c-blue);font-size:11px;font-weight:600;">
+            <svg width="11" height="11" viewBox="0 0 32 32" fill="currentColor"><path d="M29.93 8.31 19.18 1.26A3.24 3.24 0 0 0 17.15.5H14.85a3.24 3.24 0 0 0-2 .76L2.07 8.31A3.27 3.27 0 0 0 .5 10.79v10.42A3.27 3.27 0 0 0 2.07 23.7l10.74 7.05a3.24 3.24 0 0 0 2 .76h2.3a3.24 3.24 0 0 0 2-.76l10.74-7.05a3.27 3.27 0 0 0 1.57-2.49V10.79a3.27 3.27 0 0 0-1.49-2.48zM16 22a6 6 0 1 1 6-6 6 6 0 0 1-6 6z"/></svg>
+            Azure DevOps
+          </span>
+        </div>
+        <div class="search-bar-wrap">
+          <span class="search-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <input class="search-bar" id="projSearch" type="text" placeholder="Search project..." oninput="filterProjects(this.value)">
+        </div>
+        <div class="projects-grid" id="projectsGrid"></div>
+        <div class="show-more-wrap hidden" id="showMoreWrap">
+          <button class="btn btn-ghost btn-sm" onclick="showAllProjects()" id="showMoreBtn">Show more</button>
+        </div>
+        <div class="proj-count-bar hidden" id="projCountBar"></div>
+      </div>
+
+      <!-- SN groups section (SN-only or Both) -->
+      <div id="snGroupsSection" class="hidden" style="width:100%;margin-top:6px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;background:var(--c-purple-bg);border:1px solid var(--c-purple-bd);color:var(--c-purple);font-size:11px;font-weight:600;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.0 1.18 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14v2.92z" transform="scale(.9) translate(1.2,1.2)"/>
+            </svg>
+            ServiceNow
+          </span>
+          <span id="snGroupsSubtitle" style="font-size:12px;color:var(--text-faint)" data-i18n="ob_step3_sn_sub">Groups found in your ServiceNow instance.</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap">
+          <span style="font-size:13px;font-weight:600;color:var(--text-2)" data-i18n="ob_sn_groups_label">Select groups to monitor</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm" onclick="selectAllSNGroups(true)" data-i18n="ob_sn_select_all">Select all</button>
+            <button class="btn btn-ghost btn-sm" onclick="selectAllSNGroups(false)" data-i18n="ob_sn_select_none">Select none</button>
+          </div>
+        </div>
+        <div class="search-bar-wrap" style="margin-bottom:10px">
+          <span class="search-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <input class="search-bar" id="snGroupSearch" type="text" placeholder="Search group..." oninput="filterSNGroups(this.value)">
+        </div>
+        <div class="sn-groups-list" id="snGroupsList"></div>
+        <div class="proj-count-bar hidden" id="snGroupCountBar"></div>
+        <div class="sn-add-az-card" id="snAddAzCard" style="margin-top:14px">
+          <div class="sn-add-az-text" data-i18n="ob_step3_sn_title">Want to also monitor Azure DevOps backlog?</div>
+          <button class="btn btn-ghost btn-sm" onclick="goTo(2)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Configure Azure DevOps
+          </button>
+        </div>
+      </div>
+
+      <div class="step-footer" style="margin-top:24px">
+        <button class="btn btn-ghost" onclick="goTo(2)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <span data-i18n="ob_back_btn">Back</span>
+        </button>
+        <button class="btn btn-primary" onclick="finishSetup()">
+          <span data-i18n="ob_finish_btn">Finish Setup</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SCREEN 4 — DONE
+  ══════════════════════════════ -->
+  <div class="screen" id="screen4">
+    <div class="done-wrap">
+
+      <div class="checkmark-wrap">
+        <svg viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle class="checkmark-circle" cx="36" cy="36" r="34"/>
+          <polyline class="checkmark-check" points="20,37 31,48 52,24"/>
+        </svg>
+      </div>
+
+      <div class="done-title" data-i18n="ob_done_title">You're all set!</div>
+      <div class="done-sub" id="doneSub" data-i18n="ob_done_sub">Your environment is ready.</div>
+
+      <div class="done-pills" id="donePills"></div>
+
+      <div class="preview-cards">
+        <div class="preview-card">
+          <div class="preview-card-title" data-i18n="ob_preview_health">Backlog Health</div>
+          <div class="preview-visual">
+            <div class="bar" style="height:55%"></div>
+            <div class="bar bar-green" style="height:80%"></div>
+            <div class="bar" style="height:40%"></div>
+            <div class="bar bar-green" style="height:90%"></div>
+            <div class="bar" style="height:65%"></div>
+            <div class="bar bar-green" style="height:70%"></div>
+          </div>
+          <div style="font-size:11px;color:var(--text-faint)" data-i18n="ob_preview_health_sub">Backlog health per project</div>
+        </div>
+        <div class="preview-card">
+          <div class="preview-card-title" data-i18n="ob_preview_review">Monthly Review</div>
+          <div class="preview-visual" style="align-items:center;justify-content:center;gap:8px;padding:10px">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+              <div class="bar bar-purple" style="width:100%;height:40px;border-radius:4px 4px 0 0"></div>
+              <div style="font-size:9px;color:var(--text-faint)">Jun</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+              <div class="bar" style="width:100%;height:25px;border-radius:4px 4px 0 0"></div>
+              <div style="font-size:9px;color:var(--text-faint)">Jul</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+              <div class="bar bar-green" style="width:100%;height:55px;border-radius:4px 4px 0 0"></div>
+              <div style="font-size:9px;color:var(--text-faint)">Aug</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-faint)" data-i18n="ob_preview_review_sub">Incidents per month</div>
+        </div>
+        <div class="preview-card">
+          <div class="preview-card-title" data-i18n="ob_preview_ai">AI Copilot</div>
+          <div class="preview-visual-chat">
+            <div class="chat-bubble cb-user">How is the backlog?</div>
+            <div class="chat-bubble cb-ai">3 projects with high health...</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-faint)" data-i18n="ob_preview_ai_sub">AI-powered analysis assistant</div>
+        </div>
+      </div>
+
+      <div class="done-btns">
+        <button class="btn btn-primary" style="padding:13px 36px;font-size:15px" onclick="openDashboard()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <span data-i18n="ob_open_dashboard">Open Dashboard</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<script>
+/* ════════════════
+   STATE
+════════════════ */
+let currentScreen = 0;
+const state = {
+  selection: 'C',      // 'A' | 'B' | 'AB' | 'C'
+  azTested: false,
+  snTested: false,
+  skipped: false,
+  loadedProjects: [],   // [{name, teams:[]}] from API
+  selectedKeys: new Set(),  // "projName" (single-team) or "projName|teamName" (multi-team)
+  projectTypes: {},     // key -> 'User Story' | 'Task'
+  showAll: false,
+  snGroups: [],         // from SN test
+  selectedSNGroups: new Set(),
+};
+
+/* ════════════════
+   NAVIGATION
+════════════════ */
+function goTo(n) {
+  const current = document.getElementById('screen' + currentScreen);
+  if (current) {
+    current.style.opacity = '0';
+    current.style.transform = 'translateY(8px)';
+    setTimeout(() => {
+      current.classList.remove('active');
+      current.style.opacity = '';
+      current.style.transform = '';
+      activateScreen(n);
+    }, 220);
+  } else {
+    activateScreen(n);
+  }
+}
+
+function activateScreen(n) {
+  if (n === 2) prepareScreen2();
+  if (n === 3) prepareScreen3();
+  if (n === 4) prepareScreen4();
+
+  const next = document.getElementById('screen' + n);
+  next.classList.add('active');
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    next.style.opacity = '1';
+    next.style.transform = 'translateY(0)';
+  }));
+  currentScreen = n;
+
+  if (n === 2 || n === 3) next.scrollTop = 0;
+}
+
+/* ════════════════
+   THEME
+════════════════ */
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+}
+
+/* ════════════════
+   TOAST
+════════════════ */
+function showToast(msg, type = '') {
+  const c = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type ? ' ' + type : '');
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 2700);
+}
+
+/* ════════════════
+   SCREEN 1 — SELECTION
+════════════════ */
+function selectMonitor(card) {
+  if (card === 'C') {
+    state.selection = 'C';
+  } else {
+    let hasA = state.selection === 'A' || state.selection === 'AB';
+    let hasB = state.selection === 'B' || state.selection === 'AB';
+    if (card === 'A') hasA = !hasA;
+    if (card === 'B') hasB = !hasB;
+
+    if (hasA && hasB) state.selection = 'AB';
+    else if (hasA) state.selection = 'A';
+    else if (hasB) state.selection = 'B';
+    else state.selection = null;
+  }
+  updateSelectionVisual();
+}
+
+function updateSelectionVisual() {
+  const cA = document.getElementById('cardA');
+  const cB = document.getElementById('cardB');
+  const cC = document.getElementById('cardC');
+  const hint = document.getElementById('hintBoth');
+
+  cA.className = 'monitor-card';
+  cB.className = 'monitor-card';
+  cC.className = 'monitor-card';
+
+  if (state.selection === 'A') {
+    cA.className = 'monitor-card selected-blue';
+  } else if (state.selection === 'B') {
+    cB.className = 'monitor-card selected-purple';
+  } else if (state.selection === 'AB') {
+    cA.className = 'monitor-card selected-blue';
+    cB.className = 'monitor-card selected-purple';
+    hint.classList.add('visible');
+  } else if (state.selection === 'C') {
+    cC.className = 'monitor-card selected-both';
+  }
+  if (state.selection !== 'AB') hint.classList.remove('visible');
+
+  const btn = document.getElementById('btnContinue1');
+  btn.disabled = !state.selection;
+}
+
+updateSelectionVisual();
+
+/* ════════════════
+   SCREEN 2 — CONFIG
+════════════════ */
+function prepareScreen2() {
+  const showAz = state.selection === 'A' || state.selection === 'AB' || state.selection === 'C';
+  const showSn = state.selection === 'B' || state.selection === 'AB' || state.selection === 'C';
+  document.getElementById('panelAz').style.display = showAz ? '' : 'none';
+  document.getElementById('panelSn').style.display = showSn ? '' : 'none';
+  document.getElementById('skipNote').classList.remove('visible');
+}
+
+function skipConfig() {
+  state.skipped = true;
+  document.getElementById('skipNote').classList.add('visible');
+  goTo(3);
+}
+
+/* ════════════════
+   TEST AZURE
+════════════════ */
+async function testAzure() {
+  const org = document.getElementById('azOrg').value.trim();
+  const pat = document.getElementById('azPat').value.trim();
+  if (!org || !pat) {
+    showToast('Please fill in Organization and PAT.', 'warn');
+    return;
+  }
+  const btn = document.getElementById('btnTestAz');
+  const statusEl = document.getElementById('statusAz');
+  const statusText = document.getElementById('statusAzText');
+
+  btn.classList.add('testing');
+  btn.innerHTML = '<div class="spinner"></div> Testing...';
+  statusEl.className = 'conn-status';
+
+  try {
+    const resp = await fetch('/api/projects?org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat));
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || resp.statusText);
+
+    // data is array of project name strings or objects
+    const projects = Array.isArray(data) ? data : (data.projects || []);
+    const newLoaded = projects.map(p => {
+      if (typeof p === 'string') return { name: p, teams: [] };
+      return { name: p.name || p, teams: Array.isArray(p.teams) ? p.teams : [] };
+    });
+
+    // Only reset selections when the project list actually changed (different org / different projects).
+    // If the user is just re-testing the same org, preserve existing selections so they don't lose work.
+    const newNames = new Set(newLoaded.map(p => p.name));
+    const oldNames = new Set(state.loadedProjects.map(p => p.name));
+    const projectListChanged = newNames.size !== oldNames.size || [...newNames].some(n => !oldNames.has(n));
+    if (projectListChanged) {
+      state.selectedKeys = new Set();
+    } else {
+      // Same project list: remove any orphaned keys (projects that no longer exist)
+      for (const k of state.selectedKeys) {
+        const base = k.split('|')[0];
+        if (!newNames.has(base)) state.selectedKeys.delete(k);
+      }
+    }
+    state.loadedProjects = newLoaded;
+
+    state.azTested = true;
+    statusEl.classList.add('success');
+    statusText.textContent = 'Connected · ' + org + ' · ' + state.loadedProjects.length + ' projects found';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Reconnect';
+  } catch (err) {
+    state.azTested = false;
+    statusEl.classList.add('error');
+    statusText.textContent = 'Failed — ' + (err.message || 'Check your credentials and try again.');
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Test connection';
+  } finally {
+    btn.classList.remove('testing');
+  }
+}
+
+/* ════════════════
+   TEST SERVICENOW
+════════════════ */
+async function testSN() {
+  const instance = document.getElementById('snInstance').value.trim();
+  const user = document.getElementById('snUser').value.trim();
+  const pass = document.getElementById('snPass').value.trim();
+  if (!instance || !user || !pass) {
+    showToast('Please fill in Instance, Username and Password.', 'warn');
+    return;
+  }
+  const btn = document.getElementById('btnTestSn');
+  const statusEl = document.getElementById('statusSn');
+  const statusText = document.getElementById('statusSnText');
+
+  btn.classList.add('testing');
+  btn.innerHTML = '<div class="spinner"></div> Testing...';
+  statusEl.className = 'conn-status';
+
+  try {
+    const resp = await fetch('/api/sn-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instance, user, pass }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || resp.statusText);
+
+    state.snTested = true;
+
+    // Fetch assignment groups from this instance
+    try {
+      const gResp = await fetch('/api/sn-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instance, user, pass }),
+      });
+      const gData = await gResp.json();
+      const newGroups = (gData.groups || []).map(name => ({ name }));
+
+      // Only reset selections when the group list actually changed (different SN instance / different groups).
+      // If the user is just re-testing the same instance, preserve existing selections.
+      const newGroupNames  = new Set(newGroups.map(g => g.name));
+      const oldGroupNames  = new Set(state.snGroups.map(g => g.name || g));
+      const groupListChanged = newGroupNames.size !== oldGroupNames.size || [...newGroupNames].some(n => !oldGroupNames.has(n));
+      if (groupListChanged) {
+        state.selectedSNGroups = new Set();
+      } else {
+        // Same group list: remove any orphaned selections (groups no longer in the list)
+        for (const k of state.selectedSNGroups) {
+          if (!newGroupNames.has(k)) state.selectedSNGroups.delete(k);
+        }
+      }
+      state.snGroups = newGroups;
+    } catch (_) { state.snGroups = []; state.selectedSNGroups = new Set(); }
+
+    statusEl.classList.add('success');
+    const groupCount = state.snGroups.length;
+    statusText.textContent = 'Connected · ' + instance + (groupCount ? ' · ' + groupCount + ' group' + (groupCount !== 1 ? 's' : '') + ' found' : '');
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Reconnect';
+  } catch (err) {
+    state.snTested = false;
+    statusEl.classList.add('error');
+    statusText.textContent = 'Failed — ' + (err.message || 'Check your credentials and try again.');
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Test connection';
+  } finally {
+    btn.classList.remove('testing');
+  }
+}
+
+/* ════════════════
+   TOOLTIPS / POPOVERS
+════════════════ */
+function toggleTip(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+/* ════════════════
+   PASSWORD TOGGLE
+════════════════ */
+function togglePw(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const isText = input.type === 'text';
+  input.type = isText ? 'password' : 'text';
+  btn.innerHTML = isText
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+}
+
+/* ════════════════
+   SCREEN 3 — PROJECTS
+════════════════ */
+const PROJECT_COLORS = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#64748b','#06b6d4','#f97316','#a78bfa','#22c55e','#ec4899','#0ea5e9'];
+const CHECK_SVG = '<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function _witToggle(key, type) {
+  const k = escHtml(key);
+  return `<div class="type-toggle" onclick="event.stopPropagation()">
+    <button class="type-btn${type === 'User Story' ? ' active' : ''}" data-key="${k}" data-type="User Story" onclick="setTypeBtn(this)">US</button>
+    <button class="type-btn${type === 'Task' ? ' active' : ''}" data-key="${k}" data-type="Task" onclick="setTypeBtn(this)">Task</button>
+  </div>`;
+}
+
+function _singleCard(p, realIdx) {
+  const key = p.name;
+  const selected = state.selectedKeys.has(key);
+  const color = PROJECT_COLORS[realIdx % PROJECT_COLORS.length];
+  const type = state.projectTypes[key] || 'User Story';
+  return `<div class="proj-card${selected ? ' selected' : ''}" data-proj="${escHtml(key)}" onclick="toggleSingleCard(this)">
+    <div class="proj-card-head">
+      <div class="proj-icon" style="background:${color}">${escHtml(p.name[0])}</div>
+      <div class="proj-name">${escHtml(p.name)}</div>
+      <div class="proj-check">${selected ? CHECK_SVG : ''}</div>
+    </div>
+    <div class="proj-config">
+      <div class="proj-config-row">
+        <span>Item type:</span>
+        ${_witToggle(key, type)}
+      </div>
+    </div>
+  </div>`;
+}
+
+function _multiCard(p, realIdx) {
+  const color = PROJECT_COLORS[realIdx % PROJECT_COLORS.length];
+  const selTeams = p.teams.filter(t => state.selectedKeys.has(p.name + '|' + t));
+  const hasSelected = selTeams.length > 0;
+  const isOpen = hasSelected; // auto-expand when any team is selected
+  return `<div class="proj-card${hasSelected ? ' has-teams-sel' : ''}${isOpen ? ' teams-open' : ''}" onclick="toggleExpandCard(this)">
+    <div class="proj-card-head">
+      <div class="proj-icon" style="background:${color}">${escHtml(p.name[0])}</div>
+      <div class="proj-name">${escHtml(p.name)}</div>
+      <span class="proj-teams-badge">${p.teams.length} teams</span>
+      <svg class="proj-chevron" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 6l4 4 4-4"/></svg>
+    </div>
+    <div class="proj-teams-body">
+      ${p.teams.map(team => {
+        const key = p.name + '|' + team;
+        const sel = state.selectedKeys.has(key);
+        const type = state.projectTypes[key] || 'User Story';
+        return `<div class="proj-team-row${sel ? ' sel' : ''}" data-key="${escHtml(key)}" onclick="event.stopPropagation();toggleTeamRow(this)">
+          <div class="proj-team-check">${sel ? CHECK_SVG : ''}</div>
+          <div class="proj-team-label">${escHtml(team)}</div>
+          <div class="proj-team-wit">${_witToggle(key, type)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+function prepareScreen3() {
+  const wantsAz = state.selection === 'A' || state.selection === 'AB' || state.selection === 'C';
+  const wantsSn = state.selection === 'B' || state.selection === 'AB' || state.selection === 'C';
+
+  document.getElementById('azProjectsSection').classList.toggle('hidden', !wantsAz);
+  document.getElementById('snGroupsSection').classList.toggle('hidden', !wantsSn);
+
+  // Only show "configure Azure DevOps" CTA when in SN-only mode
+  const addAzCard = document.getElementById('snAddAzCard');
+  if (addAzCard) addAzCard.style.display = wantsAz ? 'none' : '';
+
+  // Update screen title directly — applyTranslations is not re-run here,
+  // so we set textContent using window._t() (available after module init).
+  const _tt = (key, fb) => (window._t && window._t(key)) || fb;
+  const titleEl = document.getElementById('s3title');
+  const subEl   = document.getElementById('s3sub');
+  if (wantsAz && wantsSn) {
+    if (titleEl) titleEl.textContent = _tt('ob_step3_title_both', 'Select projects and groups');
+    if (subEl)   subEl.textContent   = _tt('ob_step3_sub_both',   'Choose your Azure DevOps projects and ServiceNow groups to monitor.');
+  } else if (wantsSn) {
+    if (titleEl) titleEl.textContent = _tt('ob_step3_title_sn', 'Select ServiceNow groups');
+    if (subEl)   subEl.textContent   = _tt('ob_step3_sub_sn',   'Choose which assignment groups to monitor.');
+  } else {
+    if (titleEl) titleEl.textContent = _tt('ob_step3_title', 'Select Azure DevOps projects');
+    if (subEl)   subEl.textContent   = _tt('ob_step3_sub',   'Choose which Azure DevOps projects to monitor.');
+  }
+
+  if (wantsAz) {
+    const srch = document.getElementById('projSearch');
+    if (srch) srch.value = '';
+    if (!state.azTested) renderProjectsEmpty();
+    else { state.showAll = false; renderProjects(''); }
+  }
+  if (wantsSn) {
+    const srch = document.getElementById('snGroupSearch');
+    if (srch) srch.value = '';
+    renderSNGroups('');
+  }
+}
+
+function renderProjectsEmpty() {
+  const grid = document.getElementById('projectsGrid');
+  const showMore = document.getElementById('showMoreWrap');
+  const countBar = document.getElementById('projCountBar');
+
+  grid.innerHTML = '<div class="proj-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><div style="font-weight:600;color:var(--text-1)">No projects loaded</div><div>Test your Azure DevOps connection first, or go back to Step 2.</div><button class="btn btn-ghost btn-sm" onclick="goTo(2)">Go to connections</button></div>';
+  showMore.classList.add('hidden');
+  countBar.classList.add('hidden');
+}
+
+function renderProjects(filter) {
+  const grid = document.getElementById('projectsGrid');
+  const showMore = document.getElementById('showMoreWrap');
+  const showMoreBtn = document.getElementById('showMoreBtn');
+  const countBar = document.getElementById('projCountBar');
+
+  const f = (filter || '').toLowerCase();
+  const visible = state.loadedProjects.filter(p =>
+    p.name.toLowerCase().includes(f) ||
+    (p.teams && p.teams.some(t => t.toLowerCase().includes(f)))
+  );
+  const limit = state.showAll || filter ? visible.length : 6;
+  const toShow = visible.slice(0, limit);
+
+  if (visible.length === 0) {
+    grid.innerHTML = '<div class="proj-empty">No projects found.</div>';
+    showMore.classList.add('hidden');
+    countBar.classList.add('hidden');
+    return;
+  }
+
+  grid.innerHTML = toShow.map(p => {
+    const realIdx = state.loadedProjects.indexOf(p);
+    return (p.teams && p.teams.length > 1)
+      ? _multiCard(p, realIdx)
+      : _singleCard(p, realIdx);
+  }).join('');
+
+  const remaining = visible.length - toShow.length;
+  if (remaining > 0 && !filter) {
+    showMore.classList.remove('hidden');
+    showMoreBtn.textContent = 'Show ' + remaining + ' more';
+  } else {
+    showMore.classList.add('hidden');
+  }
+
+  const selectedProjects = new Set(Array.from(state.selectedKeys).map(k => k.split('|')[0]));
+  countBar.classList.remove('hidden');
+  countBar.textContent = selectedProjects.size + ' of ' + state.loadedProjects.length + ' projects selected';
+}
+
+// Single-team card: click toggles selection
+function toggleSingleCard(card) {
+  const name = card.dataset.proj;
+  if (state.selectedKeys.has(name)) state.selectedKeys.delete(name);
+  else state.selectedKeys.add(name);
+  renderProjects(document.getElementById('projSearch').value);
+}
+
+// Multi-team card header: click expands/collapses
+function toggleExpandCard(card) {
+  card.classList.toggle('teams-open');
+}
+
+// Team row inside multi-team card: click toggles that team's selection
+function toggleTeamRow(row) {
+  const key = row.dataset.key;
+  if (state.selectedKeys.has(key)) state.selectedKeys.delete(key);
+  else state.selectedKeys.add(key);
+  renderProjects(document.getElementById('projSearch').value);
+}
+
+// WIT toggle button (single-team or per-team)
+function setTypeBtn(btn) {
+  const key = btn.dataset.key;
+  const type = btn.dataset.type;
+  state.projectTypes[key] = type;
+  btn.closest('.type-toggle').querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function filterProjects(val) { renderProjects(val); }
+function showAllProjects() { state.showAll = true; renderProjects(document.getElementById('projSearch').value); }
+
+function renderSNGroups(filter) {
+  const list     = document.getElementById('snGroupsList');
+  const countBar = document.getElementById('snGroupCountBar');
+  const checkSvg = '<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const f = (filter !== undefined ? filter : (document.getElementById('snGroupSearch')?.value || '')).toLowerCase();
+
+  if (state.snGroups.length === 0) {
+    list.innerHTML = '<div class="proj-empty" style="padding:20px">No groups found. Test your ServiceNow connection in Step 2.</div>';
+    if (countBar) countBar.classList.add('hidden');
+    return;
+  }
+
+  const visible = f
+    ? state.snGroups.filter(g => (g.name || g).toLowerCase().includes(f))
+    : state.snGroups;
+
+  if (visible.length === 0) {
+    list.innerHTML = '<div class="proj-empty" style="padding:16px 20px">No groups match your search.</div>';
+  } else {
+    list.innerHTML = visible.map(g => {
+      const name = g.name || g;
+      const sel  = state.selectedSNGroups.has(name);
+      return `<div class="sn-group-item${sel ? ' selected' : ''}" data-group="${escHtml(name)}" onclick="toggleSNGroup(this.dataset.group)">
+        <div class="sn-group-check">${sel ? checkSvg : ''}</div>
+        <div class="sn-group-name">${escHtml(name)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  if (countBar) {
+    countBar.classList.remove('hidden');
+    const selCount = state.selectedSNGroups.size;
+    const total    = state.snGroups.length;
+    countBar.textContent = selCount + ' of ' + total + ' groups selected'
+      + (f ? ' (showing ' + visible.length + ' of ' + total + ')' : '');
+  }
+}
+
+function toggleSNGroup(name) {
+  if (state.selectedSNGroups.has(name)) state.selectedSNGroups.delete(name);
+  else state.selectedSNGroups.add(name);
+  renderSNGroups();
+}
+
+function filterSNGroups(val) { renderSNGroups(val); }
+
+function selectAllSNGroups(select) {
+  // Select/deselect only the currently visible (filtered) groups
+  const f = (document.getElementById('snGroupSearch')?.value || '').toLowerCase();
+  const targets = f
+    ? state.snGroups.filter(g => (g.name || g).toLowerCase().includes(f))
+    : state.snGroups;
+  targets.forEach(g => {
+    const name = g.name || g;
+    if (select) state.selectedSNGroups.add(name);
+    else state.selectedSNGroups.delete(name);
+  });
+  renderSNGroups();
+}
+
+/* ════════════════
+   FINISH SETUP
+════════════════ */
+async function finishSetup() {
+  const wantsAz = state.selection === 'A' || state.selection === 'AB' || state.selection === 'C';
+  const wantsSn = state.selection === 'B' || state.selection === 'AB' || state.selection === 'C';
+
+  let azOk = !wantsAz;
+  let snOk = !wantsSn;
+
+  if (wantsAz) {
+    const org = document.getElementById('azOrg').value.trim();
+    const pat = document.getElementById('azPat').value.trim();
+
+    if (org && pat) {
+      // Validate: at least one project must be selected
+      if (state.selectedKeys.size === 0) {
+        showToast('Select at least one project to monitor.', 'warn');
+        return;
+      }
+
+      // Build projects param: "ProjName:Type" or "ProjName:Type:TeamName"
+      const projectsParam = Array.from(state.selectedKeys)
+        .map(key => {
+          const type = state.projectTypes[key] || 'User Story';
+          const pipeIdx = key.indexOf('|');
+          if (pipeIdx >= 0) {
+            const name = key.slice(0, pipeIdx);
+            const team = key.slice(pipeIdx + 1);
+            return name + ':' + type + ':' + team;
+          }
+          return key + ':' + type;
+        })
+        .join(',');
+
+      try {
+        const body = new URLSearchParams({ org, pat, projects: projectsParam });
+        const resp = await fetch('/setup', { method: 'POST', body: body.toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          showToast('Azure setup failed: ' + (data.error || resp.statusText), 'error');
+          return; // Do not advance to Done screen on failure
+        }
+        azOk = true;
+      } catch (err) {
+        showToast('Azure setup error: ' + err.message, 'error');
+        return; // Do not advance to Done screen on error
+      }
+    } else {
+      // No credentials filled — skip azure save silently (skipped)
+      azOk = true;
+    }
+  }
+
+  if (wantsSn) {
+    const instance = document.getElementById('snInstance')?.value?.trim();
+    const user = document.getElementById('snUser')?.value?.trim();
+    const pass = document.getElementById('snPass')?.value?.trim();
+
+    if (instance && user && pass) {
+      // Include selected assignment groups (if user went through the groups step)
+      const selectedGroupNames = state.snGroups.length > 0
+        ? Array.from(state.selectedSNGroups)
+        : undefined;
+      try {
+        const body = { instance, user, pass };
+        if (selectedGroupNames !== undefined) body.assignmentGroups = selectedGroupNames;
+        const resp = await fetch('/api/sn-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          showToast('ServiceNow setup failed: ' + (data.error || resp.statusText), 'error');
+          return; // Do not advance to Done screen on failure
+        }
+        snOk = true;
+      } catch (err) {
+        showToast('ServiceNow setup error: ' + err.message, 'error');
+        return; // Do not advance to Done screen on error
+      }
+    } else {
+      snOk = true; // skipped
+    }
+  }
+
+  // Always mark onboarding as complete so the user is not redirected back
+  // to /onboarding on next visit (even when no Azure config was provided).
+  await fetch('/api/complete-onboarding', { method: 'POST' }).catch(() => {});
+
+  goTo(4);
+}
+
+/* ════════════════
+   SCREEN 4 — DONE
+════════════════ */
+function prepareScreen4() {
+  const sel = state.selection;
+  const nProj = new Set(Array.from(state.selectedKeys).map(k => k.split('|')[0])).size;
+  const checkSvg = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+  let pills = '';
+  const wantsAz = sel === 'A' || sel === 'AB' || sel === 'C';
+  const wantsSn = sel === 'B' || sel === 'AB' || sel === 'C';
+
+  if (wantsAz) pills += '<div class="done-pill">' + checkSvg + ' Azure DevOps configured</div>';
+  if (wantsSn) pills += '<div class="done-pill">' + checkSvg + ' ServiceNow configured</div>';
+  if (wantsAz && nProj > 0) pills += '<div class="done-pill">' + checkSvg + ' ' + nProj + ' project' + (nProj !== 1 ? 's' : '') + ' selected</div>';
+  if (wantsSn && state.selectedSNGroups.size > 0) {
+    const ng = state.selectedSNGroups.size;
+    pills += '<div class="done-pill">' + checkSvg + ' ' + ng + ' SN group' + (ng !== 1 ? 's' : '') + ' monitored</div>';
+  }
+
+  document.getElementById('donePills').innerHTML = pills;
+
+  // Reset checkmark animation
+  const circle = document.querySelector('.checkmark-circle');
+  const check = document.querySelector('.checkmark-check');
+  if (circle) { circle.style.animation = 'none'; void circle.offsetWidth; circle.style.animation = ''; }
+  if (check) { check.style.animation = 'none'; void check.offsetWidth; check.style.animation = ''; }
+}
+
+function openDashboard() {
+  location.href = '/';
+}
+
+/* ════════════════
+   UTILS
+════════════════ */
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ════════════════
+   INIT
+════════════════ */
+// Apply saved theme
+const savedTheme = localStorage.getItem('theme') || 'dark';
+document.documentElement.setAttribute('data-theme', savedTheme);
+
+// Fade in screen0 on load
+const s0 = document.getElementById('screen0');
+s0.style.opacity = '0';
+s0.style.transform = 'translateY(10px)';
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  s0.style.transition = 'opacity .5s ease, transform .5s ease';
+  s0.style.opacity = '1';
+  s0.style.transform = 'translateY(0)';
+}));
+</script>
+
+<script type="module">
+import { initI18n, applyTranslations, t, setLocale, getLocale } from '/modules/i18n.js';
+await initI18n();
+applyTranslations();
+window._t = t;
+window.setLocale = (lang) => {
+  setLocale(lang);
+  // setLocale in i18n.js calls location.reload() after saving to localStorage
+  // so the button state update below only matters if reload is prevented
+  document.querySelectorAll('.ob-lang-btn').forEach(b => {
+    const active = b.dataset.lang === lang;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-pressed', String(active));
+  });
+  applyTranslations();
+};
+// Set initial active lang button based on current locale
+const locale = getLocale();
+document.querySelectorAll('.ob-lang-btn').forEach(b => {
+  const active = b.dataset.lang === locale;
+  b.classList.toggle('active', active);
+  b.setAttribute('aria-pressed', String(active));
+});
+</script>
+
+</body>
+</html>

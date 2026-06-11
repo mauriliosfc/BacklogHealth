@@ -1,13 +1,32 @@
-function calcHealth(total, semEst, semResp, bugs) {
+const DEFAULT_THRESHOLDS = {
+  semEst:  { warn: 30, crit: 50 },
+  semResp: { warn: 20 },
+  bugs:    { warn: 5,  crit: 10 },
+};
+
+function calcHealth(openTotal, semEst, semResp, bugs, thresholds) {
+  const th = {
+    semEst:  { ...DEFAULT_THRESHOLDS.semEst,  ...(thresholds?.semEst  || {}) },
+    semResp: { ...DEFAULT_THRESHOLDS.semResp, ...(thresholds?.semResp || {}) },
+    bugs:    { ...DEFAULT_THRESHOLDS.bugs,    ...(thresholds?.bugs    || {}) },
+  };
   const reasons = [];
-  if (bugs > 10) reasons.push(`${bugs} bugs abertos (crítico: >10)`);
-  else if (bugs > 5) reasons.push(`${bugs} bugs abertos (alerta: >5)`);
-  if (total > 0 && semEst > total * 0.5) reasons.push(`${Math.round(semEst/total*100)}% das US sem estimativa (crítico: >50%)`);
-  else if (total > 0 && semEst > total * 0.3) reasons.push(`${Math.round(semEst/total*100)}% das US sem estimativa (alerta: >30%)`);
-  if (total > 0 && semResp > total * 0.2) reasons.push(`${Math.round(semResp/total*100)}% das US sem responsável (alerta: >20%)`);
-  const tooltip = reasons.length ? reasons.join(" · ") : "Backlog bem estruturado";
-  if (bugs > 10 || semEst > total * 0.5) return ["🔴 Crítico", "red", tooltip];
-  if (semEst > total * 0.3 || semResp > total * 0.2 || bugs > 5) return ["🟡 Atenção", "yellow", tooltip];
-  return ["🟢 Saudável", "green", tooltip];
+  if (bugs > th.bugs.crit)
+    reasons.push(`${bugs} bugs abertos (crítico: >${th.bugs.crit})`);
+  else if (bugs > th.bugs.warn)
+    reasons.push(`${bugs} bugs abertos (alerta: >${th.bugs.warn})`);
+  if (openTotal > 0 && semEst > openTotal * th.semEst.crit / 100)
+    reasons.push(`${Math.round(semEst / openTotal * 100)}% das US sem estimativa (crítico: >${th.semEst.crit}%)`);
+  else if (openTotal > 0 && semEst > openTotal * th.semEst.warn / 100)
+    reasons.push(`${Math.round(semEst / openTotal * 100)}% das US sem estimativa (alerta: >${th.semEst.warn}%)`);
+  if (openTotal > 0 && semResp > openTotal * th.semResp.warn / 100)
+    reasons.push(`${Math.round(semResp / openTotal * 100)}% das US sem responsável (alerta: >${th.semResp.warn}%)`);
+  const tooltip = reasons.length ? reasons.join(' · ') : 'Backlog bem estruturado';
+  if (bugs > th.bugs.crit || (openTotal > 0 && semEst > openTotal * th.semEst.crit / 100))
+    return ['🔴 Crítico', 'red', tooltip];
+  if ((openTotal > 0 && (semEst > openTotal * th.semEst.warn / 100 || semResp > openTotal * th.semResp.warn / 100)) || bugs > th.bugs.warn)
+    return ['🟡 Atenção', 'yellow', tooltip];
+  return ['🟢 Saudável', 'green', tooltip];
 }
-module.exports = { calcHealth };
+
+module.exports = { calcHealth, DEFAULT_THRESHOLDS };

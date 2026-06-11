@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IT-08 — Modais de Suporte · Backlog Health</title>
+<style>
+:root {
+  --bg-page:#020617; --bg-card:#0f172a; --bg-border:#1e293b; --bg-el:#1e293b; --bg-el2:#334155;
+  --text-1:#f1f5f9; --text-2:#cbd5e1; --text-muted:#94a3b8; --text-faint:#64748b;
+  --c-blue:#60a5fa; --c-blue-bg:#1e3a5f; --c-blue-bd:#2d5a8e;
+  --c-green:#22c55e; --c-green-bg:#14532d; --c-green-bd:#166534;
+  --c-yellow:#f59e0b; --c-yellow-bg:#422006;
+  --c-red:#ef4444; --c-red-bg:#450a0a;
+  --c-purple:#a78bfa; --c-purple-bg:#2e1065;
+  --c-teal:#2dd4bf; --c-teal-bg:#134e4a; --c-teal-bd:#0f766e;
+  --hover-bg:rgba(255,255,255,.04); --shadow:0 4px 24px rgba(0,0,0,.45); --modal-bg:rgba(0,0,0,.75);
+}
+[data-theme="light"] {
+  --bg-page:#f0f4f8; --bg-card:#fff; --bg-border:#e2e8f0; --bg-el:#f8fafc; --bg-el2:#e2e8f0;
+  --text-1:#0f172a; --text-2:#1e293b; --text-muted:#475569; --text-faint:#94a3b8;
+  --c-blue:#2563eb; --c-blue-bg:#dbeafe; --c-blue-bd:#93c5fd;
+  --c-green:#16a34a; --c-green-bg:#dcfce7; --c-green-bd:#86efac;
+  --c-yellow:#d97706; --c-yellow-bg:#fef3c7;
+  --c-red:#dc2626; --c-red-bg:#fee2e2;
+  --c-purple:#7c3aed; --c-purple-bg:#ede9fe;
+  --c-teal:#0d9488; --c-teal-bg:#ccfbf1; --c-teal-bd:#5eead4;
+  --hover-bg:rgba(0,0,0,.04); --shadow:0 4px 24px rgba(0,0,0,.1); --modal-bg:rgba(0,0,0,.5);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg-page);
+  color: var(--text-1);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+  border-right: 1px solid var(--bg-border);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow-y: auto;
+}
+.sidebar-logo {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--bg-border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-icon {
+  width: 32px; height: 32px;
+  background: var(--c-blue-bg);
+  border: 1px solid var(--c-blue-bd);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-icon svg { width: 18px; height: 18px; color: var(--c-blue); }
+.logo-text { font-weight: 700; font-size: 13px; color: var(--text-1); line-height: 1.2; }
+.logo-sub { font-size: 10px; color: var(--text-faint); }
+
+.sidebar-section { padding: 8px 0; }
+.sidebar-label {
+  font-size: 10px; font-weight: 600; letter-spacing: .08em;
+  color: var(--text-faint); text-transform: uppercase;
+  padding: 4px 16px 6px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 0;
+  transition: background .15s, color .15s;
+  font-size: 13px;
+  border: none; background: none; width: 100%; text-align: left;
+  position: relative;
+}
+.nav-item:hover { background: var(--hover-bg); color: var(--text-1); }
+.nav-item.active { color: var(--c-blue); background: var(--c-blue-bg); }
+.nav-item.highlighted { color: var(--c-teal); }
+.nav-item.highlighted-purple { color: var(--c-purple); }
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+.nav-badge {
+  margin-left: auto;
+  background: var(--c-blue-bg);
+  color: var(--c-blue);
+  border: 1px solid var(--c-blue-bd);
+  border-radius: 10px;
+  font-size: 10px;
+  padding: 1px 6px;
+  font-weight: 600;
+}
+
+/* ─── MAIN ─── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: filter .25s ease;
+}
+.main.blurred { filter: blur(3px) brightness(0.5); pointer-events: none; }
+
+/* ─── TOPBAR ─── */
+.topbar {
+  height: 56px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--bg-border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.topbar-title { font-size: 16px; font-weight: 600; color: var(--text-1); }
+.topbar-org { font-size: 12px; color: var(--text-muted); margin-left: 4px; }
+.topbar-spacer { flex: 1; }
+.btn-icon {
+  width: 34px; height: 34px;
+  border: 1px solid var(--bg-border);
+  background: var(--bg-el);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background .15s, color .15s, border-color .15s;
+}
+.btn-icon:hover { background: var(--hover-bg); color: var(--text-1); border-color: var(--bg-el2); }
+.btn-icon svg { width: 16px; height: 16px; }
+
+/* ─── CONTENT AREA ─── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+}
+
+/* ─── FAKE BACKGROUND CARDS ─── */
+.bg-cards {
+  width: 100%;
+  max-width: 900px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  opacity: .35;
+  pointer-events: none;
+  user-select: none;
+}
+.fake-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.fake-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.fake-badge {
+  font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
+}
+.fake-badge.blue { background: var(--c-blue-bg); color: var(--c-blue); border: 1px solid var(--c-blue-bd); }
+.fake-badge.green { background: var(--c-green-bg); color: var(--c-green); border: 1px solid var(--c-green-bd); }
+.fake-badge.purple { background: var(--c-purple-bg); color: var(--c-purple); }
+.fake-title { font-size: 13px; font-weight: 600; color: var(--text-1); }
+.fake-sub { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; }
+.fake-bar { height: 6px; border-radius: 3px; background: var(--bg-el); margin-bottom: 6px; overflow: hidden; }
+.fake-bar-fill { height: 100%; border-radius: 3px; }
+.fake-stats { display: flex; gap: 12px; margin-top: 10px; }
+.fake-stat { flex: 1; }
+.fake-stat-val { font-size: 18px; font-weight: 700; }
+.fake-stat-lbl { font-size: 10px; color: var(--text-faint); }
+
+/* ─── TRIGGER CARD ─── */
+.trigger-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: 16px;
+  padding: 32px 40px;
+  text-align: center;
+  max-width: 560px;
+  width: 100%;
+}
+.trigger-tag {
+  display: inline-block;
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  color: var(--c-blue); background: var(--c-blue-bg);
+  border: 1px solid var(--c-blue-bd);
+  border-radius: 20px; padding: 3px 12px; margin-bottom: 12px;
+}
+.trigger-title { font-size: 20px; font-weight: 700; color: var(--text-1); margin-bottom: 6px; }
+.trigger-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 28px; }
+.trigger-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* ─── BUTTONS ─── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: none; border-radius: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 500;
+  padding: 10px 18px;
+  transition: opacity .15s, transform .1s;
+  text-decoration: none;
+}
+.btn:hover { opacity: .88; }
+.btn:active { transform: scale(.97); }
+.btn-primary { background: var(--c-blue); color: #fff; }
+.btn-primary-blue { background: var(--c-blue); color: #fff; }
+.btn-primary-purple { background: var(--c-purple); color: #fff; }
+.btn-primary-teal { background: var(--c-teal); color: #0f172a; }
+.btn-ghost {
+  background: transparent; color: var(--text-muted);
+  border: 1px solid var(--bg-border);
+}
+.btn-ghost:hover { background: var(--hover-bg); color: var(--text-1); }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-full { width: 100%; justify-content: center; }
+.btn svg { width: 16px; height: 16px; }
+
+/* ─── MODAL OVERLAY ─── */
+.overlay {
+  position: fixed; inset: 0;
+  background: var(--modal-bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s ease;
+  padding: 20px;
+}
+.overlay.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  width: 100%;
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 40px);
+  transform: translateY(12px) scale(.97);
+  transition: transform .2s ease, opacity .2s ease;
+  opacity: 0;
+}
+.overlay.open .modal {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.modal-feedback { max-width: 520px; }
+.modal-sn { max-width: 660px; }
+
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--bg-border);
+  display: flex; align-items: flex-start; gap: 14px;
+  flex-shrink: 0;
+}
+.modal-header-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.modal-header-icon.teal { background: var(--c-teal-bg); border: 1px solid var(--c-teal-bd); color: var(--c-teal); }
+.modal-header-icon.sn { background: #3b0d0d; border: 1px solid #6b1414; color: #f87171; }
+.modal-header-icon svg { width: 22px; height: 22px; }
+.modal-header-text { flex: 1; }
+.modal-title { font-size: 16px; font-weight: 700; color: var(--text-1); }
+.modal-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.modal-close {
+  width: 30px; height: 30px;
+  border: 1px solid var(--bg-border);
+  background: var(--bg-el);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: background .15s, color .15s;
+}
+.modal-close:hover { background: var(--c-red-bg); color: var(--c-red); border-color: var(--c-red); }
+.modal-close svg { width: 14px; height: 14px; }
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--bg-border);
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+.modal-footer-left { flex: 1; }
+
+/* ─── FORM ELEMENTS ─── */
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-label {
+  font-size: 12px; font-weight: 600; color: var(--text-2);
+  display: flex; align-items: center; gap: 6px;
+}
+.form-label .required { color: var(--c-red); }
+.info-icon { width: 14px; height: 14px; color: var(--text-faint); cursor: help; }
+
+.form-input, .form-select, .form-textarea {
+  background: var(--bg-el);
+  border: 1px solid var(--bg-border);
+  border-radius: 8px;
+  color: var(--text-1);
+  font-size: 13px;
+  padding: 9px 12px;
+  font-family: inherit;
+  transition: border-color .15s;
+  width: 100%;
+  outline: none;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: var(--c-blue);
+  box-shadow: 0 0 0 2px rgba(96,165,250,.15);
+}
+.form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px; }
+.form-textarea { resize: vertical; min-height: 88px; }
+
+.input-with-counter { position: relative; }
+.char-counter {
+  position: absolute; right: 10px; bottom: 8px;
+  font-size: 10px; color: var(--text-faint); pointer-events: none;
+}
+
+.input-group { display: flex; }
+.input-prefix {
+  background: var(--bg-el2);
+  border: 1px solid var(--bg-border);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  padding: 9px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  display: flex; align-items: center;
+}
+.input-group .form-input { border-radius: 0 8px 8px 0; }
+
+.input-with-eye { position: relative; }
+.input-with-eye .form-input { padding-right: 38px; }
+.eye-toggle {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  color: var(--text-faint); padding: 2px;
+  display: flex; align-items: center;
+}
+.eye-toggle:hover { color: var(--text-muted); }
+.eye-toggle svg { width: 16px; height: 16px; }
+
+/* ─── SELECT WITH ICON ─── */
+.type-select-wrapper { position: relative; }
+.type-select-icon {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 1;
+}
+.type-select-icon svg { width: 12px; height: 12px; }
+.type-select-wrapper .form-select { padding-left: 38px; }
+
+/* ─── INFO BOX ─── */
+.info-box {
+  background: var(--bg-el);
+  border: 1px solid var(--bg-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex; gap: 10px;
+  align-items: flex-start;
+}
+.info-box svg { width: 14px; height: 14px; color: var(--c-blue); flex-shrink: 0; margin-top: 1px; }
+.info-box-text { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+
+/* ─── CHECKBOX ─── */
+.checkbox-row {
+  display: flex; gap: 10px; align-items: flex-start;
+}
+.checkbox-row input[type="checkbox"] {
+  width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px;
+  accent-color: var(--c-blue); cursor: pointer;
+}
+.checkbox-label { font-size: 12.5px; color: var(--text-2); cursor: pointer; }
+.checkbox-helper { font-size: 11px; color: var(--text-faint); margin-top: 3px; }
+
+/* ─── DIVIDER ─── */
+.section-divider {
+  border: none; border-top: 1px solid var(--bg-border); margin: 4px 0;
+}
+.section-card {
+  background: var(--bg-el);
+  border: 1px solid var(--bg-border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.section-card-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-muted);
+  display: flex; align-items: center; gap: 6px;
+}
+.section-card-title svg { width: 13px; height: 13px; }
+
+/* ─── CONNECTION TEST ─── */
+.test-row { display: flex; align-items: center; gap: 10px; }
+.test-row .form-group { flex: 1; }
+.conn-status { display: flex; align-items: center; gap: 6px; }
+.conn-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 500;
+  padding: 5px 10px; border-radius: 20px;
+}
+.conn-pill.success { background: var(--c-green-bg); color: var(--c-green); border: 1px solid var(--c-green-bd); }
+.conn-pill svg { width: 12px; height: 12px; }
+
+/* ─── PROJECT ROWS ─── */
+.proj-rows { display: flex; flex-direction: column; gap: 10px; }
+.proj-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 1fr 18px;
+  gap: 8px;
+  align-items: center;
+}
+.proj-badge {
+  font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px;
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.proj-badge.blue { background: var(--c-blue-bg); color: var(--c-blue); border: 1px solid var(--c-blue-bd); }
+.proj-badge.green { background: var(--c-green-bg); color: var(--c-green); border: 1px solid var(--c-green-bd); }
+.proj-badge.purple { background: var(--c-purple-bg); color: var(--c-purple); border: 1px solid #5b21b6; }
+
+.form-input.mono { font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-muted); }
+
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  transition: background .3s;
+}
+.status-dot.green { background: var(--c-green); box-shadow: 0 0 4px var(--c-green); }
+.status-dot.gray { background: var(--text-faint); }
+.status-dot.yellow { background: var(--c-yellow); box-shadow: 0 0 4px var(--c-yellow); }
+
+.proj-helper {
+  grid-column: 2 / -1;
+  font-size: 11px; color: var(--c-blue); cursor: pointer;
+  text-decoration: underline; margin-top: -4px;
+}
+.proj-note { font-size: 11.5px; color: var(--text-faint); font-style: italic; }
+
+/* ─── COLLAPSIBLE ─── */
+.collapsible-header {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
+  padding: 12px 16px;
+  background: var(--bg-el);
+  border: 1px solid var(--bg-border);
+  border-radius: 10px;
+  transition: background .15s;
+}
+.collapsible-header:hover { background: var(--hover-bg); }
+.collapsible-title {
+  flex: 1; font-size: 13px; font-weight: 600; color: var(--text-2);
+}
+.collapsible-toggle {
+  width: 22px; height: 22px;
+  background: var(--bg-el2);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); flex-shrink: 0;
+  transition: transform .2s;
+}
+.collapsible-toggle svg { width: 14px; height: 14px; }
+.collapsible-toggle.open { transform: rotate(45deg); }
+
+.collapsible-body {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .3s ease, opacity .3s ease, padding .3s ease;
+  opacity: 0;
+}
+.collapsible-body.open { max-height: 600px; opacity: 1; }
+
+.collapsible-inner {
+  border: 1px solid var(--bg-border);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  padding: 16px;
+  background: var(--bg-el);
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* ─── MULTI-SELECT PILLS ─── */
+.pill-select { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill {
+  font-size: 11.5px; padding: 4px 10px; border-radius: 20px;
+  cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+  border: 1px solid var(--bg-border);
+  background: var(--bg-el2); color: var(--text-muted);
+  user-select: none;
+}
+.pill.active {
+  background: var(--c-blue-bg); color: var(--c-blue); border-color: var(--c-blue-bd);
+}
+
+/* ─── SUCCESS SCREEN ─── */
+.success-screen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 12px; padding: 32px 24px;
+}
+.success-icon {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--c-green-bg); border: 2px solid var(--c-green-bd);
+  display: flex; align-items: center; justify-content: center;
+}
+.success-icon svg { width: 32px; height: 32px; color: var(--c-green); }
+.success-title { font-size: 18px; font-weight: 700; color: var(--text-1); }
+.success-sub { font-size: 13px; color: var(--text-muted); }
+.success-link { font-size: 13px; color: var(--c-blue); text-decoration: underline; cursor: pointer; }
+
+/* ─── SPINNER ─── */
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+.spinner.dark {
+  border: 2px solid rgba(0,0,0,.15);
+  border-top-color: #0f172a;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── LOADING STATE ─── */
+.btn.loading { pointer-events: none; opacity: .8; }
+.btn.loading .btn-text { display: none; }
+.btn.loading .btn-spinner { display: flex; }
+.btn-spinner { display: none; align-items: center; gap: 6px; }
+
+/* ─── TOAST ─── */
+.toast-container {
+  position: fixed; bottom: 24px; right: 24px;
+  z-index: 9999;
+  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  box-shadow: var(--shadow);
+  font-size: 13px; color: var(--text-1);
+  transform: translateX(120%);
+  transition: transform .3s cubic-bezier(.22,.68,0,1.2);
+  pointer-events: all;
+  min-width: 220px;
+}
+.toast.show { transform: translateX(0); }
+.toast svg { width: 16px; height: 16px; color: var(--c-green); flex-shrink: 0; }
+
+/* ─── HIDDEN ─── */
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>
+    </div>
+    <div>
+      <div class="logo-text">Backlog Health</div>
+      <div class="logo-sub">accenture-brasil</div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Navegação</div>
+    <button class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Projetos
+      <span class="nav-badge">3</span>
+    </button>
+    <button class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z"/><path d="M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/><path d="M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z"/><path d="M3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z"/><path d="M14 14.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5z"/><path d="M15.5 19H14v1.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z"/><path d="M10 9.5C10 8.67 9.33 8 8.5 8h-5C2.67 8 2 8.67 2 9.5S2.67 11 3.5 11h5c.83 0 1.5-.67 1.5-1.5z"/><path d="M8.5 5H10V3.5C10 2.67 9.33 2 8.5 2S7 2.67 7 3.5 7.67 5 8.5 5z"/></svg>
+      Copiloto IA
+    </button>
+    <button class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Review Mensal
+    </button>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Suporte</div>
+    <button class="nav-item highlighted" onclick="openModal('feedback')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      Feedback
+    </button>
+    <button class="nav-item highlighted-purple" onclick="openModal('sn')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      Configuracoes SN
+    </button>
+    <button class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93A10 10 0 0 1 19.07 19.07"/></svg>
+      Configuracoes
+    </button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main" id="mainArea">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <span class="topbar-title">Dashboard</span>
+    <span class="topbar-org">· accenture-brasil</span>
+    <div class="topbar-spacer"></div>
+    <button class="btn-icon" title="Alternar tema" onclick="toggleTheme()">
+      <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <svg id="themeIconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+    <button class="btn-icon" title="Atualizar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.07-7.85"/></svg>
+    </button>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+    <!-- FAKE BG CARDS -->
+    <div class="bg-cards">
+      <div class="fake-card">
+        <div class="fake-card-header">
+          <span class="fake-badge blue">Alpha Squad</span>
+        </div>
+        <div class="fake-sub">Sprint 42 · 14 items</div>
+        <div class="fake-bar"><div class="fake-bar-fill" style="width:78%;background:var(--c-green)"></div></div>
+        <div class="fake-bar"><div class="fake-bar-fill" style="width:55%;background:var(--c-blue)"></div></div>
+        <div class="fake-stats">
+          <div class="fake-stat"><div class="fake-stat-val" style="color:var(--c-green)">78%</div><div class="fake-stat-lbl">Saude</div></div>
+          <div class="fake-stat"><div class="fake-stat-val" style="color:var(--c-blue)">12/14</div><div class="fake-stat-lbl">Com desc.</div></div>
+          <div class="fake-stat"><div class="fake-stat-val" style="color:var(--c-yellow)">2</div><div class="fake-stat-lbl">Bugs</div></div>
+        </div>
+      </div>
+      <div class="fake-card">
+        <div class="fake-card-header">
+          <span class="fake-badge green">Beta Platform</span>
+        </div>
+        <div class="fake-sub">Sprint 18 · 9 items</div>
+        <div class="fake-bar"><div class="fake-bar-fill" style="width:92%;background:var(--c-green)"></div></div>
+        <div class="fake-bar"><div class="fake-bar-fill" style="width:88%;background:var(--c-blue)"></div></div>
+        <div class="fake-stats">
+          <div class="fake-stat"><div class="fake-stat-val" style="color:var(--c-green)">92%</div><div class="fake-stat-lbl">Saude</div></div>
+          <div class="fake-stat"><div class="fake-stat-val" style="color:var(--c-blue)">8/9</div><div class="fake-stat-lbl">Com desc.</div></div>
+          <div class="fake-stat"><div class="fake-stat-val" style="color:var(--c-green)">0</div><div class="fake-stat-lbl">Bugs</div></div>
+        </div>
+      </div>
+      <div class="fake-card">
+        <div class="fake-card-header">
+          <span class="fake-badge purple">Gamma Experience</span>
+        </div>
+        <div class="fake-sub">Sprint 7 · 21 items</div>
+        <div class="fake-bar"><div class="fake-bar-fill" style="width:43%;background:var(--c-red)"></div></div>
+        <div class="fake-bar"><div class="fake-bar-fill" style="width:60%;background:var(--c-blue)"></div></div>
+        <div class="fake-stats">
+          <div class="fake-stat"><div class="fake-stat-val" style="color:var(--c-red)">43%</div><div class="fake-stat-lbl">Saude</div></div>
+          <div class="fake-stat"><div class="fake-stat-val" style="color:var(--c-blue)">13/21</div><div class="fake-stat-lbl">Com desc.</div></div>
+          <div class="fake-stat"><div class="fake-stat-val" style="color:var(--c-red)">7</div><div class="fake-stat-lbl">Bugs</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TRIGGER CARD -->
+    <div class="trigger-card">
+      <div class="trigger-tag">IT-08</div>
+      <div class="trigger-title">Modais de Suporte</div>
+      <div class="trigger-sub">Feedback do usuario e configuracao ServiceNow</div>
+      <div class="trigger-btns">
+        <button class="btn btn-primary-blue" onclick="openModal('feedback')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Abrir Modal de Feedback</span>
+        </button>
+        <button class="btn btn-primary-purple" onclick="openModal('sn')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+          <span>Abrir Configuracao ServiceNow</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- MODAL 1: FEEDBACK -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="overlay" id="overlayFeedback" onclick="handleOverlayClick(event,'overlayFeedback')">
+  <div class="modal modal-feedback" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+
+    <!-- HEADER -->
+    <div class="modal-header">
+      <div class="modal-header-icon teal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/></svg>
+      </div>
+      <div class="modal-header-text">
+        <div class="modal-title" id="feedbackTitle">Enviar Feedback</div>
+        <div class="modal-subtitle">Sua opiniao nos ajuda a melhorar o produto</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('feedback')" title="Fechar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- BODY — FORM (toggled hidden on success) -->
+    <div class="modal-body" id="feedbackFormBody">
+
+      <!-- Tipo -->
+      <div class="form-group">
+        <label class="form-label">
+          Tipo de Feedback <span class="required">*</span>
+        </label>
+        <div class="type-select-wrapper">
+          <div class="type-select-icon" id="typeIcon" style="background:#1e3a5f">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <select class="form-select" id="feedbackType" onchange="onTypeChange()">
+            <option value="sugestao" data-icon="bulb" data-color="#1e3a5f" data-stroke="#60a5fa">Sugestao de melhoria</option>
+            <option value="bug" data-icon="bug" data-color="#450a0a" data-stroke="#ef4444">Reportar bug</option>
+            <option value="duvida" data-icon="question" data-color="#422006" data-stroke="#f59e0b">Duvida ou pergunta</option>
+            <option value="elogio" data-icon="star" data-color="#2e1065" data-stroke="#a78bfa">Elogio</option>
+            <option value="outro" data-icon="other" data-color="#1e293b" data-stroke="#94a3b8">Outro</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Titulo -->
+      <div class="form-group">
+        <label class="form-label" for="feedbackTitle2">
+          Titulo <span class="required">*</span>
+        </label>
+        <div class="input-with-counter">
+          <input class="form-input" id="feedbackTitle2" type="text" maxlength="80"
+            placeholder="Resumo breve do feedback"
+            oninput="updateCounter(this,'counterTitle',80)">
+          <span class="char-counter" id="counterTitle">0 / 80</span>
+        </div>
+      </div>
+
+      <!-- Descricao -->
+      <div class="form-group">
+        <label class="form-label" for="feedbackDesc">Descricao <span style="color:var(--text-faint);font-weight:400">(opcional)</span></label>
+        <div class="input-with-counter" style="position:relative">
+          <textarea class="form-textarea" id="feedbackDesc" maxlength="500"
+            placeholder="Descreva com mais detalhes... (opcional)"
+            oninput="updateCounter(this,'counterDesc',500)" style="padding-bottom:20px"></textarea>
+          <span class="char-counter" id="counterDesc">0 / 500</span>
+        </div>
+      </div>
+
+      <!-- Contexto automatico -->
+      <div class="info-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <div class="info-box-text">
+          Serao incluidos automaticamente: versao do app <strong>v1.8.2</strong>, organizacao Azure <strong>accenture-brasil</strong>, numero de projetos configurados <strong>3</strong>
+        </div>
+      </div>
+
+      <!-- Privacidade -->
+      <div class="form-group">
+        <div class="checkbox-row">
+          <input type="checkbox" id="privacyCheck" checked>
+          <div>
+            <label class="checkbox-label" for="privacyCheck">
+              Concordo em compartilhar informacoes de contexto nao-sensiveis para melhorar o diagnostico
+            </label>
+            <div class="checkbox-helper">Nenhuma credencial ou dado pessoal e enviado</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- BODY — SUCCESS (hidden by default) -->
+    <div class="success-screen hidden" id="feedbackSuccess">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="success-title">Feedback enviado com sucesso!</div>
+      <div class="success-sub">Issue #247 criada no GitHub</div>
+      <a class="success-link" href="#" target="_blank">Ver issue #247 &rarr;</a>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('feedback')" style="margin-top:4px">Fechar</button>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="modal-footer" id="feedbackFooter">
+      <div class="modal-footer-left">
+        <button class="btn btn-primary-teal btn-full" id="btnSubmitFeedback" onclick="submitFeedback()">
+          <span class="btn-text" style="display:flex;align-items:center;gap:8px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Enviar Feedback
+          </span>
+          <span class="btn-spinner">
+            <span class="spinner dark"></span>
+            Enviando...
+          </span>
+        </button>
+      </div>
+      <button class="btn btn-ghost" onclick="closeModal('feedback')">Cancelar</button>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- MODAL 2: SERVICENOW CONFIG -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="overlay" id="overlaySN" onclick="handleOverlayClick(event,'overlaySN')">
+  <div class="modal modal-sn" role="dialog" aria-modal="true" aria-labelledby="snModalTitle">
+
+    <!-- HEADER -->
+    <div class="modal-header">
+      <div class="modal-header-icon sn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 12h6"/><path d="M12 9v6"/></svg>
+      </div>
+      <div class="modal-header-text">
+        <div class="modal-title" id="snModalTitle">Configuracao ServiceNow</div>
+        <div class="modal-subtitle">Configure a integracao com o portal de incidentes</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('sn')" title="Fechar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- BODY -->
+    <div class="modal-body">
+
+      <!-- SECAO 1: CREDENCIAIS -->
+      <div class="section-card">
+        <div class="section-card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Credenciais Globais
+        </div>
+
+        <!-- Instancia -->
+        <div class="form-group">
+          <label class="form-label" for="snInstance">
+            Instancia
+            <span title="URL da instancia sem protocolo. Ex: empresa.service-now.com" style="cursor:help">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </span>
+          </label>
+          <div class="input-group">
+            <span class="input-prefix">https://</span>
+            <input class="form-input" id="snInstance" type="text" value="accenture-brasil.service-now.com">
+          </div>
+        </div>
+
+        <!-- Usuario -->
+        <div class="form-group">
+          <label class="form-label" for="snUser">Usuario</label>
+          <input class="form-input" id="snUser" type="text" value="svc.backlog.dashboard">
+        </div>
+
+        <!-- Senha -->
+        <div class="form-group">
+          <label class="form-label" for="snPass">Senha / Token</label>
+          <div class="input-with-eye">
+            <input class="form-input" id="snPass" type="password" value="s3cr3t-t0k3n-xYz">
+            <button class="eye-toggle" onclick="togglePassword('snPass', this)" title="Mostrar/ocultar senha">
+              <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Testar conexao -->
+        <div style="display:flex;align-items:center;gap:12px;justify-content:flex-end">
+          <div id="connStatusWrap" style="min-height:28px;display:flex;align-items:center"></div>
+          <button class="btn btn-primary-teal btn-sm" id="btnTestConn" onclick="testConnection()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span class="btn-text">Testar Conexao</span>
+            <span class="btn-spinner"><span class="spinner dark" style="border-top-color:#0f172a"></span></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- SECAO 2: GRUPOS POR PROJETO -->
+      <div class="section-card">
+        <div class="section-card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Grupos por Projeto
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:-6px">
+          Associe cada projeto a um Assignment Group do ServiceNow
+        </div>
+
+        <!-- Table header -->
+        <div style="display:grid;grid-template-columns:130px 1fr 1fr 18px;gap:8px;padding:0 0 4px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em">Projeto</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em">Assignment Group</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em">sys_id</div>
+          <div></div>
+        </div>
+
+        <div class="proj-rows">
+          <!-- Row 1 -->
+          <div>
+            <div class="proj-row">
+              <div><span class="proj-badge blue">Alpha Squad</span></div>
+              <input class="form-input" type="text" value="Squad Alpha — AMS" oninput="onProjInput(this, 'dot1')">
+              <input class="form-input mono" type="text" value="a1b2c3d4e5f67890" oninput="onProjInput(this, 'dot1')">
+              <span class="status-dot green" id="dot1" title="Configurado"></span>
+            </div>
+          </div>
+          <!-- Row 2 -->
+          <div>
+            <div class="proj-row">
+              <div><span class="proj-badge green">Beta Platform</span></div>
+              <input class="form-input" type="text" value="Plataforma Beta" oninput="onProjInput(this, 'dot2')">
+              <input class="form-input mono" type="text" value="f9e8d7c6b5a43210" oninput="onProjInput(this, 'dot2')">
+              <span class="status-dot green" id="dot2" title="Configurado"></span>
+            </div>
+          </div>
+          <!-- Row 3 -->
+          <div>
+            <div class="proj-row">
+              <div><span class="proj-badge purple">Gamma Experience</span></div>
+              <input class="form-input" type="text" placeholder="Buscar grupo..." oninput="onProjInput(this, 'dot3')">
+              <input class="form-input mono" type="text" placeholder="cole o sys_id..." oninput="onProjInput(this, 'dot3')">
+              <span class="status-dot gray" id="dot3" title="Nao configurado"></span>
+            </div>
+            <div class="proj-helper" style="padding-left:138px">
+              Como encontrar o sys_id? &rarr;
+            </div>
+          </div>
+        </div>
+
+        <div class="proj-note">
+          Projetos sem grupo configurado nao exibiram incidentes no Review Mensal
+        </div>
+      </div>
+
+      <!-- SECAO 3: CAMPOS DO RELATORIO (collapsible) -->
+      <div>
+        <div class="collapsible-header" onclick="toggleCollapsible()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;color:var(--text-muted)"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
+          <span class="collapsible-title">Campos do Relatorio</span>
+          <div class="collapsible-toggle" id="collapsibleToggle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+        </div>
+        <div class="collapsible-body" id="collapsibleBody">
+          <div class="collapsible-inner">
+            <div class="form-group">
+              <label class="form-label" for="groupPrimary">Agrupamento primario</label>
+              <select class="form-select" id="groupPrimary">
+                <option selected>Assignment Group</option>
+                <option>Category</option>
+                <option>Priority</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="groupSecondary">Agrupamento secundario</label>
+              <select class="form-select" id="groupSecondary">
+                <option>None</option>
+                <option selected>Category</option>
+                <option>Priority</option>
+                <option>State</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Campos adicionais</label>
+              <div class="pill-select" id="pillSelect">
+                <span class="pill active" onclick="togglePill(this)">Number</span>
+                <span class="pill active" onclick="togglePill(this)">Created</span>
+                <span class="pill" onclick="togglePill(this)">Updated</span>
+                <span class="pill active" onclick="togglePill(this)">Priority</span>
+                <span class="pill" onclick="togglePill(this)">Category</span>
+                <span class="pill" onclick="togglePill(this)">State</span>
+                <span class="pill" onclick="togglePill(this)">Short Description</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /modal-body -->
+
+    <!-- FOOTER -->
+    <div class="modal-footer">
+      <div class="modal-footer-left">
+        <button class="btn btn-primary btn-full" onclick="saveSN()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Salvar Configuracao
+        </button>
+      </div>
+      <button class="btn btn-ghost" onclick="closeModal('sn')">Cancelar</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/* ── THEME ── */
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.getElementById('themeIconSun').classList.toggle('hidden', !isDark);
+  document.getElementById('themeIconMoon').classList.toggle('hidden', isDark);
+}
+// init icon state
+document.getElementById('themeIconSun').classList.remove('hidden');
+document.getElementById('themeIconMoon').classList.add('hidden');
+
+/* ── MODAL OPEN/CLOSE ── */
+let activeModal = null;
+
+function openModal(which) {
+  // close any active first
+  if (activeModal && activeModal !== which) {
+    _closeOverlay(activeModal);
+  }
+  activeModal = which;
+  const overlayId = which === 'feedback' ? 'overlayFeedback' : 'overlaySN';
+  document.getElementById(overlayId).classList.add('open');
+  document.getElementById('mainArea').classList.add('blurred');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal(which) {
+  _closeOverlay(which);
+  activeModal = null;
+  document.getElementById('mainArea').classList.remove('blurred');
+  document.body.style.overflow = '';
+}
+
+function _closeOverlay(which) {
+  const overlayId = which === 'feedback' ? 'overlayFeedback' : 'overlaySN';
+  document.getElementById(overlayId).classList.remove('open');
+}
+
+function handleOverlayClick(e, overlayId) {
+  if (e.target.id === overlayId) {
+    const which = overlayId === 'overlayFeedback' ? 'feedback' : 'sn';
+    closeModal(which);
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && activeModal) {
+    closeModal(activeModal);
+  }
+});
+
+/* ── FEEDBACK MODAL ── */
+const typeIconMap = {
+  sugestao: {
+    bg: '#1e3a5f', stroke: '#60a5fa',
+    svg: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'
+  },
+  bug: {
+    bg: '#450a0a', stroke: '#ef4444',
+    svg: '<path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 0 6h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1 0-6h1V6a4 4 0 0 1 4-4z"/><path d="M12 2v2"/><path d="M7 7H5"/><path d="M19 7h-2"/><path d="M7 17H5"/><path d="M19 17h-2"/>'
+  },
+  duvida: {
+    bg: '#422006', stroke: '#f59e0b',
+    svg: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>'
+  },
+  elogio: {
+    bg: '#2e1065', stroke: '#a78bfa',
+    svg: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>'
+  },
+  outro: {
+    bg: '#1e293b', stroke: '#94a3b8',
+    svg: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>'
+  }
+};
+
+function onTypeChange() {
+  const sel = document.getElementById('feedbackType');
+  const val = sel.value;
+  const icon = document.getElementById('typeIcon');
+  const info = typeIconMap[val] || typeIconMap['outro'];
+  icon.style.background = info.bg;
+  icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="${info.stroke}" stroke-width="2" style="width:12px;height:12px">${info.svg}</svg>`;
+}
+// init
+onTypeChange();
+
+function updateCounter(el, counterId, max) {
+  const len = el.value.length;
+  const counter = document.getElementById(counterId);
+  counter.textContent = `${len} / ${max}`;
+  counter.style.color = len >= max * 0.9 ? 'var(--c-yellow)' : 'var(--text-faint)';
+}
+
+function submitFeedback() {
+  const btn = document.getElementById('btnSubmitFeedback');
+  btn.classList.add('loading');
+
+  setTimeout(() => {
+    btn.classList.remove('loading');
+    document.getElementById('feedbackFormBody').classList.add('hidden');
+    document.getElementById('feedbackFooter').classList.add('hidden');
+    document.getElementById('feedbackSuccess').classList.remove('hidden');
+  }, 1500);
+}
+
+/* ── SERVICENOW MODAL ── */
+function togglePassword(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const isPass = input.type === 'password';
+  input.type = isPass ? 'text' : 'password';
+  btn.innerHTML = isPass
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+}
+
+function testConnection() {
+  const btn = document.getElementById('btnTestConn');
+  const statusWrap = document.getElementById('connStatusWrap');
+  btn.classList.add('loading');
+  statusWrap.innerHTML = '';
+
+  setTimeout(() => {
+    btn.classList.remove('loading');
+    statusWrap.innerHTML = `
+      <div class="conn-pill success">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Conectado &middot; accenture-brasil &middot; latencia 188ms
+      </div>`;
+  }, 1500);
+}
+
+function onProjInput(input, dotId) {
+  const dot = document.getElementById(dotId);
+  dot.className = 'status-dot yellow';
+  dot.title = 'Aguardando validacao';
+}
+
+function toggleCollapsible() {
+  const body = document.getElementById('collapsibleBody');
+  const toggle = document.getElementById('collapsibleToggle');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  toggle.classList.toggle('open', !isOpen);
+}
+
+function togglePill(el) {
+  el.classList.toggle('active');
+}
+
+function saveSN() {
+  showToast('Configuracao ServiceNow salva', 'success');
+}
+
+/* ── TOAST ── */
+function showToast(msg, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+    ${msg}
+  `;
+  container.appendChild(toast);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => toast.classList.add('show'));
+  });
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 350);
+  }, 3000);
+}
+
+/* ── RESET FEEDBACK on close ── */
+const origClose = closeModal;
+window.closeModal = function(which) {
+  origClose(which);
+  if (which === 'feedback') {
+    // reset form state after animation completes
+    setTimeout(() => {
+      document.getElementById('feedbackFormBody').classList.remove('hidden');
+      document.getElementById('feedbackFooter').classList.remove('hidden');
+      document.getElementById('feedbackSuccess').classList.add('hidden');
+      document.getElementById('feedbackTitle2').value = '';
+      document.getElementById('feedbackDesc').value = '';
+      document.getElementById('counterTitle').textContent = '0 / 80';
+      document.getElementById('counterDesc').textContent = '0 / 500';
+      document.getElementById('feedbackType').value = 'sugestao';
+      onTypeChange();
+      document.getElementById('btnSubmitFeedback').classList.remove('loading');
+    }, 300);
+  }
+};
+</script>
+</body>
+</html>

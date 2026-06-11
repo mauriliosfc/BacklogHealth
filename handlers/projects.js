@@ -66,7 +66,7 @@ async function setup({ rawOrg, pat, projectsRaw }) {
     httpError(400, 'Preencha todos os campos obrigatórios.');
   const { org, baseUrl } = parseOrgInput(rawOrg);
   const existing = getCfg();
-  saveConfig({ ...existing, org, baseUrl, pat, projects });
+  saveConfig({ ...existing, org, baseUrl, pat, projects, _onboarded: true });
   await buildAndCache();
   return { ok: true };
 }
@@ -79,4 +79,15 @@ async function removeProject({ project }) {
   return { ok: true };
 }
 
-module.exports = { listProjects, setup, removeProject };
+async function disconnect() {
+  const existing = getCfg();
+  saveConfig({ ...existing, org: '', baseUrl: '', pat: '', projects: [] });
+  return { ok: true };
+}
+
+async function markOnboarded() {
+  saveConfig({ ...getCfg(), _onboarded: true });
+  return { ok: true };
+}
+
+module.exports = { listProjects, setup, removeProject, disconnect, markOnboarded };

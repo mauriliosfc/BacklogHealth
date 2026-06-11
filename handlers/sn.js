@@ -17,9 +17,10 @@ function getSnCfg({ project = '' } = {}) {
 
 function saveSnCfg(p = {}) {
   const snGlobal = {
-    ...(p.instance !== undefined ? { instance: String(p.instance).trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '') } : {}),
-    ...(p.user     !== undefined ? { user: String(p.user).trim() } : {}),
-    ...(p.pass                   ? { pass: p.pass }                : {}),
+    ...(p.instance          !== undefined ? { instance: String(p.instance).trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '') } : {}),
+    ...(p.user              !== undefined ? { user: String(p.user).trim() } : {}),
+    ...(p.pass                            ? { pass: p.pass }                : {}),
+    ...(p.assignmentGroups  !== undefined ? { assignmentGroups: Array.isArray(p.assignmentGroups) ? p.assignmentGroups : [] } : {}),
   };
   const projectGroup = p.project ? {
     projectName:         p.project,
@@ -47,4 +48,33 @@ async function testSn({ instance, user, pass } = {}) {
   }
 }
 
-module.exports = { getSnCfg, saveSnCfg, testSn };
+// Returns the distinct assignment group names found in active incidents.
+// Accepts raw credentials so it can be called before config is saved (onboarding).
+async function fetchGroups({ instance, user, pass } = {}) {
+  if (!instance || !user || !pass)
+    httpError(400, 'instance, user and pass are required.');
+  try {
+    const snCfg = { instance: instance.trim(), user: user.trim(), pass };
+    const qs = [
+      'sysparm_query=active=true',
+      'sysparm_display_value=true',
+      'sysparm_fields=assignment_group',
+      'sysparm_limit=1000',
+    ].join('&');
+    const data = await snGet(snCfg, `table/incident?${qs}`);
+    const names = [...new Set(
+      (data.result || [])
+        .map(r => {
+          const v = r.assignment_group;
+          if (!v) return '';
+          return (typeof v === 'object' ? (v.display_value || v.value) : v) || '';
+        })
+        .filter(Boolean)
+    )].sort();
+    return { groups: names };
+  } catch (e) {
+    return { error: e.message, groups: [] };
+  }
+}
+
+module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups };

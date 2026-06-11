@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>Backlog Health — {{TITLE}}</title>
@@ -28,149 +28,380 @@
   </div>
 </div>
 
-<!-- ── Main layout ── -->
-<div class="su-layout">
+<!-- ── Tabbed settings layout ── -->
+<div class="su-tabs-layout">
 
-  <!-- Left: credentials form -->
-  <aside class="su-left">
-    <h1 class="su-title" data-i18n="setup_title">Setup Connectivity</h1>
-    <p class="su-subtitle">{{SUBTITLE}}</p>
+  <!-- Tab bar -->
+  <div class="su-tabs-bar">
+    <div class="su-tabs-bar-inner">
 
-    <div class="su-form-card">
-      <div class="err-box" id="err-box"></div>
-
-      <div class="su-field">
-        <label class="su-label" data-i18n="setup_org_label">ORGANIZATION NAME</label>
-        <div class="su-input-wrap">
-          <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.4"/><path d="M6 9h4M8 7v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-          <input type="text" id="inp-org" class="su-input" data-i18n-placeholder="setup_org_placeholder" placeholder="e.g. MyCompany" value="{{ORG_VALUE}}" autocomplete="off">
-        </div>
-        <div class="su-hint" data-i18n="setup_org_hint">e.g. MyCompany · dev.azure.com/org · or https://company.visualstudio.com/</div>
-      </div>
-
-      <div class="su-field">
-        <label class="su-label" data-i18n="setup_pat_label">PERSONAL ACCESS TOKEN (PAT)</label>
-        <div class="su-input-wrap">
-          <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="7" r="3.5" stroke="currentColor" stroke-width="1.4"/><path d="M8.5 9.5l5 5M11 11l1.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-          <input type="password" id="inp-pat" class="su-input" data-i18n-placeholder="setup_pat_placeholder" placeholder="Paste your PAT here" value="{{PAT_VALUE}}" autocomplete="off">
-        </div>
-      </div>
-
-      <button class="su-test-btn" id="btn-test" onclick="loadProjects()">
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1v13M1 7.5h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.4"/></svg>
-        <span id="btn-test-label">Test Connection</span>
+      <button class="su-tab-btn active" data-tab="azure" onclick="switchTab('azure')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="3.5" width="11" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 6.5h11" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="9.5" r="1" fill="currentColor"/></svg>
+        <span data-i18n="settings_tab_azure">Azure DevOps</span>
+        <span class="su-tab-badge" id="tab-badge-azure"></span>
+        <span class="su-tab-dirty" id="dirty-azure" style="display:none" title="Unsaved changes"></span>
       </button>
 
-      <div class="su-security-note">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1L2 3.5v4C2 10.5 4.5 13 7 13s5-2.5 5-5.5v-4L7 1z" stroke="currentColor" stroke-width="1.3"/><path d="M5 7l1.5 1.5L9.5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <div><strong data-i18n="setup_security_label">Security Note:</strong> <span data-i18n="setup_security_text">Your PAT is stored locally in config.json on your device only. It is never sent to any external service other than Azure DevOps.</span></div>
-      </div>
+      <button class="su-tab-btn" data-tab="sn" onclick="switchTab('sn')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M7 4v3l2 1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span data-i18n="settings_tab_sn">ServiceNow</span>
+        <span class="su-tab-badge" id="tab-badge-sn"></span>
+        <span class="su-tab-dirty" id="dirty-sn" style="display:none" title="Unsaved changes"></span>
+      </button>
+
+      <button class="su-tab-btn" data-tab="projects" onclick="switchTab('projects')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="1.5" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="8" y="1.5" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1.5" y="8" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="8" y="8" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+        <span data-i18n="settings_tab_projects">Projects</span>
+        <span class="su-tab-badge" id="tab-badge-projects"></span>
+        <span class="su-tab-dirty" id="dirty-projects" style="display:none" title="Unsaved changes"></span>
+      </button>
+
+      <button class="su-tab-btn" data-tab="ai" onclick="switchTab('ai')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5C4 1.5 1.5 3.5 1.5 6c0 1.2.6 2.3 1.5 3.1V12l2.5-1.5A6.3 6.3 0 007 10.5c3 0 5.5-2 5.5-4.5S10 1.5 7 1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="4.5" cy="6" r=".7" fill="currentColor"/><circle cx="7" cy="6" r=".7" fill="currentColor"/><circle cx="9.5" cy="6" r=".7" fill="currentColor"/></svg>
+        <span data-i18n="settings_tab_ai">Copilot AI</span>
+        <span class="su-tab-badge" id="tab-badge-ai"></span>
+        <span class="su-tab-dirty" id="dirty-ai" style="display:none" title="Unsaved changes"></span>
+      </button>
+
     </div>
-
-    <!-- Service Now config card -->
-    <div class="su-form-card su-sn-card" id="sn-card">
-      <div class="su-sn-header" onclick="toggleSnSection()">
-        <span data-i18n="sn_section_title">SERVICE NOW</span>
-        <span id="sn-chevron">▸</span>
-      </div>
-      <div id="sn-body" class="su-sn-body" style="display:none">
-        <div class="su-sn-hint" data-i18n="sn_hint">Configure Service Now to include incidents and PRBs in Monthly Review reports.</div>
-        <div class="su-field">
-          <label class="su-label" data-i18n="sn_instance_label">INSTANCE</label>
-          <div class="su-input-wrap">
-            <input type="text" id="sn-instance" class="su-input" data-i18n-placeholder="sn_instance_placeholder" placeholder="company.service-now.com" autocomplete="off">
-          </div>
-        </div>
-        <div class="su-field">
-          <label class="su-label" data-i18n="sn_user_label">USERNAME</label>
-          <div class="su-input-wrap">
-            <input type="text" id="sn-user" class="su-input" placeholder="username" autocomplete="off">
-          </div>
-        </div>
-        <div class="su-field">
-          <label class="su-label" data-i18n="sn_pass_label">PASSWORD / TOKEN</label>
-          <div class="su-input-wrap">
-            <input type="password" id="sn-pass" class="su-input" placeholder="••••••••" autocomplete="off">
-          </div>
-        </div>
-        <div class="su-sn-status" id="sn-status"></div>
-        <div class="su-sn-actions">
-          <button onclick="snTest()" data-i18n="sn_test_btn">Test Connection</button>
-          <button class="su-sn-save-btn" onclick="snSave()" data-i18n="sn_save_btn">Save</button>
-        </div>
-
-        <!-- Per-project assignment group -->
-        <div class="su-sn-divider"></div>
-        <div class="su-sn-proj-title">Assignment Group por projeto</div>
-        <div class="su-sn-hint">Vincula cada projeto a um grupo do Service Now para filtrar incidentes e PRBs no Review Mensal.</div>
-        <div class="su-field">
-          <label class="su-label">PROJETO</label>
-          <div class="su-input-wrap">
-            <select id="sn-proj-sel" class="su-input" onchange="snLoadProjGroup()">
-              <option value="">— selecione um projeto —</option>
-            </select>
-          </div>
-        </div>
-        <div class="su-field">
-          <label class="su-label">ASSIGNMENT GROUP (sys_id ou nome)</label>
-          <div class="su-input-wrap">
-            <input type="text" id="sn-ag" class="su-input" placeholder="ex: 8a4dde73c6112278017a6a4baf547aa7" autocomplete="off">
-          </div>
-        </div>
-        <div class="su-field">
-          <label class="su-label">NOME DO GRUPO (exibição)</label>
-          <div class="su-input-wrap">
-            <input type="text" id="sn-ag-name" class="su-input" placeholder="ex: TI - Suporte Alpha" autocomplete="off">
-          </div>
-        </div>
-        <div class="su-sn-status" id="sn-proj-status"></div>
-        <div class="su-sn-actions">
-          <button class="su-sn-save-btn" onclick="snSaveProjGroup()">Salvar grupo</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="su-actions">
-      <button class="su-save-btn" id="btn-save" onclick="doSave()" data-i18n="setup_btn_save">Save and Open Dashboard</button>
+    <div class="su-tabs-bar-end">
       {{BACK_LINK}}
     </div>
-  </aside>
+  </div>
 
-  <!-- Right: project & team scope -->
-  <main class="su-right">
-    <div class="su-right-header">
-      <h2 class="su-right-title" data-i18n="setup_projects_label">Project &amp; Team Scope</h2>
-      <div class="su-search-wrap">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M9.5 9.5l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-        <input type="text" id="proj-search" class="su-search" data-i18n-placeholder="setup_search_placeholder" placeholder="Filter projects…" oninput="filterProjects()" autocomplete="off">
+  <!-- Panel container -->
+  <div class="su-tab-panels">
+
+    <!-- ─────────────────────── Azure DevOps ─────────────────────── -->
+    <div class="su-tab-panel active" id="panel-azure">
+      <div class="su-tab-body">
+        <div class="su-tab-inner">
+
+          <div class="su-tab-page-header">
+            <h1 class="su-tab-page-title" data-i18n="settings_tab_azure">Azure DevOps</h1>
+            <p class="su-tab-page-sub">{{SUBTITLE}}</p>
+          </div>
+
+          <div class="su-azure-grid">
+
+            <!-- Left: credentials -->
+            <div class="su-azure-main">
+              <div class="su-form-card">
+                <div class="err-box" id="err-box" style="display:none"></div>
+
+                <div class="su-field">
+                  <label class="su-label" data-i18n="setup_org_label">ORGANIZATION NAME</label>
+                  <div class="su-input-wrap">
+                    <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.4"/><path d="M6 9h4M8 7v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                    <input type="text" id="inp-org" class="su-input" data-i18n-placeholder="setup_org_placeholder" placeholder="e.g. MyCompany" value="{{ORG_VALUE}}" autocomplete="off" oninput="updateOrgPreview(); markDirty('azure')">
+                  </div>
+                  <div class="su-hint" data-i18n="setup_org_hint">e.g. MyCompany · dev.azure.com/organization · or https://company.visualstudio.com/</div>
+                  <div id="org-url-preview" class="su-org-preview" style="display:none">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1l1.5 3h3l-2.5 2 1 3L6 7.5 3 9l1-3L1.5 4h3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+                    <span>dev.azure.com/</span><strong id="org-preview-name"></strong>
+                  </div>
+                </div>
+
+                <div class="su-field">
+                  <div class="su-label-row">
+                    <label class="su-label" data-i18n="setup_pat_label">PERSONAL ACCESS TOKEN (PAT)</label>
+                    <button type="button" class="su-pat-help-btn" id="pat-help-btn" onclick="togglePatHelp()" data-i18n-title="setup_pat_help_btn" title="How to generate a PAT">
+                      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 5a1.5 1.5 0 013 .5c0 1-1.5 1.5-1.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="6.5" cy="9.5" r=".6" fill="currentColor"/></svg>
+                      <span data-i18n="setup_pat_help_btn">How to generate?</span>
+                    </button>
+                  </div>
+                  <div class="su-input-wrap">
+                    <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="7" r="3.5" stroke="currentColor" stroke-width="1.4"/><path d="M8.5 9.5l5 5M11 11l1.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                    <input type="password" id="inp-pat" class="su-input" data-i18n-placeholder="setup_pat_placeholder" placeholder="Paste your PAT here" value="{{PAT_VALUE}}" autocomplete="off" oninput="markDirty('azure')">
+                  </div>
+                  <div class="su-pat-popover" id="pat-help-popover" style="display:none">
+                    <div class="su-pat-popover-title" data-i18n="setup_pat_popover_title">How to generate a PAT</div>
+                    <ol class="su-pat-popover-steps">
+                      <li data-i18n="setup_pat_step1">Go to <strong>dev.azure.com</strong> and sign in</li>
+                      <li data-i18n="setup_pat_step2">Click your <strong>profile icon</strong> (top right)</li>
+                      <li data-i18n="setup_pat_step3">Select <strong>Personal Access Tokens</strong></li>
+                      <li data-i18n="setup_pat_step4">Click <strong>New Token</strong></li>
+                      <li data-i18n="setup_pat_step5">Set permissions: <code>Work Items (Read)</code>, <code>Project and Team (Read)</code></li>
+                      <li data-i18n="setup_pat_step6">Click <strong>Create</strong> and copy the token</li>
+                    </ol>
+                  </div>
+                  <div class="su-hint su-pat-expiry-hint" data-i18n="settings_azure_pat_expiry">Tip: set a 1-year expiry and note the renewal date.</div>
+                </div>
+
+                <button class="su-test-btn" id="btn-test" onclick="loadProjects()">
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1v13M1 7.5h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.4"/></svg>
+                  <span id="btn-test-label" data-i18n="setup_btn_test">Test Connection and Load Projects</span>
+                </button>
+                <div id="conn-status" class="su-conn-status" style="display:none"></div>
+
+                <div class="su-security-note">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1L2 3.5v4C2 10.5 4.5 13 7 13s5-2.5 5-5.5v-4L7 1z" stroke="currentColor" stroke-width="1.3"/><path d="M5 7l1.5 1.5L9.5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <div><strong data-i18n="setup_security_label">Security Note:</strong> <span data-i18n="setup_security_text">Your PAT is stored locally in config.json on your device only. It is never sent to any external service other than Azure DevOps.</span></div>
+                </div>
+              </div>
+
+              <!-- Danger zone -->
+              <div class="su-danger-zone">
+                <div class="su-danger-title" data-i18n="settings_danger_zone">Danger Zone</div>
+                <p class="su-danger-desc" data-i18n="settings_disconnect_confirm">Removes your Azure DevOps credentials and all project settings from this device.</p>
+                <div class="su-danger-confirm" id="danger-confirm" style="display:none">
+                  <p class="su-danger-confirm-msg" data-i18n="settings_disconnect_sure">Are you sure? This action cannot be undone.</p>
+                  <div class="su-danger-confirm-actions">
+                    <button class="su-btn-danger-ok" onclick="doDisconnect()" data-i18n="settings_disconnect_ok">Yes, disconnect</button>
+                    <button class="su-btn-danger-cancel" onclick="hideDangerConfirm()" data-i18n="settings_disconnect_cancel">Cancel</button>
+                  </div>
+                </div>
+                <button class="su-disconnect-btn" id="danger-btn" onclick="showDangerConfirm()" data-i18n="settings_disconnect_btn">Disconnect Azure DevOps</button>
+              </div>
+            </div>
+
+            <!-- Right: PAT help sidebar -->
+            <div class="su-azure-side">
+              <div class="su-help-side-card">
+                <div class="su-help-side-title" data-i18n="setup_help_title">Can't find your project?</div>
+                <div class="su-help-side-sub" data-i18n="setup_help_sub">Ensure your Personal Access Token has the 'Project Read' and 'Work Items Read' permissions scope.</div>
+                <div class="su-pat-info">
+                  <h4 data-i18n="setup_pat_section">Required PAT Permissions</h4>
+                  <ul>
+                    <li><code>Work Items (Read)</code></li>
+                    <li><code>Project and Team (Read)</code></li>
+                  </ul>
+                  <div class="su-pat-link" data-i18n="setup_pat_link">Azure DevOps → User Settings → Personal Access Tokens</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <div class="su-tab-footer">
+        <button class="su-save-btn" id="btn-save-azure" onclick="doSaveAzure()">
+          <span class="spinner" id="sp-azure" style="display:none"></span>
+          <span id="lbl-save-azure" data-i18n="settings_save_azure">Save Credentials</span>
+        </button>
+        <span class="su-tab-save-msg" id="azure-msg" style="display:none"></span>
       </div>
     </div>
 
-    <div class="su-ok-box" id="ok-box" style="display:none"></div>
+    <!-- ─────────────────────── ServiceNow ─────────────────────── -->
+    <div class="su-tab-panel" id="panel-sn">
+      <div class="su-tab-body">
+        <div class="su-tab-inner">
 
-    <div class="su-proj-list" id="proj-list">
-      <!-- projects rendered by JS -->
-    </div>
+          <div class="su-tab-page-header">
+            <h1 class="su-tab-page-title" data-i18n="settings_tab_sn">ServiceNow</h1>
+          </div>
 
-    <!-- Help section (always visible) -->
-    <div class="su-help">
-      <svg class="su-help-icon" width="40" height="40" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="var(--text-faint)" stroke-width="1.5"/><circle cx="14" cy="20" r="2" fill="var(--text-faint)"/><circle cx="20" cy="20" r="2" fill="var(--text-faint)"/><circle cx="26" cy="20" r="2" fill="var(--text-faint)"/></svg>
-      <div class="su-help-title" data-i18n="setup_help_title">Can't find your project?</div>
-      <div class="su-help-sub" data-i18n="setup_help_sub">Ensure your Personal Access Token has the 'Project Read' and 'Work Items Read' permissions scope.</div>
-      <div class="su-pat-info">
-        <h4 data-i18n="setup_pat_section">Required PAT Permissions</h4>
-        <ul>
-          <li><code>Work Items (Read)</code></li>
-          <li><code>Project and Team (Read)</code></li>
-        </ul>
-        <div class="su-pat-link" data-i18n="setup_pat_link">Azure DevOps → User Settings → Personal Access Tokens</div>
+          <div class="su-sn-banner" id="sn-banner" style="display:none">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><path d="M8 1L1 14h14L8 1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6v4M8 11.5v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            <span data-i18n="settings_sn_banner">ServiceNow is not configured. Set up below to include incidents and PRBs in Monthly Review reports.</span>
+          </div>
+
+          <div class="su-form-card">
+            <div class="su-hint su-sn-hint" data-i18n="sn_hint">Configure Service Now to include incidents and PRBs in Monthly Review reports.</div>
+            <div class="su-field">
+              <label class="su-label" data-i18n="sn_instance_label">INSTANCE</label>
+              <div class="su-input-wrap">
+                <input type="text" id="sn-instance" class="su-input" data-i18n-placeholder="sn_instance_placeholder" placeholder="company.service-now.com" autocomplete="off" oninput="markDirty('sn')">
+              </div>
+            </div>
+            <div class="su-field">
+              <label class="su-label" data-i18n="sn_user_label">USERNAME</label>
+              <div class="su-input-wrap">
+                <input type="text" id="sn-user" class="su-input" placeholder="username" autocomplete="off" oninput="markDirty('sn')">
+              </div>
+            </div>
+            <div class="su-field">
+              <label class="su-label" data-i18n="sn_pass_label">PASSWORD / TOKEN</label>
+              <div class="su-input-wrap">
+                <input type="password" id="sn-pass" class="su-input" placeholder="••••••••" autocomplete="off" oninput="markDirty('sn')">
+              </div>
+            </div>
+            <div class="su-sn-status" id="sn-status"></div>
+            <button class="su-test-btn" onclick="snTest()" data-i18n="sn_test_btn">Test Connection</button>
+          </div>
+
+          <!-- Per-project assignment group -->
+          <div class="su-form-card su-sn-proj-card">
+            <div class="su-sn-proj-title" data-i18n="settings_sn_proj_section">Per-project Assignment Group</div>
+            <div class="su-hint" data-i18n="settings_sn_proj_hint">Bind each project to a ServiceNow group to filter incidents in Monthly Review.</div>
+            <div class="su-field">
+              <label class="su-label">PROJECT</label>
+              <div class="su-input-wrap">
+                <select id="sn-proj-sel" class="su-input" onchange="snLoadProjGroup()">
+                  <option value="">— select a project —</option>
+                </select>
+              </div>
+            </div>
+            <div class="su-field">
+              <label class="su-label">ASSIGNMENT GROUP (sys_id or name)</label>
+              <div class="su-input-wrap">
+                <input type="text" id="sn-ag" class="su-input" placeholder="e.g. 8a4dde73c6112278017a6a4baf547aa7" autocomplete="off">
+              </div>
+            </div>
+            <div class="su-field">
+              <label class="su-label">GROUP DISPLAY NAME</label>
+              <div class="su-input-wrap">
+                <input type="text" id="sn-ag-name" class="su-input" placeholder="e.g. IT - Support Alpha" autocomplete="off">
+              </div>
+            </div>
+            <div class="su-sn-status" id="sn-proj-status"></div>
+            <button class="su-test-btn" onclick="snSaveProjGroup()" data-i18n="settings_sn_save_group">Save group</button>
+          </div>
+
+        </div>
+      </div>
+      <div class="su-tab-footer">
+        <button class="su-save-btn" id="btn-save-sn" onclick="snSaveAndMark()">
+          <span class="spinner" id="sp-sn" style="display:none"></span>
+          <span id="lbl-save-sn" data-i18n="settings_save_sn">Save ServiceNow</span>
+        </button>
+        <span class="su-tab-save-msg" id="sn-msg" style="display:none"></span>
       </div>
     </div>
 
-    <div class="su-count" id="proj-count"></div>
-  </main>
+    <!-- ─────────────────────── Projects ─────────────────────── -->
+    <div class="su-tab-panel" id="panel-projects">
+      <div class="su-tab-body">
+        <div class="su-tab-inner">
+
+          <div class="su-tab-page-header su-tab-page-header--flex">
+            <h1 class="su-tab-page-title" data-i18n="settings_tab_projects">Projects</h1>
+            <div class="su-search-wrap">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M9.5 9.5l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              <input type="text" id="proj-search" class="su-search" data-i18n-placeholder="setup_search_placeholder" placeholder="Filter projects…" oninput="filterProjects()" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="su-ok-box" id="ok-box" style="display:none"></div>
+
+          <div class="su-proj-list" id="proj-list">
+            <!-- projects rendered by JS -->
+          </div>
+
+          <div class="su-help">
+            <svg class="su-help-icon" width="40" height="40" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="var(--text-faint)" stroke-width="1.5"/><circle cx="14" cy="20" r="2" fill="var(--text-faint)"/><circle cx="20" cy="20" r="2" fill="var(--text-faint)"/><circle cx="26" cy="20" r="2" fill="var(--text-faint)"/></svg>
+            <div class="su-help-title" data-i18n="setup_help_title">Can't find your project?</div>
+            <div class="su-help-sub" data-i18n="setup_help_sub">Ensure your Personal Access Token has the 'Project Read' and 'Work Items Read' permissions scope.</div>
+          </div>
+
+          <div class="su-count" id="proj-count"></div>
+
+        </div>
+      </div>
+      <div class="su-tab-footer">
+        <button class="su-save-btn" id="btn-save" onclick="doSave()">
+          <span class="spinner" id="sp-save" style="display:none"></span>
+          <span id="lbl-save" data-i18n="setup_btn_save">Save and Open Dashboard</span>
+        </button>
+        <span class="su-tab-save-msg" id="projects-msg" style="display:none"></span>
+      </div>
+    </div>
+
+    <!-- ─────────────────────── Copilot AI ─────────────────────── -->
+    <div class="su-tab-panel" id="panel-ai">
+      <div class="su-tab-body">
+        <div class="su-tab-inner">
+
+          <div class="su-tab-page-header">
+            <h1 class="su-tab-page-title" data-i18n="settings_tab_ai">Copilot AI</h1>
+          </div>
+
+          <div class="su-form-card">
+            <div class="su-hint" data-i18n="ai_config_hint">Configure your AI credentials. We will not store this information in our database, it is saved only on your device.</div>
+
+            <div class="su-field">
+              <label class="su-label" data-i18n="ai_endpoint_label">ENDPOINT</label>
+              <div class="su-input-wrap">
+                <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/><path d="M1.5 8h13M8 1.5C6.5 4 5.5 6 5.5 8s1 4 2.5 6.5M8 1.5C9.5 4 10.5 6 10.5 8s-1 4-2.5 6.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                <input type="text" id="ai-endpoint" class="su-input" placeholder="https://api.openai.com/v1" autocomplete="off" oninput="markDirty('ai')">
+              </div>
+              <div class="su-hint" data-i18n="ai_endpoint_hint">Base API URL (Azure OpenAI, OpenAI-compatible, etc.)</div>
+            </div>
+
+            <div class="su-field">
+              <label class="su-label" data-i18n="ai_apikey_label">API KEY</label>
+              <div class="su-input-wrap">
+                <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="7" r="3.5" stroke="currentColor" stroke-width="1.4"/><path d="M8.5 9.5l5 5M11 11l1.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                <input type="password" id="ai-apikey" class="su-input" placeholder="••••••••" autocomplete="off" oninput="markDirty('ai')">
+              </div>
+            </div>
+
+            <div class="su-field">
+              <label class="su-label" data-i18n="ai_model_label">MODEL / DEPLOYMENT</label>
+              <div class="su-input-wrap">
+                <input type="text" id="ai-model" class="su-input" placeholder="gpt-4o" autocomplete="off" oninput="markDirty('ai')">
+              </div>
+              <div class="su-hint" data-i18n="ai_model_hint">Model or deployment name (e.g. gpt-4o, claude-opus-4-6)</div>
+            </div>
+
+            <div class="su-field">
+              <label class="su-label" data-i18n="ai_apiversion_label">API VERSION (optional)</label>
+              <div class="su-input-wrap">
+                <input type="text" id="ai-apiversion" class="su-input" placeholder="2024-02-01" autocomplete="off" oninput="markDirty('ai')">
+              </div>
+              <div class="su-hint" data-i18n="ai_apiversion_hint">Required only for Azure OpenAI</div>
+            </div>
+
+            <button class="su-test-btn" id="btn-ai-test" onclick="testAI()">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1v13M1 7.5h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.4"/></svg>
+              <span id="lbl-ai-test" data-i18n="ai_btn_test">Test Connection</span>
+            </button>
+            <div class="su-sn-status" id="ai-status"></div>
+          </div>
+
+          <!-- Behavior toggles -->
+          <div class="su-form-card su-ai-behaviors-card">
+            <div class="su-sn-proj-title" data-i18n="settings_ai_behaviors">Behavior</div>
+            <div class="su-hint" data-i18n="settings_ai_behaviors_hint">Control how Copilot AI uses project context when answering questions.</div>
+
+            <div class="su-toggle-row">
+              <div class="su-toggle-info">
+                <span class="su-toggle-label" data-i18n="settings_ai_toggle1">Include sprint context in prompts</span>
+              </div>
+              <label class="su-toggle">
+                <input type="checkbox" id="ai-toggle1" checked>
+                <span class="su-toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="su-toggle-row">
+              <div class="su-toggle-info">
+                <span class="su-toggle-label" data-i18n="settings_ai_toggle2">Include health indicators in context</span>
+              </div>
+              <label class="su-toggle">
+                <input type="checkbox" id="ai-toggle2" checked>
+                <span class="su-toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="su-toggle-row">
+              <div class="su-toggle-info">
+                <span class="su-toggle-label" data-i18n="settings_ai_toggle3">Auto-summarize project on open</span>
+              </div>
+              <label class="su-toggle">
+                <input type="checkbox" id="ai-toggle3">
+                <span class="su-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="su-tab-footer">
+        <button class="su-save-btn" id="btn-save-ai" onclick="doSaveAI()">
+          <span class="spinner" id="sp-ai" style="display:none"></span>
+          <span id="lbl-save-ai" data-i18n="settings_save_ai">Save AI Config</span>
+        </button>
+        <span class="su-tab-save-msg" id="ai-msg" style="display:none"></span>
+      </div>
+    </div>
+
+  </div>
+  <!-- end .su-tab-panels -->
 
 </div>
+<!-- end .su-tabs-layout -->
 
 <script type="module">
   import { initI18n, applyTranslations, t, setLocale, getLocale } from '/modules/i18n.js';
@@ -199,7 +430,69 @@
   let ALL_PROJECTS = [];
   let SELECTED_SET = new Set(Object.keys(WORK_ITEM_TYPES));
 
-  // ── Icon helpers (mirrors backend) ───────────────────────────────────────
+  // ── Tab switching ────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.querySelectorAll('.su-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.su-tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
+    if (tab === 'sn')       _populateSnProjSel();
+    if (tab === 'ai')       aiLoad();
+    if (tab === 'projects') updateTabBadgeProjects();
+    try { sessionStorage.setItem('settings_tab', tab); } catch(_) {}
+  }
+
+  // Restore tab from session (page reload / back navigation)
+  (function() {
+    try {
+      const tab = sessionStorage.getItem('settings_tab');
+      if (tab && ['azure','sn','projects','ai'].includes(tab)) switchTab(tab);
+    } catch(_) {}
+  })();
+
+  // ── Dirty tracking ───────────────────────────────────────────────────────
+  function markDirty(tab) {
+    const dot = document.getElementById('dirty-' + tab);
+    if (dot) dot.style.display = 'inline-block';
+  }
+  function clearDirty(tab) {
+    const dot = document.getElementById('dirty-' + tab);
+    if (dot) dot.style.display = 'none';
+  }
+
+  // ── Tab badge helpers ────────────────────────────────────────────────────
+  function _setTabBadge(tab, isOk, okKey, warnKey) {
+    const el = document.getElementById('tab-badge-' + tab);
+    if (!el) return;
+    const okText   = window._t ? window._t(okKey,   isOk   ? 'Configured'     : 'Not configured') : (isOk ? 'Configured' : 'Not configured');
+    const warnText = window._t ? window._t(warnKey, !isOk  ? 'Not configured' : 'Configured')      : (!isOk ? 'Not configured' : 'Configured');
+    el.textContent = isOk ? okText : warnText;
+    el.className   = 'su-tab-badge ' + (isOk ? 'su-tab-badge--ok' : 'su-tab-badge--warn');
+  }
+
+  function updateTabBadgeProjects() {
+    const el = document.getElementById('tab-badge-projects');
+    if (!el) return;
+    const count = SELECTED_SET.size;
+    el.textContent = count ? count + ' selected' : 'None';
+    el.className   = 'su-tab-badge ' + (count ? 'su-tab-badge--ok' : 'su-tab-badge--warn');
+  }
+
+  function updateTabBadges() {
+    const orgOk = !!(document.getElementById('inp-org').value.trim() && document.getElementById('inp-pat').value.trim());
+    _setTabBadge('azure', orgOk, 'settings_configured', 'settings_not_configured');
+    updateTabBadgeProjects();
+  }
+
+  // ── Inline save-message helper ───────────────────────────────────────────
+  function showMsg(id, type, msg) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.className   = 'su-tab-save-msg su-tab-save-msg--' + type;
+    el.style.display = 'inline-flex';
+    if (type === 'ok') setTimeout(() => { el.style.display = 'none'; }, 3000);
+  }
+
+  // ── Icon helpers ─────────────────────────────────────────────────────────
   const ICON_COLORS = ['#3b82f6','#8b5cf6','#f59e0b','#10b981','#ef4444','#06b6d4','#f97316','#ec4899','#14b8a6','#6366f1'];
   function _iconColor(name) {
     let h = 0;
@@ -227,6 +520,44 @@
     return msg;
   }
 
+  // ── Org URL preview ───────────────────────────────────────────────────────
+  function updateOrgPreview() {
+    const val     = document.getElementById('inp-org').value.trim();
+    const preview = document.getElementById('org-url-preview');
+    const name    = document.getElementById('org-preview-name');
+    const isRaw   = val && !val.startsWith('http') && !val.includes('.');
+    if (isRaw) { name.textContent = val; preview.style.display = 'flex'; }
+    else        { preview.style.display = 'none'; }
+  }
+  updateOrgPreview();
+
+  // ── PAT help popover ──────────────────────────────────────────────────────
+  function togglePatHelp() {
+    const pop  = document.getElementById('pat-help-popover');
+    const btn  = document.getElementById('pat-help-btn');
+    const open = pop.style.display !== 'none';
+    pop.style.display = open ? 'none' : 'block';
+    btn.classList.toggle('active', !open);
+  }
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#pat-help-popover') && !e.target.closest('#pat-help-btn')) {
+      const pop = document.getElementById('pat-help-popover');
+      if (pop) { pop.style.display = 'none'; document.getElementById('pat-help-btn').classList.remove('active'); }
+    }
+  });
+
+  // ── Connection status pill ────────────────────────────────────────────────
+  function setConnStatus(type, msg) {
+    const el = document.getElementById('conn-status');
+    el.className = 'su-conn-status su-conn-status--' + type;
+    el.innerHTML = '<span class="su-conn-dot"></span><span>' + msg + '</span>';
+    el.style.display = 'flex';
+  }
+  function clearConnStatus() {
+    const el = document.getElementById('conn-status');
+    if (el) el.style.display = 'none';
+  }
+
   // ── Theme ─────────────────────────────────────────────────────────────────
   function setTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
@@ -237,9 +568,23 @@
   function toggleTheme() { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
   setTheme(localStorage.getItem('theme') || 'dark');
 
-  // ── Error display ─────────────────────────────────────────────────────────
-  function showErr(msg) { const el = document.getElementById('err-box'); el.textContent = '❌ ' + msg; el.style.display = 'block'; }
-  function hideErr() { document.getElementById('err-box').style.display = 'none'; }
+  // ── Error display ──────────────────────────────────────────────────────────
+  function showErr(msg) { const el = document.getElementById('err-box'); if (el) { el.textContent = msg; el.style.display = 'block'; } }
+  function hideErr()    { const el = document.getElementById('err-box'); if (el) el.style.display = 'none'; }
+
+  // ── Danger zone ───────────────────────────────────────────────────────────
+  function showDangerConfirm() {
+    document.getElementById('danger-confirm').style.display = 'block';
+    document.getElementById('danger-btn').style.display = 'none';
+  }
+  function hideDangerConfirm() {
+    document.getElementById('danger-confirm').style.display = 'none';
+    document.getElementById('danger-btn').style.display = 'inline-flex';
+  }
+  async function doDisconnect() {
+    try { await fetch('/api/disconnect', { method: 'POST' }); } catch(_) {}
+    location.href = '/';
+  }
 
   // ── Load projects ─────────────────────────────────────────────────────────
   async function loadProjects() {
@@ -247,6 +592,7 @@
     const pat = document.getElementById('inp-pat').value.trim();
     if (!org || !pat) { showErr(_tr('setup_err_fill', 'Fill in the organization and PAT before continuing.')); return; }
     hideErr();
+    clearConnStatus();
     const btn = document.getElementById('btn-test');
     btn.disabled = true;
     const lbl = document.getElementById('btn-test-label');
@@ -254,17 +600,26 @@
     try {
       const r = await fetch('/api/projects?org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat));
       const data = await r.json();
-      if (data.error) { showErr(data.error); btn.disabled = false; lbl.textContent = _tr('setup_btn_reload', 'Reload project list'); return; }
+      if (data.error) {
+        showErr(data.error);
+        setConnStatus('err', data.error);
+        btn.disabled = false;
+        lbl.textContent = _tr('setup_btn_reload', 'Reload project list');
+        return;
+      }
       const rawProjects = (data.projects || []).map(p => typeof p === 'string' ? { name: p, teams: [] } : p);
       ALL_PROJECTS = rawProjects;
       renderProjectList(rawProjects);
       const okBox = document.getElementById('ok-box');
-      okBox.textContent = _tr('setup_conn_ok', '✅ Connection OK — {{count}} project(s) available.', { count: rawProjects.length });
+      okBox.textContent = _tr('setup_conn_ok', 'Connection OK — {{count}} project(s) available.', { count: rawProjects.length });
       okBox.style.display = 'block';
+      setConnStatus('ok', org + ' · ' + rawProjects.length + ' ' + _tr('setup_projects_found', 'projects found'));
       lbl.textContent = _tr('setup_btn_reload', 'Reload project list');
       btn.disabled = false;
+      updateTabBadges();
     } catch(e) {
       showErr(_tr('setup_err_network', 'Network error: {{msg}}', { msg: e.message }));
+      setConnStatus('err', _tr('setup_err_network', 'Network error: {{msg}}', { msg: e.message }));
       btn.disabled = false;
       lbl.textContent = _tr('setup_btn_test', 'Test Connection');
     }
@@ -316,8 +671,7 @@
     </div>`;
   }
 
-  // ── Project row (single-team) ─────────────────────────────────────────────
-  // _isSelected: checks both plain key and any "name|team" variant in SELECTED_SET
+  // ── Single-project row ────────────────────────────────────────────────────
   function _isSelected(name) {
     if (SELECTED_SET.has(name)) return true;
     return [...SELECTED_SET].some(k => k.startsWith(name + '|'));
@@ -330,7 +684,7 @@
       if (k.startsWith(key + '|') && WORK_ITEM_TYPES[k]) wt = WORK_ITEM_TYPES[k];
       return wt;
     }, 'User Story');
-    const color = _iconColor(p.name);
+    const color    = _iconColor(p.name);
     const initials = _initials(p.name);
     return `<div class="su-proj-item ${checked ? 'selected' : ''}" data-key="${esc}">
       <div class="su-proj-header su-proj-header--single">
@@ -344,9 +698,9 @@
     </div>`;
   }
 
-  // ── Project row (multi-team) ──────────────────────────────────────────────
+  // ── Multi-team project row ────────────────────────────────────────────────
   function _multiProjectRow(p) {
-    const color = _iconColor(p.name);
+    const color    = _iconColor(p.name);
     const initials = _initials(p.name);
     const hasSelected = p.teams.some(t => SELECTED_SET.has(p.name + '|' + t));
     const expanded = hasSelected;
@@ -368,11 +722,7 @@
   // ── Render project list ───────────────────────────────────────────────────
   function renderProjectList(projects) {
     const list = document.getElementById('proj-list');
-    if (!projects.length) {
-      list.innerHTML = '';
-      return;
-    }
-    // Configured projects first
+    if (!projects.length) { list.innerHTML = ''; return; }
     const sorted = [...projects].sort((a, b) => {
       const aSelected = a.teams && a.teams.length > 1
         ? a.teams.some(t => SELECTED_SET.has(a.name + '|' + t))
@@ -387,11 +737,11 @@
     ).join('');
   }
 
-  // ── Expand/collapse project teams ─────────────────────────────────────────
+  // ── Expand/collapse ───────────────────────────────────────────────────────
   function toggleExpand(header) {
-    const body = header.nextElementSibling;
+    const body    = header.nextElementSibling;
     const chevron = header.querySelector('.su-proj-chevron');
-    const isOpen = body.style.display !== 'none';
+    const isOpen  = body.style.display !== 'none';
     body.style.display = isOpen ? 'none' : 'block';
     chevron.classList.toggle('open', !isOpen);
   }
@@ -399,16 +749,16 @@
   // ── Checkbox change ───────────────────────────────────────────────────────
   function onProjChange(cb) {
     const key = cb.value;
-    const projItem = cb.closest('.su-proj-item') || cb.closest('.su-team-row');
     if (cb.checked) {
       SELECTED_SET.add(key);
       if (!WORK_ITEM_TYPES[key]) WORK_ITEM_TYPES[key] = 'User Story';
     } else {
       SELECTED_SET.delete(key);
     }
-    // Re-render the wit toggle and selection state for this item
     _refreshProjItem(cb, key);
     updateCount();
+    updateTabBadgeProjects();
+    markDirty('projects');
   }
 
   function _refreshProjItem(cb, key) {
@@ -420,12 +770,9 @@
         const wrap = document.createElement('div');
         wrap.innerHTML = _witToggle(key, WORK_ITEM_TYPES[key] || 'User Story');
         teamRow.appendChild(wrap.firstElementChild);
-      } else if (!cb.checked && wit) {
-        wit.remove();
-      }
+      } else if (!cb.checked && wit) { wit.remove(); }
       return;
     }
-    // Single-project item
     const projItem = cb.closest('.su-proj-item');
     if (projItem) {
       projItem.classList.toggle('selected', cb.checked);
@@ -434,15 +781,13 @@
         const wrap = document.createElement('div');
         wrap.innerHTML = _witToggle(key, WORK_ITEM_TYPES[key] || 'User Story');
         projItem.appendChild(wrap.firstElementChild);
-      } else if (!cb.checked && wit) {
-        wit.remove();
-      }
+      } else if (!cb.checked && wit) { wit.remove(); }
     }
   }
 
   // ── Filter ────────────────────────────────────────────────────────────────
   function filterProjects() {
-    const q = document.getElementById('proj-search').value.toLowerCase().trim();
+    const q        = document.getElementById('proj-search').value.toLowerCase().trim();
     const filtered = q ? ALL_PROJECTS.filter(p => {
       if (p.name.toLowerCase().includes(q)) return true;
       if (p.teams && p.teams.some(t => t.toLowerCase().includes(q))) return true;
@@ -452,11 +797,6 @@
   }
 
   // ── Count ─────────────────────────────────────────────────────────────────
-  function _keyToDisplay(key) {
-    const idx = key.indexOf('|');
-    return idx >= 0 ? key.slice(0, idx) + ' — ' + key.slice(idx + 1) : key;
-  }
-
   function updateCount() {
     const keys = [...SELECTED_SET];
     document.getElementById('proj-count').textContent = keys.length
@@ -464,12 +804,9 @@
       : '';
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────
-  async function doSave() {
-    const org = document.getElementById('inp-org').value.trim();
-    const pat = document.getElementById('inp-pat').value.trim();
-    if (!org || !pat) { showErr(_tr('setup_err_fields', 'Fill in all required fields.')); return; }
-    const selected = [...SELECTED_SET].map(key => {
+  // ── Build projects param ──────────────────────────────────────────────────
+  function _buildProjectsParam() {
+    return [...SELECTED_SET].map(key => {
       const workItemType = WORK_ITEM_TYPES[key] || 'User Story';
       const pipeIdx = key.indexOf('|');
       if (pipeIdx >= 0) {
@@ -479,32 +816,72 @@
       }
       return `${key}:${workItemType}`;
     });
-    if (!selected.length) { showErr(_tr('setup_err_select', 'Select at least one project to monitor.')); return; }
+  }
+
+  // ── Save Azure credentials ────────────────────────────────────────────────
+  async function doSaveAzure() {
+    const org = document.getElementById('inp-org').value.trim();
+    const pat = document.getElementById('inp-pat').value.trim();
+    if (!org || !pat) { showErr(_tr('setup_err_fill', 'Fill in the organization and PAT before continuing.')); return; }
+    const selected = _buildProjectsParam();
+    if (!selected.length) {
+      showMsg('azure-msg', 'warn', _tr('settings_warn_select_projects', 'Select projects in the Projects tab first.'));
+      return;
+    }
+    hideErr();
+    const btn = document.getElementById('btn-save-azure');
+    btn.disabled = true;
+    document.getElementById('sp-azure').style.display   = 'inline-block';
+    document.getElementById('lbl-save-azure').textContent = _tr('settings_save_azure_saving', 'Saving…');
+    try {
+      const body = 'org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat) + '&projects=' + encodeURIComponent(selected.join(','));
+      const r    = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) {
+        showMsg('azure-msg', 'ok', _tr('settings_save_azure_ok', 'Credentials saved!'));
+        clearDirty('azure');
+        updateTabBadges();
+      } else {
+        showMsg('azure-msg', 'err', data.error || _tr('setup_err_save', 'Error saving settings.'));
+      }
+    } catch(e) { showMsg('azure-msg', 'err', e.message); }
+    btn.disabled = false;
+    document.getElementById('sp-azure').style.display   = 'none';
+    document.getElementById('lbl-save-azure').textContent = _tr('settings_save_azure', 'Save Credentials');
+  }
+
+  // ── Save projects + open dashboard ───────────────────────────────────────
+  async function doSave() {
+    const org = document.getElementById('inp-org').value.trim();
+    const pat = document.getElementById('inp-pat').value.trim();
+    if (!org || !pat) {
+      switchTab('azure');
+      showErr(_tr('setup_err_fields', 'Please fill in all required fields.'));
+      return;
+    }
+    const selected = _buildProjectsParam();
+    if (!selected.length) {
+      showMsg('projects-msg', 'err', _tr('setup_err_select', 'Select at least one project to monitor.'));
+      return;
+    }
     hideErr();
     const btn = document.getElementById('btn-save');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>' + _tr('setup_btn_saving', 'Saving…');
+    document.getElementById('sp-save').style.display = 'inline-block';
+    document.getElementById('lbl-save').textContent  = _tr('setup_btn_saving', 'Saving…');
     try {
       const body = 'org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat) + '&projects=' + encodeURIComponent(selected.join(','));
-      const r = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+      const r    = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.ok) { location.href = '/'; return; }
-      showErr(data.error || _tr('setup_err_save', 'Error saving configuration.'));
-    } catch(e) { showErr(e.message); }
+      showMsg('projects-msg', 'err', data.error || _tr('setup_err_save', 'Error saving settings.'));
+    } catch(e) { showMsg('projects-msg', 'err', e.message); }
     btn.disabled = false;
-    btn.textContent = _tr('setup_btn_save', 'Save and Open Dashboard');
+    document.getElementById('sp-save').style.display = 'none';
+    document.getElementById('lbl-save').textContent  = _tr('setup_btn_save', 'Save and Open Dashboard');
   }
 
-  // ── Service Now section ───────────────────────────────────────────────────
-  function toggleSnSection() {
-    const body = document.getElementById('sn-body');
-    const chev = document.getElementById('sn-chevron');
-    const open = body.style.display !== 'none';
-    body.style.display = open ? 'none' : 'flex';
-    chev.textContent   = open ? '▸' : '▾';
-    if (!open) _populateSnProjSel(); // populate project selector when opening
-  }
-
+  // ── ServiceNow helpers ────────────────────────────────────────────────────
   async function _loadSnConfig() {
     try {
       const r = await fetch('/api/sn-config');
@@ -512,6 +889,10 @@
       if (d.instance) document.getElementById('sn-instance').value = d.instance;
       if (d.user)     document.getElementById('sn-user').value     = d.user;
       if (d.hasPass)  document.getElementById('sn-pass').placeholder = '••••••••  (saved)';
+      const configured = !!(d.instance && d.user);
+      const banner = document.getElementById('sn-banner');
+      if (!configured && banner) banner.style.display = 'flex';
+      _setTabBadge('sn', configured, 'settings_configured', 'settings_not_configured');
     } catch(_) {}
   }
   _loadSnConfig();
@@ -540,13 +921,35 @@
     try {
       const body = { instance, user };
       if (pass) body.pass = pass;
-      await fetch('/api/sn-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      st.className = 'su-sn-status ok'; st.textContent = _tr('sn_saved', 'Saved!');
-    } catch(e) { st.className = 'su-sn-status error'; st.textContent = e.message; }
+      const r = await fetch('/api/sn-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) { st.className = 'su-sn-status ok'; st.textContent = _tr('sn_saved', 'Saved!'); return true; }
+      st.className = 'su-sn-status error'; st.textContent = d.error || 'Error';
+      return false;
+    } catch(e) { st.className = 'su-sn-status error'; st.textContent = e.message; return false; }
+  }
+
+  async function snSaveAndMark() {
+    const btn = document.getElementById('btn-save-sn');
+    btn.disabled = true;
+    document.getElementById('sp-sn').style.display  = 'inline-block';
+    document.getElementById('lbl-save-sn').textContent = _tr('sn_saving', 'Saving…');
+    const ok = await snSave();
+    if (ok) {
+      showMsg('sn-msg', 'ok', _tr('sn_saved', 'Saved!'));
+      clearDirty('sn');
+      _setTabBadge('sn', true, 'settings_configured', 'settings_not_configured');
+      const banner = document.getElementById('sn-banner');
+      if (banner) banner.style.display = 'none';
+    } else {
+      showMsg('sn-msg', 'err', document.getElementById('sn-status').textContent || 'Error');
+    }
+    btn.disabled = false;
+    document.getElementById('sp-sn').style.display  = 'none';
+    document.getElementById('lbl-save-sn').textContent = _tr('settings_save_sn', 'Save ServiceNow');
   }
 
   function _snKeyToDisplay(key) {
-    // Keys in SELECTED_SET use "Project|Team" format; display name is "Project - Team"
     const idx = key.indexOf('|');
     return idx >= 0 ? key.slice(0, idx) + ' - ' + key.slice(idx + 1) : key;
   }
@@ -555,7 +958,7 @@
     const sel = document.getElementById('sn-proj-sel');
     if (!sel) return;
     const current = sel.value;
-    sel.innerHTML = '<option value="">— selecione um projeto —</option>'
+    sel.innerHTML = '<option value="">— select a project —</option>'
       + [...SELECTED_SET].map(key => {
           const display = _snKeyToDisplay(key);
           return `<option value="${display}"${display === current ? ' selected' : ''}>${display}</option>`;
@@ -581,8 +984,8 @@
     const assignmentGroup     = document.getElementById('sn-ag').value.trim();
     const assignmentGroupName = document.getElementById('sn-ag-name').value.trim();
     const st = document.getElementById('sn-proj-status');
-    if (!project) { st.className = 'su-sn-status error'; st.textContent = 'Selecione um projeto.'; return; }
-    st.className = 'su-sn-status'; st.textContent = 'Salvando…';
+    if (!project) { st.className = 'su-sn-status error'; st.textContent = 'Select a project.'; return; }
+    st.className = 'su-sn-status'; st.textContent = _tr('sn_saving', 'Saving…');
     try {
       const r = await fetch('/api/sn-config', {
         method: 'POST',
@@ -591,11 +994,77 @@
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { st.className = 'su-sn-status error'; st.textContent = d.error || `HTTP ${r.status}`; return; }
-      st.className = 'su-sn-status ok'; st.textContent = 'Salvo!';
+      st.className = 'su-sn-status ok'; st.textContent = _tr('sn_saved', 'Saved!');
     } catch(e) { st.className = 'su-sn-status error'; st.textContent = e.message; }
   }
 
+  // ── AI config ─────────────────────────────────────────────────────────────
+  let _aiLoaded = false;
+  async function aiLoad() {
+    if (_aiLoaded) return;
+    _aiLoaded = true;
+    try {
+      const r = await fetch('/ai/config');
+      const d = await r.json();
+      if (d.endpoint)   document.getElementById('ai-endpoint').value     = d.endpoint;
+      if (d.apiKey)     document.getElementById('ai-apikey').placeholder = '••••••••  (saved)';
+      if (d.model)      document.getElementById('ai-model').value        = d.model;
+      if (d.apiVersion) document.getElementById('ai-apiversion').value   = d.apiVersion;
+      _setTabBadge('ai', d.configured, 'settings_configured', 'settings_not_configured');
+    } catch(_) { _aiLoaded = false; }
+  }
+
+  async function testAI() {
+    const endpoint   = document.getElementById('ai-endpoint').value.trim();
+    const apiKey     = document.getElementById('ai-apikey').value;
+    const model      = document.getElementById('ai-model').value.trim();
+    const apiVersion = document.getElementById('ai-apiversion').value.trim();
+    const st  = document.getElementById('ai-status');
+    const btn = document.getElementById('btn-ai-test');
+    if (!endpoint || !model) { st.className = 'su-sn-status error'; st.textContent = _tr('ai_err_fill', 'Please fill in endpoint, API key and model.'); return; }
+    st.className = 'su-sn-status'; st.textContent = _tr('ai_btn_testing', 'Testing…');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint, apiKey, model, apiVersion }) });
+      const d = await r.json();
+      if (d.ok) { st.className = 'su-sn-status ok'; st.textContent = _tr('ai_test_ok', 'Connection successful!'); }
+      else { st.className = 'su-sn-status error'; st.textContent = d.error || _tr('ai_err_generic', 'An error occurred.'); }
+    } catch(e) { st.className = 'su-sn-status error'; st.textContent = e.message; }
+    btn.disabled = false;
+  }
+
+  async function doSaveAI() {
+    const endpoint   = document.getElementById('ai-endpoint').value.trim();
+    const apiKey     = document.getElementById('ai-apikey').value;
+    const model      = document.getElementById('ai-model').value.trim();
+    const apiVersion = document.getElementById('ai-apiversion').value.trim();
+    if (!endpoint || !model) { showMsg('ai-msg', 'err', _tr('ai_err_fill', 'Please fill in endpoint, API key and model.')); return; }
+    const btn = document.getElementById('btn-save-ai');
+    btn.disabled = true;
+    document.getElementById('sp-ai').style.display  = 'inline-block';
+    document.getElementById('lbl-save-ai').textContent = _tr('settings_save_ai_saving', 'Saving…');
+    try {
+      const body = { endpoint, model };
+      if (apiKey)     body.apiKey     = apiKey;
+      if (apiVersion) body.apiVersion = apiVersion;
+      const r    = await fetch('/ai/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) {
+        showMsg('ai-msg', 'ok', _tr('settings_save_ai_ok', 'AI config saved!'));
+        clearDirty('ai');
+        _setTabBadge('ai', true, 'settings_configured', 'settings_not_configured');
+      } else {
+        showMsg('ai-msg', 'err', data.error || _tr('setup_err_save', 'Error saving settings.'));
+      }
+    } catch(e) { showMsg('ai-msg', 'err', e.message); }
+    btn.disabled = false;
+    document.getElementById('sp-ai').style.display  = 'none';
+    document.getElementById('lbl-save-ai').textContent = _tr('settings_save_ai', 'Save AI Config');
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
   updateCount();
+  updateTabBadges();
   {{AUTO_LOAD_SCRIPT}}
 </script>
 </body>

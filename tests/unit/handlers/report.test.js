@@ -161,7 +161,21 @@ describe('getIncidents', () => {
       mode:        'backlog',
       filterField: 'cmdb_ci',
       filterValue: 'SAP',
+      group:       '',
     });
     expect(result).toEqual({ incidents });
+  });
+
+  test('passa group para fetchSnIncidentBacklog quando fornecido', async () => {
+    fetchSnIncidentBacklog.mockResolvedValue([]);
+
+    await getIncidents({ project: '', month: '2026-06', group: 'L_BRA_OPS' });
+
+    expect(fetchSnIncidentBacklog).toHaveBeenCalledWith('', '2026-06', {
+      mode:        'backlog',
+      filterField: '',
+      filterValue: '',
+      group:       'L_BRA_OPS',
+    });
   });
 });

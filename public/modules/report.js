@@ -2508,6 +2508,12 @@ export async function reportOpenIncidentsModal() {
   _showIncidentsModal('Backlog de Incidentes', params.toString());
 }
 
+export function openIncidentsForGroup(groupName) {
+  const month = new Date().toISOString().slice(0, 7);
+  const params = new URLSearchParams({ group: groupName, month, mode: 'backlog', filterField: '', filterValue: '' });
+  _showIncidentsModal(groupName, params.toString());
+}
+
 async function _load(refresh = false) {
   const body       = document.getElementById('report-modal-body');
   const refreshBtn = document.getElementById('report-refresh-btn');

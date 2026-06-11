@@ -62,8 +62,8 @@ async function getReport({ project, month, groupFields = [], agingState = 'In Re
   return { payload, months, month: resolvedMonth };
 }
 
-async function getIncidents({ project, month, mode = 'backlog', filterField = '', filterValue = '' }) {
-  const incidents = await fetchSnIncidentBacklog(project, month, { mode, filterField, filterValue });
+async function getIncidents({ project, month, mode = 'backlog', filterField = '', filterValue = '', group = '' }) {
+  const incidents = await fetchSnIncidentBacklog(project, month, { mode, filterField, filterValue, group });
   return { incidents };
 }
 

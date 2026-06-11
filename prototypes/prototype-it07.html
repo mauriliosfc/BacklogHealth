@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backlog Health — Setup IT-07</title>
+<style>
+:root {
+  --bg-page:#020617;--bg-card:#0f172a;--bg-border:#1e293b;--bg-el:#1e293b;--bg-el2:#334155;
+  --text-1:#f1f5f9;--text-2:#cbd5e1;--text-muted:#94a3b8;--text-faint:#64748b;
+  --c-blue:#60a5fa;--c-blue-bg:#1e3a5f;--c-blue-bd:#2d5a8e;
+  --c-green:#22c55e;--c-green-bg:#14532d;--c-green-bd:#166534;
+  --c-yellow:#f59e0b;--c-yellow-bg:#422006;
+  --c-red:#ef4444;--c-red-bg:#450a0a;
+  --c-purple:#a78bfa;--c-purple-bg:#2e1065;
+  --c-teal:#2dd4bf;--c-teal-bg:#0f3d38;--c-teal-bd:#115e54;
+  --hover-bg:rgba(255,255,255,.04);--shadow:0 4px 24px rgba(0,0,0,.45);
+  --r-sm:6px;--r-md:10px;--r-lg:14px;--r-xl:18px;--t:.18s ease;
+}
+[data-theme="light"] {
+  --bg-page:#f0f4f8;--bg-card:#fff;--bg-border:#e2e8f0;--bg-el:#f8fafc;--bg-el2:#e2e8f0;
+  --text-1:#0f172a;--text-2:#1e293b;--text-muted:#475569;--text-faint:#94a3b8;
+  --c-blue:#2563eb;--c-blue-bg:#dbeafe;--c-blue-bd:#93c5fd;
+  --c-green:#16a34a;--c-green-bg:#dcfce7;--c-green-bd:#86efac;
+  --c-yellow:#d97706;--c-yellow-bg:#fef3c7;
+  --c-red:#dc2626;--c-red-bg:#fee2e2;
+  --c-purple:#7c3aed;--c-purple-bg:#f5f3ff;
+  --c-teal:#0d9488;--c-teal-bg:#ccfbf1;--c-teal-bd:#5eead4;
+  --hover-bg:rgba(0,0,0,.04);--shadow:0 4px 24px rgba(0,0,0,.1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg-page);color:var(--text-1);font-size:14px;line-height:1.5}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input{font-family:inherit}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--bg-el2);border-radius:99px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ── LAYOUT ── */
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* ── TOPBAR ── */
+.topbar{
+  display:flex;align-items:center;gap:12px;
+  padding:0 22px;height:54px;
+  background:var(--bg-card);
+  border-bottom:1px solid var(--bg-border);
+  flex-shrink:0;
+  position:relative;z-index:10;
+}
+.tb-logo{display:flex;align-items:center;gap:10px}
+.logo-icon{
+  width:32px;height:32px;border-radius:var(--r-md);
+  background:linear-gradient(135deg,#2563eb,#7c3aed);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.logo-icon svg{color:#fff}
+.logo-name{font-size:13px;font-weight:700;color:var(--text-1);line-height:1}
+.logo-sub{font-size:10px;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-top:1px}
+.tb-sep{flex:1}
+.icon-btn{
+  width:34px;height:34px;border-radius:var(--r-md);
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  color:var(--text-muted);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all var(--t);flex-shrink:0;
+}
+.icon-btn:hover{color:var(--text-1);border-color:var(--bg-el2)}
+.back-btn{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 14px;border-radius:var(--r-md);
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  color:var(--text-2);font-size:13px;font-weight:500;
+  cursor:pointer;transition:all var(--t);
+}
+.back-btn:hover{border-color:var(--bg-el2);color:var(--text-1)}
+
+/* ── BODY (two panels) ── */
+.body{display:flex;flex:1;min-height:0;overflow:hidden}
+
+/* ── LEFT PANEL ── */
+.left-panel{
+  width:380px;flex-shrink:0;
+  background:var(--bg-card);
+  border-right:1px solid var(--bg-border);
+  display:flex;flex-direction:column;
+  height:100%;overflow:hidden;
+  position:relative;
+}
+.left-scroll{
+  flex:1;overflow-y:auto;
+  padding:32px 28px;
+  padding-bottom:100px;
+}
+.left-footer{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:20px 28px;
+  background:var(--bg-card);
+  border-top:1px solid var(--bg-border);
+}
+.left-fade{
+  position:absolute;bottom:84px;left:0;right:5px;height:48px;
+  background:linear-gradient(to top,var(--bg-card),transparent);
+  pointer-events:none;z-index:1;
+}
+.setup-title{font-size:22px;font-weight:700;color:var(--text-1);margin-bottom:4px}
+.setup-sub{font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:24px}
+
+/* ── FORM CARD ── */
+.form-card{
+  background:var(--bg-page);
+  border:1px solid var(--bg-border);
+  border-radius:var(--r-lg);
+  padding:24px;
+  margin-bottom:20px;
+}
+.field{margin-bottom:18px}
+.field:last-child{margin-bottom:0}
+.field-label{
+  font-size:10px;font-weight:700;
+  color:var(--text-faint);
+  letter-spacing:.9px;text-transform:uppercase;
+  margin-bottom:7px;display:block;
+}
+.field-wrap{position:relative;display:flex;align-items:center}
+.field-icon{
+  position:absolute;left:11px;
+  color:var(--text-faint);
+  display:flex;align-items:center;
+  pointer-events:none;
+}
+.field-input{
+  width:100%;
+  background:var(--bg-el);
+  border:1px solid var(--bg-border);
+  border-radius:var(--r-md);
+  color:var(--text-1);
+  font-size:13px;
+  padding:9px 12px 9px 36px;
+  outline:none;
+  transition:border-color var(--t),box-shadow var(--t);
+}
+.field-input:focus{
+  border-color:var(--c-blue-bd);
+  box-shadow:0 0 0 3px rgba(96,165,250,.12);
+}
+.field-input::placeholder{color:var(--text-faint)}
+.field-input.has-action{padding-right:40px}
+.field-action{
+  position:absolute;right:8px;
+  width:28px;height:28px;border-radius:var(--r-sm);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-faint);cursor:pointer;
+  transition:color var(--t),background var(--t);
+}
+.field-action:hover{color:var(--text-1);background:var(--bg-el2)}
+.field-hint{font-size:11px;color:var(--text-faint);margin-top:5px}
+.field-hint code{
+  font-size:10px;background:var(--bg-el2);
+  padding:1px 5px;border-radius:4px;color:var(--text-muted);
+}
+
+/* ── TEST BUTTON ── */
+.test-btn{
+  width:100%;padding:9px;
+  border-radius:var(--r-md);
+  border:1px solid var(--c-teal-bd);
+  background:var(--c-teal-bg);
+  color:var(--c-teal);
+  font-size:13px;font-weight:600;
+  cursor:pointer;
+  transition:all var(--t);
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  margin-top:18px;
+}
+.test-btn:hover{filter:brightness(1.1)}
+.test-btn:disabled{opacity:.5;cursor:not-allowed}
+.test-btn.loading{opacity:.8}
+.test-btn.success{
+  border-color:var(--c-green-bd);
+  background:var(--c-green-bg);
+  color:var(--c-green);
+}
+.test-result{
+  display:none;
+  margin-top:10px;
+  padding:10px 14px;
+  border-radius:var(--r-md);
+  border:1px solid var(--c-green-bd);
+  background:var(--c-green-bg);
+  color:var(--c-green);
+  font-size:12px;font-weight:500;
+  align-items:center;gap:8px;
+}
+.test-result.show{display:flex}
+.test-result svg{flex-shrink:0}
+
+/* ── SECURITY NOTE ── */
+.security-note{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:12px 14px;
+  border-radius:var(--r-md);
+  border:1px solid var(--c-green-bd);
+  background:var(--c-green-bg);
+  margin-top:6px;
+}
+.security-note svg{flex-shrink:0;color:var(--c-green);margin-top:1px}
+.security-note p{font-size:12px;color:var(--c-green);line-height:1.5}
+
+/* ── COLLAPSIBLE SECTION ── */
+.section-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 0;
+  border-top:1px solid var(--bg-border);
+  margin-top:8px;cursor:pointer;
+}
+.section-hdr-label{font-size:13px;font-weight:600;color:var(--text-2)}
+.section-chevron{
+  width:28px;height:28px;border-radius:var(--r-sm);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-faint);
+  transition:transform var(--t),background var(--t);
+}
+.section-hdr:hover .section-chevron{background:var(--bg-el);color:var(--text-1)}
+.section-chevron.open{transform:rotate(180deg)}
+.section-body{display:none;padding-bottom:4px}
+.section-body.open{display:block}
+
+/* ── LEFT FOOTER ACTIONS ── */
+.save-btn{
+  width:100%;padding:11px;
+  border-radius:var(--r-md);
+  background:var(--c-blue);
+  color:#fff;
+  font-size:14px;font-weight:700;
+  cursor:pointer;
+  transition:all var(--t);
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  border:none;
+  margin-bottom:8px;
+}
+.save-btn:hover{background:#3b82f6;box-shadow:0 0 0 3px rgba(96,165,250,.2)}
+.cancel-link{
+  display:block;text-align:center;
+  font-size:12px;color:var(--text-faint);
+  cursor:pointer;padding:2px;
+  transition:color var(--t);
+}
+.cancel-link:hover{color:var(--text-muted)}
+
+/* ── RIGHT PANEL ── */
+.right-panel{
+  flex:1;min-width:0;
+  display:flex;flex-direction:column;
+  height:100%;overflow:hidden;
+}
+.right-header{
+  padding:24px 32px 0;
+  flex-shrink:0;
+}
+.right-header-top{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  margin-bottom:4px;
+}
+.right-title{font-size:16px;font-weight:700;color:var(--text-1)}
+.found-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:4px 10px;
+  border-radius:99px;
+  background:var(--c-blue-bg);
+  border:1px solid var(--c-blue-bd);
+  color:var(--c-blue);
+  font-size:11px;font-weight:600;
+  flex-shrink:0;
+  margin-top:2px;
+}
+.right-sub{font-size:12px;color:var(--text-muted);line-height:1.55;margin-bottom:16px}
+.search-wrap{
+  position:relative;margin-bottom:16px;
+}
+.search-icon{
+  position:absolute;left:11px;top:50%;transform:translateY(-50%);
+  color:var(--text-faint);pointer-events:none;
+  display:flex;align-items:center;
+}
+.search-input{
+  width:100%;
+  background:var(--bg-el);
+  border:1px solid var(--bg-border);
+  border-radius:var(--r-md);
+  color:var(--text-1);
+  font-size:13px;
+  padding:9px 12px 9px 36px;
+  outline:none;
+  transition:border-color var(--t),box-shadow var(--t);
+}
+.search-input:focus{border-color:var(--c-blue-bd);box-shadow:0 0 0 3px rgba(96,165,250,.12)}
+.search-input::placeholder{color:var(--text-faint)}
+
+/* ── PROJECT LIST ── */
+.right-scroll{flex:1;overflow-y:auto;padding:0 32px}
+.projects-list{display:flex;flex-direction:column;gap:8px;padding-bottom:12px}
+
+.project-item{
+  background:var(--bg-card);
+  border:1px solid var(--bg-border);
+  border-radius:12px;
+  transition:border-color var(--t),box-shadow var(--t);
+  overflow:hidden;
+}
+.project-item:hover{border-color:var(--bg-el2)}
+.project-item.checked{
+  border-color:var(--c-blue-bd);
+  border-left:3px solid var(--c-blue);
+}
+.project-row{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 16px;
+}
+.project-item.checked .project-row{padding-left:14px}
+
+/* checkbox */
+.cb{
+  width:18px;height:18px;border-radius:5px;
+  border:2px solid var(--bg-el2);
+  background:var(--bg-el);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;flex-shrink:0;
+  transition:all var(--t);
+}
+.cb.checked{
+  background:var(--c-blue);
+  border-color:var(--c-blue);
+}
+.cb.checked svg{display:block}
+.cb svg{display:none;color:#fff}
+
+/* avatar */
+.avatar{
+  width:32px;height:32px;border-radius:var(--r-md);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;
+  color:#fff;flex-shrink:0;
+}
+.av-red{background:linear-gradient(135deg,#dc2626,#b91c1c)}
+.av-yellow{background:linear-gradient(135deg,#d97706,#b45309)}
+.av-green{background:linear-gradient(135deg,#16a34a,#15803d)}
+.av-blue{background:linear-gradient(135deg,#2563eb,#1d4ed8)}
+.av-purple{background:linear-gradient(135deg,#7c3aed,#6d28d9)}
+.av-gray{background:linear-gradient(135deg,#475569,#334155)}
+
+.project-name{font-size:13px;font-weight:600;color:var(--text-1);flex:1;min-width:0}
+.project-team-count{font-size:11px;color:var(--text-faint)}
+
+/* wit toggle */
+.wit-toggle{
+  display:flex;align-items:center;gap:3px;
+  background:var(--bg-el);
+  border:1px solid var(--bg-border);
+  border-radius:99px;
+  padding:3px;
+  flex-shrink:0;
+}
+.wit-btn{
+  padding:3px 10px;border-radius:99px;
+  font-size:11px;font-weight:600;
+  color:var(--text-faint);cursor:pointer;
+  transition:all var(--t);white-space:nowrap;
+}
+.wit-btn.active{
+  background:var(--c-blue);color:#fff;
+}
+.wit-btn:not(.active):hover{color:var(--text-1)}
+
+/* expand btn */
+.expand-btn{
+  width:24px;height:24px;border-radius:var(--r-sm);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-faint);cursor:pointer;
+  transition:transform var(--t),background var(--t);
+  flex-shrink:0;
+}
+.expand-btn:hover{background:var(--bg-el);color:var(--text-1)}
+.expand-btn.open{transform:rotate(90deg)}
+
+/* sub-teams */
+.sub-teams{
+  display:none;
+  border-top:1px solid var(--bg-border);
+  background:rgba(0,0,0,.15);
+}
+[data-theme="light"] .sub-teams{background:rgba(0,0,0,.03)}
+.sub-teams.open{display:block}
+.sub-team-row{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 16px 10px 20px;
+  border-bottom:1px solid var(--bg-border);
+  transition:background var(--t);
+}
+.sub-team-row:last-child{border-bottom:none}
+.sub-team-row:hover{background:var(--hover-bg)}
+.sub-team-name{font-size:12px;color:var(--text-2);flex:1}
+
+/* ── RIGHT FOOTER ── */
+.right-footer{
+  flex-shrink:0;
+  padding:14px 32px;
+  border-top:1px solid var(--bg-border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.sel-count{font-size:13px;color:var(--text-muted)}
+.sel-count strong{color:var(--text-1);font-weight:700}
+.sel-actions{display:flex;align-items:center;gap:14px}
+.sel-link{
+  font-size:12px;color:var(--c-blue);cursor:pointer;
+  transition:opacity var(--t);background:none;border:none;padding:0;
+}
+.sel-link:hover{opacity:.7}
+
+/* ── TOAST ── */
+.toast{
+  position:fixed;top:70px;right:24px;z-index:100;
+  background:var(--c-green-bg);
+  border:1px solid var(--c-green-bd);
+  color:var(--c-green);
+  padding:12px 18px;border-radius:var(--r-md);
+  font-size:13px;font-weight:600;
+  display:none;align-items:center;gap:8px;
+  box-shadow:var(--shadow);
+  animation:slideIn .25s ease;
+}
+.toast.show{display:flex}
+@keyframes slideIn{
+  from{opacity:0;transform:translateY(-8px) translateX(8px)}
+  to{opacity:1;transform:translateY(0) translateX(0)}
+}
+
+/* ── SPINNER ── */
+.spinner{
+  width:14px;height:14px;
+  border:2px solid currentColor;
+  border-top-color:transparent;
+  border-radius:50%;
+  animation:spin .7s linear infinite;
+  flex-shrink:0;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── SN SECTION ── */
+.sn-test-btn{
+  width:100%;padding:8px;
+  border-radius:var(--r-md);
+  border:1px solid var(--bg-el2);
+  background:var(--bg-el);
+  color:var(--text-muted);
+  font-size:13px;font-weight:500;
+  cursor:pointer;
+  transition:all var(--t);
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  margin-top:14px;
+}
+.sn-test-btn:hover{border-color:var(--bg-el2);color:var(--text-1)}
+
+/* ── DIVIDER ── */
+.section-divider{height:1px;background:var(--bg-border);margin:20px 0}
+
+/* empty state */
+.empty-list{
+  text-align:center;padding:40px 20px;
+  color:var(--text-faint);font-size:13px;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="tb-logo">
+      <div class="logo-icon">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6M5 20h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v11a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-name">Backlog Health</div>
+        <div class="logo-sub">Azure DevOps</div>
+      </div>
+    </div>
+
+    <div class="tb-sep"></div>
+
+    <button class="icon-btn" id="themeToggle" title="Alternar tema">
+      <svg id="themeIcon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+
+    <button class="back-btn" onclick="showToast('Voltando ao dashboard...',true)">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+      </svg>
+      Voltar ao Dashboard
+    </button>
+  </header>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- LEFT PANEL -->
+    <aside class="left-panel">
+      <div class="left-scroll" id="leftScroll">
+
+        <h1 class="setup-title">Configuração</h1>
+        <p class="setup-sub">Conecte sua organização ao Azure DevOps para monitorar os backlogs dos seus times.</p>
+
+        <!-- Azure DevOps form card -->
+        <div class="form-card">
+
+          <!-- Org field -->
+          <div class="field">
+            <label class="field-label">Organização</label>
+            <div class="field-wrap">
+              <span class="field-icon">
+                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+              </span>
+              <input class="field-input" type="text" id="orgInput" placeholder="minha-empresa" value="accenture-brasil">
+            </div>
+            <p class="field-hint">Usado em: <code>dev.azure.com/{organização}</code></p>
+          </div>
+
+          <!-- PAT field -->
+          <div class="field">
+            <label class="field-label">Personal Access Token (PAT)</label>
+            <div class="field-wrap">
+              <span class="field-icon">
+                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                </svg>
+              </span>
+              <input class="field-input has-action" type="password" id="patInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="mySecretPAToken123456789abcdef">
+              <button class="field-action" id="patToggle" title="Mostrar/ocultar token">
+                <svg id="eyeIcon" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+              </button>
+            </div>
+            <p class="field-hint">Token gerado no Azure DevOps com permissão de leitura</p>
+          </div>
+
+          <!-- Test connection -->
+          <button class="test-btn" id="testAzBtn" onclick="testAzureConnection()">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            Testar Conexão
+          </button>
+
+          <div class="test-result" id="testAzResult">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Conexão estabelecida · 12 projetos encontrados
+          </div>
+        </div>
+
+        <!-- Security note -->
+        <div class="security-note">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+          <p>Suas credenciais são armazenadas apenas localmente neste computador. Nunca enviadas para servidores externos.</p>
+        </div>
+
+        <!-- Service Now collapsible -->
+        <div class="section-hdr" onclick="toggleSection('sn')">
+          <span class="section-hdr-label">Service Now</span>
+          <span class="section-chevron" id="snChevron">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </span>
+        </div>
+
+        <div class="section-body" id="snBody">
+          <div class="form-card" style="margin-top:0">
+            <div class="field">
+              <label class="field-label">Instância</label>
+              <div class="field-wrap">
+                <span class="field-icon">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                  </svg>
+                </span>
+                <input class="field-input" type="text" placeholder="empresa.service-now.com">
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label">Usuário</label>
+              <div class="field-wrap">
+                <span class="field-icon">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                  </svg>
+                </span>
+                <input class="field-input" type="text" placeholder="seu.usuario">
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label">Senha / Token</label>
+              <div class="field-wrap">
+                <span class="field-icon">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                  </svg>
+                </span>
+                <input class="field-input" type="password" placeholder="••••••••••••">
+              </div>
+            </div>
+            <button class="sn-test-btn">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+              Testar Conexão SN
+            </button>
+          </div>
+        </div>
+
+      </div><!-- /left-scroll -->
+
+      <div class="left-fade"></div>
+
+      <div class="left-footer">
+        <button class="save-btn" onclick="saveConfig()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+          </svg>
+          Salvar e Abrir Dashboard
+        </button>
+        <a class="cancel-link" onclick="showToast('Alterações descartadas.', true)">Cancelar</a>
+      </div>
+    </aside>
+
+    <!-- RIGHT PANEL -->
+    <main class="right-panel">
+      <div class="right-header">
+        <div class="right-header-top">
+          <div>
+            <div class="right-title">Projetos disponíveis</div>
+          </div>
+          <div class="found-badge">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+            </svg>
+            12 projetos encontrados
+          </div>
+        </div>
+        <p class="right-sub">Selecione os projetos que deseja monitorar. Você pode filtrar por time e definir o tipo de item de trabalho.</p>
+        <div class="search-wrap">
+          <span class="search-icon">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </span>
+          <input class="search-input" type="text" id="searchInput" placeholder="Buscar projeto ou time..." oninput="filterProjects(this.value)">
+        </div>
+      </div>
+
+      <div class="right-scroll">
+        <div class="projects-list" id="projectsList">
+
+          <!-- 1. Alpha Squad -->
+          <div class="project-item checked" data-name="alpha squad" id="proj-1">
+            <div class="project-row">
+              <div class="cb checked" onclick="toggleCheck('proj-1')">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+              </div>
+              <div class="avatar av-red">AL</div>
+              <span class="project-name">Alpha Squad</span>
+              <div class="wit-toggle">
+                <button class="wit-btn active" onclick="setWit(this, 'proj-1')">User Story</button>
+                <button class="wit-btn" onclick="setWit(this, 'proj-1')">Task</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Beta Platform -->
+          <div class="project-item checked" data-name="beta platform" id="proj-2">
+            <div class="project-row">
+              <div class="cb checked" onclick="toggleCheck('proj-2')">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+              </div>
+              <div class="avatar av-yellow">BP</div>
+              <span class="project-name">Beta Platform</span>
+              <div class="wit-toggle">
+                <button class="wit-btn active" onclick="setWit(this, 'proj-2')">User Story</button>
+                <button class="wit-btn" onclick="setWit(this, 'proj-2')">Task</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Gamma Experience -->
+          <div class="project-item checked" data-name="gamma experience" id="proj-3">
+            <div class="project-row">
+              <div class="cb checked" onclick="toggleCheck('proj-3')">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+              </div>
+              <div class="avatar av-green">GX</div>
+              <span class="project-name">Gamma Experience</span>
+              <div class="wit-toggle">
+                <button class="wit-btn" onclick="setWit(this, 'proj-3')">User Story</button>
+                <button class="wit-btn active" onclick="setWit(this, 'proj-3')">Task</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Delta Core (multi-team) -->
+          <div class="project-item" data-name="delta core team alpha team beta team gamma" id="proj-4">
+            <div class="project-row" style="cursor:default">
+              <button class="expand-btn open" id="expandDelta" onclick="toggleExpand('deltaSub','expandDelta')">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+              </button>
+              <div class="avatar av-blue">DC</div>
+              <div style="flex:1;min-width:0">
+                <span class="project-name">Delta Core</span>
+                <div style="font-size:11px;color:var(--text-faint);margin-top:1px">3 times disponíveis</div>
+              </div>
+            </div>
+            <div class="sub-teams open" id="deltaSub">
+              <!-- Sub-team: Team Alpha -->
+              <div class="sub-team-row" id="sub-4-1">
+                <div class="cb" onclick="toggleSubCheck('sub-4-1')">
+                  <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+                <span class="sub-team-name">Team Alpha</span>
+                <div class="wit-toggle">
+                  <button class="wit-btn active" onclick="setWitSub(this,'sub-4-1')">User Story</button>
+                  <button class="wit-btn" onclick="setWitSub(this,'sub-4-1')">Task</button>
+                </div>
+              </div>
+              <!-- Sub-team: Team Beta -->
+              <div class="sub-team-row" id="sub-4-2">
+                <div class="cb checked" onclick="toggleSubCheck('sub-4-2')">
+                  <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+                <span class="sub-team-name">Team Beta</span>
+                <div class="wit-toggle">
+                  <button class="wit-btn active" onclick="setWitSub(this,'sub-4-2')">User Story</button>
+                  <button class="wit-btn" onclick="setWitSub(this,'sub-4-2')">Task</button>
+                </div>
+              </div>
+              <!-- Sub-team: Team Gamma -->
+              <div class="sub-team-row" id="sub-4-3">
+                <div class="cb" onclick="toggleSubCheck('sub-4-3')">
+                  <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+                <span class="sub-team-name">Team Gamma</span>
+                <div class="wit-toggle">
+                  <button class="wit-btn active" onclick="setWitSub(this,'sub-4-3')">User Story</button>
+                  <button class="wit-btn" onclick="setWitSub(this,'sub-4-3')">Task</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Epsilon Analytics -->
+          <div class="project-item" data-name="epsilon analytics" id="proj-5">
+            <div class="project-row">
+              <div class="cb" onclick="toggleCheck('proj-5')">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+              </div>
+              <div class="avatar av-purple">EA</div>
+              <span class="project-name">Epsilon Analytics</span>
+              <div class="wit-toggle">
+                <button class="wit-btn active" onclick="setWit(this, 'proj-5')">User Story</button>
+                <button class="wit-btn" onclick="setWit(this, 'proj-5')">Task</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. Zeta Operations -->
+          <div class="project-item" data-name="zeta operations" id="proj-6">
+            <div class="project-row">
+              <div class="cb" onclick="toggleCheck('proj-6')">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+              </div>
+              <div class="avatar av-gray">ZO</div>
+              <span class="project-name">Zeta Operations</span>
+              <div class="wit-toggle">
+                <button class="wit-btn active" onclick="setWit(this, 'proj-6')">User Story</button>
+                <button class="wit-btn" onclick="setWit(this, 'proj-6')">Task</button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /projects-list -->
+
+        <div class="empty-list" id="emptyList" style="display:none">
+          Nenhum projeto encontrado para a busca.
+        </div>
+
+      </div><!-- /right-scroll -->
+
+      <div class="right-footer">
+        <div class="sel-count">
+          <strong id="selCountNum">3</strong> projetos selecionados
+        </div>
+        <div class="sel-actions">
+          <button class="sel-link" onclick="selectAll()">Selecionar todos</button>
+          <button class="sel-link" onclick="clearAll()">Limpar seleção</button>
+        </div>
+      </div>
+    </main>
+
+  </div><!-- /body -->
+
+</div><!-- /app -->
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+  </svg>
+  <span id="toastMsg">Configuração salva com sucesso!</span>
+</div>
+
+<script>
+// ── THEME ──
+const html = document.documentElement;
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const isDark = html.dataset.theme === 'dark';
+  html.dataset.theme = isDark ? 'light' : 'dark';
+  const icon = document.getElementById('themeIcon');
+  if (isDark) {
+    icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>`;
+  } else {
+    icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>`;
+  }
+});
+
+// ── PAT TOGGLE ──
+let patVisible = false;
+document.getElementById('patToggle').addEventListener('click', () => {
+  patVisible = !patVisible;
+  const input = document.getElementById('patInput');
+  input.type = patVisible ? 'text' : 'password';
+  const icon = document.getElementById('eyeIcon');
+  if (patVisible) {
+    icon.innerHTML = `
+      <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>`;
+  } else {
+    icon.innerHTML = `
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>`;
+  }
+});
+
+// ── SERVICE NOW TOGGLE ──
+function toggleSection(id) {
+  const body = document.getElementById(id + 'Body');
+  const chevron = document.getElementById(id + 'Chevron');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  chevron.classList.toggle('open', !isOpen);
+}
+
+// ── TEST AZURE CONNECTION ──
+let testRunning = false;
+function testAzureConnection() {
+  if (testRunning) return;
+  testRunning = true;
+  const btn = document.getElementById('testAzBtn');
+  const result = document.getElementById('testAzResult');
+  result.classList.remove('show');
+  btn.classList.remove('success');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.innerHTML = `<div class="spinner"></div> Testando...`;
+  setTimeout(() => {
+    testRunning = false;
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.classList.add('success');
+    btn.innerHTML = `
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      Conexão bem-sucedida`;
+    result.classList.add('show');
+  }, 1500);
+}
+
+// ── CHECKBOXES ──
+function countSelected() {
+  let count = 0;
+  document.querySelectorAll('.project-item > .project-row > .cb.checked').forEach(() => count++);
+  document.querySelectorAll('.sub-team-row > .cb.checked').forEach(() => count++);
+  document.getElementById('selCountNum').textContent = count;
+}
+
+function toggleCheck(id) {
+  const item = document.getElementById(id);
+  const cb = item.querySelector(':scope > .project-row > .cb');
+  const checked = cb.classList.toggle('checked');
+  item.classList.toggle('checked', checked);
+  countSelected();
+}
+
+function toggleSubCheck(id) {
+  const row = document.getElementById(id);
+  const cb = row.querySelector('.cb');
+  cb.classList.toggle('checked');
+  countSelected();
+}
+
+// ── WIT TOGGLE ──
+function setWit(btn, projId) {
+  const toggle = btn.closest('.wit-toggle');
+  toggle.querySelectorAll('.wit-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function setWitSub(btn, subId) {
+  const toggle = btn.closest('.wit-toggle');
+  toggle.querySelectorAll('.wit-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── EXPAND/COLLAPSE MULTI-TEAM ──
+function toggleExpand(subId, btnId) {
+  const sub = document.getElementById(subId);
+  const btn = document.getElementById(btnId);
+  const isOpen = sub.classList.contains('open');
+  sub.classList.toggle('open', !isOpen);
+  btn.classList.toggle('open', !isOpen);
+}
+
+// ── SEARCH / FILTER ──
+function filterProjects(q) {
+  const query = q.toLowerCase().trim();
+  let visible = 0;
+  document.querySelectorAll('#projectsList .project-item').forEach(item => {
+    const name = item.dataset.name || '';
+    const match = !query || name.includes(query);
+    item.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  document.getElementById('emptyList').style.display = visible === 0 ? '' : 'none';
+}
+
+// ── SELECT ALL / CLEAR ──
+function selectAll() {
+  document.querySelectorAll('.project-item:not([style*="display: none"])').forEach(item => {
+    const cb = item.querySelector(':scope > .project-row > .cb');
+    if (cb) { cb.classList.add('checked'); item.classList.add('checked'); }
+  });
+  document.querySelectorAll('.sub-team-row .cb').forEach(cb => cb.classList.add('checked'));
+  countSelected();
+}
+
+function clearAll() {
+  document.querySelectorAll('.cb').forEach(cb => cb.classList.remove('checked'));
+  document.querySelectorAll('.project-item').forEach(item => item.classList.remove('checked'));
+  countSelected();
+}
+
+// ── SAVE CONFIG ──
+function saveConfig() {
+  showToast('Configuracao salva com sucesso!');
+}
+
+// ── TOAST ──
+let toastTimer = null;
+function showToast(msg, neutral) {
+  const toast = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  toast.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
