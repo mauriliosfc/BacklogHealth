@@ -4,7 +4,7 @@ const fs       = require('fs');
 const nodePath = require('path');
 dns.setDefaultResultOrder('ipv4first');
 
-const { PORT, loadConfig, getCfg, getDisplayName } = require('./config');
+const { PORT, loadConfig, getCfg, getDisplayName, getAppMode } = require('./config');
 const { HttpError, readBody } = require('./handlers/utils');
 const state     = require('./handlers/state');
 const dashH     = require('./handlers/dashboard');
@@ -13,7 +13,8 @@ const azureH    = require('./handlers/azure');
 const aiH       = require('./handlers/ai');
 const reportH   = require('./handlers/report');
 const snH       = require('./handlers/sn');
-const feedbackH = require('./handlers/feedback');
+const feedbackH    = require('./handlers/feedback');
+const healthCfgH   = require('./handlers/healthConfig');
 
 const PUBLIC_DIR = nodePath.join(__dirname, 'public');
 
@@ -52,7 +53,18 @@ async function main() {
     await dashH.buildAndCache();
     console.log('✅ Dados carregados! Iniciando servidor...');
   } else {
-    console.log('⚙️  Configuração não encontrada. Iniciando tela de setup...');
+    const partialCfg = getCfg();
+    if (partialCfg.org && partialCfg.pat) {
+      // Credenciais existem mas sem projetos → gera dashboard com empty state
+      await dashH.buildAndCache();
+      console.log('⚙️  Sem projetos configurados. Iniciando dashboard em modo vazio...');
+    } else if (getAppMode() === 'sn-only') {
+      console.log('🟣 Modo ServiceNow-only. Carregando incidentes...');
+      await dashH.buildAndCache();
+      console.log('✅ Dados SN carregados! Iniciando servidor...');
+    } else {
+      console.log('⚙️  Configuração não encontrada. Iniciando tela de setup...');
+    }
   }
 
   const server = http.createServer(async (req, res) => {
@@ -75,6 +87,16 @@ async function main() {
       return json(res, () => projH.listProjects({ org: qp.get('org')?.trim(), pat: qp.get('pat')?.trim() }));
     }
 
+    // ── POST /api/disconnect ──────────────────────────────────────────────
+    if (req.method === 'POST' && url === '/api/disconnect') {
+      return json(res, () => projH.disconnect());
+    }
+
+    // ── POST /api/complete-onboarding ─────────────────────────────────────
+    if (req.method === 'POST' && url === '/api/complete-onboarding') {
+      return json(res, () => projH.markOnboarded());
+    }
+
     // ── POST /api/remove-project ───────────────────────────────────────────
     if (req.method === 'POST' && url === '/api/remove-project') {
       const body = await readBody(req);
@@ -93,17 +115,38 @@ async function main() {
       }));
     }
 
+    // ── GET /onboarding ────────────────────────────────────────────────────
+    if (url === '/onboarding') {
+      const onboardingPath = nodePath.join(__dirname, 'views', 'onboarding.html');
+      return page(res, () => fs.readFileSync(onboardingPath, 'utf8'));
+    }
+
     // ── GET /settings ──────────────────────────────────────────────────────
     if (url === '/settings') {
       const cfg = getCfg();
       return page(res, () => dashH.renderSetup({ org: cfg.org || '', pat: cfg.pat || '', projects: cfg.projects || [] }));
     }
 
-    // ── No config → setup ─────────────────────────────────────────────────
+    // ── No config → onboarding (first time) | SN-only | settings (returning) ─
+    // API calls from the onboarding flow must still work even without a config,
+    // so only redirect page-level requests (not /api/* or /ai/* routes).
     const cfg = getCfg();
-    if (!cfg.org || !cfg.pat || !cfg.projects?.length) {
+    if ((!cfg.org || !cfg.pat) && !url.startsWith('/api/') && !url.startsWith('/ai/')) {
+      if (!cfg._onboarded) {
+        res.writeHead(302, { Location: '/onboarding' });
+        return res.end();
+      }
+      // SN-only mode: serve the SN dashboard (rebuild if state is empty)
+      if (getAppMode() === 'sn-only') {
+        if (!state.html) {
+          try { await dashH.buildAndCache(); } catch (_) {}
+        }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(state.html || '<p>Loading ServiceNow dashboard...</p>');
+      }
       return page(res, () => dashH.renderSetup());
     }
+    // org + pat configurados mas sem projetos → dashboard com empty state
 
     // ── GET /refresh ───────────────────────────────────────────────────────
     if (url === '/refresh') {
@@ -170,6 +213,16 @@ async function main() {
       return json(res, () => feedbackH.submitFeedback(JSON.parse(body)));
     }
 
+    // ── GET/POST /api/health-config ───────────────────────────────────────
+    if (url === '/api/health-config') {
+      if (req.method === 'GET')
+        return json(res, () => healthCfgH.getHealthConfig());
+      if (req.method === 'POST') {
+        const body = await readBody(req);
+        return json(res, () => healthCfgH.saveHealthConfig(JSON.parse(body || '{}')));
+      }
+    }
+
     // ── GET /api/report-config (must precede /api/report) ─────────────────
     if (url.startsWith('/api/report-config')) {
       if (req.method === 'GET') {
@@ -217,6 +270,7 @@ async function main() {
         mode:        qp.get('mode')        || 'backlog',
         filterField: qp.get('filterField') || '',
         filterValue: qp.get('filterValue') || '',
+        group:       qp.get('group')       || '',
       }));
     }
 
@@ -228,7 +282,14 @@ async function main() {
       }
       if (req.method === 'POST') {
         const body = await readBody(req);
-        return json(res, () => snH.saveSnCfg(JSON.parse(body || '{}')));
+        return json(res, async () => {
+          const result = await snH.saveSnCfg(JSON.parse(body || '{}'));
+          // Rebuild dashboard when in SN-only mode so the groups filter takes effect immediately
+          if (getAppMode() === 'sn-only') {
+            await dashH.buildAndCache();
+          }
+          return result;
+        });
       }
     }
 
@@ -236,6 +297,12 @@ async function main() {
     if (req.method === 'POST' && url === '/api/sn-test') {
       const body = await readBody(req);
       return json(res, () => snH.testSn(JSON.parse(body || '{}')));
+    }
+
+    // ── POST /api/sn-groups ────────────────────────────────────────────────
+    if (req.method === 'POST' && url === '/api/sn-groups') {
+      const body = await readBody(req);
+      return json(res, () => snH.fetchGroups(JSON.parse(body || '{}')));
     }
 
     // ── GET / — dashboard ──────────────────────────────────────────────────

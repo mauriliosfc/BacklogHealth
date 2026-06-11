@@ -2,7 +2,7 @@ jest.mock('../../../config');
 jest.mock('../../../azureClient');
 jest.mock('../../../handlers/dashboard');
 
-const { listProjects, setup, removeProject } = require('../../../handlers/projects');
+const { listProjects, setup, removeProject, disconnect, markOnboarded } = require('../../../handlers/projects');
 const { getCfg, saveConfig, parseOrgInput, getDisplayName } = require('../../../config');
 const { rawAzureGet } = require('../../../azureClient');
 const { buildAndCache } = require('../../../handlers/dashboard');
@@ -230,5 +230,73 @@ describe('setup', () => {
 
     const call = saveConfig.mock.calls[0][0];
     expect(call.projects[0].servicenow).toEqual({ assignmentGroup: 'grp123' });
+  });
+
+  test('salva _onboarded: true para marcar onboarding concluído', async () => {
+    await setup({ rawOrg: 'myorg', pat: 'token', projectsRaw: 'Alpha:User Story' });
+
+    expect(saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ _onboarded: true })
+    );
+  });
+});
+
+// ── disconnect ───────────────────────────────────────────────────────────────
+
+describe('disconnect', () => {
+  beforeEach(() => {
+    getCfg.mockReturnValue({ org: 'myorg', pat: 'token', projects: [{ name: 'Alpha' }], ai: { apiKey: 'key' } });
+  });
+
+  test('limpa org, baseUrl, pat e projects mas preserva outros campos', async () => {
+    const result = await disconnect();
+
+    expect(saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        org:      '',
+        baseUrl:  '',
+        pat:      '',
+        projects: [],
+        ai:       { apiKey: 'key' },
+      })
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
+  test('preserva _onboarded ao desconectar para redirecionar para settings (não onboarding)', async () => {
+    getCfg.mockReturnValue({
+      org: 'myorg', pat: 'token', projects: [], ai: { apiKey: 'key' }, _onboarded: true,
+    });
+
+    await disconnect();
+
+    expect(saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ _onboarded: true })
+    );
+  });
+
+  test('retorna { ok: true }', async () => {
+    const result = await disconnect();
+    expect(result).toEqual({ ok: true });
+  });
+});
+
+// ── markOnboarded ─────────────────────────────────────────────────────────────
+
+describe('markOnboarded', () => {
+  test('salva _onboarded: true preservando todos os outros campos', async () => {
+    getCfg.mockReturnValue({ servicenow: { instance: 'acme.service-now.com' }, org: '' });
+
+    await markOnboarded();
+
+    expect(saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ _onboarded: true, servicenow: { instance: 'acme.service-now.com' } })
+    );
+  });
+
+  test('retorna { ok: true }', async () => {
+    getCfg.mockReturnValue({});
+    const result = await markOnboarded();
+    expect(result).toEqual({ ok: true });
   });
 });

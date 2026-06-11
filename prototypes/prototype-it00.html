@@ -1,0 +1,1757 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backlog Health — Onboarding (IT-00)</title>
+<style>
+/* ── TOKENS ── */
+:root {
+  --bg-page:#020617;--bg-card:#0f172a;--bg-border:#1e293b;--bg-el:#1e293b;--bg-el2:#334155;
+  --text-1:#f1f5f9;--text-2:#cbd5e1;--text-muted:#94a3b8;--text-faint:#64748b;
+  --c-blue:#60a5fa;--c-blue-bg:#1e3a5f;--c-blue-bd:#2d5a8e;
+  --c-green:#22c55e;--c-green-bg:#14532d;--c-green-bd:#166534;
+  --c-yellow:#f59e0b;--c-yellow-bg:#422006;
+  --c-red:#ef4444;--c-red-bg:#450a0a;
+  --c-purple:#a78bfa;--c-purple-bg:#2e1065;
+  --hover-bg:rgba(255,255,255,.04);--shadow:0 4px 24px rgba(0,0,0,.45);--modal-bg:rgba(0,0,0,.75);
+  --r-sm:6px;--r-md:10px;--r-lg:14px;--r-xl:18px;--t:.18s ease;
+}
+[data-theme="light"]{
+  --bg-page:#f0f4f8;--bg-card:#fff;--bg-border:#e2e8f0;--bg-el:#f8fafc;--bg-el2:#e2e8f0;
+  --text-1:#0f172a;--text-2:#1e293b;--text-muted:#475569;--text-faint:#94a3b8;
+  --c-blue:#2563eb;--c-blue-bg:#dbeafe;--c-blue-bd:#93c5fd;
+  --c-green:#16a34a;--c-green-bg:#dcfce7;--c-green-bd:#86efac;
+  --c-yellow:#d97706;--c-yellow-bg:#fef3c7;
+  --c-red:#dc2626;--c-red-bg:#fee2e2;
+  --c-purple:#7c3aed;--c-purple-bg:#f5f3ff;
+  --hover-bg:rgba(0,0,0,.04);--shadow:0 4px 24px rgba(0,0,0,.1);--modal-bg:rgba(0,0,0,.5);
+}
+
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;min-height:100vh}
+body{
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  background:var(--bg-page);color:var(--text-1);font-size:14px;line-height:1.5;
+  overflow-x:hidden;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input{font-family:inherit}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--bg-el2);border-radius:99px}
+
+/* ── ANIMATED BG ── */
+.bg-glow{
+  position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;
+}
+.bg-glow::before{
+  content:'';position:absolute;top:-20%;left:-10%;
+  width:60%;height:60%;
+  background:radial-gradient(ellipse at center,rgba(96,165,250,.06) 0%,transparent 70%);
+  animation:bgPulse 8s ease-in-out infinite;
+}
+.bg-glow::after{
+  content:'';position:absolute;bottom:-20%;right:-10%;
+  width:50%;height:50%;
+  background:radial-gradient(ellipse at center,rgba(167,139,250,.04) 0%,transparent 70%);
+  animation:bgPulse 8s ease-in-out infinite reverse;
+  animation-delay:4s;
+}
+.bg-grid{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px);
+  background-size:48px 48px;
+}
+[data-theme="light"] .bg-grid{
+  background-image:
+    linear-gradient(rgba(0,0,0,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,0,0,.03) 1px,transparent 1px);
+}
+@keyframes bgPulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
+
+/* ── THEME TOGGLE ── */
+.theme-btn{
+  position:fixed;top:16px;right:18px;z-index:100;
+  width:36px;height:36px;border-radius:var(--r-md);
+  background:var(--bg-card);border:1px solid var(--bg-border);
+  color:var(--text-muted);display:flex;align-items:center;justify-content:center;
+  transition:all var(--t);
+}
+.theme-btn:hover{background:var(--bg-el);color:var(--text-1)}
+.theme-btn .icon-dark{display:block}
+.theme-btn .icon-light{display:none}
+[data-theme="light"] .theme-btn .icon-dark{display:none}
+[data-theme="light"] .theme-btn .icon-light{display:block}
+
+/* ── SCREENS WRAPPER ── */
+#app{
+  position:relative;z-index:1;
+  min-height:100vh;display:flex;flex-direction:column;
+}
+
+/* ── SCREEN TRANSITIONS ── */
+.screen{
+  display:none;
+  opacity:0;
+  transform:translateY(10px);
+  transition:opacity .3s ease,transform .3s ease;
+  flex:1;
+}
+.screen.active{
+  display:flex;
+  opacity:1;
+  transform:translateY(0);
+}
+
+/* ── STEP INDICATOR ── */
+.step-bar{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:24px 0 0;flex-shrink:0;
+}
+.step-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--bg-el2);transition:all .3s ease;
+}
+.step-dot.active{
+  width:24px;border-radius:4px;background:var(--c-blue);
+}
+.step-dot.done{background:var(--c-blue);opacity:.45}
+.step-label{
+  font-size:12px;color:var(--text-faint);font-weight:500;
+  letter-spacing:.4px;
+}
+
+/* ── STEP AREA (screens 1-3) ── */
+.step-area{
+  display:flex;flex-direction:column;align-items:center;
+  flex:1;padding:0 20px 40px;max-width:900px;width:100%;margin:0 auto;
+}
+.step-header{margin:28px 0 24px;text-align:center}
+.step-breadcrumb{font-size:11px;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px}
+.step-title{font-size:22px;font-weight:700;color:var(--text-1);margin-bottom:6px}
+.step-subtitle{font-size:14px;color:var(--text-muted);max-width:520px;margin:0 auto}
+
+/* ── FOOTER BUTTONS ── */
+.step-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  width:100%;margin-top:28px;gap:12px;
+}
+.step-footer-center{justify-content:center}
+.step-footer-right{justify-content:flex-end}
+
+/* ── BUTTON STYLES ── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:10px 20px;border-radius:var(--r-md);font-size:14px;font-weight:600;
+  transition:all var(--t);border:1px solid transparent;cursor:pointer;
+  white-space:nowrap;
+}
+.btn-primary{
+  background:linear-gradient(135deg,#3b82f6,#6d28d9);color:#fff;
+  box-shadow:0 2px 12px rgba(59,130,246,.25);
+}
+.btn-primary:hover:not(:disabled){
+  background:linear-gradient(135deg,#2563eb,#5b21b6);
+  box-shadow:0 4px 20px rgba(59,130,246,.4);transform:translateY(-1px);
+}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-ghost{
+  background:transparent;color:var(--text-muted);
+  border-color:var(--bg-border);
+}
+.btn-ghost:hover{background:var(--hover-bg);color:var(--text-1)}
+.btn-sm{padding:7px 14px;font-size:13px}
+.btn-full{width:100%}
+.btn-link{
+  background:none;border:none;color:var(--text-faint);
+  font-size:13px;font-weight:400;text-decoration:underline;cursor:pointer;
+  transition:color var(--t);
+}
+.btn-link:hover{color:var(--text-muted)}
+
+/* ── TOAST ── */
+.toast-container{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  z-index:9999;display:flex;flex-direction:column;align-items:center;gap:8px;
+  pointer-events:none;
+}
+.toast{
+  background:var(--bg-card);border:1px solid var(--bg-border);
+  border-radius:var(--r-lg);padding:10px 18px;
+  font-size:13px;color:var(--text-1);
+  box-shadow:var(--shadow);
+  animation:toastIn .3s ease,toastOut .3s ease 2.2s forwards;
+  pointer-events:auto;
+}
+.toast.warn{border-color:var(--c-yellow);background:var(--c-yellow-bg);color:var(--c-yellow)}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(10px)}}
+
+/* ════════════════════════════════
+   SCREEN 0 — WELCOME
+════════════════════════════════ */
+#screen0{
+  min-height:100vh;align-items:center;justify-content:center;
+  flex-direction:column;padding:40px 20px;
+}
+.welcome-wrap{
+  display:grid;grid-template-columns:1fr 1fr;gap:48px;
+  max-width:920px;width:100%;align-items:center;
+}
+@media(max-width:720px){
+  .welcome-wrap{grid-template-columns:1fr;max-width:440px;text-align:center}
+  .bullet-list{align-items:center}
+}
+
+/* left col */
+.brand-col{display:flex;flex-direction:column;gap:20px}
+.brand-logo-wrap{display:flex;align-items:center;gap:16px}
+@media(max-width:720px){.brand-logo-wrap{justify-content:center}}
+.brand-logo-icon{
+  width:64px;height:64px;border-radius:20px;flex-shrink:0;
+  background:linear-gradient(135deg,#3b82f6,#7c3aed);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 32px rgba(59,130,246,.35);
+}
+.brand-name{
+  font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1;
+  background:linear-gradient(135deg,#60a5fa,#a78bfa);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.brand-tagline{font-size:15px;color:var(--text-muted);line-height:1.6;max-width:380px}
+.bullet-list{display:flex;flex-direction:column;gap:11px;margin-top:4px}
+.bullet-item{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text-2)}
+.bullet-icon{
+  width:30px;height:30px;border-radius:var(--r-sm);background:var(--bg-el);
+  border:1px solid var(--bg-border);display:flex;align-items:center;justify-content:center;
+  color:var(--c-blue);flex-shrink:0;
+}
+.version-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;border-radius:99px;background:var(--bg-el);border:1px solid var(--bg-border);
+  font-size:11px;color:var(--text-faint);font-weight:500;
+  align-self:flex-start;
+}
+@media(max-width:720px){.version-badge{align-self:center}}
+
+/* right col — CTA card */
+.cta-card{
+  background:var(--bg-card);border:1px solid var(--bg-border);
+  border-radius:var(--r-xl);padding:32px;
+  box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:20px;
+}
+.cta-title{font-size:18px;font-weight:700;color:var(--text-1)}
+.cta-sub{font-size:13px;color:var(--text-muted)}
+.or-sep{display:flex;align-items:center;gap:12px;color:var(--text-faint);font-size:12px}
+.or-sep::before,.or-sep::after{content:'';flex:1;height:1px;background:var(--bg-border)}
+.privacy-note{
+  display:flex;align-items:flex-start;gap:8px;
+  font-size:12px;color:var(--text-faint);line-height:1.5;
+  padding-top:4px;border-top:1px solid var(--bg-border);
+}
+.privacy-note svg{flex-shrink:0;margin-top:1px;color:var(--text-faint)}
+
+/* ════════════════════════════════
+   SCREEN 1 — WHAT TO MONITOR
+════════════════════════════════ */
+#screen1{flex-direction:column;align-items:center}
+.monitor-cards{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:14px;width:100%;
+}
+@media(max-width:720px){.monitor-cards{grid-template-columns:1fr}}
+
+.monitor-card{
+  background:var(--bg-card);border:2px solid var(--bg-border);
+  border-radius:var(--r-lg);padding:22px;cursor:pointer;
+  transition:all .2s ease;position:relative;
+  display:flex;flex-direction:column;gap:12px;
+  user-select:none;
+}
+.monitor-card:hover{background:var(--bg-el);transform:translateY(-2px);box-shadow:var(--shadow)}
+.monitor-card.selected-blue{border-color:var(--c-blue);background:var(--c-blue-bg)}
+.monitor-card.selected-purple{border-color:var(--c-purple);background:var(--c-purple-bg)}
+.monitor-card.selected-both{
+  border-color:var(--c-blue);
+  background:linear-gradient(135deg,rgba(30,58,95,.8),rgba(46,16,101,.8));
+}
+.mc-checkmark{
+  position:absolute;top:12px;right:12px;
+  width:20px;height:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg-el2);transition:all .2s ease;
+}
+.selected-blue .mc-checkmark,.selected-both .mc-checkmark{background:var(--c-blue)}
+.selected-purple .mc-checkmark{background:var(--c-purple)}
+.mc-icon{
+  width:44px;height:44px;border-radius:var(--r-md);
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg-el);border:1px solid var(--bg-border);flex-shrink:0;
+}
+.mc-icon-az{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.2);color:var(--c-blue)}
+.mc-icon-sn{background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.2);color:var(--c-purple)}
+.mc-icon-both{
+  background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(167,139,250,.12));
+  border-color:rgba(96,165,250,.2);
+}
+.mc-icon-both svg{color:var(--c-blue)}
+.mc-title{font-size:15px;font-weight:700;color:var(--text-1)}
+.mc-desc{font-size:13px;color:var(--text-muted);line-height:1.5}
+.mc-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+.mc-tag{
+  font-size:11px;padding:2px 7px;border-radius:99px;
+  background:var(--bg-el2);color:var(--text-faint);font-weight:500;
+}
+.badge-rec{
+  display:inline-flex;align-items:center;padding:3px 9px;
+  border-radius:99px;background:var(--c-green-bg);border:1px solid var(--c-green-bd);
+  color:var(--c-green);font-size:11px;font-weight:700;letter-spacing:.4px;
+  text-transform:uppercase;align-self:flex-start;
+}
+.hint-both{
+  text-align:center;font-size:12px;color:var(--c-blue);
+  margin-top:6px;opacity:0;transition:opacity .3s;
+}
+.hint-both.visible{opacity:1}
+
+/* ════════════════════════════════
+   SCREEN 2 — CONFIGURE
+════════════════════════════════ */
+#screen2{flex-direction:column;align-items:center}
+.config-panels{display:flex;flex-direction:column;gap:18px;width:100%}
+.config-panel{
+  background:var(--bg-card);border:1px solid var(--bg-border);
+  border-radius:var(--r-lg);padding:24px;
+  border-left:3px solid var(--bg-border);
+  position:relative;
+}
+.config-panel-az{border-left-color:var(--c-blue)}
+.config-panel-sn{border-left-color:var(--c-purple)}
+.panel-title{
+  display:flex;align-items:center;gap:10px;
+  font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:18px;
+}
+.panel-title-icon{
+  width:30px;height:30px;border-radius:var(--r-sm);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;
+}
+.pt-az{background:rgba(59,130,246,.15);color:var(--c-blue)}
+.pt-sn{background:rgba(167,139,250,.15);color:var(--c-purple)}
+
+/* form fields */
+.field{margin-bottom:16px;position:relative}
+.field:last-of-type{margin-bottom:0}
+.field-label{
+  display:flex;align-items:center;gap:5px;
+  font-size:12px;font-weight:600;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;
+}
+.field-label-normal{
+  display:flex;align-items:center;gap:5px;
+  font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:6px;
+}
+.tooltip-btn{
+  width:15px;height:15px;border-radius:50%;background:var(--bg-el2);
+  color:var(--text-faint);font-size:10px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all var(--t);border:1px solid var(--bg-border);
+  flex-shrink:0;
+}
+.tooltip-btn:hover{background:var(--c-blue-bg);color:var(--c-blue);border-color:var(--c-blue-bd)}
+.field-input{
+  width:100%;padding:9px 12px;
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  border-radius:var(--r-md);color:var(--text-1);font-size:14px;
+  transition:border-color var(--t),box-shadow var(--t);outline:none;
+}
+.field-input:focus{border-color:var(--c-blue);box-shadow:0 0 0 3px rgba(96,165,250,.12)}
+.field-input::placeholder{color:var(--text-faint)}
+.input-wrap{display:flex;gap:0;position:relative}
+.input-prefix{
+  padding:9px 12px;background:var(--bg-el2);border:1px solid var(--bg-border);
+  border-right:none;border-radius:var(--r-md) 0 0 var(--r-md);
+  font-size:13px;color:var(--text-faint);white-space:nowrap;display:flex;align-items:center;
+}
+.input-wrap .field-input{border-radius:0 var(--r-md) var(--r-md) 0}
+.pw-wrap{position:relative}
+.pw-wrap .field-input{padding-right:40px}
+.pw-toggle{
+  position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  color:var(--text-faint);transition:color var(--t);display:flex;align-items:center;
+}
+.pw-toggle:hover{color:var(--text-muted)}
+.field-helper{
+  display:flex;align-items:center;gap:4px;
+  margin-top:6px;font-size:12px;color:var(--c-blue);cursor:pointer;
+}
+.field-helper:hover{text-decoration:underline}
+
+/* inline popover */
+.popover{
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  border-radius:var(--r-md);padding:14px;margin-top:8px;
+  font-size:12px;color:var(--text-2);line-height:1.6;
+  display:none;animation:fadeIn .2s ease;
+}
+.popover.open{display:block}
+.popover-title{font-weight:700;color:var(--text-1);margin-bottom:6px;font-size:13px}
+.popover ol{padding-left:16px}
+.popover li{margin-bottom:3px}
+.popover-screenshot{
+  width:100%;height:80px;border-radius:var(--r-sm);
+  background:var(--bg-el2);border:1px solid var(--bg-border);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-faint);font-size:11px;margin-bottom:10px;
+}
+
+/* test connection button + status */
+.btn-test{
+  width:100%;padding:10px;border-radius:var(--r-md);
+  border:1px solid var(--bg-border);background:var(--bg-el);
+  color:var(--text-muted);font-size:13px;font-weight:600;
+  margin-top:18px;transition:all var(--t);display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.btn-test-az:hover{border-color:var(--c-blue);color:var(--c-blue);background:var(--c-blue-bg)}
+.btn-test-sn:hover{border-color:var(--c-purple);color:var(--c-purple);background:var(--c-purple-bg)}
+.btn-test.testing{opacity:.6;cursor:not-allowed}
+.conn-status{
+  margin-top:10px;padding:8px 12px;border-radius:var(--r-md);
+  font-size:12px;font-weight:600;display:none;align-items:center;gap:7px;
+}
+.conn-status.success{display:flex;background:var(--c-green-bg);border:1px solid var(--c-green-bd);color:var(--c-green)}
+.conn-status.error{display:flex;background:var(--c-red-bg);border:1px solid rgba(239,68,68,.3);color:var(--c-red)}
+
+.skip-note{
+  padding:10px 14px;border-radius:var(--r-md);
+  background:var(--c-yellow-bg);border:1px solid rgba(245,158,11,.25);
+  color:var(--c-yellow);font-size:12px;margin-top:16px;
+  display:none;align-items:flex-start;gap:8px;line-height:1.5;
+}
+.skip-note.visible{display:flex}
+
+/* ════════════════════════════════
+   SCREEN 3 — PROJECTS
+════════════════════════════════ */
+#screen3{flex-direction:column;align-items:center}
+.search-bar-wrap{position:relative;width:100%;margin-bottom:14px}
+.search-icon{
+  position:absolute;left:11px;top:50%;transform:translateY(-50%);
+  color:var(--text-faint);pointer-events:none;
+}
+.search-bar{
+  width:100%;padding:9px 12px 9px 35px;
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  border-radius:var(--r-md);color:var(--text-1);font-size:14px;outline:none;
+  transition:border-color var(--t);
+}
+.search-bar:focus{border-color:var(--c-blue)}
+.search-bar::placeholder{color:var(--text-faint)}
+
+.projects-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+  width:100%;
+}
+@media(max-width:720px){.projects-grid{grid-template-columns:1fr}}
+
+.proj-card{
+  background:var(--bg-card);border:2px solid var(--bg-border);
+  border-radius:var(--r-lg);padding:14px 14px 12px;
+  cursor:pointer;transition:all .2s ease;
+  display:flex;flex-direction:column;gap:8px;
+}
+.proj-card:hover{background:var(--bg-el);transform:translateY(-1px)}
+.proj-card.selected{border-color:var(--c-blue);background:var(--c-blue-bg)}
+.proj-card-head{display:flex;align-items:center;gap:10px}
+.proj-icon{
+  width:34px;height:34px;border-radius:var(--r-sm);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:800;color:#fff;
+}
+.proj-name{font-size:13px;font-weight:700;color:var(--text-1);flex:1;line-height:1.3}
+.proj-check{
+  width:18px;height:18px;border-radius:50%;flex-shrink:0;
+  border:2px solid var(--bg-el2);background:transparent;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;
+}
+.proj-card.selected .proj-check{
+  background:var(--c-blue);border-color:var(--c-blue);
+}
+.proj-meta{font-size:11px;color:var(--text-faint)}
+
+/* project config row */
+.proj-config{
+  padding:10px 12px;border-radius:var(--r-sm);
+  background:var(--bg-el2);border:1px solid var(--bg-border);
+  display:none;flex-direction:column;gap:8px;margin-top:2px;
+}
+.proj-card.selected .proj-config{display:flex}
+.proj-config-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)}
+.type-toggle{display:flex;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--bg-border)}
+.type-btn{
+  padding:4px 9px;font-size:11px;font-weight:600;color:var(--text-faint);
+  background:var(--bg-el);transition:all var(--t);cursor:pointer;border:none;
+}
+.type-btn.active{background:var(--c-blue-bg);color:var(--c-blue)}
+.proj-team-input{
+  flex:1;padding:4px 8px;background:var(--bg-el);
+  border:1px solid var(--bg-border);border-radius:var(--r-sm);
+  color:var(--text-1);font-size:12px;outline:none;
+}
+.proj-team-input::placeholder{color:var(--text-faint)}
+
+/* show more */
+.show-more-wrap{text-align:center;margin-top:10px}
+.proj-count-bar{
+  font-size:12px;color:var(--text-muted);text-align:center;margin-top:10px;
+  padding-top:10px;border-top:1px solid var(--bg-border);width:100%;
+}
+
+/* SN-only mode */
+.sn-groups-list{display:flex;flex-direction:column;gap:8px;width:100%}
+.sn-group-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;background:var(--bg-card);
+  border:1px solid var(--bg-border);border-radius:var(--r-md);
+  cursor:pointer;transition:all var(--t);
+}
+.sn-group-item:hover{background:var(--bg-el)}
+.sn-group-item.selected{border-color:var(--c-purple);background:var(--c-purple-bg)}
+.sn-group-check{
+  width:18px;height:18px;border-radius:4px;flex-shrink:0;
+  border:2px solid var(--bg-el2);background:transparent;
+  display:flex;align-items:center;justify-content:center;transition:all .2s;
+}
+.sn-group-item.selected .sn-group-check{background:var(--c-purple);border-color:var(--c-purple)}
+.sn-group-name{font-size:13px;font-weight:600;color:var(--text-1);flex:1}
+.sn-group-id{font-size:11px;color:var(--text-faint);font-family:monospace}
+.sn-add-az-card{
+  padding:14px;background:var(--bg-card);border:1px dashed var(--bg-border);
+  border-radius:var(--r-lg);margin-top:14px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+}
+.sn-add-az-text{font-size:13px;color:var(--text-muted)}
+
+/* ════════════════════════════════
+   SCREEN 4 — DONE
+════════════════════════════════ */
+#screen4{
+  flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;padding:40px 20px;
+}
+.done-wrap{
+  display:flex;flex-direction:column;align-items:center;
+  gap:20px;max-width:680px;width:100%;
+}
+.checkmark-wrap{
+  width:72px;height:72px;position:relative;
+}
+.checkmark-circle{
+  fill:none;stroke:var(--c-green);stroke-width:2.5;
+  stroke-dasharray:283;stroke-dashoffset:283;
+  animation:drawCircle .5s ease .1s forwards;
+}
+.checkmark-check{
+  fill:none;stroke:var(--c-green);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:50;stroke-dashoffset:50;
+  animation:drawCheck .4s ease .55s forwards;
+}
+@keyframes drawCircle{to{stroke-dashoffset:0}}
+@keyframes drawCheck{to{stroke-dashoffset:0}}
+
+.done-title{font-size:26px;font-weight:800;color:var(--text-1);text-align:center}
+.done-sub{font-size:14px;color:var(--text-muted);text-align:center}
+.done-pills{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.done-pill{
+  display:flex;align-items:center;gap:5px;
+  padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;
+  background:var(--c-green-bg);border:1px solid var(--c-green-bd);color:var(--c-green);
+}
+
+.preview-cards{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:14px;width:100%;
+}
+@media(max-width:720px){.preview-cards{grid-template-columns:1fr}}
+.preview-card{
+  background:var(--bg-card);border:1px solid var(--bg-border);
+  border-radius:var(--r-lg);padding:16px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.preview-card-title{font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px}
+.preview-visual{
+  height:72px;border-radius:var(--r-sm);
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  display:flex;align-items:flex-end;gap:4px;padding:10px 10px 0;overflow:hidden;
+}
+.bar{border-radius:3px 3px 0 0;flex:1;background:var(--c-blue-bg);border:1px solid var(--c-blue-bd)}
+.bar-green{background:var(--c-green-bg);border-color:var(--c-green-bd)}
+.bar-purple{background:var(--c-purple-bg);border-color:rgba(167,139,250,.3)}
+.preview-visual-chat{
+  height:72px;border-radius:var(--r-sm);
+  background:var(--bg-el);border:1px solid var(--bg-border);
+  padding:8px;display:flex;flex-direction:column;gap:5px;justify-content:flex-end;
+}
+.chat-bubble{
+  border-radius:var(--r-sm);padding:4px 8px;font-size:10px;
+  color:var(--text-faint);max-width:85%;
+}
+.cb-user{background:var(--c-blue-bg);align-self:flex-end}
+.cb-ai{background:var(--bg-el2);align-self:flex-start}
+
+.done-btns{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+
+/* ── LANGUAGE SELECTOR ── */
+.lang-selector{display:flex;flex-direction:column;gap:8px}
+.lang-label{font-size:11px;color:var(--text-faint);font-weight:500;text-align:center;letter-spacing:.2px}
+.lang-btns{display:flex;gap:8px}
+.lang-btn{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:8px 10px;border-radius:var(--r-md);
+  background:var(--bg-el);border:1.5px solid var(--bg-border);
+  color:var(--text-muted);font-size:13px;font-weight:600;
+  cursor:pointer;transition:all var(--t);white-space:nowrap;
+  position:relative;
+}
+.lang-btn:hover{background:var(--hover-bg);border-color:var(--c-blue-bd);color:var(--text-1)}
+.lang-btn.active{
+  background:var(--c-blue-bg);border-color:var(--c-blue);color:var(--c-blue);
+}
+.lang-btn .lang-check{
+  width:14px;height:14px;border-radius:50%;
+  background:var(--c-blue);display:none;
+  align-items:center;justify-content:center;flex-shrink:0;margin-left:2px;
+}
+.lang-btn.active .lang-check{display:flex}
+.lang-sep{height:1px;background:var(--bg-border);margin:0}
+
+/* ── UTILS ── */
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{
+  width:16px;height:16px;border-radius:50%;
+  border:2px solid currentColor;border-top-color:transparent;
+  animation:spin .6s linear infinite;flex-shrink:0;
+}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- animated background layers -->
+<div class="bg-glow" aria-hidden="true"></div>
+<div class="bg-grid" aria-hidden="true"></div>
+
+<!-- theme toggle -->
+<button class="theme-btn" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema">
+  <span class="icon-dark">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+    </svg>
+  </span>
+  <span class="icon-light">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+  </span>
+</button>
+
+<!-- toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<div id="app">
+
+  <!-- ══════════════════════════════
+       SCREEN 0 — WELCOME
+  ══════════════════════════════ -->
+  <div class="screen active" id="screen0">
+    <div class="welcome-wrap">
+
+      <!-- left: brand -->
+      <div class="brand-col">
+        <div class="brand-logo-wrap">
+          <div class="brand-logo-icon" aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+              <path d="M5 22 Q8 10 17 10 Q26 10 29 22" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+              <path d="M10 22 L13 16 L17 20 L20 13 L24 22" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <circle cx="17" cy="25" r="2.5" fill="white" opacity=".85"/>
+            </svg>
+          </div>
+          <div>
+            <div class="brand-name">Backlog Health</div>
+          </div>
+        </div>
+        <div class="brand-tagline">Visibilidade total do seu time,<br>do backlog ao incidente.</div>
+        <div class="bullet-list">
+          <div class="bullet-item">
+            <div class="bullet-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
+              </svg>
+            </div>
+            <span>Saude do backlog em tempo real</span>
+          </div>
+          <div class="bullet-item">
+            <div class="bullet-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+            </div>
+            <span>Plano de entrega e burndown por sprint</span>
+          </div>
+          <div class="bullet-item">
+            <div class="bullet-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <span>Incidentes ServiceNow integrados</span>
+          </div>
+        </div>
+        <div class="version-badge">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          v1.8.2
+        </div>
+      </div>
+
+      <!-- right: CTA card -->
+      <div class="cta-card">
+        <div>
+          <div class="cta-title" data-i18n="welcome_title">Bem-vindo!</div>
+          <div class="cta-sub" style="margin-top:5px"><span data-i18n="welcome_subtitle">Vamos configurar seu ambiente.</span> <span data-i18n="welcome_time">Leva menos de 2 minutos.</span></div>
+        </div>
+
+        <!-- language selector -->
+        <div class="lang-selector">
+          <div class="lang-label" data-i18n="lang_label">Idioma / Language / Idioma</div>
+          <div class="lang-btns">
+            <button class="lang-btn" id="langBtn-pt" onclick="setLocale('pt')" aria-pressed="false">
+              🇧🇷 <span>Português</span>
+              <span class="lang-check">
+                <svg width="8" height="8" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </button>
+            <button class="lang-btn active" id="langBtn-en" onclick="setLocale('en')" aria-pressed="true">
+              🇺🇸 <span>English</span>
+              <span class="lang-check">
+                <svg width="8" height="8" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </button>
+            <button class="lang-btn" id="langBtn-es" onclick="setLocale('es')" aria-pressed="false">
+              🇪🇸 <span>Español</span>
+              <span class="lang-check">
+                <svg width="8" height="8" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div class="lang-sep"></div>
+
+        <button class="btn btn-primary btn-full" onclick="goTo(1)" style="padding:13px 20px;font-size:15px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>
+          </svg>
+          <span data-i18n="welcome_cta">Comecar configuracao</span>
+        </button>
+        <div class="or-sep">ou</div>
+        <button class="btn btn-ghost btn-full" onclick="showToast('Em breve: importacao de configuracao por arquivo.')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span data-i18n="welcome_import">Ja tenho configuracao — importar arquivo</span>
+        </button>
+        <div class="privacy-note">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+          <span data-i18n="welcome_privacy">Seus dados ficam apenas no seu computador. Nenhuma informacao e enviada para nossos servidores.</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SCREEN 1 — WHAT TO MONITOR
+  ══════════════════════════════ -->
+  <div class="screen" id="screen1" style="flex-direction:column">
+    <div class="step-bar" id="stepBar1">
+      <div class="step-dot active" id="sd1-1"></div>
+      <div class="step-dot" id="sd1-2"></div>
+      <div class="step-dot" id="sd1-3"></div>
+      <span class="step-label">Passo 1 de 3</span>
+    </div>
+    <div class="step-area">
+      <div class="step-header">
+        <div class="step-breadcrumb">Configuracao inicial</div>
+        <div class="step-title" data-i18n="step1_title">O que voce quer monitorar?</div>
+        <div class="step-subtitle" data-i18n="step1_subtitle">Selecione as integracoes que voce usa. Voce pode adicionar mais depois nas Configuracoes.</div>
+      </div>
+
+      <div class="monitor-cards" id="monitorCards">
+
+        <!-- Card A: Azure -->
+        <div class="monitor-card" id="cardA" onclick="selectMonitor('A')">
+          <div class="mc-checkmark" id="checkA">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="mc-icon mc-icon-az">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+            </svg>
+          </div>
+          <div class="mc-title">Backlog Azure DevOps</div>
+          <div class="mc-desc">Acompanhe saude do backlog, burndown, plano de entrega e capacidade do time por sprint.</div>
+          <div class="mc-tags">
+            <span class="mc-tag">User Stories</span>
+            <span class="mc-tag">Sprints</span>
+            <span class="mc-tag">Burndown</span>
+            <span class="mc-tag">UAT</span>
+          </div>
+        </div>
+
+        <!-- Card B: SN -->
+        <div class="monitor-card" id="cardB" onclick="selectMonitor('B')">
+          <div class="mc-checkmark" id="checkB">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="mc-icon mc-icon-sn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.0 1.18 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14v2.92z" transform="scale(.9) translate(1.2,1.2)"/>
+            </svg>
+          </div>
+          <div class="mc-title">Incidentes ServiceNow</div>
+          <div class="mc-desc">Monitore incidentes por grupo, prioridade e projeto vinculado no Review Mensal.</div>
+          <div class="mc-tags">
+            <span class="mc-tag">P1/P2/P3</span>
+            <span class="mc-tag">Assignment Groups</span>
+            <span class="mc-tag">SLA</span>
+            <span class="mc-tag">Review Mensal</span>
+          </div>
+        </div>
+
+        <!-- Card C: Both (pre-selected) -->
+        <div class="monitor-card selected-both" id="cardC" onclick="selectMonitor('C')">
+          <div class="mc-checkmark" id="checkC" style="background:var(--c-blue)">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="display:flex;align-items:center;gap:-6px">
+            <div class="mc-icon mc-icon-both" style="width:38px;height:38px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+              </svg>
+            </div>
+            <div class="mc-icon mc-icon-sn" style="width:38px;height:38px;margin-left:-10px;border-color:rgba(167,139,250,.3)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.0 1.18 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14v2.92z" transform="scale(.85) translate(1.8,1.8)"/>
+              </svg>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="mc-title">Azure DevOps + ServiceNow</div>
+            <div class="badge-rec">Recomendado</div>
+          </div>
+          <div class="mc-desc">Visao completa: saude do backlog correlacionada com incidentes em producao.</div>
+          <div class="mc-tags">
+            <span class="mc-tag">Todos os recursos</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="hint-both" id="hintBoth">Isso e equivalente a selecionar Ambos. Que tal usar a opcao combinada?</div>
+
+      <div class="step-footer" style="margin-top:24px">
+        <button class="btn btn-ghost" onclick="goTo(0)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span data-i18n="back_btn">Voltar</span>
+        </button>
+        <button class="btn btn-primary" id="btnContinue1" onclick="goTo(2)">
+          <span data-i18n="continue_btn">Continuar</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SCREEN 2 — CONFIGURE
+  ══════════════════════════════ -->
+  <div class="screen" id="screen2" style="flex-direction:column;overflow-y:auto">
+    <div class="step-bar">
+      <div class="step-dot done"></div>
+      <div class="step-dot active" style="width:24px;border-radius:4px"></div>
+      <div class="step-dot"></div>
+      <span class="step-label">Passo 2 de 3</span>
+    </div>
+    <div class="step-area">
+      <div class="step-header">
+        <div class="step-breadcrumb">Configuracao inicial</div>
+        <div class="step-title" data-i18n="step2_title">Configure as conexoes</div>
+        <div class="step-subtitle" id="configSubtitle">Configure suas duas integracoes.</div>
+      </div>
+
+      <div class="config-panels" id="configPanels">
+
+        <!-- Azure panel -->
+        <div class="config-panel config-panel-az" id="panelAz">
+          <div class="panel-title">
+            <div class="panel-title-icon pt-az">Az</div>
+            Azure DevOps
+          </div>
+
+          <div class="field">
+            <label class="field-label-normal">
+              Organizacao
+              <button class="tooltip-btn" onclick="toggleTip('tipOrg')" title="O que e isso?">?</button>
+            </label>
+            <input class="field-input" id="azOrg" type="text" placeholder="ex: minha-empresa" autocomplete="off" spellcheck="false">
+            <div class="popover" id="tipOrg">
+              <div class="popover-title">Como encontrar minha organizacao?</div>
+              <div class="popover-screenshot">[ dev.azure.com / <strong>minhaempresa</strong> / projeto ]</div>
+              <ol>
+                <li>Acesse <strong>dev.azure.com</strong> no navegador</li>
+                <li>O nome da org aparece logo apos a barra na URL</li>
+                <li>Exemplo: <code style="background:var(--bg-el2);padding:1px 5px;border-radius:3px">dev.azure.com/<strong>accenture-brasil</strong></code></li>
+              </ol>
+            </div>
+            <div class="field-helper" onclick="toggleTip('tipOrg')">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Como encontrar minha organizacao?
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label-normal">
+              Personal Access Token (PAT)
+              <button class="tooltip-btn" onclick="toggleTip('tipPat')" title="O que e isso?">?</button>
+            </label>
+            <div class="pw-wrap">
+              <input class="field-input" id="azPat" type="password" placeholder="cole seu PAT aqui" autocomplete="off" spellcheck="false">
+              <button class="pw-toggle" onclick="togglePw('azPat',this)" aria-label="Mostrar senha">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-icon">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+            <div class="popover" id="tipPat">
+              <div class="popover-title">Como gerar um PAT?</div>
+              <ol>
+                <li>Acesse <strong>dev.azure.com</strong></li>
+                <li>Clique no icone de usuario (canto superior direito)</li>
+                <li>Selecione <strong>Personal Access Tokens</strong></li>
+                <li>Crie um token com permissao <strong>Work Items (Read)</strong></li>
+                <li>Copie e cole o token acima</li>
+              </ol>
+            </div>
+            <div class="field-helper" onclick="toggleTip('tipPat')">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Como gerar um PAT?
+            </div>
+          </div>
+
+          <button class="btn-test btn-test-az" id="btnTestAz" onclick="testConnection('az')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Testar conexao
+          </button>
+          <div class="conn-status" id="statusAz">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="status-icon-az">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span id="statusAzText"></span>
+          </div>
+        </div>
+
+        <!-- SN panel -->
+        <div class="config-panel config-panel-sn" id="panelSn">
+          <div class="panel-title">
+            <div class="panel-title-icon pt-sn">SN</div>
+            ServiceNow
+          </div>
+
+          <div class="field">
+            <label class="field-label-normal">
+              Instancia
+              <button class="tooltip-btn" onclick="toggleTip('tipSn')" title="O que e isso?">?</button>
+            </label>
+            <div class="input-wrap">
+              <div class="input-prefix">https://</div>
+              <input class="field-input" id="snInstance" type="text" placeholder="empresa.service-now.com" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="popover" id="tipSn">
+              <div class="popover-title">Como encontrar minha instancia?</div>
+              <p>O nome da instancia e o subdominio da sua URL do ServiceNow. Exemplo: se voce acessa <strong>accenture.service-now.com</strong>, insira apenas <strong>accenture.service-now.com</strong>.</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label-normal">Usuario</label>
+            <input class="field-input" id="snUser" type="text" placeholder="usuario de servico" autocomplete="off" spellcheck="false">
+          </div>
+
+          <div class="field">
+            <label class="field-label-normal">Senha / Token</label>
+            <div class="pw-wrap">
+              <input class="field-input" id="snPass" type="password" placeholder="sua senha ou token de acesso" autocomplete="off" spellcheck="false">
+              <button class="pw-toggle" onclick="togglePw('snPass',this)" aria-label="Mostrar senha">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-icon">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <button class="btn-test btn-test-sn" id="btnTestSn" onclick="testConnection('sn')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Testar conexao
+          </button>
+          <div class="conn-status" id="statusSn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="status-icon-sn">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span id="statusSnText"></span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="skip-note" id="skipNote">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span>Conexao nao testada. Voce pode configurar as credenciais depois em <strong>Configuracoes</strong>.</span>
+      </div>
+
+      <div class="step-footer" style="margin-top:24px">
+        <button class="btn btn-ghost" onclick="goTo(1)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <span data-i18n="back_btn">Voltar</span>
+        </button>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn-link" onclick="skipConfig()"><span data-i18n="skip_btn">Pular por agora</span></button>
+          <button class="btn btn-primary" id="btnContinue2" onclick="goTo(3)">
+            <span id="cont2label" style="display:flex;align-items:center;gap:6px">
+              Continuar
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SCREEN 3 — PROJECTS
+  ══════════════════════════════ -->
+  <div class="screen" id="screen3" style="flex-direction:column;overflow-y:auto">
+    <div class="step-bar">
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot active" style="width:24px;border-radius:4px"></div>
+      <span class="step-label">Passo 3 de 3</span>
+    </div>
+    <div class="step-area">
+      <div class="step-header">
+        <div class="step-breadcrumb">Configuracao inicial</div>
+        <div class="step-title" id="s3title" data-i18n="step3_title">Selecione seus projetos</div>
+        <div class="step-subtitle" id="s3sub">Escolha quais projetos voce quer acompanhar.</div>
+      </div>
+
+      <!-- AZURE: project list -->
+      <div id="azProjectsSection" style="width:100%">
+        <div class="search-bar-wrap">
+          <span class="search-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <input class="search-bar" id="projSearch" type="text" placeholder="Buscar projeto..." oninput="filterProjects(this.value)">
+        </div>
+        <div class="projects-grid" id="projectsGrid"></div>
+        <div class="show-more-wrap" id="showMoreWrap">
+          <button class="btn btn-ghost btn-sm" onclick="showAllProjects()">Ver mais projetos</button>
+        </div>
+        <div class="proj-count-bar" id="projCountBar">3 de 12 projetos selecionados</div>
+      </div>
+
+      <!-- SN-only: groups -->
+      <div id="snGroupsSection" class="hidden" style="width:100%">
+        <div class="step-subtitle" style="margin-bottom:14px;text-align:left">Grupos encontrados na sua instancia ServiceNow.</div>
+        <div class="sn-groups-list" id="snGroupsList"></div>
+        <div class="sn-add-az-card">
+          <div class="sn-add-az-text">Deseja habilitar o monitoramento de backlog?</div>
+          <button class="btn btn-ghost btn-sm" onclick="goTo(2,'addAz')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Configurar Azure DevOps
+          </button>
+        </div>
+      </div>
+
+      <div class="step-footer" style="margin-top:24px">
+        <button class="btn btn-ghost" onclick="goTo(2)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <span data-i18n="back_btn">Voltar</span>
+        </button>
+        <button class="btn btn-primary" onclick="goTo(4)">
+          <span data-i18n="continue_btn">Continuar</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SCREEN 4 — DONE
+  ══════════════════════════════ -->
+  <div class="screen" id="screen4">
+    <div class="done-wrap">
+
+      <div class="checkmark-wrap">
+        <svg viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle class="checkmark-circle" cx="36" cy="36" r="34"/>
+          <polyline class="checkmark-check" points="20,37 31,48 52,24"/>
+        </svg>
+      </div>
+
+      <div class="done-title" data-i18n="step4_title">Tudo pronto!</div>
+      <div class="done-sub" id="doneSub">Azure DevOps e ServiceNow conectados · 3 projetos selecionados</div>
+
+      <div class="done-pills" id="donePills">
+        <div class="done-pill">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Azure DevOps conectado
+        </div>
+        <div class="done-pill">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          ServiceNow conectado
+        </div>
+        <div class="done-pill">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          3 projetos selecionados
+        </div>
+      </div>
+
+      <div class="preview-cards">
+        <div class="preview-card">
+          <div class="preview-card-title">Dashboard de saude</div>
+          <div class="preview-visual">
+            <div class="bar" style="height:55%"></div>
+            <div class="bar bar-green" style="height:80%"></div>
+            <div class="bar" style="height:40%"></div>
+            <div class="bar bar-green" style="height:90%"></div>
+            <div class="bar" style="height:65%"></div>
+            <div class="bar bar-green" style="height:70%"></div>
+          </div>
+          <div style="font-size:11px;color:var(--text-faint)">Saude do backlog por projeto</div>
+        </div>
+        <div class="preview-card">
+          <div class="preview-card-title">Review Mensal</div>
+          <div class="preview-visual" style="align-items:center;justify-content:center;gap:8px;padding:10px">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+              <div class="bar bar-purple" style="width:100%;height:40px;border-radius:4px 4px 0 0"></div>
+              <div style="font-size:9px;color:var(--text-faint)">Jun</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+              <div class="bar" style="width:100%;height:25px;border-radius:4px 4px 0 0"></div>
+              <div style="font-size:9px;color:var(--text-faint)">Jul</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+              <div class="bar bar-green" style="width:100%;height:55px;border-radius:4px 4px 0 0"></div>
+              <div style="font-size:9px;color:var(--text-faint)">Ago</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-faint)">Incidentes por mes</div>
+        </div>
+        <div class="preview-card">
+          <div class="preview-card-title">Copilot IA</div>
+          <div class="preview-visual-chat">
+            <div class="chat-bubble cb-user">Como esta o backlog?</div>
+            <div class="chat-bubble cb-ai">3 projetos com saude alta...</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-faint)">Assistente de analise com IA</div>
+        </div>
+      </div>
+
+      <div class="done-btns">
+        <button class="btn btn-primary" style="padding:13px 36px;font-size:15px" onclick="alert('Redirecionando para o dashboard...')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <span data-i18n="finish_btn">Abrir o dashboard</span>
+        </button>
+        <button class="btn-link" onclick="alert('Redirecionando para o dashboard...')">Configurar mais tarde</button>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<script>
+/* ════════════════
+   STATE
+════════════════ */
+let currentScreen = 0;
+const state = {
+  selection: 'C',       // 'A' | 'B' | 'AB' | 'C'
+  azTested: false,
+  snTested: false,
+  skipped: false,
+  selectedProjects: new Set([0, 1, 2]),
+  showAll: false,
+};
+
+/* ════════════════
+   PROJECTS DATA
+════════════════ */
+const PROJECTS = [
+  { name:'Alpha Squad',          color:'#3b82f6', proc:'Scrum', teams:3 },
+  { name:'Beta Platform',        color:'#8b5cf6', proc:'Scrum', teams:2 },
+  { name:'Gamma Experience',     color:'#10b981', proc:'Agile', teams:4 },
+  { name:'Delta Core',           color:'#f59e0b', proc:'Scrum', teams:2 },
+  { name:'Epsilon Services',     color:'#ef4444', proc:'Scrum', teams:1 },
+  { name:'Zeta Infrastructure',  color:'#64748b', proc:'Kanban',teams:5 },
+  { name:'Eta Analytics',        color:'#06b6d4', proc:'Scrum', teams:2 },
+  { name:'Theta Security',       color:'#f97316', proc:'Scrum', teams:3 },
+  { name:'Iota Integrations',    color:'#a78bfa', proc:'Agile', teams:2 },
+  { name:'Kappa DevTools',       color:'#22c55e', proc:'Scrum', teams:1 },
+  { name:'Lambda Payments',      color:'#ec4899', proc:'Scrum', teams:4 },
+  { name:'Mu CloudOps',          color:'#0ea5e9', proc:'Kanban',teams:6 },
+];
+
+const SN_GROUPS = [
+  { name:'Suporte Aplicacoes', id:'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4' },
+  { name:'Infraestrutura Cloud', id:'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5' },
+  { name:'Seguranca e Compliance', id:'c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6' },
+];
+const selectedSNGroups = new Set([0, 1, 2]);
+
+/* ════════════════
+   NAVIGATION
+════════════════ */
+function goTo(n, extra) {
+  const screens = document.querySelectorAll('.screen');
+  const current = document.getElementById('screen' + currentScreen);
+
+  // animate out
+  if (current) {
+    current.style.opacity = '0';
+    current.style.transform = 'translateY(8px)';
+    setTimeout(() => {
+      current.classList.remove('active');
+      current.style.opacity = '';
+      current.style.transform = '';
+      activateScreen(n, extra);
+    }, 220);
+  } else {
+    activateScreen(n, extra);
+  }
+}
+
+function activateScreen(n, extra) {
+  // prepare screen 2 before showing
+  if (n === 2) prepareScreen2(extra);
+  if (n === 3) prepareScreen3();
+  if (n === 4) prepareScreen4();
+
+  const next = document.getElementById('screen' + n);
+  next.classList.add('active');
+  // trigger reflow then fade in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      next.style.opacity = '1';
+      next.style.transform = 'translateY(0)';
+    });
+  });
+  currentScreen = n;
+
+  // scroll to top for scrollable screens
+  if (n === 2 || n === 3) {
+    next.scrollTop = 0;
+  }
+}
+
+/* ════════════════
+   THEME
+════════════════ */
+function toggleTheme() {
+  const html = document.documentElement;
+  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+
+/* ════════════════
+   TOAST
+════════════════ */
+function showToast(msg, type='') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast' + (type ? ' ' + type : '');
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 2700);
+}
+
+/* ════════════════
+   SCREEN 1 — SELECTION
+════════════════ */
+function selectMonitor(card) {
+  const cardEl = { A: 'cardA', B: 'cardB', C: 'cardC' };
+
+  if (card === 'C') {
+    // select only C
+    state.selection = 'C';
+  } else {
+    // toggle A or B
+    let hasA = state.selection === 'A' || state.selection === 'AB';
+    let hasB = state.selection === 'B' || state.selection === 'AB';
+    if (card === 'A') hasA = !hasA;
+    if (card === 'B') hasB = !hasB;
+
+    if (hasA && hasB) state.selection = 'AB';
+    else if (hasA) state.selection = 'A';
+    else if (hasB) state.selection = 'B';
+    else state.selection = null;
+  }
+
+  // update visual
+  updateSelectionVisual();
+}
+
+function updateSelectionVisual() {
+  const cA = document.getElementById('cardA');
+  const cB = document.getElementById('cardB');
+  const cC = document.getElementById('cardC');
+  const hint = document.getElementById('hintBoth');
+
+  // clear all
+  cA.className = 'monitor-card';
+  cB.className = 'monitor-card';
+  cC.className = 'monitor-card';
+
+  if (state.selection === 'A') {
+    cA.className = 'monitor-card selected-blue';
+  } else if (state.selection === 'B') {
+    cB.className = 'monitor-card selected-purple';
+  } else if (state.selection === 'AB') {
+    cA.className = 'monitor-card selected-blue';
+    cB.className = 'monitor-card selected-purple';
+    hint.classList.add('visible');
+  } else if (state.selection === 'C') {
+    cC.className = 'monitor-card selected-both';
+  }
+
+  if (state.selection !== 'AB') hint.classList.remove('visible');
+
+  // enable/disable continue
+  const btn = document.getElementById('btnContinue1');
+  btn.disabled = !state.selection;
+}
+
+// init with C selected
+updateSelectionVisual();
+
+/* ════════════════
+   SCREEN 2 — CONFIG
+════════════════ */
+function prepareScreen2(extra) {
+  const showAz = state.selection === 'A' || state.selection === 'AB' || state.selection === 'C';
+  const showSn = state.selection === 'B' || state.selection === 'AB' || state.selection === 'C';
+  const sub = document.getElementById('configSubtitle');
+  const panelAz = document.getElementById('panelAz');
+  const panelSn = document.getElementById('panelSn');
+
+  panelAz.style.display = showAz ? '' : 'none';
+  panelSn.style.display = showSn ? '' : 'none';
+
+  if (extra === 'addAz') {
+    panelAz.style.display = '';
+  }
+
+  if (showAz && showSn) sub.textContent = 'Configure suas duas integracoes.';
+  else if (showAz) sub.textContent = 'Conecte ao seu Azure DevOps para comecar.';
+  else sub.textContent = 'Conecte ao seu ServiceNow para comecar.';
+
+  // hide skip note
+  document.getElementById('skipNote').classList.remove('visible');
+  updateContinue2();
+}
+
+function updateContinue2() {
+  const btn = document.getElementById('btnContinue2');
+  const label = document.getElementById('cont2label');
+  const atLeastOne = state.azTested || state.snTested || state.skipped;
+
+  if (state.azTested || state.snTested) {
+    label.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      Continuar
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    `;
+  } else {
+    label.innerHTML = `Continuar <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
+  }
+}
+
+function skipConfig() {
+  state.skipped = true;
+  document.getElementById('skipNote').classList.add('visible');
+  goTo(3);
+}
+
+/* ════════════════
+   TEST CONNECTION
+════════════════ */
+function testConnection(type) {
+  const btn = document.getElementById(type === 'az' ? 'btnTestAz' : 'btnTestSn');
+  const statusEl = document.getElementById(type === 'az' ? 'statusAz' : 'statusSn');
+  const statusText = document.getElementById(type === 'az' ? 'statusAzText' : 'statusSnText');
+
+  btn.classList.add('testing');
+  btn.innerHTML = `<div class="spinner"></div> Testando conexao...`;
+  statusEl.className = 'conn-status';
+
+  const org = document.getElementById('azOrg')?.value?.trim();
+  const pat = document.getElementById('azPat')?.value?.trim();
+  const instance = document.getElementById('snInstance')?.value?.trim();
+
+  setTimeout(() => {
+    btn.classList.remove('testing');
+    // Simulate success (prototype always succeeds)
+    const isSuccess = true;
+
+    if (isSuccess) {
+      statusEl.classList.add('success');
+      if (type === 'az') {
+        const orgName = org || 'accenture-brasil';
+        statusText.textContent = `Conectado · ${orgName} · 12 projetos encontrados`;
+        state.azTested = true;
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Reconectar`;
+      } else {
+        const inst = instance || 'empresa';
+        statusText.textContent = `Conectado · ${inst} · 3 grupos encontrados`;
+        state.snTested = true;
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Reconectar`;
+      }
+    } else {
+      statusEl.classList.add('error');
+      statusText.textContent = 'Falha — verifique as credenciais e tente novamente';
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Testar conexao`;
+    }
+    updateContinue2();
+  }, 1500);
+}
+
+/* ════════════════
+   TOOLTIPS / POPOVERS
+════════════════ */
+function toggleTip(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+}
+
+/* ════════════════
+   PASSWORD TOGGLE
+════════════════ */
+function togglePw(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const isText = input.type === 'text';
+  input.type = isText ? 'password' : 'text';
+  btn.innerHTML = isText
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-icon"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+}
+
+/* ════════════════
+   SCREEN 3 — PROJECTS
+════════════════ */
+function prepareScreen3() {
+  const isSNOnly = state.selection === 'B';
+  const azSection = document.getElementById('azProjectsSection');
+  const snSection = document.getElementById('snGroupsSection');
+  const s3title = document.getElementById('s3title');
+  const s3sub = document.getElementById('s3sub');
+
+  if (isSNOnly) {
+    azSection.classList.add('hidden');
+    snSection.classList.remove('hidden');
+    s3title.textContent = 'Associe seus grupos ServiceNow';
+    s3sub.textContent = 'Confirme os grupos que deseja monitorar.';
+    renderSNGroups();
+  } else {
+    azSection.classList.remove('hidden');
+    snSection.classList.add('hidden');
+    s3title.textContent = 'Selecione seus projetos';
+    s3sub.textContent = 'Escolha quais projetos voce quer acompanhar.';
+    renderProjects();
+  }
+}
+
+function renderProjects(filter='') {
+  const grid = document.getElementById('projectsGrid');
+  const showMore = document.getElementById('showMoreWrap');
+  const f = filter.toLowerCase();
+  const visible = PROJECTS.filter(p => p.name.toLowerCase().includes(f));
+  const limit = state.showAll || filter ? visible.length : 6;
+  const toShow = visible.slice(0, limit);
+
+  grid.innerHTML = toShow.map((p, i) => {
+    const realIdx = PROJECTS.indexOf(p);
+    const selected = state.selectedProjects.has(realIdx);
+    return `
+      <div class="proj-card${selected ? ' selected' : ''}" onclick="toggleProject(${realIdx})">
+        <div class="proj-card-head">
+          <div class="proj-icon" style="background:${p.color}">${p.name[0]}</div>
+          <div class="proj-name">${p.name}</div>
+          <div class="proj-check">
+            ${selected ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
+          </div>
+        </div>
+        <div class="proj-meta">Process: ${p.proc} &middot; ${p.teams} equipes</div>
+        <div class="proj-config">
+          <div class="proj-config-row">
+            <span>Tipo de item:</span>
+            <div class="type-toggle">
+              <button class="type-btn active" onclick="event.stopPropagation();setType(${realIdx},'US',this)">User Story</button>
+              <button class="type-btn" onclick="event.stopPropagation();setType(${realIdx},'Task',this)">Task</button>
+            </div>
+          </div>
+          <div class="proj-config-row">
+            <span>Equipe (opcional):</span>
+            <input class="proj-team-input" type="text" placeholder="nome da equipe" onclick="event.stopPropagation()">
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // show more button
+  const remaining = visible.length - limit;
+  if (remaining > 0 && !filter) {
+    showMore.style.display = '';
+    showMore.querySelector('button').textContent = `Ver mais ${remaining} projetos`;
+  } else {
+    showMore.style.display = 'none';
+  }
+
+  updateProjCount();
+}
+
+function toggleProject(idx) {
+  if (state.selectedProjects.has(idx)) {
+    state.selectedProjects.delete(idx);
+  } else {
+    state.selectedProjects.add(idx);
+  }
+  renderProjects(document.getElementById('projSearch').value);
+}
+
+function setType(idx, type, btn) {
+  const btns = btn.closest('.type-toggle').querySelectorAll('.type-btn');
+  btns.forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function filterProjects(val) {
+  renderProjects(val);
+}
+
+function showAllProjects() {
+  state.showAll = true;
+  renderProjects(document.getElementById('projSearch').value);
+}
+
+function updateProjCount() {
+  const el = document.getElementById('projCountBar');
+  if (el) el.textContent = `${state.selectedProjects.size} de ${PROJECTS.length} projetos selecionados`;
+}
+
+function renderSNGroups() {
+  const list = document.getElementById('snGroupsList');
+  list.innerHTML = SN_GROUPS.map((g, i) => `
+    <div class="sn-group-item${selectedSNGroups.has(i) ? ' selected' : ''}" onclick="toggleSNGroup(${i})">
+      <div class="sn-group-check">
+        ${selectedSNGroups.has(i) ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
+      </div>
+      <div class="sn-group-name">${g.name}</div>
+      <div class="sn-group-id">${g.id.substring(0,8)}...</div>
+    </div>
+  `).join('');
+}
+
+function toggleSNGroup(i) {
+  if (selectedSNGroups.has(i)) selectedSNGroups.delete(i);
+  else selectedSNGroups.add(i);
+  renderSNGroups();
+}
+
+/* ════════════════
+   SCREEN 4 — DONE
+════════════════ */
+function prepareScreen4() {
+  const sub = document.getElementById('doneSub');
+  const pills = document.getElementById('donePills');
+  const sel = state.selection;
+  const nProj = state.selectedProjects.size;
+
+  let subText = '';
+  let pillsHTML = '';
+
+  if (sel === 'A') {
+    subText = `Azure DevOps conectado · ${nProj} projetos selecionados`;
+    pillsHTML = `
+      <div class="done-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Azure DevOps conectado</div>
+      <div class="done-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>${nProj} projetos selecionados</div>`;
+  } else if (sel === 'B') {
+    subText = `ServiceNow conectado · ${selectedSNGroups.size} grupos configurados`;
+    pillsHTML = `
+      <div class="done-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>ServiceNow conectado</div>
+      <div class="done-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>${selectedSNGroups.size} grupos configurados</div>`;
+  } else {
+    subText = `Azure DevOps e ServiceNow conectados · ${nProj} projetos selecionados`;
+    pillsHTML = `
+      <div class="done-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Azure DevOps conectado</div>
+      <div class="done-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>ServiceNow conectado</div>
+      <div class="done-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>${nProj} projetos selecionados</div>`;
+  }
+
+  sub.textContent = subText;
+  pills.innerHTML = pillsHTML;
+
+  // reset checkmark animation
+  const circle = document.querySelector('.checkmark-circle');
+  const check = document.querySelector('.checkmark-check');
+  if (circle) { circle.style.animation = 'none'; void circle.offsetWidth; circle.style.animation = ''; }
+  if (check) { check.style.animation = 'none'; void check.offsetWidth; check.style.animation = ''; }
+}
+
+/* ════════════════
+   I18N
+════════════════ */
+const TRANSLATIONS = {
+  pt: {
+    welcome_title: 'Bem-vindo!',
+    welcome_subtitle: 'Vamos configurar seu ambiente.',
+    welcome_time: 'Leva menos de 2 minutos.',
+    welcome_cta: 'Comecar configuracao',
+    welcome_import: 'Ja tenho configuracao — importar arquivo',
+    welcome_privacy: 'Seus dados ficam apenas no seu computador. Nenhuma informacao e enviada para nossos servidores.',
+    lang_label: 'Idioma / Language / Idioma',
+    step1_title: 'O que voce quer monitorar?',
+    step1_subtitle: 'Selecione as integracoes que voce usa. Voce pode adicionar mais depois nas Configuracoes.',
+    step2_title: 'Configure as conexoes',
+    step3_title: 'Selecione seus projetos',
+    step4_title: 'Tudo pronto!',
+    continue_btn: 'Continuar',
+    back_btn: 'Voltar',
+    skip_btn: 'Pular por agora',
+    finish_btn: 'Abrir o dashboard',
+  },
+  en: {
+    welcome_title: 'Welcome!',
+    welcome_subtitle: "Let's set up your environment.",
+    welcome_time: 'Takes less than 2 minutes.',
+    welcome_cta: 'Start setup',
+    welcome_import: 'I already have a configuration — import file',
+    welcome_privacy: 'Your data stays on your computer only. No information is sent to our servers.',
+    lang_label: 'Idioma / Language / Idioma',
+    step1_title: 'What do you want to monitor?',
+    step1_subtitle: 'Select the integrations you use. You can add more later in Settings.',
+    step2_title: 'Configure connections',
+    step3_title: 'Select your projects',
+    step4_title: "You're all set!",
+    continue_btn: 'Continue',
+    back_btn: 'Back',
+    skip_btn: 'Skip for now',
+    finish_btn: 'Open dashboard',
+  },
+  es: {
+    welcome_title: '¡Bienvenido!',
+    welcome_subtitle: 'Vamos a configurar tu entorno.',
+    welcome_time: 'Tarda menos de 2 minutos.',
+    welcome_cta: 'Comenzar configuracion',
+    welcome_import: 'Ya tengo configuracion — importar archivo',
+    welcome_privacy: 'Tus datos permanecen solo en tu computadora. No se envia ninguna informacion a nuestros servidores.',
+    lang_label: 'Idioma / Language / Idioma',
+    step1_title: '¿Que quieres monitorear?',
+    step1_subtitle: 'Selecciona las integraciones que usas. Puedes agregar mas despues en Configuracion.',
+    step2_title: 'Configura las conexiones',
+    step3_title: 'Selecciona tus proyectos',
+    step4_title: '¡Todo listo!',
+    continue_btn: 'Continuar',
+    back_btn: 'Volver',
+    skip_btn: 'Omitir por ahora',
+    finish_btn: 'Abrir el panel',
+  }
+};
+
+let currentLocale = localStorage.getItem('locale') || 'en';
+
+function applyTranslations(lang) {
+  const dict = TRANSLATIONS[lang];
+  if (!dict) return;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (dict[key] !== undefined) el.textContent = dict[key];
+  });
+}
+
+function setLocale(lang) {
+  if (!TRANSLATIONS[lang]) return;
+  currentLocale = lang;
+  localStorage.setItem('locale', lang);
+
+  // update button states
+  ['pt', 'en', 'es'].forEach(l => {
+    const btn = document.getElementById('langBtn-' + l);
+    if (!btn) return;
+    btn.classList.toggle('active', l === lang);
+    btn.setAttribute('aria-pressed', l === lang ? 'true' : 'false');
+  });
+
+  applyTranslations(lang);
+}
+
+/* ════════════════
+   INIT
+════════════════ */
+// screens start hidden except screen0; set initial fade state
+document.querySelectorAll('.screen:not(.active)').forEach(s => {
+  s.style.opacity = '0';
+  s.style.transform = 'translateY(10px)';
+});
+// screen0 fades in on load
+const s0 = document.getElementById('screen0');
+s0.style.opacity = '0';
+s0.style.transform = 'translateY(10px)';
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  s0.style.transition = 'opacity .5s ease, transform .5s ease';
+  s0.style.opacity = '1';
+  s0.style.transform = 'translateY(0)';
+}));
+
+// apply saved locale on startup
+setLocale(currentLocale);
+</script>
+</body>
+</html>

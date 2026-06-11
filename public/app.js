@@ -1,4 +1,6 @@
 import { initFilters, toggleDropdown, onCheckChange, clearFilter, applyFilter, toggleUS, initHealthBadges, openCardStat } from './modules/filters.js';
+import { setThresholds } from './modules/health.js';
+import { openHealthConfig, closeHealthConfig, saveHealthConfigModal } from './modules/healthConfig.js';
 import { startTimer, doRefresh } from './modules/timer.js';
 import { setTheme, toggleTheme } from './modules/theme.js';
 import { openDetails, closeDetails, closeDetailsBtn, toggleMaximize, loadDetailData, _detailState, editOrigEst, openDetailStat } from './modules/detail.js';
@@ -13,7 +15,7 @@ import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from './modules/teamCapacity.js';
 import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback, openFeedbackSuccess, closeFeedbackSuccess, closeFeedbackSuccessOverlay } from './modules/feedback.js';
 import { openUAT, closeUAT, closeUATOverlay, toggleUATMax, refreshUAT, uatChangeSprint, uatTogglePlan, uatFilterPlan, uatClearPlanFilter } from './modules/uat.js';
-import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportOpenLocationPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot, reportOpenIncidentFilter, reportExportIncidentsCSV } from './modules/report.js';
+import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportOpenLocationPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot, reportOpenIncidentFilter, reportExportIncidentsCSV, openIncidentsForGroup } from './modules/report.js';
 import { openSnConfig, closeSnConfig, closeSnConfigOverlay, snConfigTest, snConfigSaveGlobal, snConfigSaveProject } from './modules/snConfig.js';
 
 // Expor funções ao window para inline handlers no HTML
@@ -51,6 +53,12 @@ window.toggleItemsFilter      = toggleItemsFilter;
 window.clearItemsFilter       = clearItemsFilter;
 window.toggleItemsModalMax       = toggleItemsModalMax;
 window.toggleItemsFilterDropdown = toggleItemsFilterDropdown;
+window.openSNGroupIncidents = function(btn) {
+  const card = btn.closest('.sn-inc-card');
+  if (!card) return;
+  const groupName = card.dataset.group || card.querySelector('.sn-inc-group-name')?.textContent || '';
+  openIncidentsForGroup(groupName);
+};
 window.openBurndown          = openBurndown;
 window.closeBurndown     = closeBurndown;
 window.closeBurndownOverlay = closeBurndownOverlay;
@@ -135,6 +143,43 @@ window.closeSnConfigOverlay  = closeSnConfigOverlay;
 window.snConfigTest          = snConfigTest;
 window.snConfigSaveGlobal    = snConfigSaveGlobal;
 window.snConfigSaveProject   = snConfigSaveProject;
+window.openHealthConfig      = openHealthConfig;
+window.closeHealthConfig     = closeHealthConfig;
+window.saveHealthConfigModal = saveHealthConfigModal;
+
+let _activeHealthFilter = 'all';
+window.toggleHealthFilter = function(chip) {
+  document.querySelectorAll('#health-filter-row .fchip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  _activeHealthFilter = chip.dataset.health || 'all';
+  window.reapplyHealthFilter();
+};
+window.reapplyHealthFilter = function() {
+  document.querySelectorAll('#content .card[data-project]').forEach(card => {
+    if (_activeHealthFilter === 'all') {
+      card.style.display = '';
+    } else {
+      const hbar = card.querySelector('.health-hbar');
+      card.style.display = (hbar && hbar.classList.contains(_activeHealthFilter)) ? '' : 'none';
+    }
+  });
+};
+
+window.toggleCardMore = function(btn) {
+  const wrap  = btn.closest('.more-wrap');
+  const panel = wrap?.querySelector('.more-panel');
+  if (!panel) return;
+  const isOpen = panel.classList.toggle('open');
+  if (isOpen) {
+    document.querySelectorAll('.more-panel.open').forEach(p => { if (p !== panel) p.classList.remove('open'); });
+  }
+};
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.more-wrap')) {
+    document.querySelectorAll('.more-panel.open').forEach(p => p.classList.remove('open'));
+  }
+});
 
 let _removeCard = null;
 
@@ -186,6 +231,7 @@ document.addEventListener('keydown', e => {
 // ── View toggle (grid / list) ────────────────────────────────────────────────
 function _applyView(mode) {
   const content = document.getElementById('content');
+  if (!content) return; // SN dashboard or other views without a card grid
   const iconGrid = document.getElementById('iconViewGrid');
   const iconList = document.getElementById('iconViewList');
   if (mode === 'list') {
@@ -201,6 +247,7 @@ function _applyView(mode) {
 
 window.toggleView = function() {
   const content = document.getElementById('content');
+  if (!content) return;
   const isGrid = content.classList.contains('cards-grid');
   const next = isGrid ? 'list' : 'grid';
   localStorage.setItem('dashView', next);
@@ -211,6 +258,7 @@ window.toggleView = function() {
 setTheme(localStorage.getItem('theme') || 'dark');
 await initI18n();
 applyTranslations();
+fetch('/api/health-config').then(r => r.json()).then(setThresholds).catch(() => {});
 initFilters();
 initHealthBadges();
 applyOrder();

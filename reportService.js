@@ -656,14 +656,20 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
 
 // ── Incident backlog list (for modal) ──────────────────────────────────────────
 
-async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', filterField = '', filterValue = '' } = {}) {
+async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', filterField = '', filterValue = '', group = '' } = {}) {
   const snCfg = getSnConfig();
-  const snGrp = getProjectSnGroup(displayName);
-  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass || !snGrp?.assignmentGroup) return null;
+  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
 
-  const grp       = snGrp.assignmentGroup.trim();
-  const isSysId   = /^[0-9a-f]{32}$/i.test(grp);
-  const grpFilter = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
+  let grpFilter;
+  if (group) {
+    grpFilter = `assignment_group.name=${group}`;
+  } else {
+    const snGrp = getProjectSnGroup(displayName);
+    if (!snGrp?.assignmentGroup) return null;
+    const grp   = snGrp.assignmentGroup.trim();
+    const isSysId = /^[0-9a-f]{32}$/i.test(grp);
+    grpFilter   = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
+  }
 
   const [y, m] = month.split('-').map(Number);
   const start    = new Date(y, m - 1, 1).toISOString().slice(0, 19) + 'Z';

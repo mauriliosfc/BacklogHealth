@@ -1,6 +1,6 @@
 jest.mock('fs');
 
-const { parseOrgInput, getDisplayName, getProjectConfig, saveConfig } = require('../../config');
+const { parseOrgInput, getDisplayName, getProjectConfig, saveConfig, getAppMode, loadConfig, getCfg } = require('../../config');
 const fs = require('fs');
 
 beforeEach(() => {
@@ -139,5 +139,117 @@ describe('getProjectConfig', () => {
   test('não encontra projeto pelo nome interno quando há time (deve usar displayName)', () => {
     // "AMS" sozinho não deve match — o identifier correto é "AMS - AMS Backend"
     expect(getProjectConfig('AMS')).toBeNull();
+  });
+});
+
+// ── loadConfig ────────────────────────────────────────────────────────────────
+
+describe('loadConfig', () => {
+  beforeEach(() => {
+    // Reset cfg to empty before each test
+    saveConfig({});
+  });
+
+  test('retorna true e carrega cfg quando Azure está totalmente configurado', () => {
+    const raw = JSON.stringify({ org: 'myorg', pat: 'token', projects: [{ name: 'Alpha', workItemType: 'User Story' }] });
+    fs.readFileSync.mockReturnValueOnce(raw);
+    const result = loadConfig();
+    expect(result).toBe(true);
+    expect(getCfg().org).toBe('myorg');
+    expect(getCfg().projects).toHaveLength(1);
+  });
+
+  test('retorna false MAS ainda carrega cfg quando apenas SN está configurado (modo sn-only)', () => {
+    const raw = JSON.stringify({ servicenow: { instance: 'dev.service-now.com', user: 'admin', pass: 'secret' }, _onboarded: true });
+    fs.readFileSync.mockReturnValueOnce(raw);
+    const result = loadConfig();
+    expect(result).toBe(false);
+    // cfg deve ter o SN config para getAppMode() funcionar corretamente após restart
+    expect(getCfg().servicenow).toMatchObject({ instance: 'dev.service-now.com' });
+    expect(getCfg()._onboarded).toBe(true);
+  });
+
+  test('retorna false e cfg={} quando arquivo não existe', () => {
+    fs.readFileSync.mockImplementationOnce(() => { throw new Error('ENOENT'); });
+    const result = loadConfig();
+    expect(result).toBe(false);
+    expect(getCfg()).toEqual({});
+  });
+
+  test('adiciona baseUrl quando ausente (compatibilidade)', () => {
+    const raw = JSON.stringify({ org: 'myorg', pat: 'token', projects: [{ name: 'Alpha', workItemType: 'User Story' }] });
+    fs.readFileSync.mockReturnValueOnce(raw);
+    loadConfig();
+    expect(getCfg().baseUrl).toBe('https://dev.azure.com/myorg');
+  });
+
+  test('migração: converte projects string[] para object[]', () => {
+    const raw = JSON.stringify({ org: 'myorg', pat: 'token', projects: ['Alpha', 'Beta'] });
+    fs.readFileSync.mockReturnValueOnce(raw);
+    loadConfig();
+    expect(getCfg().projects).toEqual([
+      { name: 'Alpha', workItemType: 'User Story' },
+      { name: 'Beta',  workItemType: 'User Story' },
+    ]);
+  });
+
+  test('getAppMode() retorna "sn-only" após loadConfig() com config SN-only', () => {
+    const raw = JSON.stringify({ servicenow: { instance: 'dev.service-now.com', user: 'u', pass: 'p' }, _onboarded: true });
+    fs.readFileSync.mockReturnValueOnce(raw);
+    loadConfig();
+    expect(getAppMode()).toBe('sn-only');
+  });
+});
+
+// ── getAppMode ────────────────────────────────────────────────────────────────
+
+describe('getAppMode', () => {
+  test('retorna "empty" quando nenhuma credencial está configurada', () => {
+    saveConfig({});
+    expect(getAppMode()).toBe('empty');
+  });
+
+  test('retorna "sn-only" quando somente ServiceNow está configurado', () => {
+    saveConfig({ servicenow: { instance: 'dev.service-now.com', user: 'admin', pass: 'secret' } });
+    expect(getAppMode()).toBe('sn-only');
+  });
+
+  test('retorna "sn-only" quando org/pat existem mas projects está vazio', () => {
+    saveConfig({
+      org: 'myorg', pat: 'token', projects: [],
+      servicenow: { instance: 'dev.service-now.com', user: 'u', pass: 'p' },
+    });
+    expect(getAppMode()).toBe('sn-only');
+  });
+
+  test('retorna "azure" quando somente Azure está configurado (sem SN)', () => {
+    saveConfig({ org: 'myorg', pat: 'token', projects: [{ name: 'Alpha', workItemType: 'User Story' }] });
+    expect(getAppMode()).toBe('azure');
+  });
+
+  test('retorna "full" quando Azure e ServiceNow estão configurados', () => {
+    saveConfig({
+      org: 'myorg', pat: 'token', projects: [{ name: 'Alpha', workItemType: 'User Story' }],
+      servicenow: { instance: 'dev.service-now.com', user: 'u', pass: 'p' },
+    });
+    expect(getAppMode()).toBe('full');
+  });
+
+  test('retorna "empty" quando SN está parcialmente configurado (sem pass)', () => {
+    saveConfig({ servicenow: { instance: 'dev.service-now.com', user: 'admin' } });
+    expect(getAppMode()).toBe('empty');
+  });
+
+  test('retorna "empty" quando SN está parcialmente configurado (sem instance)', () => {
+    saveConfig({ servicenow: { user: 'admin', pass: 'secret' } });
+    expect(getAppMode()).toBe('empty');
+  });
+
+  test('retorna "azure" quando SN existe mas sem credenciais completas', () => {
+    saveConfig({
+      org: 'myorg', pat: 'token', projects: [{ name: 'Alpha', workItemType: 'User Story' }],
+      servicenow: { instance: 'dev.service-now.com' }, // sem user/pass
+    });
+    expect(getAppMode()).toBe('azure');
   });
 });

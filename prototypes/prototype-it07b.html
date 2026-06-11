@@ -1,0 +1,1611 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IT-07b — Configuracoes (Tabbed) · Backlog Health</title>
+<style>
+:root {
+  --bg-page:#020617; --bg-card:#0f172a; --bg-border:#1e293b; --bg-el:#1e293b; --bg-el2:#334155;
+  --text-1:#f1f5f9; --text-2:#cbd5e1; --text-muted:#94a3b8; --text-faint:#64748b;
+  --c-blue:#60a5fa; --c-blue-bg:#1e3a5f; --c-blue-bd:#2d5a8e;
+  --c-green:#22c55e; --c-green-bg:#14532d; --c-green-bd:#166534;
+  --c-yellow:#f59e0b; --c-yellow-bg:#422006; --c-yellow-bd:#78350f;
+  --c-red:#ef4444; --c-red-bg:#450a0a; --c-red-bd:#7f1d1d;
+  --c-purple:#a78bfa; --c-purple-bg:#2e1065; --c-purple-bd:#4c1d95;
+  --hover-bg:rgba(255,255,255,.04); --shadow:0 4px 24px rgba(0,0,0,.45); --modal-bg:rgba(0,0,0,.75);
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --t:.15s ease;
+}
+[data-theme="light"] {
+  --bg-page:#f0f4f8; --bg-card:#fff; --bg-border:#e2e8f0; --bg-el:#f8fafc; --bg-el2:#e2e8f0;
+  --text-1:#0f172a; --text-2:#1e293b; --text-muted:#475569; --text-faint:#94a3b8;
+  --c-blue:#2563eb; --c-blue-bg:#dbeafe; --c-blue-bd:#93c5fd;
+  --c-green:#16a34a; --c-green-bg:#dcfce7; --c-green-bd:#86efac;
+  --c-yellow:#d97706; --c-yellow-bg:#fef3c7; --c-yellow-bd:#fcd34d;
+  --c-red:#dc2626; --c-red-bg:#fee2e2; --c-red-bd:#fca5a5;
+  --c-purple:#7c3aed; --c-purple-bg:#ede9fe; --c-purple-bd:#c4b5fd;
+  --hover-bg:rgba(0,0,0,.04); --shadow:0 4px 24px rgba(0,0,0,.1); --modal-bg:rgba(0,0,0,.5);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg-page);
+  color: var(--text-1);
+  display: flex;
+  font-size: 14px;
+  line-height: 1.5;
+}
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+input, textarea { font-family: inherit; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: var(--bg-el2); border-radius: 99px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: 220px; flex-shrink: 0;
+  background: var(--bg-card);
+  border-right: 1px solid var(--bg-border);
+  display: flex; flex-direction: column;
+  overflow-y: auto; height: 100vh;
+}
+.sidebar-logo {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--bg-border);
+  display: flex; align-items: center; gap: 10px;
+}
+.logo-icon {
+  width: 32px; height: 32px;
+  background: var(--c-blue-bg);
+  border: 1px solid var(--c-blue-bd);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.logo-icon svg { width: 18px; height: 18px; color: var(--c-blue); }
+.logo-text { font-weight: 700; font-size: 13px; color: var(--text-1); line-height: 1.2; }
+.logo-sub { font-size: 10px; color: var(--text-faint); }
+
+.sidebar-section { padding: 8px 0; }
+.sidebar-label {
+  font-size: 10px; font-weight: 600; letter-spacing: .08em;
+  color: var(--text-faint); text-transform: uppercase;
+  padding: 4px 16px 6px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+  font-size: 13px;
+  border: none; background: none; width: 100%; text-align: left;
+}
+.nav-item:hover { background: var(--hover-bg); color: var(--text-1); }
+.nav-item.active { color: var(--c-blue); background: var(--c-blue-bg); }
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+.nav-badge {
+  margin-left: auto;
+  background: var(--c-blue-bg);
+  color: var(--c-blue);
+  border: 1px solid var(--c-blue-bd);
+  border-radius: 10px;
+  font-size: 10px; padding: 1px 6px; font-weight: 600;
+}
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px 16px;
+  border-top: 1px solid var(--bg-border);
+  font-size: 11px; color: var(--text-faint);
+}
+
+/* ── MAIN ── */
+.main {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  height: 100vh; overflow: hidden;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  height: 56px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--bg-border);
+  display: flex; align-items: center;
+  padding: 0 28px; gap: 12px; flex-shrink: 0;
+}
+.topbar-left { display: flex; flex-direction: column; }
+.topbar-title { font-size: 16px; font-weight: 700; color: var(--text-1); line-height: 1.2; }
+.topbar-sub { font-size: 11px; color: var(--text-faint); }
+.topbar-spacer { flex: 1; }
+.version-badge {
+  font-size: 11px; color: var(--text-faint);
+  background: var(--bg-el); border: 1px solid var(--bg-border);
+  border-radius: 99px; padding: 3px 10px;
+}
+.icon-btn {
+  width: 34px; height: 34px;
+  border: 1px solid var(--bg-border);
+  background: var(--bg-el);
+  border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-muted);
+  transition: background var(--t), color var(--t), border-color var(--t);
+}
+.icon-btn:hover { background: var(--hover-bg); color: var(--text-1); border-color: var(--bg-el2); }
+.icon-btn svg { width: 16px; height: 16px; }
+
+/* ── TAB BAR ── */
+.tab-bar {
+  display: flex; align-items: stretch;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--bg-border);
+  padding: 0 28px; gap: 2px; flex-shrink: 0;
+}
+.tab-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 16px; height: 46px;
+  color: var(--text-faint); font-size: 13px; font-weight: 500;
+  background: none; border: none; cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color var(--t), border-color var(--t);
+  position: relative; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text-2); }
+.tab-btn.active { color: var(--text-1); border-bottom-color: var(--c-blue); }
+.tab-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+.tab-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600; padding: 2px 7px;
+  border-radius: 99px; flex-shrink: 0;
+}
+.tab-status.green {
+  background: var(--c-green-bg); color: var(--c-green);
+  border: 1px solid var(--c-green-bd);
+}
+.tab-status.yellow {
+  background: var(--c-yellow-bg); color: var(--c-yellow);
+  border: 1px solid var(--c-yellow-bd);
+}
+.tab-status.blue {
+  background: var(--c-blue-bg); color: var(--c-blue);
+  border: 1px solid var(--c-blue-bd);
+}
+.tab-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.tab-unsaved {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c-yellow); flex-shrink: 0;
+  display: none;
+}
+.tab-unsaved.show { display: block; }
+
+/* ── CONTENT AREA ── */
+.content {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 28px;
+}
+
+/* ── TAB PANELS ── */
+.tab-panel { display: none; }
+.tab-panel.active { display: flex; flex-direction: column; gap: 24px; }
+
+/* ── TWO-COL LAYOUT ── */
+.two-col {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ── SECTION HEADER ── */
+.section-head {
+  font-size: 13px; font-weight: 700; color: var(--text-2);
+  letter-spacing: .02em; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-head svg { color: var(--text-faint); }
+
+/* ── FORM CARD ── */
+.form-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--r-lg); padding: 24px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+/* ── FIELD ── */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label {
+  font-size: 10px; font-weight: 700; color: var(--text-faint);
+  letter-spacing: .08em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 6px;
+}
+.field-wrap { position: relative; display: flex; align-items: center; }
+.field-prefix {
+  position: absolute; left: 10px;
+  font-size: 12px; color: var(--text-faint);
+  pointer-events: none; white-space: nowrap;
+}
+.field-input {
+  width: 100%;
+  background: var(--bg-el);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--r-md);
+  color: var(--text-1); font-size: 13px;
+  padding: 9px 36px 9px 12px;
+  outline: none;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.field-input.no-icon { padding: 9px 12px; }
+.field-input.has-prefix { padding-left: 70px; }
+.field-input:focus {
+  border-color: var(--c-blue-bd);
+  box-shadow: 0 0 0 3px rgba(96,165,250,.12);
+}
+.field-input::placeholder { color: var(--text-faint); }
+.field-action {
+  position: absolute; right: 8px;
+  width: 28px; height: 28px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-faint); cursor: pointer;
+  transition: color var(--t), background var(--t);
+}
+.field-action:hover { color: var(--text-1); background: var(--bg-el2); }
+.field-hint { font-size: 11px; color: var(--text-faint); display: flex; align-items: center; gap: 5px; }
+.field-hint.green { color: var(--c-green); }
+.field-hint.muted-url { color: var(--text-faint); font-family: monospace; font-size: 11px; }
+
+/* Tooltip trigger */
+.tip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--bg-el2); color: var(--text-faint);
+  font-size: 10px; font-weight: 700; cursor: default;
+  font-style: normal; flex-shrink: 0;
+}
+
+/* ── DIVIDER ── */
+.divider { height: 1px; background: var(--bg-border); }
+
+/* ── STATUS CARD ── */
+.status-card {
+  border-radius: var(--r-md); padding: 14px 16px;
+  border: 1px solid var(--c-green-bd);
+  background: var(--c-green-bg);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.status-card.yellow { border-color: var(--c-yellow-bd); background: var(--c-yellow-bg); }
+.status-card-top {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600;
+}
+.status-card.yellow .status-card-top { color: var(--c-yellow); }
+.status-card:not(.yellow) .status-card-top { color: var(--c-green); }
+.status-card-meta { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: var(--r-md); cursor: pointer; font-size: 13px; font-weight: 600;
+  padding: 9px 18px; transition: all var(--t);
+  border: 1px solid transparent;
+}
+.btn-primary { background: var(--c-blue); color: #fff; border-color: var(--c-blue); }
+.btn-primary:hover { background: #3b82f6; box-shadow: 0 0 0 3px rgba(96,165,250,.2); }
+.btn-outline {
+  background: transparent; color: var(--text-muted);
+  border-color: var(--bg-el2);
+}
+.btn-outline:hover { color: var(--text-1); border-color: var(--bg-el2); background: var(--hover-bg); }
+.btn-red-outline {
+  background: transparent; color: var(--c-red);
+  border-color: var(--c-red-bd);
+}
+.btn-red-outline:hover { background: var(--c-red-bg); }
+.btn-sm { padding: 6px 14px; font-size: 12px; }
+.btn-full { width: 100%; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── TEST BUTTON ── */
+.test-btn {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 9px; border-radius: var(--r-md);
+  background: var(--bg-el); border: 1px solid var(--bg-el2);
+  color: var(--text-muted); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all var(--t);
+}
+.test-btn:hover { color: var(--text-1); border-color: var(--c-blue-bd); background: var(--c-blue-bg); }
+.test-btn.success { background: var(--c-green-bg); border-color: var(--c-green-bd); color: var(--c-green); }
+.test-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── SPINNER ── */
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── HELP CARD ── */
+.help-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--r-lg); padding: 22px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.help-title { font-size: 13px; font-weight: 700; color: var(--text-1); }
+.help-step {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 12px; color: var(--text-2); line-height: 1.5;
+}
+.help-step-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--bg-el2); color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+}
+.help-link {
+  font-size: 12px; color: var(--c-blue); cursor: pointer;
+  text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+}
+.help-link:hover { text-decoration: underline; opacity: .8; }
+
+.danger-card {
+  border: 1px solid var(--c-red-bd);
+  background: var(--c-red-bg);
+  border-radius: var(--r-md); padding: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.danger-title { font-size: 12px; font-weight: 700; color: var(--c-red); display: flex; align-items: center; gap: 6px; }
+.danger-text { font-size: 11px; color: var(--text-muted); }
+.danger-confirm { display: none; align-items: center; gap: 8px; padding-top: 4px; }
+.danger-confirm.show { display: flex; }
+
+/* ── SN WARNING BANNER ── */
+.warn-banner {
+  border: 1px solid var(--c-yellow-bd);
+  background: var(--c-yellow-bg);
+  border-radius: var(--r-md); padding: 14px 16px;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.warn-banner-icon { color: var(--c-yellow); flex-shrink: 0; margin-top: 1px; }
+.warn-banner-text { font-size: 12px; color: var(--c-yellow); line-height: 1.6; }
+.warn-banner-text strong { font-weight: 700; font-size: 13px; display: block; margin-bottom: 2px; }
+.warn-link { color: var(--c-yellow); text-decoration: underline; cursor: pointer; }
+.warn-link:hover { opacity: .7; }
+
+/* ── FEATURE LIST ── */
+.feature-list { display: flex; flex-direction: column; gap: 10px; }
+.feature-item { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-2); }
+.feature-item svg { color: var(--c-green); flex-shrink: 0; }
+.feature-note { font-size: 11px; color: var(--text-faint); line-height: 1.5; padding: 10px 12px; background: var(--bg-el); border-radius: var(--r-sm); }
+
+/* ── SN GROUP PILLS ── */
+.group-pills { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+.group-pill {
+  font-size: 11px; font-weight: 500; padding: 4px 10px;
+  border-radius: 99px; background: var(--c-blue-bg);
+  border: 1px solid var(--c-blue-bd); color: var(--c-blue);
+}
+
+/* ── PROJECT LIST ── */
+.proj-tab-topbar {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+}
+.search-wrap { position: relative; flex: 1; }
+.search-icon {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--text-faint); pointer-events: none; display: flex;
+}
+.search-input {
+  width: 100%;
+  background: var(--bg-el); border: 1px solid var(--bg-border);
+  border-radius: var(--r-md); color: var(--text-1); font-size: 13px;
+  padding: 8px 12px 8px 34px; outline: none;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.search-input:focus { border-color: var(--c-blue-bd); box-shadow: 0 0 0 3px rgba(96,165,250,.12); }
+.search-input::placeholder { color: var(--text-faint); }
+.count-badge {
+  font-size: 11px; font-weight: 600; padding: 4px 12px;
+  border-radius: 99px; white-space: nowrap; flex-shrink: 0;
+  background: var(--bg-el); border: 1px solid var(--bg-border); color: var(--text-muted);
+}
+
+.proj-list { display: flex; flex-direction: column; gap: 8px; }
+
+.proj-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--r-lg); overflow: hidden;
+  transition: border-color var(--t);
+}
+.proj-card:hover { border-color: var(--bg-el2); }
+
+.proj-card-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+}
+.proj-avatar {
+  width: 36px; height: 36px; border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+.av-blue  { background: linear-gradient(135deg,#2563eb,#1d4ed8); }
+.av-green { background: linear-gradient(135deg,#16a34a,#15803d); }
+.av-purple{ background: linear-gradient(135deg,#7c3aed,#6d28d9); }
+.av-yellow{ background: linear-gradient(135deg,#d97706,#b45309); }
+.av-red   { background: linear-gradient(135deg,#dc2626,#b91c1c); }
+.av-gray  { background: linear-gradient(135deg,#475569,#334155); }
+
+.proj-info { flex: 1; min-width: 0; }
+.proj-name { font-size: 13px; font-weight: 700; color: var(--text-1); }
+.proj-team { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+.proj-org-badge {
+  font-size: 9px; font-weight: 600; letter-spacing: .05em;
+  color: var(--text-faint); background: var(--bg-el);
+  border: 1px solid var(--bg-border); border-radius: 4px;
+  padding: 1px 5px; white-space: nowrap;
+}
+
+.proj-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.badge {
+  font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 99px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.badge-type { background: var(--bg-el2); color: var(--text-muted); border: 1px solid var(--bg-border); }
+.badge-sprint { background: var(--c-blue-bg); color: var(--c-blue); border: 1px solid var(--c-blue-bd); }
+.badge-health-red { background: var(--c-red-bg); color: var(--c-red); border: 1px solid var(--c-red-bd); }
+.badge-health-yellow { background: var(--c-yellow-bg); color: var(--c-yellow); border: 1px solid var(--c-yellow-bd); }
+.badge-health-green { background: var(--c-green-bg); color: var(--c-green); border: 1px solid var(--c-green-bd); }
+
+.proj-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.proj-action-btn {
+  width: 30px; height: 30px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-faint);
+  transition: color var(--t), background var(--t);
+}
+.proj-action-btn:hover { background: var(--hover-bg); color: var(--text-1); }
+.proj-action-btn.red:hover { background: var(--c-red-bg); color: var(--c-red); }
+.proj-action-btn svg { width: 15px; height: 15px; }
+
+/* ── INLINE EXPAND ── */
+.proj-expand {
+  display: none;
+  border-top: 1px solid var(--bg-border);
+  background: rgba(0,0,0,.15);
+  padding: 20px 16px;
+}
+[data-theme="light"] .proj-expand { background: rgba(0,0,0,.03); }
+.proj-expand.open { display: block; }
+.proj-expand-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.proj-expand-field { display: flex; flex-direction: column; gap: 6px; }
+.proj-expand-field .field-label { font-size: 10px; font-weight: 700; color: var(--text-faint); letter-spacing: .08em; text-transform: uppercase; }
+.proj-expand-input {
+  background: var(--bg-el); border: 1px solid var(--bg-border);
+  border-radius: var(--r-sm); color: var(--text-1); font-size: 12px;
+  padding: 7px 10px; outline: none; width: 100%;
+  transition: border-color var(--t);
+}
+.proj-expand-input:focus { border-color: var(--c-blue-bd); }
+.proj-expand-input::placeholder { color: var(--text-faint); }
+.proj-expand-input.mono { font-family: monospace; font-size: 11px; color: var(--text-muted); }
+.proj-expand-note { font-size: 11px; color: var(--text-faint); line-height: 1.5; }
+.proj-expand-note a { color: var(--c-blue); cursor: pointer; }
+
+.wit-toggle {
+  display: flex; align-items: center; gap: 3px;
+  background: var(--bg-el); border: 1px solid var(--bg-border);
+  border-radius: 99px; padding: 3px;
+}
+.wit-btn {
+  padding: 4px 12px; border-radius: 99px;
+  font-size: 11px; font-weight: 600;
+  color: var(--text-faint); cursor: pointer;
+  transition: all var(--t); white-space: nowrap;
+}
+.wit-btn.active { background: var(--c-blue); color: #fff; }
+.wit-btn:not(.active):hover { color: var(--text-1); }
+
+.proj-expand-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.proj-confirm { display: none; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--bg-border); }
+.proj-confirm.show { display: flex; }
+.proj-confirm-text { font-size: 12px; color: var(--text-muted); flex: 1; }
+
+/* ── AVAILABLE PROJECTS ── */
+.avail-section { margin-top: 24px; }
+.avail-header { font-size: 12px; font-weight: 700; color: var(--text-faint); margin-bottom: 12px; }
+.avail-list { display: flex; flex-direction: column; gap: 6px; }
+.avail-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-card); border: 1px solid var(--bg-border);
+  border-radius: var(--r-md); opacity: .7;
+  transition: opacity var(--t), border-color var(--t);
+}
+.avail-item:hover { opacity: 1; border-color: var(--bg-el2); }
+.avail-name { font-size: 13px; color: var(--text-2); flex: 1; }
+.avail-more { font-size: 12px; color: var(--c-blue); cursor: pointer; margin-top: 8px; display: inline-flex; align-items: center; gap: 4px; }
+.avail-more:hover { text-decoration: underline; opacity: .8; }
+
+/* ── AI CONFIG ── */
+.ai-toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0;
+}
+.ai-toggle-row + .ai-toggle-row { border-top: 1px solid var(--bg-border); }
+.ai-toggle-label { display: flex; flex-direction: column; gap: 2px; }
+.ai-toggle-text { font-size: 13px; color: var(--text-2); }
+.ai-toggle-sub { font-size: 11px; color: var(--text-faint); }
+.toggle-switch {
+  width: 38px; height: 22px; border-radius: 99px;
+  background: var(--bg-el2); cursor: pointer;
+  position: relative; transition: background var(--t); flex-shrink: 0;
+  border: none;
+}
+.toggle-switch.on { background: var(--c-blue); }
+.toggle-knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; transition: left var(--t);
+}
+.toggle-switch.on .toggle-knob { left: 19px; }
+
+/* Provider list */
+.provider-list { display: flex; flex-direction: column; gap: 10px; }
+.provider-item {
+  border: 1px solid var(--bg-border); border-radius: var(--r-md);
+  padding: 12px 14px; background: var(--bg-page);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.provider-name { font-size: 13px; font-weight: 600; color: var(--text-1); display: flex; align-items: center; gap: 8px; }
+.provider-rec {
+  font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  background: var(--c-green-bg); color: var(--c-green); border: 1px solid var(--c-green-bd);
+  border-radius: 4px; padding: 2px 6px;
+}
+.provider-url { font-size: 11px; color: var(--text-faint); font-family: monospace; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; top: 70px; right: 24px; z-index: 500;
+  background: var(--c-green-bg);
+  border: 1px solid var(--c-green-bd);
+  color: var(--c-green);
+  padding: 12px 18px; border-radius: var(--r-md);
+  font-size: 13px; font-weight: 600;
+  display: none; align-items: center; gap: 8px;
+  box-shadow: var(--shadow);
+  animation: slideIn .25s ease;
+  max-width: 320px;
+}
+.toast.show { display: flex; }
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-8px) translateX(8px); }
+  to   { opacity: 1; transform: translateY(0) translateX(0); }
+}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6M5 20h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v11a2 2 0 002 2z"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">Backlog Health</div>
+      <div class="logo-sub">Azure DevOps</div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Principal</div>
+    <button class="nav-item" onclick="showToast('Navegando para o Dashboard...')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+      </svg>
+      Dashboard
+      <span class="nav-badge">3</span>
+    </button>
+    <button class="nav-item" onclick="showToast('Navegando para Review Mensal...')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6M5 20h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v11a2 2 0 002 2z"/>
+      </svg>
+      Review Mensal
+    </button>
+    <button class="nav-item" onclick="showToast('Navegando para Copilot IA...')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3-3-3z"/>
+      </svg>
+      Copilot IA
+    </button>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Sistema</div>
+    <button class="nav-item active">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+      </svg>
+      Configuracoes
+    </button>
+  </div>
+
+  <div class="sidebar-footer">v1.8.2</div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-title">Configuracoes</div>
+      <div class="topbar-sub">Gerencie suas integracoes e preferencias</div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <span class="version-badge">v1.8.2</span>
+    <button class="icon-btn" id="themeToggle" title="Alternar tema">
+      <svg id="themeIcon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- TAB BAR -->
+  <nav class="tab-bar">
+
+    <!-- Tab 1: Azure DevOps -->
+    <button class="tab-btn active" onclick="switchTab('azure', this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+      </svg>
+      Azure DevOps
+      <span class="tab-status green" id="tab-status-azure">
+        <span class="tab-dot"></span>
+        Conectado
+      </span>
+      <span class="tab-unsaved" id="tab-unsaved-azure"></span>
+    </button>
+
+    <!-- Tab 2: ServiceNow -->
+    <button class="tab-btn" onclick="switchTab('sn', this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      ServiceNow
+      <span class="tab-status yellow" id="tab-status-sn">
+        <svg width="9" height="9" fill="currentColor" viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        Nao configurado
+      </span>
+      <span class="tab-unsaved" id="tab-unsaved-sn"></span>
+    </button>
+
+    <!-- Tab 3: Projetos -->
+    <button class="tab-btn" onclick="switchTab('projetos', this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+      </svg>
+      Projetos
+      <span class="tab-status blue" id="tab-status-projetos">3</span>
+      <span class="tab-unsaved" id="tab-unsaved-projetos"></span>
+    </button>
+
+    <!-- Tab 4: Copilot IA -->
+    <button class="tab-btn" onclick="switchTab('ai', this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3-3-3z"/>
+      </svg>
+      Copilot IA
+      <span class="tab-status green" id="tab-status-ai">
+        <span class="tab-dot"></span>
+        Conectado
+      </span>
+      <span class="tab-unsaved" id="tab-unsaved-ai"></span>
+    </button>
+
+  </nav>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- ════════════════════════════════════════
+         TAB 1: AZURE DEVOPS
+    ════════════════════════════════════════ -->
+    <div class="tab-panel active" id="panel-azure">
+      <div class="two-col">
+
+        <!-- LEFT: Form -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="section-head">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+            </svg>
+            Credenciais Azure DevOps
+          </div>
+
+          <div class="form-card">
+
+            <!-- Status card (connected) -->
+            <div class="status-card" id="az-status-card">
+              <div class="status-card-top">
+                <span class="status-dot"></span>
+                Conectado com sucesso
+              </div>
+              <div class="status-card-meta">
+                Organizacao: accenture-brasil &nbsp;·&nbsp; 12 projetos disponiveis &nbsp;·&nbsp; Ultima verificacao: hoje 09:41
+              </div>
+              <div style="margin-top:6px;">
+                <button class="btn btn-outline btn-sm" onclick="testAzure()">
+                  <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  Re-testar conexao
+                </button>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Org field -->
+            <div class="field">
+              <label class="field-label">
+                Organizacao
+                <span class="tip" title="Nome da org na URL do Azure DevOps. Ex: dev.azure.com/NOME">?</span>
+              </label>
+              <div class="field-wrap">
+                <input class="field-input no-icon" type="text" id="az-org" value="accenture-brasil" oninput="markUnsaved('azure')">
+              </div>
+              <span class="field-hint muted-url" id="az-url-preview">dev.azure.com/accenture-brasil</span>
+            </div>
+
+            <!-- PAT field -->
+            <div class="field">
+              <label class="field-label">
+                Personal Access Token (PAT)
+                <span class="tip" title="Token de leitura — Work Items, Iterations, Team Members">?</span>
+              </label>
+              <div class="field-wrap">
+                <input class="field-input no-icon" type="password" id="az-pat" value="mySecretPAToken123456789abcdef" oninput="markUnsaved('azure')">
+                <button class="field-action" id="az-pat-toggle" onclick="togglePat('az-pat','az-pat-toggle')">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  </svg>
+                </button>
+              </div>
+              <span class="field-hint green">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2"/>
+                </svg>
+                Expira em: 15/09/2026
+              </span>
+            </div>
+
+            <div class="divider"></div>
+
+            <button class="test-btn" id="az-test-btn" onclick="testAzure()">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+              Testar Conexao
+            </button>
+            <button class="btn btn-outline btn-full" onclick="saveTab('azure')">Salvar</button>
+
+          </div>
+        </div>
+
+        <!-- RIGHT: Help + Danger -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+
+          <!-- Help card -->
+          <div class="help-card">
+            <div class="help-title">Como obter um PAT</div>
+
+            <div class="help-step">
+              <span class="help-step-num">1</span>
+              Acesse dev.azure.com e faca login com sua conta
+            </div>
+            <div class="help-step">
+              <span class="help-step-num">2</span>
+              Clique no icone de usuario no canto superior direito
+            </div>
+            <div class="help-step">
+              <span class="help-step-num">3</span>
+              Selecione "Personal Access Tokens"
+            </div>
+            <div class="help-step">
+              <span class="help-step-num">4</span>
+              Clique em "New Token" e nomeie como "Backlog Health Dashboard"
+            </div>
+            <div class="help-step">
+              <span class="help-step-num">5</span>
+              Permissoes necessarias: Work Items (Read), Project and Team (Read), Graph (Read)
+            </div>
+            <div class="help-step">
+              <span class="help-step-num">6</span>
+              Copie o token gerado — ele nao sera exibido novamente
+            </div>
+
+            <a class="help-link" href="#">
+              Abrir documentacao Azure
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Danger zone -->
+          <div class="danger-card" id="danger-card">
+            <div class="danger-title">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              </svg>
+              Zona de perigo
+            </div>
+            <div class="danger-text">Remove as credenciais e desativa os cards de backlog. Os projetos permanecem listados.</div>
+            <div>
+              <button class="btn btn-red-outline btn-sm" onclick="showDisconnectConfirm()" id="disconnect-btn">
+                Desconectar Azure DevOps
+              </button>
+            </div>
+            <div class="danger-confirm" id="disconnect-confirm">
+              <span style="font-size:12px;color:var(--c-red);flex:1;">Tem certeza? Esta acao remove suas credenciais.</span>
+              <button class="btn btn-red-outline btn-sm" onclick="confirmDisconnect()">Sim, desconectar</button>
+              <button class="btn btn-outline btn-sm" onclick="cancelDisconnect()">Cancelar</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+         TAB 2: SERVICENOW
+    ════════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-sn">
+      <div class="two-col">
+
+        <!-- LEFT: Form -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+
+          <!-- Warning banner (not configured) -->
+          <div class="warn-banner" id="sn-warn">
+            <span class="warn-banner-icon">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              </svg>
+            </span>
+            <div class="warn-banner-text">
+              <strong>ServiceNow nao configurado</strong>
+              Configure para exibir incidentes no Review Mensal e correlacionar com seus projetos Azure.
+              <a class="warn-link" onclick="scrollToSnForm()">Configurar agora</a>
+            </div>
+          </div>
+
+          <div class="section-head">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+            </svg>
+            Credenciais ServiceNow
+          </div>
+
+          <div class="form-card" id="sn-form">
+
+            <!-- Instance field -->
+            <div class="field">
+              <label class="field-label">
+                Instancia
+                <span class="tip" title="URL da instancia sem o protocolo. Ex: empresa.service-now.com">?</span>
+              </label>
+              <div class="field-wrap">
+                <span class="field-prefix">https://</span>
+                <input class="field-input has-prefix no-icon" type="text" id="sn-instance" placeholder="sua-empresa.service-now.com" oninput="markUnsaved('sn')">
+              </div>
+            </div>
+
+            <!-- User field -->
+            <div class="field">
+              <label class="field-label">Usuario</label>
+              <div class="field-wrap">
+                <input class="field-input no-icon" type="text" id="sn-user" placeholder="usuario.de.servico" oninput="markUnsaved('sn')">
+              </div>
+            </div>
+
+            <!-- Password field -->
+            <div class="field">
+              <label class="field-label">Senha / Token de API</label>
+              <div class="field-wrap">
+                <input class="field-input no-icon" type="password" id="sn-pass" placeholder="senha ou API token" oninput="markUnsaved('sn')">
+                <button class="field-action" onclick="togglePat('sn-pass', this)">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Groups found (hidden until test) -->
+            <div id="sn-groups-found" style="display:none;">
+              <div class="divider"></div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Grupos encontrados:</div>
+              <div class="group-pills">
+                <span class="group-pill">Squad Alpha — AMS</span>
+                <span class="group-pill">Plataforma Beta</span>
+                <span class="group-pill">Gamma Support</span>
+              </div>
+            </div>
+
+            <button class="test-btn" id="sn-test-btn" onclick="testSn()">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+              Testar Conexao
+            </button>
+            <button class="btn btn-outline btn-full" onclick="saveTab('sn')">Salvar</button>
+
+          </div>
+        </div>
+
+        <!-- RIGHT: Help -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="help-card">
+            <div class="help-title">O que o ServiceNow habilita</div>
+            <div class="feature-list">
+              <div class="feature-item">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+                Incidentes P1/P2/P3 no Review Mensal
+              </div>
+              <div class="feature-item">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+                Correlacao incidente x projeto Azure
+              </div>
+              <div class="feature-item">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+                Metricas de volume e tendencia mensal
+              </div>
+              <div class="feature-item">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+                Grupos de atendimento por projeto
+              </div>
+            </div>
+            <div class="feature-note">
+              O ServiceNow e completamente opcional. O dashboard funciona normalmente sem ele.
+            </div>
+            <a class="help-link" onclick="showToast('Abra o prototype-it02.html para ver o exemplo.')">
+              Ver exemplo de Review com SN
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+              </svg>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+         TAB 3: PROJETOS
+    ════════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-projetos">
+
+      <!-- Top bar -->
+      <div class="proj-tab-topbar">
+        <div class="search-wrap">
+          <span class="search-icon">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </span>
+          <input class="search-input" type="text" id="proj-search" placeholder="Buscar projeto..." oninput="filterProjects(this.value)">
+        </div>
+        <span class="count-badge" id="proj-count-badge">3 projetos ativos</span>
+        <button class="btn btn-primary btn-sm" onclick="showToast('Adicionar projeto em breve.')">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          Adicionar projeto
+        </button>
+      </div>
+
+      <!-- Project list -->
+      <div class="proj-list" id="proj-list">
+
+        <!-- Project 1: Alpha Squad (pre-expanded) -->
+        <div class="proj-card" data-proj-name="alpha squad alpha" id="pc-1">
+          <div class="proj-card-row">
+            <div class="proj-avatar av-blue">A</div>
+            <div class="proj-info">
+              <div class="proj-name">Alpha Squad</div>
+              <div class="proj-team">Alpha Squad Team &nbsp;<span class="proj-org-badge">accenture-brasil</span></div>
+            </div>
+            <div class="proj-badges">
+              <span class="badge badge-type">User Story</span>
+              <span class="badge badge-sprint">Sprint 47</span>
+              <span class="badge badge-health-red">Critica</span>
+            </div>
+            <div class="proj-actions">
+              <button class="proj-action-btn" title="Editar" onclick="toggleExpand('pe-1', this)">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                </svg>
+              </button>
+              <button class="proj-action-btn red" title="Remover" onclick="showRemoveConfirm('pc-1')">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Inline edit form (pre-expanded) -->
+          <div class="proj-expand open" id="pe-1">
+            <div class="proj-expand-grid">
+              <div class="proj-expand-field">
+                <label class="field-label">Tipo de item de trabalho</label>
+                <div class="wit-toggle">
+                  <button class="wit-btn active" onclick="setWit(this)">User Story</button>
+                  <button class="wit-btn" onclick="setWit(this)">Task</button>
+                </div>
+              </div>
+              <div class="proj-expand-field">
+                <label class="field-label">Equipe (opcional)</label>
+                <input class="proj-expand-input" type="text" value="Alpha Squad Team" placeholder="Nome do time">
+              </div>
+              <div class="proj-expand-field">
+                <label class="field-label">Vinculo ServiceNow — Grupo</label>
+                <input class="proj-expand-input" type="text" value="Squad Alpha — AMS" placeholder="Nome do grupo">
+              </div>
+              <div class="proj-expand-field">
+                <label class="field-label">sys_id do Grupo</label>
+                <input class="proj-expand-input mono" type="text" value="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4" placeholder="ID do grupo SN">
+              </div>
+            </div>
+            <div class="proj-expand-note" style="margin-top:12px;">
+              Grupos de atendimento SN sao configurados globalmente na
+              <a onclick="switchTab('sn', document.querySelector('.tab-btn:nth-child(2)'))">aba ServiceNow</a>.
+            </div>
+            <div class="proj-expand-actions" style="margin-top:14px;">
+              <button class="btn btn-primary btn-sm" onclick="saveTab('projetos')">Salvar</button>
+              <button class="btn btn-outline btn-sm" onclick="toggleExpand('pe-1')">Cancelar</button>
+            </div>
+          </div>
+
+          <!-- Remove confirm -->
+          <div class="proj-confirm" id="pconf-pc-1">
+            <span class="proj-confirm-text">Remover Alpha Squad do dashboard?</span>
+            <button class="btn btn-red-outline btn-sm" onclick="confirmRemove('pc-1')">Remover</button>
+            <button class="btn btn-outline btn-sm" onclick="cancelRemove('pc-1')">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Project 2: Beta Platform -->
+        <div class="proj-card" data-proj-name="beta platform" id="pc-2">
+          <div class="proj-card-row">
+            <div class="proj-avatar av-green">B</div>
+            <div class="proj-info">
+              <div class="proj-name">Beta Platform</div>
+              <div class="proj-team">Beta Platform Team &nbsp;<span class="proj-org-badge">accenture-brasil</span></div>
+            </div>
+            <div class="proj-badges">
+              <span class="badge badge-type">User Story</span>
+              <span class="badge badge-sprint">Sprint 47</span>
+              <span class="badge badge-health-yellow">Atencao</span>
+            </div>
+            <div class="proj-actions">
+              <button class="proj-action-btn" title="Editar" onclick="toggleExpand('pe-2', this)">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                </svg>
+              </button>
+              <button class="proj-action-btn red" title="Remover" onclick="showRemoveConfirm('pc-2')">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="proj-expand" id="pe-2">
+            <div class="proj-expand-grid">
+              <div class="proj-expand-field">
+                <label class="field-label">Tipo de item de trabalho</label>
+                <div class="wit-toggle">
+                  <button class="wit-btn active" onclick="setWit(this)">User Story</button>
+                  <button class="wit-btn" onclick="setWit(this)">Task</button>
+                </div>
+              </div>
+              <div class="proj-expand-field">
+                <label class="field-label">Equipe (opcional)</label>
+                <input class="proj-expand-input" type="text" value="Beta Platform Team" placeholder="Nome do time">
+              </div>
+              <div class="proj-expand-field">
+                <label class="field-label">Vinculo ServiceNow — Grupo</label>
+                <input class="proj-expand-input" type="text" value="Plataforma Beta" placeholder="Nome do grupo">
+              </div>
+              <div class="proj-expand-field">
+                <label class="field-label">sys_id do Grupo</label>
+                <input class="proj-expand-input mono" type="text" value="b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5" placeholder="ID do grupo SN">
+              </div>
+            </div>
+            <div class="proj-expand-actions" style="margin-top:14px;">
+              <button class="btn btn-primary btn-sm" onclick="saveTab('projetos')">Salvar</button>
+              <button class="btn btn-outline btn-sm" onclick="toggleExpand('pe-2')">Cancelar</button>
+            </div>
+          </div>
+          <div class="proj-confirm" id="pconf-pc-2">
+            <span class="proj-confirm-text">Remover Beta Platform do dashboard?</span>
+            <button class="btn btn-red-outline btn-sm" onclick="confirmRemove('pc-2')">Remover</button>
+            <button class="btn btn-outline btn-sm" onclick="cancelRemove('pc-2')">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Project 3: Gamma Experience -->
+        <div class="proj-card" data-proj-name="gamma experience" id="pc-3">
+          <div class="proj-card-row">
+            <div class="proj-avatar av-purple">G</div>
+            <div class="proj-info">
+              <div class="proj-name">Gamma Experience</div>
+              <div class="proj-team">Gamma XP Team &nbsp;<span class="proj-org-badge">accenture-brasil</span></div>
+            </div>
+            <div class="proj-badges">
+              <span class="badge badge-type">Task</span>
+              <span class="badge badge-sprint">Sprint 47</span>
+              <span class="badge badge-health-green">Saudavel</span>
+            </div>
+            <div class="proj-actions">
+              <button class="proj-action-btn" title="Editar" onclick="toggleExpand('pe-3', this)">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                </svg>
+              </button>
+              <button class="proj-action-btn red" title="Remover" onclick="showRemoveConfirm('pc-3')">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="proj-expand" id="pe-3">
+            <div class="proj-expand-grid">
+              <div class="proj-expand-field">
+                <label class="field-label">Tipo de item de trabalho</label>
+                <div class="wit-toggle">
+                  <button class="wit-btn" onclick="setWit(this)">User Story</button>
+                  <button class="wit-btn active" onclick="setWit(this)">Task</button>
+                </div>
+              </div>
+              <div class="proj-expand-field">
+                <label class="field-label">Equipe (opcional)</label>
+                <input class="proj-expand-input" type="text" value="Gamma XP Team" placeholder="Nome do time">
+              </div>
+              <div class="proj-expand-field">
+                <label class="field-label">Vinculo ServiceNow — Grupo</label>
+                <input class="proj-expand-input" type="text" value="Gamma Support" placeholder="Nome do grupo">
+              </div>
+              <div class="proj-expand-field">
+                <label class="field-label">sys_id do Grupo</label>
+                <input class="proj-expand-input mono" type="text" value="c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6" placeholder="ID do grupo SN">
+              </div>
+            </div>
+            <div class="proj-expand-actions" style="margin-top:14px;">
+              <button class="btn btn-primary btn-sm" onclick="saveTab('projetos')">Salvar</button>
+              <button class="btn btn-outline btn-sm" onclick="toggleExpand('pe-3')">Cancelar</button>
+            </div>
+          </div>
+          <div class="proj-confirm" id="pconf-pc-3">
+            <span class="proj-confirm-text">Remover Gamma Experience do dashboard?</span>
+            <button class="btn btn-red-outline btn-sm" onclick="confirmRemove('pc-3')">Remover</button>
+            <button class="btn btn-outline btn-sm" onclick="cancelRemove('pc-3')">Cancelar</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Available projects section -->
+      <div class="avail-section">
+        <div class="avail-header">12 projetos encontrados em accenture-brasil — 3 ja configurados</div>
+        <div class="avail-list" id="avail-list">
+          <div class="avail-item">
+            <div class="proj-avatar av-yellow" style="width:28px;height:28px;font-size:11px;">D</div>
+            <span class="avail-name">Delta Core</span>
+            <button class="btn btn-outline btn-sm" onclick="addProject('Delta Core')">Adicionar</button>
+          </div>
+          <div class="avail-item">
+            <div class="proj-avatar av-red" style="width:28px;height:28px;font-size:11px;">E</div>
+            <span class="avail-name">Epsilon Services</span>
+            <button class="btn btn-outline btn-sm" onclick="addProject('Epsilon Services')">Adicionar</button>
+          </div>
+          <div class="avail-item">
+            <div class="proj-avatar av-gray" style="width:28px;height:28px;font-size:11px;">Z</div>
+            <span class="avail-name">Zeta Infrastructure</span>
+            <button class="btn btn-outline btn-sm" onclick="addProject('Zeta Infrastructure')">Adicionar</button>
+          </div>
+          <div class="avail-item">
+            <div class="proj-avatar av-blue" style="width:28px;height:28px;font-size:11px;">H</div>
+            <span class="avail-name">Horizon Platform</span>
+            <button class="btn btn-outline btn-sm" onclick="addProject('Horizon Platform')">Adicionar</button>
+          </div>
+        </div>
+        <a class="avail-more" onclick="showToast('Exibindo todos os 9 projetos...')">
+          Ver todos os 9 projetos
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </a>
+      </div>
+
+    </div>
+
+    <!-- ════════════════════════════════════════
+         TAB 4: COPILOT IA
+    ════════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-ai">
+      <div class="two-col">
+
+        <!-- LEFT: Form -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="section-head">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3-3-3z"/>
+            </svg>
+            Configuracao do Copilot IA
+          </div>
+
+          <div class="form-card">
+            <!-- Status card -->
+            <div class="status-card">
+              <div class="status-card-top">
+                <span class="status-dot"></span>
+                Copilot IA configurado
+              </div>
+              <div class="status-card-meta">
+                Azure OpenAI &nbsp;·&nbsp; gpt-4o &nbsp;·&nbsp; Latencia media: 312ms &nbsp;·&nbsp; Ultima verificacao: hoje 09:41
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="field">
+              <label class="field-label">Endpoint</label>
+              <div class="field-wrap">
+                <input class="field-input no-icon" type="text" id="ai-endpoint" value="https://meu-recurso.openai.azure.com/" oninput="markUnsaved('ai')">
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-label">Chave de API</label>
+              <div class="field-wrap">
+                <input class="field-input no-icon" type="password" id="ai-key" value="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" oninput="markUnsaved('ai')">
+                <button class="field-action" onclick="togglePat('ai-key', this)">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-label">Modelo / Deployment</label>
+              <div class="field-wrap">
+                <input class="field-input no-icon" type="text" id="ai-model" value="gpt-4o" oninput="markUnsaved('ai')">
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-label">Versao da API (opcional)</label>
+              <div class="field-wrap">
+                <input class="field-input no-icon" type="text" id="ai-version" value="2024-02-01" oninput="markUnsaved('ai')">
+              </div>
+            </div>
+
+            <button class="test-btn" id="ai-test-btn" onclick="testAi()">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+              Testar Conexao
+            </button>
+            <button class="btn btn-outline btn-full" onclick="saveTab('ai')">Salvar</button>
+          </div>
+
+          <!-- AI Settings toggles -->
+          <div class="section-head" style="margin-bottom:0;">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            Configuracoes do Copilot
+          </div>
+
+          <div class="form-card" style="gap:0;padding:0;">
+            <div class="ai-toggle-row" style="padding:14px 16px;">
+              <div class="ai-toggle-label">
+                <span class="ai-toggle-text">Carregar contexto automaticamente ao abrir o chat</span>
+                <span class="ai-toggle-sub">Inclui dados do projeto selecionado</span>
+              </div>
+              <button class="toggle-switch on" onclick="this.classList.toggle('on')" title="Alternar">
+                <div class="toggle-knob"></div>
+              </button>
+            </div>
+            <div class="ai-toggle-row" style="padding:14px 16px;">
+              <div class="ai-toggle-label">
+                <span class="ai-toggle-text">Incluir dados de saude do backlog no contexto</span>
+                <span class="ai-toggle-sub">Metricas de sprint, stories nao estimadas, etc.</span>
+              </div>
+              <button class="toggle-switch on" onclick="this.classList.toggle('on')" title="Alternar">
+                <div class="toggle-knob"></div>
+              </button>
+            </div>
+            <div class="ai-toggle-row" style="padding:14px 16px;">
+              <div class="ai-toggle-label">
+                <span class="ai-toggle-text">Incluir dados de capacidade do time</span>
+                <span class="ai-toggle-sub">Capacidade planejada vs. utilizada por sprint</span>
+              </div>
+              <button class="toggle-switch" onclick="this.classList.toggle('on')" title="Alternar">
+                <div class="toggle-knob"></div>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT: Help -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="help-card">
+            <div class="help-title">Provedores suportados</div>
+            <div class="provider-list">
+              <div class="provider-item">
+                <div class="provider-name">
+                  Azure OpenAI
+                  <span class="provider-rec">Recomendado</span>
+                </div>
+                <div class="provider-url">https://SEU-RECURSO.openai.azure.com/</div>
+              </div>
+              <div class="provider-item">
+                <div class="provider-name">OpenAI</div>
+                <div class="provider-url">https://api.openai.com/v1</div>
+              </div>
+              <div class="provider-item">
+                <div class="provider-name">Endpoint compativel com OpenAI API</div>
+                <div class="provider-url">Qualquer endpoint que implemente a API OpenAI</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+  </svg>
+  <span id="toast-msg">Configuracao salva</span>
+</div>
+
+<script>
+// ── THEME ──
+const html = document.documentElement;
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const isDark = html.dataset.theme === 'dark';
+  html.dataset.theme = isDark ? 'light' : 'dark';
+  const icon = document.getElementById('themeIcon');
+  icon.innerHTML = isDark
+    ? `<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>`
+    : `<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>`;
+});
+
+// ── TOAST ──
+let _toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── TAB SWITCHING ──
+const panels = { azure:'panel-azure', sn:'panel-sn', projetos:'panel-projetos', ai:'panel-ai' };
+function switchTab(key, btn) {
+  // deactivate all tabs and panels
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  // activate selected
+  if (btn) btn.classList.add('active');
+  const panel = document.getElementById(panels[key]);
+  if (panel) panel.classList.add('active');
+}
+
+// ── UNSAVED INDICATOR ──
+function markUnsaved(tab) {
+  const dot = document.getElementById('tab-unsaved-' + tab);
+  if (dot) dot.classList.add('show');
+}
+
+// ── ORG URL PREVIEW ──
+document.getElementById('az-org').addEventListener('input', function() {
+  document.getElementById('az-url-preview').textContent = 'dev.azure.com/' + (this.value || '...');
+  markUnsaved('azure');
+});
+
+// ── PAT TOGGLE ──
+const eyeShow = `<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>`;
+const eyeHide = `<path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>`;
+
+function togglePat(inputId, btnEl) {
+  const input = document.getElementById(inputId);
+  const svg = btnEl.querySelector('svg');
+  const isPass = input.type === 'password';
+  input.type = isPass ? 'text' : 'password';
+  if (svg) svg.innerHTML = isPass ? eyeHide : eyeShow;
+}
+
+// ── TEST CONNECTIONS ──
+function runTest(btnId, onSuccess) {
+  const btn = document.getElementById(btnId);
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.innerHTML = `<div class="spinner"></div> Testando...`;
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.classList.add('success');
+    btn.innerHTML = `
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      Conexao bem-sucedida`;
+    if (onSuccess) onSuccess();
+  }, 1500);
+}
+
+function testAzure() {
+  runTest('az-test-btn', () => {
+    // Update tab status to green
+    const s = document.getElementById('tab-status-azure');
+    s.className = 'tab-status green';
+    s.innerHTML = '<span class="tab-dot"></span> Conectado';
+  });
+}
+
+function testSn() {
+  runTest('sn-test-btn', () => {
+    // Show groups found
+    document.getElementById('sn-groups-found').style.display = 'block';
+    // Hide warning banner
+    const warn = document.getElementById('sn-warn');
+    if (warn) warn.style.display = 'none';
+    // Update tab status
+    const s = document.getElementById('tab-status-sn');
+    s.className = 'tab-status green';
+    s.innerHTML = '<span class="tab-dot"></span> Conectado';
+  });
+}
+
+function testAi() {
+  runTest('ai-test-btn');
+}
+
+// ── SAVE TAB ──
+function saveTab(tab) {
+  const dot = document.getElementById('tab-unsaved-' + tab);
+  if (dot) dot.classList.remove('show');
+  showToast('Configuracao salva');
+}
+
+// ── DISCONNECT CONFIRM ──
+function showDisconnectConfirm() {
+  document.getElementById('disconnect-btn').style.display = 'none';
+  document.getElementById('disconnect-confirm').classList.add('show');
+}
+function cancelDisconnect() {
+  document.getElementById('disconnect-btn').style.display = '';
+  document.getElementById('disconnect-confirm').classList.remove('show');
+}
+function confirmDisconnect() {
+  cancelDisconnect();
+  showToast('Azure DevOps desconectado');
+  // Update tab status
+  const s = document.getElementById('tab-status-azure');
+  s.className = 'tab-status yellow';
+  s.innerHTML = `<svg width="9" height="9" fill="currentColor" viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg> Desconectado`;
+}
+
+// ── SCROLL TO SN FORM ──
+function scrollToSnForm() {
+  const form = document.getElementById('sn-form');
+  if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── EXPAND / COLLAPSE PROJECT EDIT ──
+function toggleExpand(panelId, triggerBtn) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  const isOpen = panel.classList.contains('open');
+  // Close all other expand panels in the same list
+  document.querySelectorAll('.proj-expand.open').forEach(p => {
+    if (p.id !== panelId) p.classList.remove('open');
+  });
+  panel.classList.toggle('open', !isOpen);
+}
+
+// ── REMOVE CONFIRM ──
+function showRemoveConfirm(cardId) {
+  const conf = document.getElementById('pconf-' + cardId);
+  if (conf) conf.classList.add('show');
+}
+function cancelRemove(cardId) {
+  const conf = document.getElementById('pconf-' + cardId);
+  if (conf) conf.classList.remove('show');
+}
+function confirmRemove(cardId) {
+  const card = document.getElementById(cardId);
+  const name = card ? card.querySelector('.proj-name').textContent : 'Projeto';
+  if (card) card.remove();
+  showToast(name + ' removido');
+  updateProjCount();
+}
+
+function updateProjCount() {
+  const n = document.querySelectorAll('#proj-list .proj-card').length;
+  const badge = document.getElementById('proj-count-badge');
+  if (badge) badge.textContent = n + ' projeto' + (n !== 1 ? 's' : '') + ' ativo' + (n !== 1 ? 's' : '');
+  const tabStatus = document.getElementById('tab-status-projetos');
+  if (tabStatus) tabStatus.textContent = n;
+}
+
+// ── ADD AVAILABLE PROJECT ──
+function addProject(name) {
+  showToast(name + ' adicionado');
+  updateProjCount();
+}
+
+// ── WIT TOGGLE ──
+function setWit(btn) {
+  const toggle = btn.closest('.wit-toggle');
+  toggle.querySelectorAll('.wit-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  markUnsaved('projetos');
+}
+
+// ── FILTER PROJECTS ──
+function filterProjects(q) {
+  const query = q.toLowerCase().trim();
+  let visible = 0;
+  document.querySelectorAll('#proj-list .proj-card').forEach(card => {
+    const name = (card.dataset.projName || '').toLowerCase();
+    const match = !query || name.includes(query);
+    card.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+}
+</script>
+</body>
+</html>

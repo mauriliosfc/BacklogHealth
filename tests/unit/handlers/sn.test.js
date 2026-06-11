@@ -1,7 +1,7 @@
 jest.mock('../../../config');
 jest.mock('../../../servicenowClient');
 
-const { getSnCfg, saveSnCfg, testSn } = require('../../../handlers/sn');
+const { getSnCfg, saveSnCfg, testSn, fetchGroups } = require('../../../handlers/sn');
 const { getSnConfig, saveSnConfig, getProjectSnGroup } = require('../../../config');
 const { snGet } = require('../../../servicenowClient');
 
@@ -156,6 +156,70 @@ describe('testSn', () => {
     expect(snGet).toHaveBeenCalledWith(
       expect.objectContaining({ instance: 'company.service-now.com' }),
       expect.any(String)
+    );
+  });
+});
+
+// ── fetchGroups ───────────────────────────────────────────────────────────────
+
+describe('fetchGroups', () => {
+  test('throws 400 quando credenciais ausentes', async () => {
+    await expect(fetchGroups({ instance: '', user: 'u', pass: 'p' }))
+      .rejects.toMatchObject({ status: 400 });
+    await expect(fetchGroups({ instance: 'x', user: '', pass: 'p' }))
+      .rejects.toMatchObject({ status: 400 });
+    await expect(fetchGroups({ instance: 'x', user: 'u', pass: '' }))
+      .rejects.toMatchObject({ status: 400 });
+  });
+
+  test('retorna lista de nomes únicos ordenados', async () => {
+    snGet.mockResolvedValue({ result: [
+      { assignment_group: 'Network Ops' },
+      { assignment_group: 'Database' },
+      { assignment_group: 'Network Ops' }, // duplicata
+      { assignment_group: 'Application' },
+    ]});
+    const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
+    expect(groups).toEqual(['Application', 'Database', 'Network Ops']);
+  });
+
+  test('suporta campos com formato {value, display_value}', async () => {
+    snGet.mockResolvedValue({ result: [
+      { assignment_group: { value: 'grp_id', display_value: 'My Group' } },
+    ]});
+    const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
+    expect(groups).toEqual(['My Group']);
+  });
+
+  test('ignora linhas sem assignment_group', async () => {
+    snGet.mockResolvedValue({ result: [
+      { assignment_group: 'Ops' },
+      { assignment_group: null },
+      { assignment_group: '' },
+    ]});
+    const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
+    expect(groups).toEqual(['Ops']);
+  });
+
+  test('retorna { error, groups: [] } quando API falha (não lança exceção)', async () => {
+    snGet.mockRejectedValue(new Error('timeout'));
+    const result = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
+    expect(result.error).toBe('timeout');
+    expect(result.groups).toEqual([]);
+  });
+
+  test('retorna lista vazia quando API retorna resultado vazio', async () => {
+    snGet.mockResolvedValue({ result: [] });
+    const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
+    expect(groups).toEqual([]);
+  });
+
+  test('salva assignmentGroups via saveSnCfg', () => {
+    // Verifica que saveSnCfg repassa assignmentGroups para saveSnConfig
+    saveSnCfg({ instance: 'x', user: 'u', pass: 'p', assignmentGroups: ['Ops', 'DB'] });
+    expect(saveSnConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ assignmentGroups: ['Ops', 'DB'] }),
+      null
     );
   });
 });

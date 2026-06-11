@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backlog Health — Protótipo Dashboard v3</title>
+<style>
+:root {
+  --bg-page:#020617;--bg-card:#0f172a;--bg-border:#1e293b;--bg-el:#1e293b;--bg-el2:#334155;
+  --text-1:#f1f5f9;--text-2:#cbd5e1;--text-muted:#94a3b8;--text-faint:#64748b;
+  --c-blue:#60a5fa;--c-blue-bg:#1e3a5f;--c-blue-bd:#2d5a8e;
+  --c-green:#22c55e;--c-green-bg:#14532d;--c-green-bd:#166534;
+  --c-yellow:#f59e0b;--c-yellow-bg:#422006;
+  --c-red:#ef4444;--c-red-bg:#450a0a;
+  --c-purple:#a78bfa;--c-purple-bg:#2e1065;
+  --hover-bg:rgba(255,255,255,.04);--shadow:0 4px 24px rgba(0,0,0,.45);--modal-bg:rgba(0,0,0,.75);
+  --sb-w:224px;--r-sm:6px;--r-md:10px;--r-lg:14px;--r-xl:18px;--t:.18s ease;
+}
+[data-theme="light"]{
+  --bg-page:#f0f4f8;--bg-card:#fff;--bg-border:#e2e8f0;--bg-el:#f8fafc;--bg-el2:#e2e8f0;
+  --text-1:#0f172a;--text-2:#1e293b;--text-muted:#475569;--text-faint:#94a3b8;
+  --c-blue:#2563eb;--c-blue-bg:#dbeafe;--c-blue-bd:#93c5fd;
+  --c-green:#16a34a;--c-green-bg:#dcfce7;--c-green-bd:#86efac;
+  --c-yellow:#d97706;--c-yellow-bg:#fef3c7;
+  --c-red:#dc2626;--c-red-bg:#fee2e2;
+  --c-purple:#7c3aed;--c-purple-bg:#f5f3ff;
+  --hover-bg:rgba(0,0,0,.04);--shadow:0 4px 24px rgba(0,0,0,.1);--modal-bg:rgba(0,0,0,.5);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg-page);color:var(--text-1);font-size:14px;line-height:1.5;overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+a{color:var(--c-blue);text-decoration:none}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--bg-el2);border-radius:99px}
+.app{display:flex;height:100vh;width:100vw;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sb-w);flex-shrink:0;background:var(--bg-card);border-right:1px solid var(--bg-border);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.sb-logo{display:flex;align-items:center;gap:10px;padding:15px 14px;border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.sb-logo-icon{width:32px;height:32px;border-radius:var(--r-md);flex-shrink:0;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff}
+.sb-logo-name{font-size:13px;font-weight:700;color:var(--text-1)}
+.sb-logo-sub{font-size:10px;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase}
+.sb-nav{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:1px}
+.nav-sep{font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;padding:10px 8px 4px;margin-top:4px}
+.ni{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:var(--r-md);color:var(--text-muted);font-size:13px;font-weight:500;cursor:pointer;transition:all var(--t);border:1px solid transparent}
+.ni:hover{background:var(--hover-bg);color:var(--text-1)}
+.ni.active{background:var(--c-blue-bg);border-color:var(--c-blue-bd);color:var(--c-blue)}
+.ni svg{flex-shrink:0;opacity:.75}
+.ni.active svg{opacity:1}
+.nav-badge{margin-left:auto;background:var(--c-red);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;line-height:1.6}
+.nav-count{margin-left:auto;font-size:11px;color:var(--text-faint);background:var(--bg-el);padding:1px 7px;border-radius:99px}
+.sb-foot{padding:8px;border-top:1px solid var(--bg-border);display:flex;flex-direction:column;gap:1px;flex-shrink:0}
+
+/* ── MAIN + TOPBAR ── */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:10px;padding:0 18px;height:54px;background:var(--bg-card);border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.tb-left{display:flex;flex-direction:column;gap:1px;min-width:0}
+.tb-title{font-size:15px;font-weight:700;color:var(--text-1);line-height:1}
+.tb-sub{font-size:11px;color:var(--text-muted)}
+.tb-sep{flex:1}
+.status-pill{display:flex;align-items:center;gap:6px;padding:4px 11px;border-radius:99px;font-size:11px;font-weight:600;border:1px solid;white-space:nowrap;flex-shrink:0}
+.status-pill.ok{background:var(--c-green-bg);border-color:var(--c-green-bd);color:var(--c-green)}
+.status-pill.warn{background:var(--c-yellow-bg);border-color:#78350f;color:var(--c-yellow)}
+.status-pill.crit{background:var(--c-red-bg);border-color:#7f1d1d;color:var(--c-red)}
+.s-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.lang-sw{display:flex;align-items:center;gap:2px;background:var(--bg-el);border:1px solid var(--bg-border);border-radius:var(--r-md);padding:2px;flex-shrink:0}
+.lang-btn{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;color:var(--text-faint);cursor:pointer;transition:all var(--t)}
+.lang-btn:hover{color:var(--text-1)}
+.lang-btn.active{background:var(--bg-card);color:var(--text-1);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.view-toggle{display:flex;align-items:center;gap:2px;background:var(--bg-el);border:1px solid var(--bg-border);border-radius:var(--r-md);padding:2px;flex-shrink:0}
+.view-btn{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);cursor:pointer;transition:all var(--t)}
+.view-btn:hover{color:var(--text-1)}
+.view-btn.active{background:var(--bg-card);color:var(--text-1)}
+.refresh-grp{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.timer-badge{font-size:12px;font-weight:700;color:var(--text-faint);background:var(--bg-el);border:1px solid var(--bg-border);border-radius:var(--r-md);padding:4px 10px;font-variant-numeric:tabular-nums;min-width:52px;text-align:center}
+.icon-btn{width:34px;height:34px;border-radius:var(--r-md);background:var(--bg-el);border:1px solid var(--bg-border);color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--t);flex-shrink:0}
+.icon-btn:hover{color:var(--text-1);border-color:var(--bg-el2)}
+
+/* ── CONTENT ── */
+.content{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:16px}
+
+/* ── Summary bar ── */
+.sum-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.sum-stat{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-lg);padding:14px 16px;display:flex;flex-direction:column;gap:5px;transition:border-color var(--t)}
+.sum-stat:hover{border-color:var(--bg-el2)}
+.sum-lbl{font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;display:flex;align-items:center;gap:5px}
+.sum-val{font-size:26px;font-weight:800;color:var(--text-1);line-height:1}
+.sum-sub{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px}
+.t-up{color:var(--c-green)}.t-dn{color:var(--c-red)}
+
+/* ── Filter row ── */
+.filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.filter-lbl{font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-right:2px;flex-shrink:0}
+.fchip{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid var(--bg-border);color:var(--text-muted);background:var(--bg-card);cursor:pointer;transition:all var(--t)}
+.fchip:hover{border-color:var(--bg-el2);color:var(--text-1)}
+.fchip.active{background:var(--c-blue-bg);border-color:var(--c-blue-bd);color:var(--c-blue)}
+.fchip-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* ── Cards ── */
+.cards-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.cards-list{display:flex;flex-direction:column;gap:10px}
+
+.proj-card{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-xl);display:flex;flex-direction:column;overflow:hidden;transition:border-color var(--t),box-shadow var(--t);position:relative}
+.proj-card:hover{border-color:var(--bg-el2);box-shadow:var(--shadow)}
+.proj-card:hover .drag-h{opacity:1}
+
+.drag-h{position:absolute;top:50%;left:4px;transform:translateY(-50%);opacity:0;transition:opacity var(--t);cursor:grab;color:var(--text-faint);padding:4px;z-index:2}
+.drag-h:active{cursor:grabbing}
+
+.hbar{height:3px;width:100%;flex-shrink:0}
+.hbar.g{background:var(--c-green)}.hbar.y{background:var(--c-yellow)}.hbar.r{background:var(--c-red)}
+
+.card-head{display:flex;align-items:flex-start;gap:11px;padding:13px 15px 10px 22px}
+.card-av{width:36px;height:36px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;letter-spacing:-.5px}
+.card-meta{flex:1;min-width:0}
+.card-name{font-size:14px;font-weight:700;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-sprint-row{display:flex;align-items:center;gap:6px;margin-top:3px;position:relative}
+.sprint-dot{width:5px;height:5px;border-radius:50%;background:var(--c-blue);flex-shrink:0}
+.sprint-filter-btn{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);cursor:pointer;transition:color var(--t);background:none;border:none;font-family:inherit;padding:0;line-height:1}
+.sprint-filter-btn:hover{color:var(--c-blue)}
+.sprint-filter-btn svg{flex-shrink:0;opacity:.7}
+.sprint-type{font-size:11px;color:var(--text-faint)}
+
+.h-pill{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;flex-shrink:0;border:1px solid}
+.h-pill.g{background:var(--c-green-bg);border-color:var(--c-green-bd);color:var(--c-green)}
+.h-pill.y{background:var(--c-yellow-bg);border-color:#78350f;color:var(--c-yellow)}
+.h-pill.r{background:var(--c-red-bg);border-color:#7f1d1d;color:var(--c-red)}
+.h-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+.card-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--bg-border);border-top:1px solid var(--bg-border)}
+.cstat{background:var(--bg-card);padding:9px 11px;display:flex;flex-direction:column;gap:2px;cursor:pointer;transition:background var(--t)}
+.cstat:hover{background:var(--hover-bg)}
+.cstat-lbl{font-size:9px;font-weight:700;color:var(--text-faint);letter-spacing:.7px;text-transform:uppercase}
+.cstat-val{font-size:18px;font-weight:800;line-height:1;color:var(--text-1)}
+.cstat-val.w{color:var(--c-yellow)}.cstat-val.c{color:var(--c-red)}.cstat-val.g{color:var(--c-green)}
+.cstat-sub{font-size:10px;color:var(--text-faint);line-height:1.2}
+
+.card-prog{padding:7px 15px 6px;border-top:1px solid var(--bg-border)}
+.prog-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.prog-lbl{font-size:10px;color:var(--text-faint)}
+.prog-pct{font-size:10px;font-weight:700;color:var(--text-muted)}
+.prog-track{height:4px;background:var(--bg-el2);border-radius:99px;overflow:hidden}
+.prog-fill{height:100%;border-radius:99px;background:var(--c-blue)}
+.prog-fill.g{background:var(--c-green)}.prog-fill.y{background:var(--c-yellow)}.prog-fill.r{background:var(--c-red)}
+
+.card-issues{padding:7px 15px;display:flex;flex-wrap:wrap;gap:5px;border-top:1px solid var(--bg-border)}
+.itag{display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;border:1px solid;cursor:pointer;transition:opacity var(--t)}
+.itag:hover{opacity:.8}
+.itag.w{background:var(--c-yellow-bg);border-color:#78350f;color:var(--c-yellow)}
+.itag.c{background:var(--c-red-bg);border-color:#7f1d1d;color:var(--c-red)}
+.itag.i{background:var(--c-blue-bg);border-color:var(--c-blue-bd);color:var(--c-blue)}
+
+.card-foot{display:flex;align-items:center;gap:4px;padding:7px 11px;border-top:1px solid var(--bg-border)}
+.ca{display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:var(--r-sm);font-size:12px;font-weight:600;color:var(--text-muted);border:1px solid transparent;transition:all var(--t);white-space:nowrap}
+.ca:hover{background:var(--hover-bg);color:var(--text-1);border-color:var(--bg-border)}
+.ca.p{color:var(--c-blue)}.ca.p:hover{background:var(--c-blue-bg);border-color:var(--c-blue-bd)}
+.ca.d:hover{background:var(--c-red-bg);color:var(--c-red);border-color:#7f1d1d}
+.foot-sep{flex:1}
+
+.sparkline{display:flex;align-items:flex-end;gap:2px;height:22px;flex-shrink:0}
+.sp-bar{width:4px;border-radius:2px;background:var(--c-blue);opacity:.5;transition:opacity var(--t)}
+.sp-bar:last-child{opacity:1}
+.sp-bar.r{background:var(--c-red)}
+
+/* More menu */
+.more-wrap{position:relative}
+.more-panel{position:absolute;bottom:calc(100% + 4px);right:0;background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-lg);padding:4px;box-shadow:var(--shadow);min-width:165px;z-index:200;opacity:0;pointer-events:none;transform:translateY(4px);transition:all .15s}
+.more-panel.open{opacity:1;pointer-events:all;transform:none}
+.more-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-md);font-size:13px;color:var(--text-muted);cursor:pointer;transition:all var(--t)}
+.more-item:hover{background:var(--hover-bg);color:var(--text-1)}
+.more-item.d:hover{background:var(--c-red-bg);color:var(--c-red)}
+.more-divider{height:1px;background:var(--bg-border);margin:4px 0}
+
+/* Sprint dropdown */
+.sprint-dd{position:absolute;top:calc(100% + 4px);left:0;z-index:300;background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-lg);padding:6px;min-width:210px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transform:translateY(-4px);transition:all .15s}
+.sprint-dd.open{opacity:1;pointer-events:all;transform:none}
+.sprint-dd-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:var(--r-md);font-size:13px;color:var(--text-muted);cursor:pointer;transition:all var(--t)}
+.sprint-dd-item:hover{background:var(--hover-bg);color:var(--text-1)}
+.sprint-dd-item input{accent-color:var(--c-blue);width:14px;height:14px;flex-shrink:0}
+.sprint-dd-foot{padding:6px 8px 2px;border-top:1px solid var(--bg-border);margin-top:4px;display:flex;gap:6px;justify-content:flex-end}
+
+/* Add card */
+.add-card{background:var(--bg-card);border:2px dashed var(--bg-border);border-radius:var(--r-xl);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:28px;cursor:pointer;transition:all var(--t);min-height:180px}
+.add-card:hover{border-color:var(--c-blue-bd);background:var(--c-blue-bg)}
+.add-icon{width:40px;height:40px;border-radius:50%;background:var(--bg-el);display:flex;align-items:center;justify-content:center;transition:background var(--t)}
+.add-card:hover .add-icon{background:var(--c-blue-bg);color:var(--c-blue)}
+.add-lbl{font-size:14px;font-weight:700;color:var(--text-muted)}
+.add-card:hover .add-lbl{color:var(--c-blue)}
+.add-sub{font-size:12px;color:var(--text-faint);text-align:center;max-width:200px;line-height:1.5}
+
+/* ── MODAIS ── */
+.modal-overlay{position:fixed;inset:0;background:var(--modal-bg);display:flex;align-items:center;justify-content:center;z-index:500;padding:24px;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal-box{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-xl);width:100%;max-width:700px;max-height:88vh;display:flex;flex-direction:column;box-shadow:var(--shadow);transform:translateY(8px) scale(.98);transition:transform .2s}
+.modal-overlay.open .modal-box{transform:none}
+.modal-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.modal-icon{width:34px;height:34px;border-radius:var(--r-md);flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--c-blue-bg);color:var(--c-blue);border:1px solid var(--c-blue-bd)}
+.modal-tg{flex:1;min-width:0}
+.modal-title{font-size:15px;font-weight:700;color:var(--text-1)}
+.modal-sub{font-size:12px;color:var(--text-muted);margin-top:1px}
+.modal-acts{display:flex;align-items:center;gap:3px}
+.mbtn{width:30px;height:30px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:all var(--t)}
+.mbtn:hover{background:var(--hover-bg);color:var(--text-1)}
+.mbtn.close:hover{background:var(--c-red-bg);color:var(--c-red)}
+.modal-tabs{display:flex;gap:2px;padding:0 18px;border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.mtab{padding:9px 13px;font-size:13px;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;transition:all var(--t)}
+.mtab:hover{color:var(--text-1)}
+.mtab.active{color:var(--c-blue);border-bottom-color:var(--c-blue)}
+.modal-body{flex:1;overflow-y:auto;padding:18px}
+.modal-foot{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--bg-border);flex-shrink:0}
+.mf-sep{flex:1}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 15px;border-radius:var(--r-md);font-size:13px;font-weight:600;cursor:pointer;border:1px solid;transition:all var(--t);font-family:inherit}
+.btn-primary{background:var(--c-blue);border-color:var(--c-blue);color:#fff}
+.btn-primary:hover{opacity:.88}
+.btn-secondary{background:var(--bg-el);border-color:var(--bg-border);color:var(--text-1)}
+.btn-secondary:hover{border-color:var(--bg-el2)}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--text-muted)}
+.btn-ghost:hover{background:var(--hover-bg);color:var(--text-1)}
+.btn-danger{background:var(--c-red-bg);border-color:#7f1d1d;color:var(--c-red)}
+.btn-sm{padding:5px 11px;font-size:12px}
+
+/* Detail */
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:16px}
+.dblock{background:var(--bg-el);border:1px solid var(--bg-border);border-radius:var(--r-lg);padding:13px 15px}
+.dblock-lbl{font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-bottom:7px}
+.dblock-val{font-size:24px;font-weight:800;color:var(--text-1);line-height:1;margin-bottom:3px}
+.dblock-sub{font-size:11px;color:var(--text-muted)}
+.pbar-wrap{height:5px;background:var(--bg-el2);border-radius:99px;overflow:hidden;margin-top:7px}
+.pbar{height:100%;border-radius:99px}
+.pbar.g{background:var(--c-green)}.pbar.y{background:var(--c-yellow)}.pbar.r{background:var(--c-red)}.pbar.b{background:var(--c-blue)}
+
+.issues-sep{font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.issues-sep::after{content:'';flex:1;height:1px;background:var(--bg-border)}
+.issue-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r-md);background:var(--bg-el);border:1px solid var(--bg-border);margin-bottom:6px;cursor:pointer;transition:all var(--t)}
+.issue-row:hover{border-color:var(--bg-el2)}
+.iicon{width:28px;height:28px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.iicon.w{background:var(--c-yellow-bg);color:var(--c-yellow)}.iicon.c{background:var(--c-red-bg);color:var(--c-red)}.iicon.i{background:var(--c-blue-bg);color:var(--c-blue)}
+.itext{flex:1;min-width:0}
+.itext-main{font-size:13px;font-weight:600;color:var(--text-1)}
+.itext-sub{font-size:11px;color:var(--text-muted)}
+.icount{font-size:13px;font-weight:700;color:var(--text-faint)}
+
+/* Items table */
+.items-tw{overflow:auto;border:1px solid var(--bg-border);border-radius:var(--r-lg)}
+table.it{width:100%;border-collapse:collapse}
+table.it th{padding:9px 13px;font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.7px;text-transform:uppercase;background:var(--bg-el);border-bottom:1px solid var(--bg-border);text-align:left;white-space:nowrap;position:sticky;top:0}
+table.it td{padding:9px 13px;font-size:13px;color:var(--text-2);border-bottom:1px solid var(--bg-border);vertical-align:middle}
+table.it tr:last-child td{border-bottom:none}
+table.it tr:hover td{background:var(--hover-bg)}
+.sbadge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;white-space:nowrap}
+.sbadge.a{background:var(--c-blue-bg);color:var(--c-blue)}
+.sbadge.r{background:var(--c-green-bg);color:var(--c-green)}
+.sbadge.b{background:var(--c-red-bg);color:var(--c-red)}
+.sbadge.v{background:var(--c-purple-bg);color:var(--c-purple)}
+.sbadge.n{background:var(--bg-el);color:var(--text-muted)}
+
+/* Confirm */
+.confirm-body{padding:24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
+.confirm-icon{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.confirm-icon.d{background:var(--c-red-bg);color:var(--c-red)}
+.confirm-title{font-size:16px;font-weight:700;color:var(--text-1)}
+.confirm-msg{font-size:13px;color:var(--text-muted);line-height:1.6;max-width:300px}
+
+/* Daily */
+.daily-nav{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.daily-ttl{flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text-1)}
+.dblock-d{background:var(--bg-el);border:1px solid var(--bg-border);border-radius:var(--r-lg);padding:13px 15px;margin-bottom:10px}
+.dblock-d-lbl{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.dblock-d-item{font-size:13px;color:var(--text-2);padding:3px 0;line-height:1.5}
+
+/* Toasts */
+.toast-stack{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:9000}
+.toast{display:flex;align-items:flex-start;gap:10px;padding:12px 15px;border-radius:var(--r-lg);border:1px solid;font-size:13px;box-shadow:var(--shadow);max-width:320px;transform:translateX(120%);transition:transform .3s ease;background:var(--bg-card)}
+.toast.show{transform:none}
+.toast.success{border-color:var(--c-green-bd)}.toast.error{border-color:#7f1d1d}.toast.info{border-color:var(--c-blue-bd)}
+.toast-ico{flex-shrink:0;margin-top:1px}
+.toast.success .toast-ico{color:var(--c-green)}.toast.error .toast-ico{color:var(--c-red)}.toast.info .toast-ico{color:var(--c-blue)}
+.toast-t{font-weight:700;color:var(--text-1);margin-bottom:1px;font-size:13px}
+.toast-m{color:var(--text-muted);font-size:12px}
+
+/* Copilot FAB */
+.copilot-fab{position:fixed;bottom:20px;right:20px;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 20px rgba(37,99,235,.4);cursor:pointer;transition:transform var(--t),box-shadow var(--t);z-index:400}
+.copilot-fab:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(37,99,235,.55)}
+
+/* SVG icon helpers */
+svg{display:inline-block;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ═══════ SIDEBAR ═══════ -->
+<aside class="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-icon">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+      </svg>
+    </div>
+    <div><div class="sb-logo-name">Backlog Health</div><div class="sb-logo-sub">Azure DevOps</div></div>
+  </div>
+
+  <nav class="sb-nav">
+    <div class="nav-sep">Visão Geral</div>
+
+    <div class="ni active">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+      <span class="nav-count">4</span>
+    </div>
+
+    <div class="ni" onclick="showModal('daily')">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      Daily Standup
+    </div>
+
+    <div class="ni" onclick="showToast('info','Plano de Entrega','Abrindo timeline de sprints...')">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Plano de Entrega
+    </div>
+
+    <div class="ni" onclick="showToast('info','Capacidade','Abrindo capacidade do time...')">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      Capacidade do Time
+    </div>
+
+    <div class="ni" onclick="showToast('info','Review Mensal','Abrindo review...')">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      Review Mensal
+    </div>
+
+    <div class="nav-sep">Projetos</div>
+
+    <div class="ni">
+      <div style="width:15px;height:15px;border-radius:4px;background:#450a0a;border:1px solid #7f1d1d;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#ef4444;line-height:1">AL</div>
+      Alpha Squad
+      <span class="nav-badge">2</span>
+    </div>
+
+    <div class="ni">
+      <div style="width:15px;height:15px;border-radius:4px;background:#422006;border:1px solid #78350f;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#f59e0b;line-height:1">BP</div>
+      Beta Platform
+    </div>
+
+    <div class="ni">
+      <div style="width:15px;height:15px;border-radius:4px;background:#14532d;border:1px solid #166534;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#22c55e;line-height:1">GX</div>
+      Gamma Experience
+    </div>
+
+    <div class="nav-sep">Ferramentas</div>
+
+    <div class="ni" onclick="showToast('info','Copilot IA','Abrindo assistente de IA...')">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+      Copilot IA
+    </div>
+  </nav>
+
+  <div class="sb-foot">
+    <div class="ni" onclick="showToast('info','Feedback','Obrigado pelo feedback!')">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      Feedback
+    </div>
+    <div class="ni" onclick="showToast('info','Configurações','Abrindo página de configuração...')">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Configurações
+    </div>
+  </div>
+</aside>
+
+<!-- ═══════ MAIN ═══════ -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="tb-left">
+      <div class="tb-title">Dashboard</div>
+      <div class="tb-sub">Sprint 47 · 4 projetos monitorados</div>
+    </div>
+
+    <div class="status-pill warn"><div class="s-dot"></div>2 projetos com atenção</div>
+
+    <div class="tb-sep"></div>
+
+    <!-- Timer -->
+    <div class="refresh-grp" title="Próxima atualização automática">
+      <div class="timer-badge" id="timer">04:32</div>
+      <button class="icon-btn" onclick="showToast('info','Atualizado','Dados atualizados com sucesso')" title="Atualizar agora">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+      </button>
+    </div>
+
+    <!-- Toggle grade/lista -->
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-grid" onclick="setView('grid')" title="Grade">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </button>
+      <button class="view-btn" id="btn-list" onclick="setView('list')" title="Lista">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      </button>
+    </div>
+
+    <!-- Idioma -->
+    <div class="lang-sw">
+      <button class="lang-btn active" onclick="setLang(this)">PT</button>
+      <button class="lang-btn" onclick="setLang(this)">EN</button>
+      <button class="lang-btn" onclick="setLang(this)">ES</button>
+    </div>
+
+    <!-- Tema -->
+    <button class="icon-btn" onclick="toggleTheme()" title="Alternar tema">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="theme-icon">
+        <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- Summary bar -->
+    <div class="sum-bar">
+      <div class="sum-stat">
+        <div class="sum-lbl"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>Projetos</div>
+        <div class="sum-val">4</div>
+        <div class="sum-sub">monitorados ativamente</div>
+      </div>
+      <div class="sum-stat">
+        <div class="sum-lbl"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Sprint Atual</div>
+        <div class="sum-val">Sprint 47</div>
+        <div class="sum-sub"><span class="t-dn">↓</span>&nbsp;8 dias restantes</div>
+      </div>
+      <div class="sum-stat">
+        <div class="sum-lbl"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>Velocity Médio</div>
+        <div class="sum-val">42 <span style="font-size:13px;font-weight:500;color:var(--text-faint)">pts</span></div>
+        <div class="sum-sub"><span class="t-up">↑</span>&nbsp;+5 vs sprint anterior</div>
+      </div>
+      <div class="sum-stat">
+        <div class="sum-lbl"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>Itens c/ Problema</div>
+        <div class="sum-val" style="color:var(--c-red)">16</div>
+        <div class="sum-sub"><span class="t-dn">↑</span>&nbsp;9 críticos, 7 atenção</div>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-row">
+      <span class="filter-lbl">Saúde</span>
+      <button class="fchip active" onclick="toggleChip(this,'.filter-row')"><span class="fchip-dot" style="background:var(--c-blue)"></span>Todos</button>
+      <button class="fchip" onclick="toggleChip(this,'.filter-row')"><span class="fchip-dot" style="background:var(--c-red)"></span>Críticos</button>
+      <button class="fchip" onclick="toggleChip(this,'.filter-row')"><span class="fchip-dot" style="background:var(--c-yellow)"></span>Atenção</button>
+      <button class="fchip" onclick="toggleChip(this,'.filter-row')"><span class="fchip-dot" style="background:var(--c-green)"></span>Saudáveis</button>
+    </div>
+
+    <!-- ══ CARDS ══ -->
+    <div class="cards-grid" id="cards-container">
+
+      <!-- CARD 1 — Crítico -->
+      <div class="proj-card">
+        <div class="drag-h" title="Arrastar para reordenar">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01"/></svg>
+        </div>
+        <div class="hbar r"></div>
+        <div class="card-head">
+          <div class="card-av" style="background:#450a0a;color:#ef4444">AL</div>
+          <div class="card-meta">
+            <div class="card-name">Alpha Squad</div>
+            <div class="card-sprint-row">
+              <div class="sprint-dot" style="background:var(--c-red)"></div>
+              <div style="position:relative">
+                <button class="sprint-filter-btn" onclick="toggleSprintDD('dd-al')">
+                  Sprint 47 (atual)
+                  <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="sprint-dd" id="dd-al">
+                  <div class="sprint-dd-item"><input type="checkbox" checked> Sprint 47 (atual)</div>
+                  <div class="sprint-dd-item"><input type="checkbox"> Sprint 46</div>
+                  <div class="sprint-dd-item"><input type="checkbox"> Sprint 45</div>
+                  <div class="sprint-dd-foot">
+                    <button class="btn btn-sm btn-ghost" onclick="closeAllDDs()">Fechar</button>
+                    <button class="btn btn-sm btn-primary" onclick="closeAllDDs();showToast('info','Filtro','Filtro de sprint aplicado')">Aplicar</button>
+                  </div>
+                </div>
+              </div>
+              <span class="sprint-type">· User Story</span>
+            </div>
+          </div>
+          <div class="h-pill r"><div class="h-dot"></div>Crítico</div>
+        </div>
+
+        <!-- Stats: Total | Story Pts | Sem Estim. | Sem Resp. -->
+        <div class="card-stats">
+          <div class="cstat" onclick="showModal('items')">
+            <div class="cstat-lbl">Total</div>
+            <div class="cstat-val">24</div>
+            <div class="cstat-sub">user stories</div>
+          </div>
+          <div class="cstat" onclick="showModal('items')">
+            <div class="cstat-lbl">Story Pts</div>
+            <div class="cstat-val">87</div>
+            <div class="cstat-sub">38 entregues</div>
+          </div>
+          <div class="cstat" onclick="showModal('items')">
+            <div class="cstat-lbl">Sem Estim.</div>
+            <div class="cstat-val c">9</div>
+            <div class="cstat-sub">acima do limite</div>
+          </div>
+          <div class="cstat" onclick="showModal('items')">
+            <div class="cstat-lbl">Sem Resp.</div>
+            <div class="cstat-val w">4</div>
+            <div class="cstat-sub">sem atribuição</div>
+          </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="card-prog">
+          <div class="prog-row">
+            <span class="prog-lbl">Fechados / Total</span>
+            <span class="prog-pct">8 / 24 · 33%</span>
+          </div>
+          <div class="prog-track"><div class="prog-fill r" style="width:33%"></div></div>
+        </div>
+
+        <!-- Issues tags -->
+        <div class="card-issues">
+          <div class="itag c" onclick="showModal('items')">
+            <svg width="10" height="10" fill="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            9 sem estimativa
+          </div>
+          <div class="itag w" onclick="showModal('items')">5 sem crit. aceite</div>
+          <div class="itag w" onclick="showModal('items')">3 bugs abertos</div>
+          <div class="itag i" onclick="showToast('info','UAT','Abrindo plano de testes...')">UAT pendente</div>
+        </div>
+
+        <!-- Footer -->
+        <div class="card-foot">
+          <button class="ca p" onclick="showModal('detail')">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Detalhes
+          </button>
+          <button class="ca" onclick="showModal('daily')">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            Daily
+          </button>
+          <button class="ca" onclick="showToast('info','Burndown','Abrindo gráfico de burndown...')">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            Burndown
+          </button>
+          <button class="ca" onclick="showToast('info','UAT','Abrindo plano de testes...')">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            UAT
+          </button>
+          <div class="foot-sep"></div>
+          <div class="sparkline" title="Tendência — últimas 5 sprints">
+            <div class="sp-bar" style="height:35%"></div><div class="sp-bar" style="height:50%"></div>
+            <div class="sp-bar r" style="height:75%"></div><div class="sp-bar r" style="height:65%"></div>
+            <div class="sp-bar r" style="height:90%"></div>
+          </div>
+          <div class="more-wrap">
+            <button class="ca" onclick="toggleMore(this)" style="padding:4px 7px">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+            </button>
+            <div class="more-panel">
+              <div class="more-item" onclick="showToast('info','Renomear','Clique no nome para editar')">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Renomear projeto
+              </div>
+              <div class="more-item" onclick="showToast('info','Review','Abrindo review mensal...')">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Review Mensal
+              </div>
+              <div class="more-divider"></div>
+              <div class="more-item d" onclick="showModal('confirm')">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                Remover projeto
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 2 — Atenção -->
+      <div class="proj-card">
+        <div class="drag-h" title="Arrastar para reordenar"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01"/></svg></div>
+        <div class="hbar y"></div>
+        <div class="card-head">
+          <div class="card-av" style="background:#422006;color:#f59e0b">BP</div>
+          <div class="card-meta">
+            <div class="card-name">Beta Platform</div>
+            <div class="card-sprint-row">
+              <div class="sprint-dot"></div>
+              <button class="sprint-filter-btn">Sprint 47 (atual) <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+              <span class="sprint-type">· User Story</span>
+            </div>
+          </div>
+          <div class="h-pill y"><div class="h-dot"></div>Atenção</div>
+        </div>
+        <div class="card-stats">
+          <div class="cstat"><div class="cstat-lbl">Total</div><div class="cstat-val">31</div><div class="cstat-sub">user stories</div></div>
+          <div class="cstat"><div class="cstat-lbl">Story Pts</div><div class="cstat-val">124</div><div class="cstat-sub">51 entregues</div></div>
+          <div class="cstat" onclick="showModal('items')"><div class="cstat-lbl">Sem Estim.</div><div class="cstat-val w">6</div><div class="cstat-sub">acima do limite</div></div>
+          <div class="cstat"><div class="cstat-lbl">Sem Resp.</div><div class="cstat-val g">1</div><div class="cstat-sub">dentro do limite</div></div>
+        </div>
+        <div class="card-prog">
+          <div class="prog-row"><span class="prog-lbl">Fechados / Total</span><span class="prog-pct">16 / 31 · 52%</span></div>
+          <div class="prog-track"><div class="prog-fill y" style="width:52%"></div></div>
+        </div>
+        <div class="card-issues">
+          <div class="itag w" onclick="showModal('items')">6 sem estimativa</div>
+          <div class="itag w" onclick="showModal('items')">2 bloqueadas</div>
+        </div>
+        <div class="card-foot">
+          <button class="ca p" onclick="showModal('detail')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>Detalhes</button>
+          <button class="ca" onclick="showModal('daily')">Daily</button>
+          <button class="ca" onclick="showToast('info','Burndown','Abrindo gráfico...')">Burndown</button>
+          <button class="ca" onclick="showToast('info','UAT','Abrindo UAT...')">UAT</button>
+          <div class="foot-sep"></div>
+          <div class="sparkline"><div class="sp-bar" style="height:55%"></div><div class="sp-bar" style="height:65%"></div><div class="sp-bar" style="height:48%"></div><div class="sp-bar" style="height:70%"></div><div class="sp-bar" style="height:60%"></div></div>
+          <div class="more-wrap">
+            <button class="ca" onclick="toggleMore(this)" style="padding:4px 7px"><svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+            <div class="more-panel">
+              <div class="more-item" onclick="showToast('info','Renomear','Edite o nome')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Renomear projeto</div>
+              <div class="more-item" onclick="showToast('info','Review','Abrindo...')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>Review Mensal</div>
+              <div class="more-divider"></div>
+              <div class="more-item d" onclick="showModal('confirm')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>Remover projeto</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 3 — Saudável -->
+      <div class="proj-card">
+        <div class="drag-h" title="Arrastar para reordenar"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01"/></svg></div>
+        <div class="hbar g"></div>
+        <div class="card-head">
+          <div class="card-av" style="background:#14532d;color:#22c55e">GX</div>
+          <div class="card-meta">
+            <div class="card-name">Gamma Experience</div>
+            <div class="card-sprint-row">
+              <div class="sprint-dot" style="background:var(--c-green)"></div>
+              <button class="sprint-filter-btn">Sprint 47 (atual) <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+              <span class="sprint-type">· Task</span>
+            </div>
+          </div>
+          <div class="h-pill g"><div class="h-dot"></div>Saudável</div>
+        </div>
+        <div class="card-stats">
+          <div class="cstat"><div class="cstat-lbl">Total</div><div class="cstat-val">18</div><div class="cstat-sub">tasks</div></div>
+          <div class="cstat"><div class="cstat-lbl">Horas</div><div class="cstat-val">96h</div><div class="cstat-sub">72h concluídas</div></div>
+          <div class="cstat"><div class="cstat-lbl">Sem Estim.</div><div class="cstat-val g">1</div><div class="cstat-sub">dentro do limite</div></div>
+          <div class="cstat"><div class="cstat-lbl">Sem Resp.</div><div class="cstat-val g">0</div><div class="cstat-sub">todas atribuídas</div></div>
+        </div>
+        <div class="card-prog">
+          <div class="prog-row"><span class="prog-lbl">Fechados / Total</span><span class="prog-pct">14 / 18 · 78%</span></div>
+          <div class="prog-track"><div class="prog-fill g" style="width:78%"></div></div>
+        </div>
+        <div class="card-issues">
+          <div class="itag i">1 sem estimativa</div>
+        </div>
+        <div class="card-foot">
+          <button class="ca p"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>Detalhes</button>
+          <button class="ca" onclick="showModal('daily')">Daily</button>
+          <button class="ca">Burndown</button>
+          <button class="ca">UAT</button>
+          <div class="foot-sep"></div>
+          <div class="sparkline"><div class="sp-bar" style="height:45%"></div><div class="sp-bar" style="height:65%"></div><div class="sp-bar" style="height:60%"></div><div class="sp-bar" style="height:80%"></div><div class="sp-bar" style="height:88%"></div></div>
+          <div class="more-wrap">
+            <button class="ca" onclick="toggleMore(this)" style="padding:4px 7px"><svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+            <div class="more-panel">
+              <div class="more-item">Renomear projeto</div>
+              <div class="more-item">Review Mensal</div>
+              <div class="more-divider"></div>
+              <div class="more-item d" onclick="showModal('confirm')">Remover projeto</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD adicionar -->
+      <div class="add-card" onclick="showToast('info','Novo projeto','Redirecionando para configurações...')">
+        <div class="add-icon"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg></div>
+        <div class="add-lbl">Monitorar novo projeto</div>
+        <div class="add-sub">Conecte um projeto do Azure DevOps para acompanhar sua saúde de backlog</div>
+      </div>
+
+    </div><!-- /cards-container -->
+  </div><!-- /content -->
+</main>
+</div><!-- /app -->
+
+<!-- ═══ MODAL: DETAIL ═══ -->
+<div class="modal-overlay" id="modal-detail">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-icon"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></div>
+      <div class="modal-tg"><div class="modal-title">Alpha Squad</div><div class="modal-sub">Sprint 47 · 24 User Stories · Saúde: Crítica</div></div>
+      <div class="modal-acts">
+        <button class="mbtn" onclick="showToast('info','Atualizando','Buscando dados mais recentes...')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button>
+        <button class="mbtn"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg></button>
+        <button class="mbtn close" onclick="closeModal('detail')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
+    <div class="modal-tabs">
+      <div class="mtab active">Saúde</div><div class="mtab">Sprint</div>
+      <div class="mtab">Burndown</div><div class="mtab">UAT</div><div class="mtab">Capacidade</div>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid">
+        <div class="dblock"><div class="dblock-lbl">Estimativas</div><div class="dblock-val" style="color:var(--c-red)">62%</div><div class="dblock-sub">15 de 24 estimadas · 9 sem story points</div><div class="pbar-wrap"><div class="pbar r" style="width:62%"></div></div></div>
+        <div class="dblock"><div class="dblock-lbl">Critério de Aceite</div><div class="dblock-val" style="color:var(--c-yellow)">79%</div><div class="dblock-sub">19 de 24 com AC · 5 pendentes</div><div class="pbar-wrap"><div class="pbar y" style="width:79%"></div></div></div>
+        <div class="dblock"><div class="dblock-lbl">Progresso do Sprint</div><div class="dblock-val">33%</div><div class="dblock-sub">8 fechadas de 24 · 16 em andamento</div><div class="pbar-wrap"><div class="pbar b" style="width:33%"></div></div></div>
+        <div class="dblock"><div class="dblock-lbl">Story Points</div><div class="dblock-val">38 <span style="font-size:13px;font-weight:500;color:var(--text-faint)">/ 87</span></div><div class="dblock-sub">Meta: 45 pts · 16% abaixo</div><div class="pbar-wrap"><div class="pbar b" style="width:44%"></div></div></div>
+      </div>
+      <div class="issues-sep">Issues identificadas</div>
+      <div class="issue-row" onclick="showModal('items')">
+        <div class="iicon c"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
+        <div class="itext"><div class="itext-main">Stories sem estimativa</div><div class="itext-sub">9 itens ativos sem story points</div></div>
+        <div class="icount">9</div>
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text-faint)"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <div class="issue-row" onclick="showModal('items')">
+        <div class="iicon w"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
+        <div class="itext"><div class="itext-main">Sem critério de aceite</div><div class="itext-sub">5 stories sem AC documentado</div></div>
+        <div class="icount">5</div>
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text-faint)"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <div class="issue-row" onclick="showModal('items')">
+        <div class="iicon w"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+        <div class="itext"><div class="itext-main">Sem responsável</div><div class="itext-sub">4 stories ativas sem atribuição</div></div>
+        <div class="icount">4</div>
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text-faint)"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <div class="issue-row">
+        <div class="iicon i"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg></div>
+        <div class="itext"><div class="itext-main">UAT pendente</div><div class="itext-sub">3 planos de teste aguardando execução</div></div>
+        <div class="icount">3</div>
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text-faint)"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost btn-sm" onclick="showToast('info','Copilot','Analisando com IA...')">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        Analisar com IA
+      </button>
+      <div class="mf-sep"></div>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal('detail')">Fechar</button>
+      <button class="btn btn-primary btn-sm">Ver no Azure <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: ITEMS ═══ -->
+<div class="modal-overlay" id="modal-items">
+  <div class="modal-box" style="max-width:800px">
+    <div class="modal-head">
+      <div class="modal-icon" style="background:var(--c-red-bg);color:var(--c-red);border-color:#7f1d1d"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
+      <div class="modal-tg"><div class="modal-title">Stories sem estimativa — Alpha Squad</div><div class="modal-sub">9 itens · Sprint 47 · Filtro: Ativo</div></div>
+      <div class="modal-acts"><button class="mbtn close" onclick="closeModal('items')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+    </div>
+    <div class="modal-body" style="padding:14px">
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button class="fchip active" onclick="toggleChip(this,'#modal-items .modal-body')" style="font-size:11px">Ativo</button>
+        <button class="fchip" onclick="toggleChip(this,'#modal-items .modal-body')" style="font-size:11px">Em revisão</button>
+        <button class="fchip" onclick="toggleChip(this,'#modal-items .modal-body')" style="font-size:11px">Novo</button>
+        <button class="fchip" onclick="toggleChip(this,'#modal-items .modal-body')" style="font-size:11px">Todos</button>
+      </div>
+      <div class="items-tw">
+        <table class="it">
+          <thead><tr><th style="width:60px">#</th><th>Título</th><th>Estado</th><th>Responsável</th><th style="text-align:right">Pts</th></tr></thead>
+          <tbody>
+            <tr><td><a href="#" style="color:var(--c-blue);font-weight:600">4821</a></td><td>Implementar fluxo de autenticação SSO no portal do cliente</td><td><span class="sbadge a">Ativo</span></td><td style="color:var(--text-muted)">Renata M.</td><td style="text-align:right;color:var(--c-red);font-weight:700">—</td></tr>
+            <tr><td><a href="#" style="color:var(--c-blue);font-weight:600">4835</a></td><td>Migrar banco de dados legado para PostgreSQL 15</td><td><span class="sbadge a">Ativo</span></td><td style="color:var(--text-muted)">Carlos P.</td><td style="text-align:right;color:var(--c-red);font-weight:700">—</td></tr>
+            <tr><td><a href="#" style="color:var(--c-blue);font-weight:600">4839</a></td><td>Configurar pipeline CI/CD para homologação</td><td><span class="sbadge v">Em revisão</span></td><td style="color:var(--text-muted)">Ana S.</td><td style="text-align:right;color:var(--c-red);font-weight:700">—</td></tr>
+            <tr><td><a href="#" style="color:var(--c-blue);font-weight:600">4847</a></td><td>Implementar relatório de auditoria de acessos</td><td><span class="sbadge a">Ativo</span></td><td style="color:var(--text-muted)">—</td><td style="text-align:right;color:var(--c-red);font-weight:700">—</td></tr>
+            <tr><td><a href="#" style="color:var(--c-blue);font-weight:600">4852</a></td><td>Refatorar módulo de notificações para event-driven</td><td><span class="sbadge a">Ativo</span></td><td style="color:var(--text-muted)">Felipe T.</td><td style="text-align:right;color:var(--c-red);font-weight:700">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-foot"><span style="font-size:12px;color:var(--text-faint)">Mostrando 5 de 9 itens</span><div class="mf-sep"></div><button class="btn btn-secondary btn-sm" onclick="closeModal('items')">Fechar</button></div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: DAILY ═══ -->
+<div class="modal-overlay" id="modal-daily">
+  <div class="modal-box" style="max-width:560px">
+    <div class="modal-head">
+      <div class="modal-icon" style="background:var(--c-purple-bg);color:var(--c-purple);border-color:#4c1d95"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+      <div class="modal-tg"><div class="modal-title">Daily Standup</div><div class="modal-sub">09 de junho, 2026 · Sprint 47</div></div>
+      <div class="modal-acts">
+        <button class="mbtn"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></button>
+        <button class="mbtn"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg></button>
+        <button class="mbtn close" onclick="closeModal('daily')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="daily-nav">
+        <button class="btn btn-secondary btn-sm">← Anterior</button>
+        <div class="daily-ttl">Alpha Squad <span style="font-size:11px;font-weight:500;color:var(--text-faint)">1 de 3</span></div>
+        <button class="btn btn-secondary btn-sm">Próximo →</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div class="h-pill r"><div class="h-dot"></div>Crítico</div>
+        <span style="font-size:12px;color:var(--text-muted)">Sprint 47 · 02/06 – 17/06</span>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost btn-sm" onclick="showToast('info','Burndown','Abrindo...')">Ver Burndown</button>
+      </div>
+      <div class="dblock-d" style="background:var(--c-red-bg);border-color:#7f1d1d">
+        <div class="dblock-d-lbl" style="color:var(--c-red)"><svg width="11" height="11" fill="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg> Impedimentos (1)</div>
+        <div class="dblock-d-item">Acesso ao ambiente de produção bloqueado — aguardando aprovação (#4821)</div>
+      </div>
+      <div class="dblock-d">
+        <div class="dblock-d-lbl" style="color:var(--c-green)"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Concluído ontem</div>
+        <div class="dblock-d-item">✓ Endpoint OAuth implementado e testado</div>
+        <div class="dblock-d-item">✓ Testes unitários (87% de cobertura)</div>
+      </div>
+      <div class="dblock-d">
+        <div class="dblock-d-lbl" style="color:var(--c-blue)"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Hoje</div>
+        <div class="dblock-d-item">→ Revisar PRs pendentes (#4835, #4839)</div>
+        <div class="dblock-d-item">→ Iniciar migração de dados (lote 1/5)</div>
+      </div>
+    </div>
+    <div class="modal-foot"><div class="mf-sep"></div><button class="btn btn-secondary btn-sm" onclick="closeModal('daily')">Fechar</button></div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: CONFIRMAR ═══ -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal-box" style="max-width:400px">
+    <div class="confirm-body">
+      <div class="confirm-icon d"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></div>
+      <div class="confirm-title">Remover projeto</div>
+      <div class="confirm-msg">Deseja remover <strong>Alpha Squad</strong> do monitoramento? Os dados locais serão apagados e não poderão ser recuperados.</div>
+    </div>
+    <div class="modal-foot">
+      <div class="mf-sep"></div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('confirm')">Cancelar</button>
+      <button class="btn btn-danger btn-sm" onclick="closeModal('confirm');showToast('success','Removido','Alpha Squad foi removido do monitoramento')">Remover</button>
+    </div>
+  </div>
+</div>
+
+<!-- Copilot FAB -->
+<button class="copilot-fab" onclick="showToast('info','Copilot IA','Abrindo assistente...')" title="Copilot IA">
+  <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+</button>
+
+<div class="toast-stack" id="toast-stack"></div>
+
+<script>
+// Theme
+function toggleTheme(){
+  const h=document.documentElement,c=h.getAttribute('data-theme');
+  const n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);
+  document.getElementById('theme-icon').innerHTML=n==='dark'
+    ?'<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>'
+    :'<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+}
+// Modals
+function showModal(id){const e=document.getElementById('modal-'+id);if(e)e.classList.add('open')}
+function closeModal(id){const e=document.getElementById('modal-'+id);if(e)e.classList.remove('open')}
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'))});
+// Toasts
+function showToast(type,title,msg){
+  const s=document.getElementById('toast-stack');
+  const icons={success:'<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',error:'<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',info:'<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>'};
+  const t=document.createElement('div');t.className=`toast ${type}`;
+  t.innerHTML=`<span class="toast-ico">${icons[type]}</span><div><div class="toast-t">${title}</div><div class="toast-m">${msg}</div></div>`;
+  s.appendChild(t);requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
+  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),350)},3200);
+}
+// View
+function setView(mode){
+  document.getElementById('cards-container').className=mode==='grid'?'cards-grid':'cards-list';
+  document.getElementById('btn-grid').classList.toggle('active',mode==='grid');
+  document.getElementById('btn-list').classList.toggle('active',mode==='list');
+}
+// Language
+function setLang(btn){document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');showToast('info','Idioma','Alterando para '+btn.textContent+'...')}
+// Filter chips
+function toggleChip(chip,scope){
+  const bar=chip.closest(scope||'.filter-row')||chip.closest('.filter-row')||chip.parentElement;
+  bar.querySelectorAll('.fchip').forEach(c=>c.classList.remove('active'));chip.classList.add('active');
+}
+// Modal tabs
+document.querySelectorAll('.mtab').forEach(tab=>{tab.addEventListener('click',()=>{tab.closest('.modal-tabs').querySelectorAll('.mtab').forEach(t=>t.classList.remove('active'));tab.classList.add('active')})});
+// Sprint dropdown
+function toggleSprintDD(id){const dd=document.getElementById(id);if(dd)dd.classList.toggle('open')}
+function closeAllDDs(){document.querySelectorAll('.sprint-dd.open').forEach(d=>d.classList.remove('open'))}
+// More menu
+function toggleMore(btn){
+  const p=btn.nextElementSibling;const isOpen=p.classList.contains('open');
+  document.querySelectorAll('.more-panel.open').forEach(x=>x.classList.remove('open'));
+  if(!isOpen)p.classList.add('open');
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.more-wrap'))document.querySelectorAll('.more-panel.open').forEach(p=>p.classList.remove('open'));
+  if(!e.target.closest('.sprint-filter-btn')&&!e.target.closest('.sprint-dd'))closeAllDDs();
+});
+// Timer countdown
+let secs=272;
+setInterval(()=>{secs--;if(secs<0)secs=300;const m=String(Math.floor(secs/60)).padStart(2,'0');const s=String(secs%60).padStart(2,'0');const el=document.getElementById('timer');if(el)el.textContent=m+':'+s},1000);
+</script>
+</body>
+</html>
