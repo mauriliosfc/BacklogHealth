@@ -204,7 +204,7 @@
 <div id="copilot-config-modal" class="modal-overlay copilot-config-overlay" onclick="closeCopilotConfigOverlay(event)">
   <div class="modal-box copilot-config-box">
     <div class="modal-head">
-      <div class="modal-title">🤖 Copilot Project — <span data-i18n="ai_config_title">Configuração da IA</span></div>
+      <div class="modal-title">Copilot Project — <span data-i18n="ai_config_title">Configuração da IA</span></div>
       <div class="modal-actions">
         <button class="modal-close" type="button" onclick="closeCopilotConfig()">✕</button>
       </div>
@@ -234,8 +234,8 @@
       </div>
       <div id="copilot-config-status" class="copilot-config-status"></div>
       <div class="copilot-config-actions">
-        <button id="btnCopilotTest" type="button" onclick="testCopilotConnection()" data-i18n="ai_btn_test">🔌 Testar conexão</button>
-        <button id="btnCopilotSave" type="button" class="copilot-save-btn" onclick="saveCopilotConfig()" data-i18n="ai_btn_save">💾 Salvar e abrir chat</button>
+        <button id="btnCopilotTest" type="button" onclick="testCopilotConnection()" data-i18n="ai_btn_test">Testar conexão</button>
+        <button id="btnCopilotSave" type="button" class="copilot-save-btn" onclick="saveCopilotConfig()" data-i18n="ai_btn_save">Salvar e abrir chat</button>
       </div>
     </div>
   </div>
@@ -244,23 +244,52 @@
 <!-- Copilot Chat Panel (floating) -->
 <div id="copilot-chat-panel" class="copilot-panel">
   <div class="copilot-panel-head" id="copilot-panel-head">
-    <div class="copilot-chat-title">🤖 Copilot Project</div>
+    <div class="copilot-head-info">
+      <div class="copilot-ai-icon">AI</div>
+      <div>
+        <div class="copilot-chat-title">Copilot Project</div>
+        <div class="copilot-model-badge">
+          <span class="copilot-model-dot"></span>
+          <span id="copilotModelName">IA</span>
+        </div>
+      </div>
+    </div>
     <div class="modal-actions">
-      <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" data-i18n-title="btn_settings" title="Configurações">⚙️</button>
-      <button class="modal-maximize copilot-settings-btn" type="button" onclick="clearCopilotChat()" data-i18n-title="ai_new_chat" title="Nova conversa">🗑</button>
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" data-i18n-title="btn_settings" title="Configurações">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      </button>
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="clearCopilotChat()" data-i18n-title="ai_new_chat" title="Nova conversa">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+      </button>
       <button class="modal-maximize" type="button" id="btnCopilotChatMax" onclick="toggleCopilotMaximize()" data-i18n-title="ai_maximize" title="Maximizar">⤢</button>
       <button class="modal-maximize" type="button" id="btnCopilotChatMin" onclick="toggleCopilotMinimize()" data-i18n-title="ai_minimize" title="Minimizar">−</button>
       <button class="modal-close" type="button" onclick="closeCopilotChat()">✕</button>
     </div>
   </div>
   <div class="copilot-panel-body" id="copilot-panel-body">
+    <div id="copilot-confirm-bar" class="copilot-confirm-bar" style="display:none">
+      <span data-i18n="ai_clear_confirm">Limpar conversa?</span>
+      <div class="copilot-confirm-actions">
+        <button onclick="confirmClearCopilot()" data-i18n="ai_clear_yes">Confirmar</button>
+        <button onclick="hideCopilotConfirm()" data-i18n="ai_clear_no">Cancelar</button>
+      </div>
+    </div>
     <div class="copilot-chat-messages" id="copilot-chat-messages"></div>
     <div class="copilot-chat-input-wrap">
       <textarea id="copilot-input" class="copilot-input" rows="1" placeholder="Pergunte sobre seus projetos..." onkeydown="copilotInputKeydown(event)" data-i18n-placeholder="ai_input_placeholder"></textarea>
-      <button id="btnCopilotSend" class="copilot-send-btn" type="button" onclick="sendCopilotMessage()">➤</button>
+      <button id="btnCopilotSend" class="copilot-send-btn" type="button" onclick="sendCopilotMessage()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
     </div>
   </div>
 </div>
+
+<!-- Copilot backdrop + FAB -->
+<div id="copilot-backdrop" class="copilot-backdrop" onclick="closeCopilotChat()"></div>
+<button class="copilot-fab" id="copilotFab" onclick="copilotFabClick()" aria-label="Copilot IA">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+  <span class="copilot-fab-dot" id="copilotFabDot"></span>
+</button>
 
 <!-- Feedback Modal -->
 <div id="feedback-modal" class="modal-overlay" onclick="closeFeedbackOverlay(event)">
@@ -386,13 +415,16 @@
   </div>
 </div>
 
-<!-- Service Now Config Modal (individual por projeto) -->
+<!-- Service Now Config Modal -->
 <div id="sn-config-modal" class="sn-config-overlay" onclick="closeSnConfigOverlay(event)">
   <div class="sn-config-box">
     <div class="sn-config-header">
-      <div>
-        <div class="sn-config-title">Service Now</div>
-        <div class="sn-config-subtitle" id="snm-subtitle"></div>
+      <div class="snm-header-info">
+        <div class="snm-icon">SN</div>
+        <div>
+          <div class="sn-config-title">ServiceNow</div>
+          <div class="sn-config-subtitle" id="snm-subtitle"></div>
+        </div>
       </div>
       <button class="modal-close" onclick="closeSnConfig()">&#x2715;</button>
     </div>
@@ -401,19 +433,17 @@
       <!-- Credenciais globais -->
       <div class="snm-section">
         <div class="snm-section-title">Credenciais globais</div>
-        <div class="snm-fields">
-          <div class="snm-field">
-            <label class="snm-label">INSTANCE</label>
-            <input type="text" id="snm-instance" class="snm-input-full" placeholder="empresa.service-now.com" autocomplete="off">
-          </div>
-          <div class="snm-field">
-            <label class="snm-label">USERNAME</label>
-            <input type="text" id="snm-user" class="snm-input-full" placeholder="usuario" autocomplete="off">
-          </div>
-          <div class="snm-field">
-            <label class="snm-label">PASSWORD / TOKEN</label>
-            <input type="password" id="snm-pass" class="snm-input-full" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" autocomplete="off">
-          </div>
+        <div class="snm-field">
+          <label class="snm-label">INSTANCE</label>
+          <input type="text" id="snm-instance" class="snm-input-full" placeholder="empresa.service-now.com" autocomplete="off">
+        </div>
+        <div class="snm-field">
+          <label class="snm-label">USERNAME</label>
+          <input type="text" id="snm-user" class="snm-input-full" placeholder="usuario" autocomplete="off">
+        </div>
+        <div class="snm-field">
+          <label class="snm-label">PASSWORD / TOKEN</label>
+          <input type="password" id="snm-pass" class="snm-input-full" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" autocomplete="off">
         </div>
         <div class="snm-actions-row">
           <button class="snm-btn" onclick="snConfigTest()">Testar conexão</button>
@@ -424,10 +454,10 @@
 
       <!-- Assignment group do projeto -->
       <div class="snm-section">
-        <div class="snm-section-title">Assignment Group do projeto</div>
+        <div class="snm-section-title">Assignment Group</div>
         <div class="snm-field">
           <label class="snm-label">SYS_ID ou NOME DO GRUPO</label>
-          <input type="text" id="snm-ag" class="snm-input-full" placeholder="ex: 8a4dde73c6112278017a6a4baf547aa7" autocomplete="off">
+          <input type="text" id="snm-ag" class="snm-input-full" placeholder="ex: 8a4dde73c611..." autocomplete="off">
         </div>
         <div class="snm-field">
           <label class="snm-label">NOME DE EXIBIÇÃO</label>

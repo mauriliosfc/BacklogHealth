@@ -225,28 +225,18 @@
           <div class="su-form-card su-sn-proj-card">
             <div class="su-sn-proj-title" data-i18n="settings_sn_proj_section">Per-project Assignment Group</div>
             <div class="su-hint" data-i18n="settings_sn_proj_hint">Bind each project to a ServiceNow group to filter incidents in Monthly Review.</div>
-            <div class="su-field">
-              <label class="su-label">PROJECT</label>
-              <div class="su-input-wrap">
-                <select id="sn-proj-sel" class="su-input" onchange="snLoadProjGroup()">
-                  <option value="">— select a project —</option>
-                </select>
-              </div>
-            </div>
-            <div class="su-field">
-              <label class="su-label">ASSIGNMENT GROUP (sys_id or name)</label>
-              <div class="su-input-wrap">
-                <input type="text" id="sn-ag" class="su-input" placeholder="e.g. 8a4dde73c6112278017a6a4baf547aa7" autocomplete="off">
-              </div>
-            </div>
-            <div class="su-field">
-              <label class="su-label">GROUP DISPLAY NAME</label>
-              <div class="su-input-wrap">
-                <input type="text" id="sn-ag-name" class="su-input" placeholder="e.g. IT - Support Alpha" autocomplete="off">
-              </div>
-            </div>
-            <div class="su-sn-status" id="sn-proj-status"></div>
-            <button class="su-test-btn" onclick="snSaveProjGroup()" data-i18n="settings_sn_save_group">Save group</button>
+            <table class="sn-proj-table" id="sn-proj-table">
+              <thead>
+                <tr>
+                  <th class="sn-th-status"></th>
+                  <th class="sn-th-name">Project</th>
+                  <th class="sn-th-group">Group</th>
+                  <th class="sn-th-id">sys_id / name</th>
+                  <th class="sn-th-actions"></th>
+                </tr>
+              </thead>
+              <tbody id="sn-proj-tbody"></tbody>
+            </table>
           </div>
 
         </div>
@@ -434,7 +424,7 @@
   function switchTab(tab) {
     document.querySelectorAll('.su-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.su-tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
-    if (tab === 'sn')       _populateSnProjSel();
+    if (tab === 'sn')       _snLoadAllProjects();
     if (tab === 'ai')       aiLoad();
     if (tab === 'projects') updateTabBadgeProjects();
     try { sessionStorage.setItem('settings_tab', tab); } catch(_) {}
@@ -443,7 +433,9 @@
   // Restore tab from session (page reload / back navigation)
   (function() {
     try {
-      const tab = sessionStorage.getItem('settings_tab');
+      const urlTab  = new URLSearchParams(location.search).get('tab');
+      const storTab = sessionStorage.getItem('settings_tab');
+      const tab = (urlTab && ['azure','sn','projects','ai'].includes(urlTab)) ? urlTab : storTab;
       if (tab && ['azure','sn','projects','ai'].includes(tab)) switchTab(tab);
     } catch(_) {}
   })();
@@ -949,53 +941,90 @@
     document.getElementById('lbl-save-sn').textContent = _tr('settings_save_sn', 'Save ServiceNow');
   }
 
-  function _snKeyToDisplay(key) {
-    const idx = key.indexOf('|');
-    return idx >= 0 ? key.slice(0, idx) + ' - ' + key.slice(idx + 1) : key;
-  }
+  // ── SN per-project table ────────────────────────────────────────────────
+  let _snProjData = [];
 
-  function _populateSnProjSel() {
-    const sel = document.getElementById('sn-proj-sel');
-    if (!sel) return;
-    const current = sel.value;
-    sel.innerHTML = '<option value="">— select a project —</option>'
-      + [...SELECTED_SET].map(key => {
-          const display = _snKeyToDisplay(key);
-          return `<option value="${display}"${display === current ? ' selected' : ''}>${display}</option>`;
-        }).join('');
-  }
-
-  async function snLoadProjGroup() {
-    const project = document.getElementById('sn-proj-sel').value;
-    document.getElementById('sn-ag').value      = '';
-    document.getElementById('sn-ag-name').value = '';
-    document.getElementById('sn-proj-status').textContent = '';
-    if (!project) return;
+  async function _snLoadAllProjects() {
     try {
-      const r = await fetch('/api/sn-config?' + new URLSearchParams({ project }));
+      const r = await fetch('/api/sn-projects');
       const d = await r.json();
-      if (d.assignmentGroup)     document.getElementById('sn-ag').value      = d.assignmentGroup;
-      if (d.assignmentGroupName) document.getElementById('sn-ag-name').value = d.assignmentGroupName;
+      _snProjData = d.projects || [];
+      _snRenderProjTable();
     } catch(_) {}
   }
 
-  async function snSaveProjGroup() {
-    const project             = document.getElementById('sn-proj-sel').value;
-    const assignmentGroup     = document.getElementById('sn-ag').value.trim();
-    const assignmentGroupName = document.getElementById('sn-ag-name').value.trim();
-    const st = document.getElementById('sn-proj-status');
-    if (!project) { st.className = 'su-sn-status error'; st.textContent = 'Select a project.'; return; }
-    st.className = 'su-sn-status'; st.textContent = _tr('sn_saving', 'Saving…');
+  function _snEsc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function _snRenderProjTable() {
+    const tbody = document.getElementById('sn-proj-tbody');
+    if (!tbody) return;
+    if (!_snProjData.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="sn-proj-empty">${_tr('settings_sn_no_projects', 'No projects configured yet.')}</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = _snProjData.map(p => {
+      const ok    = !!(p.assignmentGroup);
+      const gname = _snEsc(p.assignmentGroupName || (ok ? '—' : ''));
+      const ag    = p.assignmentGroup ? _snEsc(p.assignmentGroup.length > 18 ? p.assignmentGroup.slice(0, 18) + '…' : p.assignmentGroup) : '—';
+      return `<tr data-sn-project="${_snEsc(p.name)}">
+        <td><span class="sn-dot ${ok ? 'sn-dot--ok' : 'sn-dot--none'}"></span></td>
+        <td class="sn-proj-name">${_snEsc(p.name)}</td>
+        <td class="sn-proj-gname">${gname}</td>
+        <td class="sn-proj-ag">${ag}</td>
+        <td class="sn-proj-actions"><button class="su-test-btn sn-proj-edit-btn" onclick="snProjEdit(this)">${_tr('settings_sn_edit_group', 'Edit')}</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function snProjEdit(btn) {
+    const row = btn.closest('tr');
+    if (!row) return;
+    const name = row.dataset.snProject;
+    const p = _snProjData.find(x => x.name === name);
+    if (!p) return;
+    row.innerHTML = `
+      <td><span class="sn-dot ${p.assignmentGroup ? 'sn-dot--ok' : 'sn-dot--none'}"></span></td>
+      <td class="sn-proj-name">${_snEsc(p.name)}</td>
+      <td><input class="su-input sn-edit-gname" value="${_snEsc(p.assignmentGroupName || '')}" placeholder="e.g. IT - Support Alpha" autocomplete="off"></td>
+      <td><input class="su-input sn-edit-ag" value="${_snEsc(p.assignmentGroup || '')}" placeholder="e.g. 8a4dde73c611..." autocomplete="off"></td>
+      <td class="sn-proj-actions">
+        <button class="su-test-btn sn-proj-save-btn" onclick="snProjSave(this)">${_tr('settings_sn_save_group', 'Save')}</button>
+        <button class="su-test-btn sn-proj-cancel-btn" onclick="snProjCancel(this)">${_tr('settings_sn_cancel_edit', 'Cancel')}</button>
+        <span class="su-sn-status sn-row-status"></span>
+      </td>`;
+  }
+
+  async function snProjSave(btn) {
+    const row = btn.closest('tr');
+    if (!row) return;
+    const name = row.dataset.snProject;
+    const ag   = row.querySelector('.sn-edit-ag').value.trim();
+    const agN  = row.querySelector('.sn-edit-gname').value.trim();
+    const st   = row.querySelector('.sn-row-status');
+    if (st) { st.className = 'su-sn-status sn-row-status'; st.textContent = _tr('sn_saving', 'Saving…'); }
     try {
       const r = await fetch('/api/sn-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project, assignmentGroup, assignmentGroupName }),
+        body: JSON.stringify({ project: name, assignmentGroup: ag, assignmentGroupName: agN }),
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) { st.className = 'su-sn-status error'; st.textContent = d.error || `HTTP ${r.status}`; return; }
-      st.className = 'su-sn-status ok'; st.textContent = _tr('sn_saved', 'Saved!');
-    } catch(e) { st.className = 'su-sn-status error'; st.textContent = e.message; }
+      if (!r.ok) {
+        if (st) { st.className = 'su-sn-status sn-row-status error'; st.textContent = d.error || `HTTP ${r.status}`; }
+        return;
+      }
+      const idx = _snProjData.findIndex(x => x.name === name);
+      if (idx >= 0) { _snProjData[idx].assignmentGroup = ag; _snProjData[idx].assignmentGroupName = agN; }
+      _snRenderProjTable();
+    } catch(e) {
+      if (st) { st.className = 'su-sn-status sn-row-status error'; st.textContent = e.message; }
+    }
+  }
+
+  function snProjCancel() {
+    _snRenderProjTable();
   }
 
   // ── AI config ─────────────────────────────────────────────────────────────

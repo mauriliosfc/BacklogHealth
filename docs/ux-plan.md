@@ -23,11 +23,11 @@
 | 1 | Settings redesenhado | 3–4 | IT-07b | **concluído** |
 | 2 | Onboarding de primeiro uso | 3–4 | IT-00 | **concluído** |
 | 3 | Modo SN-only | 4–5 | IT-01b | **concluído** |
-| 4 | Dashboard — melhorias nos cards | 2–3 | IT-01 | pendente |
-| 5 | Copilot IA — painel de chat | 3–4 | IT-06 | pendente |
-| 6 | Feedback + SN Config | 2–3 | IT-08 | pendente |
-| 7 | Burndown + UAT | 3–4 | IT-05 | pendente |
-| 8 | Plano de Entrega | 2–3 | IT-04 | pendente |
+| 4 | Dashboard — melhorias nos cards | 2–3 | IT-01 | **concluído** |
+| 5 | Copilot IA — painel de chat | 3–4 | IT-06 | **concluído** |
+| 6 | Feedback + SN Config | 2–3 | IT-08 | **concluído** |
+| 7 | Burndown + UAT | 3–4 | IT-05 | **concluído** |
+| 8 | Plano de Entrega | 2–3 | IT-04 | **concluído** |
 | 9 | Review Mensal | 4–5 | IT-02 | pendente |
 | 10 | Capacidade do Time | 4–5 | IT-03 | pendente |
 
@@ -138,18 +138,18 @@
 ## Fase 4 — Dashboard: melhorias nos cards `IT-01`
 
 > Protótipo: `prototypes/prototype-ux.html`  
-> Iniciado em: —  
-> Concluído em: —
+> Iniciado em: 2026-06-10  
+> Concluído em: 2026-06-10
 
-- [ ] **4.1** Barra de saúde de 3px no topo do card colorida por threshold (vermelho/amarelo/verde)
+- [x] **4.1** Barra de saúde de 3px no topo do card colorida por threshold (vermelho/amarelo/verde)
   - Arquivos: `public/style.css`, `projectService.js` (`buildCardHTML`)
-- [ ] **4.2** Sprint filter dropdown por card — seletor de sprint inline no header do card
+- [x] **4.2** Sprint filter dropdown por card — seletor de sprint inline no header do card
   - Arquivos: `public/modules/filters.js`, `views/dashboard.html`
-- [ ] **4.3** Summary bar global — barra horizontal acima dos cards com KPIs somados (total US, total pts, sem estimativa, sprint atual)
+- [x] **4.3** Summary bar global — barra horizontal acima dos cards com KPIs somados (total US, total pts, sem estimativa, sprint atual)
   - Arquivos: `views/dashboard.html`, `projectService.js`
-- [ ] **4.4** Drag handle — ícone de arrastar no hover para reordenar cards (ordem salva em `localStorage`)
+- [x] **4.4** Drag handle — ícone de arrastar no hover para reordenar cards (ordem salva em `localStorage`)
   - Arquivos: `views/dashboard.html`, `public/app.js`
-- [ ] **4.5** More menu (⋯) consolidado — "Renomear", "Review Mensal", "Remover" em dropdown limpo
+- [x] **4.5** More menu (⋯) consolidado — "Renomear", "Review Mensal", "Remover" em dropdown limpo
   - Arquivos: `views/dashboard.html`, `public/modules/`
 
 ---
@@ -157,20 +157,20 @@
 ## Fase 5 — Copilot IA: painel de chat `IT-06`
 
 > Protótipo: `prototypes/prototype-it06.html`  
-> Iniciado em: —  
-> Concluído em: —
+> Iniciado em: 2026-06-10  
+> Concluído em: 2026-06-10
 
-- [ ] **5.1** Painel de chat flutuante (400px, fixed right) — substitui/complementa o modal atual
+- [x] **5.1** Painel de chat flutuante (400px, fixed right) — substitui/complementa o modal atual
   - Arquivos: `public/modules/copilot.js`, `views/dashboard.html`, `public/style.css`
-- [ ] **5.2** Estados minimize/maximize — minimizar colapsa a pill de 48px com badge de mensagem não lida
+- [x] **5.2** Estados minimize/maximize — minimizar colapsa a pill de 48px com badge de mensagem não lida
   - Arquivos: `public/modules/copilot.js`
-- [ ] **5.3** Typing indicator animado (3 pontos bouncing) durante aguardo da resposta
+- [x] **5.3** Typing indicator animado (3 pontos bouncing) durante aguardo da resposta
   - Arquivos: `public/modules/copilot.js`
-- [ ] **5.4** Contexto automático — ao abrir o chat, carregar resumo dos projetos como contexto da primeira mensagem
+- [x] **5.4** Contexto automático — ao abrir o chat, carregar resumo dos projetos como contexto da primeira mensagem
   - Arquivos: `public/modules/copilot.js`, `handlers/ai.js`
-- [ ] **5.5** Botão de limpar conversa com confirmação inline
+- [x] **5.5** Botão de limpar conversa com confirmação inline
   - Arquivos: `public/modules/copilot.js`
-- [ ] **5.6** Renderização de markdown básico nas mensagens IA — `**bold**` → `<strong>`, `- item` → `<ul>`
+- [x] **5.6** Renderização de markdown básico nas mensagens IA — `**bold**` → `<strong>`, `- item` → `<ul>`
   - Arquivos: `public/modules/copilot.js`
 
 ---
@@ -178,18 +178,18 @@
 ## Fase 6 — Feedback + SN Config `IT-08`
 
 > Protótipo: `prototypes/prototype-it08.html`  
-> Iniciado em: —  
-> Concluído em: —
+> Iniciado em: 2026-06-10  
+> Concluído em: 2026-06-10
 
-- [ ] **6.1** Modal de Feedback: dropdown de tipo com ícone dinâmico por categoria
+- [x] **6.1** Modal de Feedback: dropdown de tipo com ícone dinâmico por categoria
   - Arquivos: `views/dashboard.html`, `public/modules/`
-- [ ] **6.2** Contadores de caracteres — título (0/80) e descrição (0/500) com alerta visual ao aproximar do limite
+- [x] **6.2** Contadores de caracteres — título (0/80) e descrição (0/500) com alerta visual ao aproximar do limite
   - Arquivos: `views/dashboard.html`
-- [ ] **6.3** Box de contexto automático — versão, org, número de projetos (não-sensível)
+- [x] **6.3** Box de contexto automático — versão, org, número de projetos (não-sensível)
   - Arquivos: `views/dashboard.html`, `handlers/feedback.js`
-- [ ] **6.4** Tela de sucesso no modal — checkmark + "Issue #N criada" + link para o GitHub (substituir toast atual)
+- [x] **6.4** Tela de sucesso no modal — checkmark + "Issue #N criada" + link para o GitHub (substituir toast atual)
   - Arquivos: `views/dashboard.html`, `handlers/feedback.js`
-- [ ] **6.5** Modal de config SN: tabela de grupos por projeto com sys_id, status dot dinâmico
+- [x] **6.5** Modal de config SN: tabela de grupos por projeto com sys_id, status dot dinâmico
   - Arquivos: `public/modules/snConfig.js`, `views/dashboard.html`
 
 ---
@@ -197,35 +197,35 @@
 ## Fase 7 — Burndown + UAT `IT-05`
 
 > Protótipo: `prototypes/prototype-it05.html`  
-> Iniciado em: —  
-> Concluído em: —
+> Iniciado em: 2026-06-11  
+> Concluído em: 2026-06-11
 
-- [ ] **7.1** SVG burndown chart com tooltip interativo por ponto — hover mostra data, pts restantes, pts ideais
+- [x] **7.1** SVG burndown chart com tooltip interativo por ponto — hover mostra data, pts restantes, pts ideais
   - Arquivos: `public/modules/burndown.js`, `public/style.css`
-- [ ] **7.2** Stats row abaixo do gráfico — Remaining, Delivered, Days left, Delta (verde/vermelho vs ideal)
+- [x] **7.2** Stats row abaixo do gráfico — Remaining, Delivered, Days left, Delta (verde/vermelho vs ideal)
   - Arquivos: `public/modules/burndown.js`
-- [ ] **7.3** UAT: filtros por prioridade (P1/P2/P3) e resultado (Passou/Falhou/Bloqueado) como pills clicáveis
-  - Arquivos: `public/modules/`, `views/dashboard.html`
-- [ ] **7.4** UAT: acordeão de planos com tabela de casos de teste — badges de resultado coloridos
-  - Arquivos: `public/modules/`, `projectService.js` (`fetchUATPlans`)
+- [x] **7.3** UAT: filtros por prioridade (P1/P2/P3) e resultado (Passou/Falhou/Bloqueado) como pills clicáveis
+  - Arquivos: `public/modules/uat.js`, `public/style.css`
+- [x] **7.4** UAT: acordeão de planos com tabela de casos de teste — badges de resultado coloridos
+  - Arquivos: `public/modules/uat.js`, `projectService.js`
 
 ---
 
 ## Fase 8 — Plano de Entrega `IT-04`
 
 > Protótipo: `prototypes/prototype-it04.html`  
-> Iniciado em: —  
-> Concluído em: —
+> Iniciado em: 2026-06-12  
+> Concluído em: 2026-06-12
 
-- [ ] **8.1** Barras Gantt com visual diferenciado: passado (cinza + checkmark), atual (azul pulsante + badge de issues), futuro (dashed)
+- [x] **8.1** Barras Gantt com visual diferenciado: passado (cinza + checkmark), atual (azul pulsante + borda pulsante), futuro (dashed)
   - Arquivos: `public/modules/deliveryPlan.js`, `public/style.css`
-- [ ] **8.2** Indicador "HOJE" — linha vertical na posição proporcional à data atual dentro do sprint corrente
+- [x] **8.2** Indicador "HOJE" — linha vertical dashed vermelha com chip "HOJE", posicionada por JS via `requestAnimationFrame`
   - Arquivos: `public/modules/deliveryPlan.js`
-- [ ] **8.3** Tooltip ao hover na barra — sprint name, datas, % entregue, issues abertas
+- [x] **8.3** Tooltip ao hover na barra — sprint name, datas, status (Concluido/Em andamento/Planejado)
   - Arquivos: `public/modules/deliveryPlan.js`
-- [ ] **8.4** Painel de filtro por projeto — checkboxes "Selecionar todos / Limpar" + legenda de cores
-  - Arquivos: `public/modules/deliveryPlan.js`, `views/dashboard.html`
-- [ ] **8.5** Botão maximize/restore no modal
+- [x] **8.4** Painel lateral esquerdo — checkboxes por projeto com avatar colorido, "Selecionar todos / Limpar", legenda de cores
+  - Arquivos: `public/modules/deliveryPlan.js`, `public/style.css`
+- [x] **8.5** Botão maximize/restore no modal + reposicionamento da linha HOJE ao redimensionar
   - Arquivos: `public/modules/deliveryPlan.js`
 
 ---

@@ -6,6 +6,7 @@ let _uatPlans    = [];
 let _sprintFilter = '';
 const _expandedPlans     = new Set();
 const _planOutcomeFilter = {};
+const _planPrioFilter    = {};
 
 const _FOLDER_ICON = '<svg class="uat-folder-svg" viewBox="0 0 16 13" fill="none" xmlns="http://www.w3.org/2000/svg">'
   + '<path d="M1 3.5C1 2.67 1.67 2 2.5 2H6L7.5 4H14C14.83 4 15.5 4.67 15.5 5.5V11C15.5 11.83 14.83 12.5 14 12.5H2C1.17 12.5 0.5 11.83 0.5 11V3.5H1Z" stroke="currentColor" stroke-width="1.3" fill="none"/>'
@@ -137,25 +138,39 @@ function _buildSummaryCard(filteredPlans) {
 // ── Plan accordion rows ───────────────────────────────────────────────────────
 
 function _buildPlanDetail(plan) {
-  const points   = plan.points || [];
-  const selected = _planOutcomeFilter[plan.id] || new Set();
-  const outcomes = [...new Set(points.map(pt => pt.outcome))].sort();
+  const points          = plan.points || [];
+  const selectedOutcome = _planOutcomeFilter[plan.id] || new Set();
+  const selectedPrio    = _planPrioFilter[plan.id]    || new Set();
 
   const OUTCOME_LABELS = { passed: 'Passou', failed: 'Falhou', blocked: 'Bloqueado' };
   const labelFor = o => OUTCOME_LABELS[o] || 'Pendente';
+  const outcomes = [...new Set(points.map(pt => pt.outcome))].sort();
 
-  const clearBtn = selected.size > 0
-    ? `<button class="uat-filter-pill-clear" onclick="uatClearPlanFilter(${plan.id})">Limpar</button>`
+  const todosActive = selectedOutcome.size === 0 ? ' active' : '';
+  const todosBtn    = `<button class="uat-filter-pill${todosActive}" onclick="uatClearPlanFilter(${plan.id})">Todos</button>`;
+  const outcomePills = outcomes.map(o => {
+    const active = selectedOutcome.has(o) ? ' active' : '';
+    return `<button class="uat-filter-pill${active}" onclick="uatFilterPlan(${plan.id}, '${o}')">${labelFor(o)}</button>`;
+  }).join('');
+  const outcomeFilterHtml = todosBtn + outcomePills;
+
+  const priorities = [...new Set(points.map(pt => pt.priority).filter(p => p && p > 0))].sort();
+  const clearPrioBtn = selectedPrio.size > 0
+    ? `<button class="uat-filter-pill-clear" onclick="uatClearPlanPrioFilter(${plan.id})">Limpar</button>` : '';
+  const prioPills = priorities.length > 0
+    ? '<span class="uat-filter-sep">|</span>'
+      + priorities.map(p => {
+          const active = selectedPrio.size === 0 || selectedPrio.has(p) ? ' active' : '';
+          const cls = p === 1 ? 'p1' : p === 2 ? 'p2' : 'p3';
+          return `<button class="uat-filter-pill uat-prio-pill ${cls}${active}" onclick="uatFilterPlanPrio(${plan.id}, ${p})">P${p}</button>`;
+        }).join('') + clearPrioBtn
     : '';
-  const filterHtml = '<div class="uat-detail-filter">'
-    + outcomes.map(o => {
-        const active = selected.size === 0 || selected.has(o) ? ' active' : '';
-        return `<button class="uat-filter-pill${active}" onclick="uatFilterPlan(${plan.id}, '${o}')">${labelFor(o)}</button>`;
-      }).join('')
-    + clearBtn
-    + '</div>';
 
-  const visible = selected.size > 0 ? points.filter(pt => selected.has(pt.outcome)) : points;
+  const filterHtml = '<div class="uat-detail-filter">' + outcomeFilterHtml + prioPills + '</div>';
+
+  let visible = points;
+  if (selectedOutcome.size > 0) visible = visible.filter(pt => selectedOutcome.has(pt.outcome));
+  if (selectedPrio.size > 0)    visible = visible.filter(pt => selectedPrio.has(pt.priority));
 
   if (!visible.length) {
     return filterHtml + '<div class="uat-detail-empty">Nenhum caso de teste encontrado.</div>';
@@ -164,16 +179,27 @@ function _buildPlanDetail(plan) {
   const rows = visible.map(pt => {
     const tcId    = pt.testCaseId ? `TC-${pt.testCaseId}` : `#${pt.id}`;
     const nameEsc = (pt.name || '—').replace(/</g, '&lt;');
-    return '<div class="uat-tc-row">'
-      + `<span class="uat-tc-id">${tcId}</span>`
-      + _priorityBadge(pt.priority)
-      + `<span class="uat-tc-name">${nameEsc}</span>`
-      + `<span class="uat-tc-tester" title="${(pt.tester || '').replace(/"/g, '&quot;')}">${pt.tester || ''}</span>`
-      + _outcomeBadge(pt.outcome)
-      + '</div>';
+    return '<tr class="uat-tc-tr">'
+      + `<td class="uat-tc-id">${tcId}</td>`
+      + `<td>${_priorityBadge(pt.priority)}</td>`
+      + `<td class="uat-tc-name">${nameEsc}</td>`
+      + `<td class="uat-tc-tester" title="${(pt.tester || '').replace(/"/g, '&quot;')}">${pt.tester || '—'}</td>`
+      + `<td>${_outcomeBadge(pt.outcome)}</td>`
+      + '</tr>';
   }).join('');
 
-  return filterHtml + '<div class="uat-tc-list">' + rows + '</div>';
+  const table = '<table class="uat-tc-table">'
+    + '<thead><tr>'
+    + '<th class="uat-th-id">ID</th>'
+    + '<th class="uat-th-prio">Prioridade</th>'
+    + '<th class="uat-th-name">Nome</th>'
+    + '<th class="uat-th-tester">Testador</th>'
+    + '<th class="uat-th-outcome">Resultado</th>'
+    + '</tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '</table>';
+
+  return filterHtml + table;
 }
 
 function _buildPlanRow(plan) {
@@ -273,6 +299,7 @@ export function openUAT(el) {
   _sprintFilter = localStorage.getItem('uatSprint::' + _uatProject) || '';
   _expandedPlans.clear();
   Object.keys(_planOutcomeFilter).forEach(k => delete _planOutcomeFilter[k]);
+  Object.keys(_planPrioFilter).forEach(k => delete _planPrioFilter[k]);
   document.getElementById('uat-modal-title').textContent = getAlias(_uatProject);
   document.getElementById('uat-modal').classList.add('open', 'maximized');
   const maxBtn = document.getElementById('uat-modal-max');
@@ -318,6 +345,23 @@ export function uatClearPlanFilter(planId) {
   if (detail && plan) detail.innerHTML = _buildPlanDetail(plan);
 }
 
+export function uatFilterPlanPrio(planId, prio) {
+  if (!_planPrioFilter[planId]) _planPrioFilter[planId] = new Set();
+  const s = _planPrioFilter[planId];
+  if (s.has(prio)) s.delete(prio);
+  else s.add(prio);
+  const detail = document.querySelector(`.uat-plan-detail[data-plan="${planId}"]`);
+  const plan   = _uatPlans.find(p => p.id === planId);
+  if (detail && plan) detail.innerHTML = _buildPlanDetail(plan);
+}
+
+export function uatClearPlanPrioFilter(planId) {
+  delete _planPrioFilter[planId];
+  const detail = document.querySelector(`.uat-plan-detail[data-plan="${planId}"]`);
+  const plan   = _uatPlans.find(p => p.id === planId);
+  if (detail && plan) detail.innerHTML = _buildPlanDetail(plan);
+}
+
 export function closeUAT() {
   document.getElementById('uat-modal').classList.remove('open', 'maximized');
   const btn = document.getElementById('uat-modal-max');
@@ -348,6 +392,7 @@ export function uatChangeSprint(value) {
   else        localStorage.removeItem('uatSprint::' + _uatProject);
   _expandedPlans.clear();
   Object.keys(_planOutcomeFilter).forEach(k => delete _planOutcomeFilter[k]);
+  Object.keys(_planPrioFilter).forEach(k => delete _planPrioFilter[k]);
   document.getElementById('uat-modal-body').innerHTML = _renderContent(_uatPlans);
 }
 
