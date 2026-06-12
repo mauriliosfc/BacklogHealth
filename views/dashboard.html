@@ -25,49 +25,56 @@
     </div>
 
     <nav class="sidebar-nav">
-      <a class="sidebar-link active" id="sidebar-link-dashboard" href="#" onclick="showDashboardView();return false">
+      <a class="sidebar-link active" id="sidebar-link-dashboard" href="#" title="Dashboard" onclick="showDashboardView();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
         </span>
-        Dashboard
+        <span class="sl-label">Dashboard</span>
       </a>
-      <a class="sidebar-link" id="sidebar-link-tc" href="#" onclick="openTeamCapacity();return false">
+      <a class="sidebar-link" id="sidebar-link-tc" href="#" title="Team Capacity" onclick="openTeamCapacity();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4.5" r="2.5"/><circle cx="11" cy="4.5" r="2.5"/><path d="M1 13.5c0-2.2 1.8-4 4-4s4 1.8 4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M9.5 10.2c.5-.1 1-.2 1.5-.2 2.2 0 4 1.8 4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
         </span>
-        Team Capacity
+        <span class="sl-label">Team Capacity</span>
       </a>
-      <a class="sidebar-link" href="#" onclick="openDeliveryPlan();return false">
+      <a class="sidebar-link" href="#" title="Delivery Plan" onclick="openDeliveryPlan();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="3" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 1v4M11 1v4M1 7h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </span>
-        <span data-i18n="dp_title">Delivery Plan</span>
+        <span class="sl-label" data-i18n="dp_title">Delivery Plan</span>
       </a>
-      <a class="sidebar-link" href="#" onclick="openDaily();return false">
+      <a class="sidebar-link" href="#" title="Daily Standup" onclick="openDaily();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v4l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </span>
-        Daily Standup
+        <span class="sl-label">Daily Standup</span>
       </a>
-      <a class="sidebar-link" href="#" onclick="openCopilot();return false">
+      <a class="sidebar-link" href="#" title="Copilot AI" onclick="openCopilot();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5C4.41 1.5 1.5 4.08 1.5 7.25c0 1.73.8 3.27 2.07 4.33L3 13.5l2.18-1.09A7.15 7.15 0 008 13c3.59 0 6.5-2.58 6.5-5.75S11.59 1.5 8 1.5z"/></svg>
         </span>
-        Copilot AI
+        <span class="sl-label">Copilot AI</span>
       </a>
     </nav>
 
     <div class="sidebar-footer">
-      <a class="sidebar-link sidebar-link-sm" href="#" onclick="openFeedback();return false">
+      <a class="sidebar-link sidebar-link-sm" href="#" title="Feedback" onclick="openFeedback();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2h12a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 3v-3H2a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
         </span>
-        <span data-i18n="fb_sidebar">Feedback</span>
+        <span class="sl-label" data-i18n="fb_sidebar">Feedback</span>
       </a>
-      <a class="sidebar-link sidebar-link-sm" href="/settings">
+      <a class="sidebar-link sidebar-link-sm" href="/settings" title="Settings">
         <span class="sidebar-link-icon">⚙️</span>
-        <span data-i18n="btn_settings">Settings</span>
+        <span class="sl-label" data-i18n="btn_settings">Settings</span>
       </a>
+      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" title="Minimizar menu">
+        <span class="sidebar-link-icon">
+          <svg class="sl-icon-collapse" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg class="sl-icon-expand" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="sl-label">Minimizar</span>
+      </button>
     </div>
   </aside>
 

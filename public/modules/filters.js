@@ -62,6 +62,38 @@ export function saveFilter(card, selected) {
   else localStorage.setItem('filter_' + project, JSON.stringify(selected));
 }
 
+function syncSumBar() {
+  const cards = document.querySelectorAll('#content .card[data-project]');
+  if (!cards.length) return;
+
+  const wiEl     = document.getElementById('sum-workitems');
+  const issueEl  = document.getElementById('sum-issues');
+
+  if (wiEl) {
+    let total = 0;
+    cards.forEach(c => { total += parseInt(c.querySelector('.card-total')?.textContent, 10) || 0; });
+    wiEl.textContent = total;
+  }
+
+  if (issueEl) {
+    let issues = 0;
+    cards.forEach(c => {
+      issues += parseInt(c.querySelector('.card-semest')?.textContent,  10) || 0;
+      issues += parseInt(c.querySelector('.card-semresp')?.textContent, 10) || 0;
+      issues += parseInt(c.querySelector('.card-bugs')?.textContent,    10) || 0;
+    });
+    issueEl.textContent = issues || '—';
+    issueEl.classList.toggle('sum-val--warn', issues > 0);
+  }
+
+  const openEl = document.getElementById('sum-open');
+  if (openEl) {
+    let open = 0;
+    cards.forEach(c => { open += parseInt(c.querySelector('.card-open')?.textContent, 10) || 0; });
+    openEl.textContent = open;
+  }
+}
+
 export function applyFilter(card, selected) {
   const allItems = JSON.parse(card.dataset.items);
   const workItemType = card.dataset.workitemtype || 'User Story';
@@ -119,12 +151,18 @@ export function applyFilter(card, selected) {
     healthEl.title = health[2];
   }
 
+  // Open items counter (hidden, used by syncSumBar)
+  const openEl = card.querySelector('.card-open');
+  if (openEl) openEl.textContent = openItems.length;
+
   // Sem sprint indicator
   const noSprint = openItems.filter(i => !i.iteration.includes('\\')).length;
   const noSprintVal = card.querySelector('.no-sprint-val');
   const issuesEl = card.querySelector('.card-issues');
   if (noSprintVal) noSprintVal.textContent = noSprint;
   if (issuesEl) issuesEl.style.display = noSprint === 0 ? 'none' : '';
+
+  syncSumBar();
 }
 
 export function openCardStat(statEl, stat) {
@@ -196,6 +234,7 @@ export function initFilters() {
 
     applyFilter(card, selected);
   });
+  syncSumBar();
 }
 
 export function initHealthBadges() {

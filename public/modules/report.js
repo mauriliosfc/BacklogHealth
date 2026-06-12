@@ -1453,7 +1453,7 @@ function _renderPRBs(prbs, incidents) {
 }
 
 function _buildHTML(payload) {
-  const { metadata, hasSn, delivery, quality, incidents, prbs, prevDelivery, prevQuality } = payload;
+  const { metadata, hasSn, hasAzure, delivery, quality, incidents, prbs, prevDelivery, prevQuality } = payload;
 
   // Cache age indicator
   const ageMs  = metadata.generatedAtTs ? Date.now() - metadata.generatedAtTs : 0;
@@ -1464,7 +1464,7 @@ function _buildHTML(payload) {
     ? (ageH > 0 ? `${ageH}h${ageMin > 0 ? ` ${ageMin}min` : ''} atrás` : ageMin > 0 ? `${ageMin}min atrás` : 'agora mesmo')
     : '';
 
-  const snWarning = !hasSn
+  const snWarning = !hasSn && hasAzure
     ? `<div class="report-sn-notice">
         <span>Service Now não configurado para este projeto. Exibindo apenas dados do Azure DevOps.</span>
         <button class="report-sn-notice-btn" onclick="openReportSnConfig()">Configurar</button>
@@ -1489,7 +1489,7 @@ function _buildHTML(payload) {
       </div>
       ${snWarning}
       ${notesBar}
-      ${_renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality)}
+      ${hasAzure ? _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality) : ''}
       ${incidents ? _renderIncidents(incidents) : ''}
       ${prbs      ? _renderPRBs(prbs, incidents) : ''}
     </div>
@@ -2468,6 +2468,7 @@ async function _showIncidentsModal(title, fetchParams) {
       <div class="report-inc-modal-title">${_esc(title)}</div>
       <div class="report-inc-modal-actions">
         <button class="report-inc-export-btn" id="report-inc-export-btn" onclick="reportExportIncidentsCSV()" title="Exportar para Excel (CSV)">&#x2193; Exportar</button>
+        <button class="modal-maximize" id="report-inc-max-btn" onclick="toggleReportIncMax()" title="Maximizar">&#x2922;</button>
         <button class="report-inc-modal-close" onclick="reportCloseIncidentsModal()">&#x2715;</button>
       </div>
     </div>
@@ -2508,6 +2509,14 @@ export async function reportOpenIncidentsModal() {
   _showIncidentsModal('Backlog de Incidentes', params.toString());
 }
 
+export function toggleReportIncMax() {
+  const panel = document.querySelector('.report-inc-modal-panel');
+  if (!panel) return;
+  const isMax = panel.classList.toggle('maximized');
+  const btn = document.getElementById('report-inc-max-btn');
+  if (btn) btn.textContent = isMax ? '⤡' : '⤢';
+}
+
 export function openIncidentsForGroup(groupName) {
   const month = new Date().toISOString().slice(0, 7);
   const params = new URLSearchParams({ group: groupName, month, mode: 'backlog', filterField: '', filterValue: '' });
@@ -2533,7 +2542,7 @@ async function _load(refresh = false) {
 
   try {
     const r = await fetch('/api/report?' + q);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) { const errBody = await r.json().catch(() => ({})); throw new Error(errBody.error || `HTTP ${r.status}`); }
     const data = await r.json();
     _lastPayload = data.payload;
     _reportMonth = data.month;

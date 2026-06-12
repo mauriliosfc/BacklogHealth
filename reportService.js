@@ -343,17 +343,28 @@ function _snRaw(v) {
 
 async function fetchSnReport(displayName, period) {
   const snCfg  = getSnConfig();
+  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
+
   const snGrp  = getProjectSnGroup(displayName);
-  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass || !snGrp?.assignmentGroup) return null;
+  let grp, isSysId;
+  if (snGrp?.assignmentGroup) {
+    // Normal path: project has a linked SN assignment group config
+    grp     = snGrp.assignmentGroup.trim();
+    isSysId = /^[0-9a-f]{32}$/i.test(grp);
+  } else {
+    // SN-only mode: displayName IS the group display name from the SN dashboard card
+    const allowed = snCfg.assignmentGroups;
+    if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
+    grp     = displayName;
+    isSysId = false;
+  }
 
   const snCacheKey = String(period.history.length);
   const cached = _readCache('sn', displayName, period.month, snCacheKey);
   if (cached) return cached;
 
-  const grp = snGrp.assignmentGroup.trim();
   // ServiceNow assignment_group field accepts sys_id (32-char hex) directly.
   // If user provided a display name, use dot-notation: assignment_group.name=
-  const isSysId   = /^[0-9a-f]{32}$/i.test(grp);
   const grpFilter = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
 
   const start = period.start + 'T00:00:00Z';
@@ -600,7 +611,7 @@ async function fetchSnReport(displayName, period) {
       openBacklog:       incBacklog,
       avgResolutionDays: incAvgResolutionDays,
       byPriority,
-      slaEnabled:    snGrp.slaEnabled === true,
+      slaEnabled:    snGrp?.slaEnabled === true,
       slaByPriority,
       bySystem,
       bySystemMonthly,
@@ -636,8 +647,10 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
   const prevMonthStr  = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
   const prevPeriod    = buildPeriod(prevMonthStr, 1);
 
+  const _EMPTY_AZURE = { totalUS: 0, totalDelivered: 0, sprints: [], byTypes: {}, byTypesPts: {}, usAging: {}, bugsOpen: 0, bugsNew: 0, bugsClosed: 0 };
+
   const [azure, sn, prevAzure] = await Promise.all([
-    fetchAzureReport(displayName, period, groupFields, agingState, deliveryStates),
+    fetchAzureReport(displayName, period, groupFields, agingState, deliveryStates).catch(() => _EMPTY_AZURE),
     fetchSnReport(displayName, period),
     fetchAzureReport(displayName, prevPeriod, [], '', deliveryStates).catch(() => null),
   ]);
@@ -645,6 +658,7 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
   return {
     metadata:     { project: displayName, period: period.label, generatedAt: new Date().toLocaleString('pt-BR'), generatedAtTs: Date.now() },
     hasSn:        !!sn,
+    hasAzure:     !!(azure.sprints?.length || azure.totalUS > 0),
     delivery:     { totalUS: azure.totalUS, totalDelivered: azure.totalDelivered, sprints: azure.sprints, byTypes: azure.byTypes, byTypesPts: azure.byTypesPts, usAging: azure.usAging },
     quality:      { bugsOpen: azure.bugsOpen, bugsNew: azure.bugsNew, bugsClosed: azure.bugsClosed },
     prevDelivery: prevAzure ? { totalUS: prevAzure.totalUS, totalDelivered: prevAzure.totalDelivered } : null,
@@ -665,10 +679,17 @@ async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', fi
     grpFilter = `assignment_group.name=${group}`;
   } else {
     const snGrp = getProjectSnGroup(displayName);
-    if (!snGrp?.assignmentGroup) return null;
-    const grp   = snGrp.assignmentGroup.trim();
-    const isSysId = /^[0-9a-f]{32}$/i.test(grp);
-    grpFilter   = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
+    if (snGrp?.assignmentGroup) {
+      const grp     = snGrp.assignmentGroup.trim();
+      const isSysId = /^[0-9a-f]{32}$/i.test(grp);
+      grpFilter     = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
+    } else {
+      // SN-only mode: displayName é o nome do grupo SN diretamente
+      const allowed = snCfg.assignmentGroups;
+      if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
+      if (!displayName) return null;
+      grpFilter = `assignment_group.name=${displayName}`;
+    }
   }
 
   const [y, m] = month.split('-').map(Number);
