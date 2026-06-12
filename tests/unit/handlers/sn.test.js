@@ -1,8 +1,8 @@
 jest.mock('../../../config');
 jest.mock('../../../servicenowClient');
 
-const { getSnCfg, saveSnCfg, testSn, fetchGroups } = require('../../../handlers/sn');
-const { getSnConfig, saveSnConfig, getProjectSnGroup } = require('../../../config');
+const { getSnCfg, saveSnCfg, testSn, fetchGroups, getAllProjectsSnCfg } = require('../../../handlers/sn');
+const { getSnConfig, saveSnConfig, getProjectSnGroup, getCfg } = require('../../../config');
 const { snGet } = require('../../../servicenowClient');
 
 // ── getSnCfg ──────────────────────────────────────────────────────────────────
@@ -221,5 +221,58 @@ describe('fetchGroups', () => {
       expect.objectContaining({ assignmentGroups: ['Ops', 'DB'] }),
       null
     );
+  });
+});
+
+// ── getAllProjectsSnCfg ────────────────────────────────────────────────────────
+
+describe('getAllProjectsSnCfg', () => {
+  test('retorna lista vazia quando nenhum projeto configurado', () => {
+    getCfg.mockReturnValue({ projects: [] });
+    expect(getAllProjectsSnCfg()).toEqual({ projects: [] });
+  });
+
+  test('retorna lista vazia quando projects é undefined', () => {
+    getCfg.mockReturnValue({});
+    expect(getAllProjectsSnCfg()).toEqual({ projects: [] });
+  });
+
+  test('retorna todos os projetos com campos SN vazios quando não configurado', () => {
+    getCfg.mockReturnValue({ projects: [{ name: 'Alpha' }, { name: 'Beta' }] });
+    const { projects } = getAllProjectsSnCfg();
+    expect(projects).toHaveLength(2);
+    expect(projects[0]).toMatchObject({ name: 'Alpha', assignmentGroup: '', assignmentGroupName: '' });
+    expect(projects[1]).toMatchObject({ name: 'Beta',  assignmentGroup: '', assignmentGroupName: '' });
+  });
+
+  test('retorna assignmentGroup e assignmentGroupName quando configurado', () => {
+    getCfg.mockReturnValue({
+      projects: [{
+        name: 'Alpha',
+        servicenow: { assignmentGroup: 'grp123', assignmentGroupName: 'TI - Suporte' },
+      }],
+    });
+    const { projects } = getAllProjectsSnCfg();
+    expect(projects[0]).toMatchObject({ name: 'Alpha', assignmentGroup: 'grp123', assignmentGroupName: 'TI - Suporte' });
+  });
+
+  test('mistura projetos configurados e não configurados corretamente', () => {
+    getCfg.mockReturnValue({
+      projects: [
+        { name: 'Alpha', servicenow: { assignmentGroup: 'grp1', assignmentGroupName: 'Grupo A' } },
+        { name: 'Beta' },
+      ],
+    });
+    const { projects } = getAllProjectsSnCfg();
+    expect(projects[0]).toMatchObject({ name: 'Alpha', assignmentGroup: 'grp1', assignmentGroupName: 'Grupo A' });
+    expect(projects[1]).toMatchObject({ name: 'Beta',  assignmentGroup: '',     assignmentGroupName: '' });
+  });
+
+  test('não expõe campos internos além de name, assignmentGroup, assignmentGroupName', () => {
+    getCfg.mockReturnValue({
+      projects: [{ name: 'X', pat: 'secret', servicenow: { assignmentGroup: 'g1', assignmentGroupName: 'G1' } }],
+    });
+    const { projects } = getAllProjectsSnCfg();
+    expect(Object.keys(projects[0])).toEqual(['name', 'assignmentGroup', 'assignmentGroupName']);
   });
 });

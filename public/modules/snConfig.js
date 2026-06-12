@@ -6,11 +6,9 @@ export function openSnConfig(project) {
   if (!modal) return;
   _snProject = project || null;
 
-  // Subtitle com o nome do projeto
   const sub = document.getElementById('snm-subtitle');
   if (sub) sub.textContent = project || '';
 
-  // Limpa status anteriores
   _setStatus(document.getElementById('snm-global-status'), '', '');
   _setStatus(document.getElementById('snm-proj-status'),   '', '');
 

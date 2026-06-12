@@ -1,4 +1,4 @@
-const { getSnConfig, saveSnConfig, getProjectSnGroup } = require('../config');
+const { getSnConfig, saveSnConfig, getProjectSnGroup, getCfg } = require('../config');
 const { snGet } = require('../servicenowClient');
 const { httpError } = require('./utils');
 
@@ -77,4 +77,15 @@ async function fetchGroups({ instance, user, pass } = {}) {
   }
 }
 
-module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups };
+function getAllProjectsSnCfg() {
+  const projects = getCfg().projects || [];
+  return {
+    projects: projects.map(p => ({
+      name:                p.name,
+      assignmentGroup:     p.servicenow?.assignmentGroup     || '',
+      assignmentGroupName: p.servicenow?.assignmentGroupName || '',
+    })),
+  };
+}
+
+module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, getAllProjectsSnCfg };

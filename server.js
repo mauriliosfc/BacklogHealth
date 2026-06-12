@@ -122,7 +122,7 @@ async function main() {
     }
 
     // ── GET /settings ──────────────────────────────────────────────────────
-    if (url === '/settings') {
+    if (urlPath === '/settings') {
       const cfg = getCfg();
       return page(res, () => dashH.renderSetup({ org: cfg.org || '', pat: cfg.pat || '', projects: cfg.projects || [] }));
     }
@@ -272,6 +272,11 @@ async function main() {
         filterValue: qp.get('filterValue') || '',
         group:       qp.get('group')       || '',
       }));
+    }
+
+    // ── GET /api/sn-projects ──────────────────────────────────────────────
+    if (req.method === 'GET' && url === '/api/sn-projects') {
+      return json(res, () => snH.getAllProjectsSnCfg());
     }
 
     // ── GET/POST /api/sn-config ────────────────────────────────────────────

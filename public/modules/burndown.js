@@ -45,6 +45,27 @@ document.addEventListener('keydown', e => {
   }
 });
 
+export function bdTip(event, el) {
+  const tip  = document.getElementById('bd-tooltip');
+  const wrap = document.querySelector('.bd-chart-wrap');
+  if (!tip || !wrap) return;
+  const wRect = wrap.getBoundingClientRect();
+  const lx    = event.clientX - wRect.left + 12;
+  const ly    = event.clientY - wRect.top  - 76;
+  tip.innerHTML =
+    '<div class="bd-tip-date">' + (el.dataset.bdDate || '') + '</div>' +
+    '<div class="bd-tip-row"><span class="bd-tip-lbl">Restando</span><span class="bd-tip-v">' + (el.dataset.bdPts || '0') + '</span></div>' +
+    '<div class="bd-tip-row"><span class="bd-tip-lbl">Ideal</span><span class="bd-tip-v bd-tip-ideal">' + (el.dataset.bdIdeal || '0') + '</span></div>';
+  tip.style.left    = Math.min(Math.max(8, lx), wRect.width - 160) + 'px';
+  tip.style.top     = Math.max(4, ly) + 'px';
+  tip.style.display = 'block';
+}
+
+export function bdTipHide() {
+  const tip = document.getElementById('bd-tooltip');
+  if (tip) tip.style.display = 'none';
+}
+
 export async function openBurndownFromDaily(project, currentIter) {
   const modalEl = document.getElementById('burndown-modal');
   const bodyEl  = document.getElementById('burndown-body');
@@ -98,33 +119,39 @@ function buildBurndownChart(allSprints, highlightKey) {
   }
   const totalDays = days.length - 1 || 1;
 
-  const todayClamp = today < start ? start : today > end ? end : today;
-  const elapsed    = (todayClamp - start) / (1000 * 60 * 60 * 24);
+  const todayClamp  = today < start ? start : today > end ? end : today;
+  const elapsed     = (todayClamp - start) / (1000 * 60 * 60 * 24);
   const elapsedDays = Math.min(Math.round(elapsed), totalDays);
 
-  const W = 760, H = 320, PL = 50, PR = 20, PT = 20, PB = 40;
+  const W = 760, H = 320, PL = 52, PR = 20, PT = 18, PB = 40;
   const cW = W - PL - PR, cH = H - PT - PB;
 
   function xOf(dayIdx) { return PL + (dayIdx / totalDays) * cW; }
   function yOf(val)    { return PT + cH - (val / totalUs) * cH; }
 
-  const idealPts = days.map((_, i) => xOf(i) + ',' + yOf(totalUs - (totalUs * i / totalDays))).join(' ');
+  const dateLocale = getDateLocale();
+  const idealPts   = days.map((_, i) => xOf(i) + ',' + yOf(totalUs - (totalUs * i / totalDays))).join(' ');
 
-  const realPts = [];
+  const realPtsData = [];
   for (let i = 0; i <= elapsedDays; i++) {
-    const remaining = totalUs - Math.round(donePts * i / (elapsedDays || 1));
-    realPts.push(xOf(i) + ',' + yOf(remaining));
+    const rem     = totalUs - Math.round(donePts * i / (elapsedDays || 1));
+    const idealAt = Math.round(totalUs - totalUs * i / totalDays);
+    realPtsData.push({
+      x: xOf(i), y: yOf(rem), rem, idealAt,
+      dateStr: days[i].toLocaleDateString(dateLocale, { day: '2-digit', month: 'short' }),
+    });
   }
 
-  const todayX  = xOf(elapsedDays);
+  const todayX   = xOf(elapsedDays);
   const isActive = today >= start && today <= end;
-  const dateLocale = getDateLocale();
 
-  const yLabels = [0, 0.25, 0.5, 0.75, 1].map(f => {
-    const v = Math.round(totalUs * f);
+  // Grid lines (dashed) + Y labels
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(totalUs * f));
+  const yLabels = yTicks.map(v => {
     const y = yOf(v);
-    return '<text x="' + (PL - 6) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="#64748b">' + v + '</text>' +
-           '<line x1="' + PL + '" y1="' + y + '" x2="' + (W - PR) + '" y2="' + y + '" stroke="#1e293b" stroke-width="1"/>';
+    return '<line x1="' + PL + '" y1="' + y + '" x2="' + (W - PR) + '" y2="' + y +
+           '" stroke="rgba(255,255,255,.06)" stroke-width="1" stroke-dasharray="3,4"/>' +
+           '<text x="' + (PL - 7) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="#94a3b8">' + v + '</text>';
   }).join('');
 
   const step = Math.max(1, Math.ceil(totalDays / 8));
@@ -132,41 +159,91 @@ function buildBurndownChart(allSprints, highlightKey) {
     const i = days.indexOf(day);
     const x = xOf(i);
     const label = day.toLocaleDateString(dateLocale, { day: '2-digit', month: 'short' });
-    return '<text x="' + x + '" y="' + (H - PB + 18) + '" text-anchor="middle" font-size="11" fill="#64748b">' + label + '</text>';
+    return '<text x="' + x + '" y="' + (H - PB + 18) + '" text-anchor="middle" font-size="10" fill="#94a3b8">' + label + '</text>';
   }).join('');
 
   const todayLine = isActive
-    ? '<line x1="' + todayX + '" y1="' + PT + '" x2="' + todayX + '" y2="' + (H - PB) + '" stroke="#f87171" stroke-width="1.5" stroke-dasharray="4,3"/>' +
-      '<text x="' + (todayX + 4) + '" y="' + (PT + 12) + '" font-size="10" fill="#f87171">' + t('burndown_today') + '</text>'
+    ? '<line x1="' + todayX + '" y1="' + PT + '" x2="' + todayX + '" y2="' + (H - PB) +
+      '" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,4" opacity=".8"/>' +
+      '<text x="' + (todayX + 4) + '" y="' + (PT + 11) + '" font-size="10" fill="#ef4444" font-weight="700">' + t('burndown_today') + '</text>'
     : '';
 
-  const svg =
-    '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:320px">' +
+  // Gradient fill area under real line
+  const areaPoints = realPtsData.length > 1
+    ? realPtsData.map(p => p.x + ',' + p.y).join(' ') +
+      ' ' + realPtsData[realPtsData.length - 1].x + ',' + (H - PB) +
+      ' ' + realPtsData[0].x + ',' + (H - PB)
+    : '';
+
+  // Visible dots + invisible hit areas
+  const dotsAndHits = realPtsData.map((p, i) => {
+    const isToday = i === elapsedDays && isActive;
+    let out = '';
+    if (isToday) {
+      out += '<circle cx="' + p.x + '" cy="' + p.y + '" r="10" fill="#ef4444" opacity=".12" class="bd-pulse-ring"/>';
+      out += '<circle cx="' + p.x + '" cy="' + p.y + '" r="8" fill="none" stroke="#ef4444" stroke-width="1.5" opacity=".7"/>';
+      out += '<circle cx="' + p.x + '" cy="' + p.y + '" r="5" fill="#22c55e" stroke="#0f172a" stroke-width="2"/>';
+    } else {
+      out += '<circle cx="' + p.x + '" cy="' + p.y + '" r="4" fill="#22c55e" stroke="#0f172a" stroke-width="1.5"/>';
+    }
+    out += '<circle cx="' + p.x + '" cy="' + p.y + '" r="14" fill="transparent" class="bd-hit"' +
+      ' data-bd-date="' + p.dateStr + '" data-bd-pts="' + p.rem + '" data-bd-ideal="' + p.idealAt + '"' +
+      ' onmouseenter="bdTip(event,this)" onmouseleave="bdTipHide()"/>';
+    return out;
+  }).join('');
+
+  const svgEl =
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block">' +
+      '<defs>' +
+      '<linearGradient id="bd-fill" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#22c55e" stop-opacity=".22"/>' +
+      '<stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>' +
+      '</linearGradient>' +
+      '<filter id="bd-glow"><feGaussianBlur stdDeviation="2.5" result="blur"/>' +
+      '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+      '</defs>' +
       yLabels +
-      '<polyline points="' + idealPts + '" fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="6,4"/>' +
-      (realPts.length > 1 ? '<polyline points="' + realPts.join(' ') + '" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linejoin="round"/>' : '') +
+      '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (H - PB) + '" stroke="#1e293b" stroke-width="1"/>' +
+      '<line x1="' + PL + '" y1="' + (H - PB) + '" x2="' + (W - PR) + '" y2="' + (H - PB) + '" stroke="#1e293b" stroke-width="1"/>' +
+      '<polyline points="' + idealPts + '" fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="5,5"/>' +
+      (areaPoints ? '<polygon points="' + areaPoints + '" fill="url(#bd-fill)"/>' : '') +
+      (realPtsData.length > 1
+        ? '<polyline points="' + realPtsData.map(p => p.x + ',' + p.y).join(' ') +
+          '" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linejoin="round" filter="url(#bd-glow)"/>'
+        : '') +
       todayLine +
       xLabels +
-      '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (H - PB) + '" stroke="#334155" stroke-width="1"/>' +
-      '<line x1="' + PL + '" y1="' + (H - PB) + '" x2="' + (W - PR) + '" y2="' + (H - PB) + '" stroke="#334155" stroke-width="1"/>' +
+      dotsAndHits +
     '</svg>';
 
-  const remaining = totalUs - donePts;
-  const pct = Math.round(donePts / totalUs * 100);
+  const chartWrap = '<div class="bd-chart-wrap"><div class="bd-tooltip" id="bd-tooltip"></div>' + svgEl + '</div>';
 
-  const summary =
-    '<div style="display:flex;gap:24px;flex-wrap:wrap;padding:16px 4px 0">' +
-      '<div class="d-card"><div class="d-label">' + t('burndown_total_us') + '</div><div class="d-val blue">' + totalUs + '</div></div>' +
-      '<div class="d-card"><div class="d-label">' + t('burndown_completed') + '</div><div class="d-val green">' + donePts + '</div></div>' +
-      '<div class="d-card"><div class="d-label">' + t('burndown_remaining') + '</div><div class="d-val ' + (remaining > 0 ? 'yellow' : 'green') + '">' + remaining + '</div></div>' +
-      '<div class="d-card"><div class="d-label">' + t('burndown_progress') + '</div><div class="d-val ' + (pct >= 80 ? 'green' : pct >= 50 ? 'yellow' : 'red') + '">' + pct + '%</div></div>' +
+  // Stats below chart (4-card grid)
+  const remaining = totalUs - donePts;
+  const idealNow  = Math.round(totalUs - totalUs * elapsedDays / totalDays);
+  const delta     = remaining - idealNow;
+  const daysLeft  = today > end ? 0 : Math.ceil((end - today) / 86400000);
+  const deltaText = delta === 0 ? ''
+    : delta > 0 ? ('+' + delta + ' pts acima do ideal')
+    : (Math.abs(delta) + ' pts abaixo do ideal');
+  const deltaClass = delta > 0 ? 'delta-red' : delta < 0 ? 'delta-green' : '';
+
+  const statsRow =
+    '<div class="bd-stats-row">' +
+    '<div class="bd-stat"><div class="bd-stat-label">Restante</div><div class="bd-stat-val">' + remaining + ' <span>pts</span></div></div>' +
+    '<div class="bd-stat"><div class="bd-stat-label">Entregue</div><div class="bd-stat-val">' + donePts + ' <span>pts</span></div></div>' +
+    '<div class="bd-stat"><div class="bd-stat-label">Dias restantes</div><div class="bd-stat-val">' + daysLeft + ' <span>dias</span></div></div>' +
+    '<div class="bd-stat"><div class="bd-stat-label">Ideal restante</div><div class="bd-stat-val">' + idealNow + ' <span>pts</span></div>' +
+      (deltaText ? '<div class="bd-stat-delta ' + deltaClass + '">' + deltaText + '</div>' : '') +
+    '</div>' +
     '</div>';
 
   const legend =
-    '<div style="display:flex;gap:16px;padding:8px 4px;font-size:12px;color:#64748b">' +
-      '<span><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="1.5" stroke-dasharray="6,4"/></svg> ' + t('burndown_ideal') + '</span>' +
-      '<span><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#22c55e" stroke-width="2.5"/></svg> ' + t('burndown_real') + '</span>' +
+    '<div class="bd-legend">' +
+    '<div class="bd-legend-item"><div class="bd-legend-line bd-legend-ideal"></div><span>' + t('burndown_ideal') + '</span></div>' +
+    '<div class="bd-legend-item"><div class="bd-legend-line bd-legend-real"></div><span>' + t('burndown_real') + '</span></div>' +
+    (isActive ? '<div class="bd-legend-item"><div class="bd-legend-hoje"></div><span>' + t('burndown_today') + '</span></div>' : '') +
     '</div>';
 
-  return '<div style="padding:20px">' + summary + '<div style="margin-top:20px">' + svg + '</div>' + legend + '</div>';
+  return '<div class="bd-body">' + chartWrap + legend + statsRow + '</div>';
 }
