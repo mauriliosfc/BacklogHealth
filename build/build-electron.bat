@@ -16,14 +16,26 @@ if not exist "%SEVENZIP%" (
   echo [OK] 7za.exe atualizado para a versao do sistema.
 )
 
-:: ── 2. Remove cache corrompido do winCodeSign ──────────────────────────────
+:: ── 2. Regenera o icon.ico com o design atual ──────────────────────────────
+echo Gerando icon.ico...
+node build\gen-icon.js
+if %ERRORLEVEL% neq 0 (
+  echo [ERRO] Falha ao gerar icon.ico. Abortando.
+  pause & exit /b 1
+)
+echo [OK] icon.ico atualizado.
+
+:: ── 3. Remove cache corrompido do winCodeSign ──────────────────────────────
 set "WINCSC=%LOCALAPPDATA%\electron-builder\Cache\winCodeSign"
 if exist "%WINCSC%" (
   rmdir /S /Q "%WINCSC%"
   echo [OK] Cache winCodeSign limpo.
 )
 
-:: ── 3. Gera o build ────────────────────────────────────────────────────────
+:: ── 4. Limpa cache de icones do Windows (forca refresh no Explorer) ─────────
+ie4uinit.exe -show >nul 2>&1
+
+:: ── 5. Gera o build ────────────────────────────────────────────────────────
 echo.
 echo Gerando build...
 echo.
