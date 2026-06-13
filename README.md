@@ -21,8 +21,9 @@ Dashboard Node.js local para monitoramento e análise de saúde dos backlogs de 
 - **Suporte a múltiplos times** por projeto — cada time monitorado de forma isolada
 - **Alias de projeto** — renomear o nome exibido sem alterar configuração do servidor
 - **i18n** — Português, Inglês (padrão) e Espanhol
-- **Tema claro/escuro** com persistência no browser
-- **Distribuição como app Windows** — `BacklogHealth.exe` via wrapper WebView2, sem instalar Node.js
+- **Tema claro/escuro** com persistência no browser — sincroniza automaticamente com a preferência do Windows no app Electron
+- **App Windows nativo** — instalador NSIS ou versão portátil via Electron, sem instalar Node.js
+- **Atualizações no app** — banner aparece quando uma nova versão é publicada; baixe e instale sem sair do dashboard
 
 ---
 
@@ -94,24 +95,21 @@ npm run test:watch      # modo watch (re-executa ao salvar)
 npm run test:coverage   # exibe cobertura por arquivo
 ```
 
-163 testes unitários cobrindo handlers de domínio, utilitários e funções puras de configuração.
+259 testes unitários cobrindo handlers de domínio, utilitários e funções puras de configuração.
 
 ---
 
 ## Build — distribuição como .exe
 
 ```bash
-npm run build
+npm run electron:build
 ```
 
-Gera `dist/app/server.exe` (Node.js + app empacotados via PKG, ~37MB).
+Gera em `dist/electron/`:
+- `Backlog Health Setup x.x.x.exe` — instalador NSIS (~76MB); cria atalho no Desktop e Menu Iniciar
+- `Backlog Health x.x.x.exe` — versão portátil; execute direto, sem instalar
 
-A pasta `dist/app/` deve conter:
-- `server.exe` — gerado pelo build
-- `BacklogHealth.exe` — wrapper C# WPF, compilado separadamente via MSBuild
-- `*.dll` / `runtimes/` — DLLs do WebView2
-
-Para distribuir: zipar toda a pasta `dist/app/`. O usuário executa `BacklogHealth.exe`.
+As releases são publicadas em [github.com/mauriliosfc/BacklogHealth/releases](https://github.com/mauriliosfc/BacklogHealth/releases). O app detecta novas versões automaticamente e exibe um banner para download e instalação.
 
 ---
 
@@ -127,6 +125,10 @@ BacklogHealth/
 ├── reportService.js       # buildReport, cache JSON 6h (Azure + Service Now)
 ├── servicenowClient.js    # snGet — HTTPS Basic auth para a Table API do SN
 ├── aiClient.js            # chatCompletion, testConnection (Foundry / Azure OAI / genérico)
+├── electron/
+│   ├── main.js            # BrowserWindow, tema da barra de título, IPC, update check
+│   ├── preload.js         # contextBridge — expõe electronAPI ao renderer
+│   └── updater.js         # checkForUpdates, downloadUpdate via GitHub Releases API
 ├── handlers/              # Funções puras async — sem req/res, reutilizáveis por IPC
 │   ├── utils.js           # HttpError, httpError(), readBody()
 │   ├── state.js           # Singleton cachedHTML
@@ -143,23 +145,22 @@ BacklogHealth/
 │   ├── paginate.js        # paginatedItems — lotes de 200
 │   └── iterMap.js         # fetchIterMap — sprints/iterations com fallback
 ├── public/
-│   ├── style.css          # Todo o CSS (dark/light, zero duplicatas)
+│   ├── style.css          # Todo o CSS (dark/light, Electron, scrollbar, zero duplicatas)
 │   ├── app.js             # Entry point ES Module
 │   ├── i18n/              # pt.json, en.json (padrão), es.json
 │   └── modules/           # constants, health, utils, filters, detail, daily,
 │                          # burndown, teamCapacity, copilot, report, snConfig,
-│                          # itemsModal, alias, deliveryPlan, theme, timer, i18n
+│                          # itemsModal, alias, deliveryPlan, updater, theme, timer, i18n
 ├── views/
 │   ├── dashboard.html     # Template com tokens {{ORG}}, {{CARDS}}, etc.
 │   ├── setup.html         # Template da tela de configuração
 │   └── report.html        # Template do Review Mensal
 ├── tests/
-│   ├── unit/              # 163 testes (handlers, utils, config)
+│   ├── unit/              # 259 testes (handlers, utils, config)
 │   └── integration/       # Planejado: supertest + nock
-├── wrapper/               # C# WPF .NET 4.8 — BacklogHealth.exe
-├── dist/app/              # Distribuição (não versionado)
+├── dist/electron/         # Distribuição Electron (não versionado)
 ├── docs/
-│   └── decisions.md       # Histórico de 161 decisões arquiteturais
+│   └── decisions.md       # Histórico de decisões arquiteturais
 └── config.json            # Credenciais (gerado automaticamente, não versionado)
 ```
 
