@@ -1,198 +1,268 @@
 import { t, getDateLocale } from './i18n.js';
-import { fmtD } from './utils.js';
 import { getAlias } from './alias.js';
 
-const LABEL_W = 160; // px — largura da coluna de label
-const MIN_PX_PER_MONTH = 90; // px mínimos por mês no eixo
+const LABEL_W = 140; // px — largura fixa da coluna de label (sticky)
+
+// ── Estado do módulo ──────────────────────────────────────────────────────────
+let _dpTooltip = null;
+
+// ── View switching ────────────────────────────────────────────────────────────
+function _setSidebarActive(id) {
+  document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+}
 
 export function openDeliveryPlan() {
+  document.getElementById('content')?.style.setProperty('display', 'none');
+  document.querySelector('.cards-toolbar')?.style.setProperty('display', 'none');
+  document.getElementById('tc-view').style.display = 'none';
+  document.getElementById('dp-view').style.display = 'flex';
+  _setSidebarActive('sidebar-link-dp');
+  _renderContent();
+}
+
+function _renderContent() {
   const cards = Array.from(document.querySelectorAll('#content .card[data-project]'));
-  if (!cards.length) return;
+  const bodyEl = document.getElementById('delivery-body');
+  if (!cards.length) {
+    bodyEl.innerHTML = '<p style="color:#64748b;padding:32px;text-align:center">' + t('dp_no_data') + '</p>';
+    return;
+  }
 
   const projects = cards.map(card => {
-    const name = card.dataset.project;
-    const label = getAlias(name);
-    const iterMap = (() => { try { return JSON.parse(card.dataset.itermap || '{}'); } catch(_) { return {}; } })();
-    const saved = localStorage.getItem('filter_' + name);
+    const name    = card.dataset.project;
+    const label   = getAlias(name);
+    const iterMap = (() => { try { return JSON.parse(card.dataset.itermap || '{}'); } catch (_) { return {}; } })();
+    const saved   = localStorage.getItem('filter_' + name);
     const selectedSprints = saved ? JSON.parse(saved) : [];
-    return { name, label, iterMap, selectedSprints };
+    const hbar    = card.querySelector('.health-hbar');
+    const healthCls = hbar
+      ? (hbar.classList.contains('red') ? 'red' : hbar.classList.contains('yellow') ? 'yellow' : hbar.classList.contains('green') ? 'green' : 'gray')
+      : 'gray';
+    return { name, label, iterMap, selectedSprints, healthCls };
   }).filter(p => Object.values(p.iterMap).some(v => v.start && v.end));
 
-  document.getElementById('delivery-body').innerHTML = buildDeliveryPlan(projects);
-  document.getElementById('delivery-modal').classList.add('open', 'maximized');
-  document.getElementById('btnDeliveryMax').textContent = '\u2921';
-  document.getElementById('btnDeliveryMax').title = t('dp_restore');
-  document.body.style.overflow = 'hidden';
+  if (!projects.length) {
+    bodyEl.innerHTML = '<p style="color:#64748b;padding:32px;text-align:center">' + t('dp_no_data') + '</p>';
+  } else {
+    bodyEl.innerHTML = buildDeliveryPlan(projects);
+    requestAnimationFrame(dpPositionHoje);
+  }
 }
 
-export function closeDeliveryPlan() {
-  document.getElementById('delivery-modal').classList.remove('open', 'maximized');
-  document.getElementById('btnDeliveryMax').textContent = '\u2922';
-  document.body.style.overflow = '';
+// ── Visibilidade de linhas ────────────────────────────────────────────────────
+export function dpToggleRow(id) {
+  const row = document.getElementById('dp-row-' + id);
+  if (row) row.classList.toggle('dp-row-hidden');
 }
 
-export function closeDeliveryPlanOverlay(e) {
-  if (e.target === document.getElementById('delivery-modal')) closeDeliveryPlan();
-}
-
-export function toggleDeliveryPlanMaximize() {
-  const modal = document.getElementById('delivery-modal');
-  const btn   = document.getElementById('btnDeliveryMax');
-  const isMax = modal.classList.toggle('maximized');
-  btn.textContent = isMax ? '\u2921' : '\u2922';
-  btn.title = isMax ? t('dp_restore') : t('dp_maximize');
-}
-
-export function toggleDeliveryFilter() {
-  const panel = document.getElementById('dp-filter-panel');
-  if (panel) panel.classList.toggle('open');
-}
-
-export function applyDeliveryFilter() {
-  document.querySelectorAll('#dp-filter-panel input[type="checkbox"]').forEach(cb => {
-    const row = document.querySelector('.dp-row[data-project="' + CSS.escape(cb.value) + '"]');
-    if (row) row.hidden = !cb.checked;
+export function dpSelectAll() {
+  document.querySelectorAll('#delivery-body input[type="checkbox"]').forEach(cb => {
+    cb.checked = true;
+    const row = document.getElementById('dp-row-' + cb.id.replace('dp-chk-', ''));
+    if (row) row.classList.remove('dp-row-hidden');
   });
 }
 
-document.addEventListener('keydown', e => {
-  const modal = document.getElementById('delivery-modal');
-  if (e.key === 'Escape' && modal && modal.classList.contains('open')) closeDeliveryPlan();
-});
+export function dpClearAll() {
+  document.querySelectorAll('#delivery-body input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
+    const row = document.getElementById('dp-row-' + cb.id.replace('dp-chk-', ''));
+    if (row) row.classList.add('dp-row-hidden');
+  });
+}
 
-document.addEventListener('click', e => {
-  if (!e.target.closest('.dp-filter-bar'))
-    document.getElementById('dp-filter-panel')?.classList.remove('open');
-});
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+export function dpShowTooltip(e, bar) {
+  _dpTooltip = document.getElementById('dp-tooltip');
+  if (!_dpTooltip) return;
+  const status = bar.dataset.ttStatus || '';
+  const cls = status === 'Concluido' ? 'dp-tt-past' : status === 'Em andamento' ? 'dp-tt-curr' : 'dp-tt-future';
+  _dpTooltip.innerHTML =
+    '<div class="dp-tt-title">' + (bar.dataset.ttTitle || '') + '</div>' +
+    '<div class="dp-tt-row"><span class="dp-tt-key">Periodo</span><span class="dp-tt-val">' + (bar.dataset.ttPeriod || '') + '</span></div>' +
+    '<span class="dp-tt-badge ' + cls + '">' + status + '</span>';
+  _dpTooltip.classList.add('dp-tt-visible');
+  dpMoveTooltip(e);
+}
+
+export function dpMoveTooltip(e) {
+  if (!_dpTooltip) return;
+  const x = e.clientX + 14, y = e.clientY + 14;
+  const tw = _dpTooltip.offsetWidth, th = _dpTooltip.offsetHeight;
+  const vw = window.innerWidth,      vh = window.innerHeight;
+  _dpTooltip.style.left = (x + tw > vw - 8 ? x - tw - 20 : x) + 'px';
+  _dpTooltip.style.top  = (y + th > vh - 8 ? y - th - 20 : y) + 'px';
+}
+
+export function dpHideTooltip() {
+  if (_dpTooltip) _dpTooltip.classList.remove('dp-tt-visible');
+}
+
+// ── Posicionamento da linha HOJE ──────────────────────────────────────────────
+export function dpPositionHoje() {
+  const hojeEl    = document.getElementById('dp-hoje-line');
+  const ganttRows = document.getElementById('dp-gantt-rows');
+  if (!hojeEl || !ganttRows) return;
+  const fraction = parseFloat(hojeEl.dataset.fraction || '0');
+  const barsW    = ganttRows.offsetWidth - LABEL_W;
+  hojeEl.style.left    = (LABEL_W + fraction * barsW) + 'px';
+  hojeEl.style.opacity = '1';
+}
+
+// ── Eventos globais ───────────────────────────────────────────────────────────
+
+window.addEventListener('resize', dpPositionHoje);
 
 // ── Builder ───────────────────────────────────────────────────────────────────
-
 function buildDeliveryPlan(projects) {
   const now        = new Date();
   const dateLocale = getDateLocale();
+  const fmtShort   = d => d.toLocaleDateString(dateLocale, { day: '2-digit', month: '2-digit' });
 
-  if (!projects.length) {
-    return '<p style="color:#64748b;padding:32px;text-align:center">' + t('dp_no_data') + '</p>';
-  }
-
-  // Montar sprints por projeto e calcular range global de datas
-  let globalMin = null, globalMax = null;
-
-  const rows = projects.map(p => {
+  // 1. Sprints por projeto (respeitando filtro do dashboard)
+  const projData = projects.map(p => {
     const sprints = Object.entries(p.iterMap)
       .filter(([key, v]) => v.start && v.end && (p.selectedSprints.length === 0 || p.selectedSprints.includes(key)))
-      .map(([key, v]) => ({
-        label:     key.includes('\\') ? key.split('\\').pop() : key,
-        start:     new Date(v.start),
-        end:       new Date(v.end),
-        isCurrent: !!v.isCurrent,
-        isPast:    new Date(v.end) < now,
-      }))
+      .map(([key, v]) => {
+        const label = key.includes('\\') ? key.split('\\').pop() : key;
+        return { label, start: new Date(v.start), end: new Date(v.end), isCurrent: !!v.isCurrent };
+      })
       .sort((a, b) => a.start - b.start);
+    return { ...p, sprints };
+  }).filter(p => p.sprints.length > 0);
 
-    sprints.forEach(s => {
-      if (!globalMin || s.start < globalMin) globalMin = new Date(s.start);
-      if (!globalMax || s.end   > globalMax) globalMax = new Date(s.end);
-    });
-    return { name: p.name, label: p.label, sprints };
-  }).filter(r => r.sprints.length);
-
-  if (!rows.length || !globalMin || !globalMax) {
+  if (!projData.length) {
     return '<p style="color:#64748b;padding:32px;text-align:center">' + t('dp_no_data') + '</p>';
   }
 
-  // Pequena margem nas bordas
-  const pad    = (globalMax - globalMin) * 0.015 || 86400000;
-  globalMin    = new Date(+globalMin - pad);
-  globalMax    = new Date(+globalMax + pad);
-  const totalMs = globalMax - globalMin;
+  // 2. Range global de datas (direto das sprints de cada projeto)
+  let globalMin = null, globalMax = null;
+  projData.forEach(p => p.sprints.forEach(s => {
+    if (!globalMin || s.start < globalMin) globalMin = new Date(s.start);
+    if (!globalMax || s.end   > globalMax) globalMax = new Date(s.end);
+  }));
+  const totalMs = Math.max(1, globalMax - globalMin);
 
-  function pct(d) { return ((+new Date(d) - +globalMin) / totalMs * 100); }
+  // 3. Fração da data de hoje
+  const todayFrac = Math.min(1, Math.max(0, (now - globalMin) / totalMs));
+  const showToday = now >= globalMin && now <= globalMax;
 
-  // Meses para o eixo
+  // 4. Header de meses (células flex proporcionais às datas)
   const months = [];
   const mc = new Date(globalMin.getFullYear(), globalMin.getMonth(), 1);
-  while (mc <= globalMax) { months.push(new Date(mc)); mc.setMonth(mc.getMonth() + 1); }
-  const minTrackPx = Math.max(500, months.length * MIN_PX_PER_MONTH);
+  while (mc <= globalMax) {
+    const mStart = new Date(Math.max(+globalMin, +mc));
+    const nextM  = new Date(mc.getFullYear(), mc.getMonth() + 1, 1);
+    const mEnd   = new Date(Math.min(+globalMax, +nextM));
+    months.push({
+      label: mc.toLocaleDateString(dateLocale, { month: 'short', year: '2-digit' }),
+      pctW:  (mEnd - mStart) / totalMs * 100,
+    });
+    mc.setMonth(mc.getMonth() + 1);
+  }
 
-  // Hoje
-  const todayPct  = Math.min(100, Math.max(0, pct(now)));
-  const showToday = now > globalMin && now < globalMax;
+  const minTrackW  = Math.max(600, months.length * 90);
+  const monthRowHTML = months.map(m =>
+    '<div class="dp-month-cell" style="width:' + m.pctW.toFixed(3) + '%">' + m.label + '</div>'
+  ).join('');
 
-  // ── Filter panel ─────────────────────────────────────────────────────────
-  const filterHTML =
-    '<div class="dp-filter-bar">' +
-      '<button class="dp-filter-btn" type="button" onclick="toggleDeliveryFilter()">▾ ' + t('dp_filter_btn') + '</button>' +
-      '<div class="dp-filter-panel" id="dp-filter-panel">' +
-        '<div class="dp-filter-actions">' +
-          '<button type="button" onclick="document.querySelectorAll(\'#dp-filter-panel input\').forEach(c=>c.checked=true);applyDeliveryFilter()" data-i18n="dp_select_all">' + t('dp_select_all') + '</button>' +
-          '<button type="button" onclick="document.querySelectorAll(\'#dp-filter-panel input\').forEach(c=>c.checked=false);applyDeliveryFilter()" data-i18n="dp_clear_filter">' + t('dp_clear_filter') + '</button>' +
-        '</div>' +
-        rows.map(r =>
-          '<label class="dp-filter-item">' +
-            '<input type="checkbox" value="' + r.name.replace(/"/g, '&quot;') + '" checked onchange="applyDeliveryFilter()">' +
-            '<span>' + r.label + '</span>' +
-          '</label>'
-        ).join('') +
-      '</div>' +
-    '</div>';
+  // 5. Linhas dos projetos — barras com position:absolute baseado em datas reais
+  const healthLabels = { red: 'Critico', yellow: 'Atencao', green: 'Saudavel' };
+  const avatarClsMap = { red: 'dp-avatar-red', yellow: 'dp-avatar-yellow', green: 'dp-avatar-green' };
 
-  // ── Eixo de meses ─────────────────────────────────────────────────────────
-  const monthsHTML = months.map(m => {
-    const l = pct(m);
-    if (l < -1 || l > 101) return '';
-    return '<div class="dp-month" style="left:' + l.toFixed(2) + '%">' +
-      m.toLocaleDateString(dateLocale, { month: 'short', year: '2-digit' }) +
-    '</div>';
-  }).join('');
+  const rowsHTML = projData.map(p => {
+    const healthLabel = healthLabels[p.healthCls] || '';
 
-  const todayAxisHTML = showToday
-    ? '<div class="dp-today-axis" style="left:' + todayPct.toFixed(2) + '%"><span>' + t('tl_today') + '</span></div>'
-    : '';
+    const barsHTML = p.sprints.map(s => {
+      const left  = ((s.start - globalMin) / totalMs * 100).toFixed(3);
+      const width = ((s.end   - s.start)   / totalMs * 100).toFixed(3);
+      const st = s.end < now ? 'past'
+        : (s.isCurrent || (s.start <= now && s.end >= now)) ? 'curr'
+        : 'future';
 
-  // ── Linhas dos projetos ───────────────────────────────────────────────────
-  const rowsHTML = rows.map(r => {
-    const blocks = r.sprints.map(s => {
-      const l = Math.max(0,   pct(s.start));
-      const w = Math.max(0.3, Math.min(100 - l, pct(s.end) - pct(s.start)));
-      const state = s.isCurrent ? 'current' : s.isPast ? 'past' : 'future';
-      const title = s.label + ' · ' + fmtD(s.start.toISOString()) + ' – ' + fmtD(s.end.toISOString());
-      const fmtShort = d => d.toLocaleDateString(dateLocale, { day: '2-digit', month: '2-digit' });
-      const dateRange = fmtShort(s.start) + ' – ' + fmtShort(s.end);
-      return '<div class="dp-block dp-block--' + state + '" style="left:' + l.toFixed(2) + '%;width:' + w.toFixed(2) + '%" title="' + title + '">' +
-        '<span class="dp-block-name">' + s.label + '</span>' +
-        '<span class="dp-block-dates">' + dateRange + '</span>' +
+      const ttTitle  = s.label + ' — ' + p.label;
+      const ttPeriod = fmtShort(s.start) + ' – ' + fmtShort(s.end);
+      const ttStatus = { past: 'Concluido', curr: 'Em andamento', future: 'Planejado' }[st];
+      const check    = st === 'past' ? '<span class="dp-bar-check" aria-label="Concluido">&#10003;</span>' : '';
+
+      return '<div class="dp-sprint-bar dp-bar-' + st + '"' +
+        ' style="left:' + left + '%;width:' + width + '%"' +
+        ' data-tt-title="' + ttTitle.replace(/"/g, '&quot;') + '"' +
+        ' data-tt-period="' + ttPeriod + '"' +
+        ' data-tt-status="' + ttStatus + '"' +
+        ' onmouseenter="dpShowTooltip(event,this)" onmousemove="dpMoveTooltip(event)" onmouseleave="dpHideTooltip()">' +
+        '<span class="dp-bar-label">' + s.label + '</span>' +
+        '<span class="dp-bar-sub">' + fmtShort(s.start) + ' – ' + fmtShort(s.end) + '</span>' +
+        check +
       '</div>';
     }).join('');
 
-    const todayLine = showToday
-      ? '<div class="dp-today-line" style="left:' + todayPct.toFixed(2) + '%"></div>'
-      : '';
+    const safeId = p.name.replace(/[^a-zA-Z0-9]/g, '_');
 
-    return '<div class="dp-row" data-project="' + r.name.replace(/"/g, '&quot;') + '">' +
-      '<div class="dp-row-label" title="' + r.name.replace(/"/g, '&quot;') + '">' + r.label + '</div>' +
-      '<div class="dp-row-track">' + blocks + todayLine + '</div>' +
+    return '<div class="dp-gantt-row" id="dp-row-' + safeId + '">' +
+      '<div class="dp-label-col dp-row-label-inner">' +
+        '<span class="dp-row-name" title="' + p.label.replace(/"/g, '&quot;') + '">' + p.label + '</span>' +
+        (healthLabel ? '<span class="dp-health-pill ' + (p.healthCls || 'gray') + '">' + healthLabel + '</span>' : '') +
+      '</div>' +
+      '<div class="dp-bars-container">' + barsHTML + '</div>' +
     '</div>';
   }).join('');
 
-  // ── Legenda ───────────────────────────────────────────────────────────────
-  const legendHTML =
-    '<div class="dp-legend">' +
-      '<span class="dp-leg-past">◼ ' + t('tl_past') + '</span>' +
-      '<span class="dp-leg-future">◼ ' + t('tl_future') + '</span>' +
-      '<span class="dp-leg-current">◼ ' + t('tl_current_sprint') + '</span>' +
-      (showToday ? '<span class="dp-leg-today">┃ ' + t('tl_today_label') + '</span>' : '') +
+  // 6. Painel lateral
+  const avatarClsMapLocal = avatarClsMap;
+  const sideProjectsHTML = projData.map(p => {
+    const safeId    = p.name.replace(/[^a-zA-Z0-9]/g, '_');
+    const safeVal   = p.name.replace(/"/g, '&quot;');
+    const avatarText = (p.label || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '??';
+    const avatarCls  = avatarClsMapLocal[p.healthCls] || 'dp-avatar-gray';
+    return '<label class="dp-project-check" for="dp-chk-' + safeId + '">' +
+      '<input type="checkbox" id="dp-chk-' + safeId + '" value="' + safeVal + '" checked onchange="dpToggleRow(\'' + safeId + '\')">' +
+      '<span class="dp-avatar ' + avatarCls + '">' + avatarText + '</span>' +
+      '<span class="dp-project-name">' + p.label + '</span>' +
+    '</label>';
+  }).join('');
+
+  const sidebarHTML =
+    '<aside class="dp-sidebar">' +
+      '<div class="dp-side-label">Projetos</div>' +
+      '<div class="dp-side-actions">' +
+        '<button class="dp-btn-link" type="button" onclick="dpSelectAll()">Selecionar todos</button>' +
+        '<button class="dp-btn-link" type="button" onclick="dpClearAll()">Limpar</button>' +
+      '</div>' +
+      sideProjectsHTML +
+      '<div class="dp-side-divider"></div>' +
+      '<div class="dp-side-label">Legenda</div>' +
+      '<div class="dp-legend-item"><span class="dp-leg-swatch dp-swatch-past"></span>Passado</div>' +
+      '<div class="dp-legend-item"><span class="dp-leg-swatch dp-swatch-curr"></span>Atual</div>' +
+      '<div class="dp-legend-item"><span class="dp-leg-swatch dp-swatch-future"></span>Futuro</div>' +
+      (showToday ? '<div class="dp-legend-hoje"><span class="dp-swatch-hoje"></span>Hoje</div>' : '') +
+    '</aside>';
+
+  // 7. Linha HOJE
+  const hojeHTML = showToday
+    ? '<div class="dp-hoje-line" id="dp-hoje-line" data-fraction="' + todayFrac.toFixed(6) + '"><span class="dp-hoje-label">HOJE</span></div>'
+    : '';
+
+  // 8. Painel de timeline
+  const timelineHTML =
+    '<div class="dp-timeline">' +
+      '<div class="dp-timeline-scroll">' +
+        '<div class="dp-timeline-inner" style="min-width:' + (LABEL_W + minTrackW) + 'px">' +
+          '<div class="dp-tl-header">' +
+            '<div class="dp-month-row">' +
+              '<div class="dp-label-col dp-hd-spacer"></div>' +
+              '<div class="dp-month-track">' + monthRowHTML + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="dp-gantt-rows" id="dp-gantt-rows">' +
+            hojeHTML +
+            rowsHTML +
+          '</div>' +
+        '</div>' +
+      '</div>' +
     '</div>';
 
-  return filterHTML +
-    '<div class="dp-scroll">' +
-      '<div class="dp-inner" style="--dp-label-w:' + LABEL_W + 'px;--dp-track-min:' + minTrackPx + 'px">' +
-        '<div class="dp-axis">' +
-          '<div class="dp-axis-spacer"></div>' +
-          '<div class="dp-axis-track">' + monthsHTML + todayAxisHTML + '</div>' +
-        '</div>' +
-        '<div class="dp-rows">' + rowsHTML + '</div>' +
-      '</div>' +
-    '</div>' +
-    legendHTML;
+  return '<div class="dp-layout">' + sidebarHTML + timelineHTML + '</div>' +
+         '<div class="dp-tooltip" id="dp-tooltip"></div>';
 }

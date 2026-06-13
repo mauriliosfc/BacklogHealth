@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Backlog Health Dashboard</title>
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="dashboard-body">
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-row">
+        <div class="sidebar-logo-icon">📋</div>
+        <div>
+          <div class="sidebar-logo-name">Backlog Health</div>
+          <div class="sidebar-logo-sub">SERVICE NOW</div>
+        </div>
+      </div>
+      <div class="sidebar-logo-meta">{{SUBTITLE}}</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a class="sidebar-link active" id="sidebar-link-dashboard" href="#" title="Dashboard" onclick="showDashboardView();return false">
+        <span class="sidebar-link-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
+        </span>
+        <span class="sl-label">Dashboard</span>
+      </a>
+
+      <a class="sidebar-link" href="#" title="Copilot AI" onclick="openCopilot();return false">
+        <span class="sidebar-link-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5C4.41 1.5 1.5 4.08 1.5 7.25c0 1.73.8 3.27 2.07 4.33L3 13.5l2.18-1.09A7.15 7.15 0 008 13c3.59 0 6.5-2.58 6.5-5.75S11.59 1.5 8 1.5z"/></svg>
+        </span>
+        <span class="sl-label">Copilot AI</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a class="sidebar-link sidebar-link-sm" href="#" title="Feedback" onclick="openFeedback();return false">
+        <span class="sidebar-link-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2h12a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 3v-3H2a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="sl-label" data-i18n="fb_sidebar">Feedback</span>
+      </a>
+      <a class="sidebar-link sidebar-link-sm" href="/settings" title="Settings">
+        <span class="sidebar-link-icon">⚙️</span>
+        <span class="sl-label" data-i18n="btn_settings">Settings</span>
+      </a>
+      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" title="Minimizar menu">
+        <span class="sidebar-link-icon">
+          <svg class="sl-icon-collapse" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg class="sl-icon-expand" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="sl-label">Minimizar</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main-content">
+
+    <!-- Top bar -->
+    <div class="topbar">
+      <div class="topbar-right">
+        <div class="lang-switcher">
+          <button class="btn-lang" data-lang="pt" onclick="setLocale('pt')" title="Português">PT</button>
+          <button class="btn-lang" data-lang="en" onclick="setLocale('en')" title="English">EN</button>
+          <button class="btn-lang" data-lang="es" onclick="setLocale('es')" title="Español">ES</button>
+        </div>
+        <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="Tema claro">☀️</button>
+        <button class="btn-refresh" id="btnRefresh" onclick="doRefresh()" data-i18n-title="btn_refresh" title="Atualizar">↻</button>
+        <div class="topbar-meta">
+          <div class="timer" id="timer">…</div>
+          <div class="update" id="lastUpdate">{{LAST_UPDATE}}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SN content area -->
+    <div class="sn-content" id="content">
+
+      <!-- Azure banner (dismissable via localStorage) -->
+      <div class="sn-az-banner" id="snAzBanner">
+        <div class="sn-az-banner-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div class="sn-az-banner-text">
+          <div class="sn-az-banner-title">Enable Azure DevOps to monitor backlog, sprints and team capacity.</div>
+          <div class="sn-az-banner-sub">You can keep ServiceNow active and use both together.</div>
+        </div>
+        <a href="/settings" class="btn-primary sn-az-banner-btn">Connect Azure DevOps</a>
+        <button class="sn-az-banner-dismiss" onclick="dismissSnBanner()" title="Dismiss">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- KPI Bar -->
+      <div class="sn-kpi-bar">
+        <div class="sn-kpi-stat">
+          <div class="sn-kpi-lbl">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Open Incidents
+          </div>
+          <div class="sn-kpi-val sn-kpi-val--red">{{KPI_OPEN}}</div>
+          <div class="sn-kpi-sub">{{KPI_P1}} P1 &middot; {{KPI_P2}} P2 &middot; {{KPI_P3}} P3</div>
+        </div>
+        <div class="sn-kpi-stat">
+          <div class="sn-kpi-lbl">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+            Active Groups
+          </div>
+          <div class="sn-kpi-val">{{KPI_GROUPS}}</div>
+          <div class="sn-kpi-sub">with open incidents</div>
+        </div>
+        <div class="sn-kpi-stat">
+          <div class="sn-kpi-lbl">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Resolved this month
+          </div>
+          <div class="sn-kpi-val">{{KPI_RESOLVED}}</div>
+          <div class="sn-kpi-sub">this month</div>
+        </div>
+        <div class="sn-kpi-stat">
+          <div class="sn-kpi-lbl">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            MTTR
+          </div>
+          <div class="sn-kpi-val">{{KPI_MTTR}}</div>
+          <div class="sn-kpi-sub">Mean Time to Resolve</div>
+        </div>
+      </div>
+
+      <!-- Cards toolbar -->
+      <div class="cards-toolbar sn-cards-toolbar">
+        <div></div>
+        <div class="cards-toolbar-right">
+          <button class="btn-view-toggle" type="button" onclick="toggleSnView()" title="Alternar visualizacao">
+            <svg id="iconViewGrid" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+            <svg id="iconViewList" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="display:none"><rect x="1" y="3" width="14" height="2" rx="1"/><rect x="1" y="7" width="14" height="2" rx="1"/><rect x="1" y="11" width="14" height="2" rx="1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Incident group cards -->
+      {{CARDS}}
+
+      <!-- Azure CTA -->
+      <div class="sn-az-cta" id="snAzCta">
+        <button class="sn-az-cta-dismiss" onclick="dismissSnCta()" title="Dismiss">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+        <div class="sn-az-cta-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div class="sn-az-cta-title">Connect Azure DevOps</div>
+        <div class="sn-az-cta-sub">Enable backlog monitoring, sprint tracking and team capacity. Keep ServiceNow active and use both together.</div>
+        <div class="sn-az-cta-features">
+          <div class="sn-az-feat-chip">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+            Backlog health cards
+          </div>
+          <div class="sn-az-feat-chip">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+            Sprint burndown &amp; delivery plan
+          </div>
+          <div class="sn-az-feat-chip">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+            Team capacity
+          </div>
+          <div class="sn-az-feat-chip">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+            Monthly review with incidents
+          </div>
+        </div>
+        <a href="/settings" class="btn-primary">Configure Azure DevOps</a>
+      </div>
+
+    </div><!-- /sn-content -->
+
+  </main>
+</div>
+
+<!-- ── Modals (unchanged) ── -->
+
+<div id="detail-modal" class="modal-overlay" onclick="closeDetails(event)">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modal-title"></div>
+        <div class="modal-sub" id="modal-sub"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-refresh" type="button" id="btnRefreshDetail" onclick="loadDetailData(_detailProject, _detailSprints)" data-i18n-title="detail_refresh_title" title="Atualizar dados">↻</button>
+        <button class="modal-maximize" type="button" id="btnMaximize" onclick="toggleMaximize()" data-i18n-title="detail_maximize" title="Maximizar">⤢</button>
+        <button class="modal-close" type="button" onclick="closeDetailsBtn()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<div id="daily-modal" class="daily-overlay" onkeydown="handleDailyKey(event)">
+  <div class="daily-box" id="daily-box">
+    <div class="daily-head">
+      <div class="daily-head-title" data-i18n="daily_title">📅 Daily Standup</div>
+      <div class="daily-head-actions">
+        <button class="modal-refresh" id="btnDailyRefresh" onclick="refreshDaily()" title="Refresh">↻</button>
+        <button class="modal-maximize" id="btnDailyMax" onclick="toggleDailyMaximize()" data-i18n-title="daily_expand" title="Expandir">⤢</button>
+        <button class="modal-close" onclick="closeDaily()" data-i18n-title="btn_close" title="Fechar">✕</button>
+      </div>
+    </div>
+    <div class="daily-carousel-wrap">
+      <div class="daily-track" id="daily-track"></div>
+    </div>
+    <div class="daily-nav">
+      <button class="daily-nav-btn" id="btnDailyPrev" onclick="dailyPrev()" data-i18n="daily_prev">← Anterior</button>
+      <div class="daily-counter" id="daily-counter"></div>
+      <button class="daily-nav-btn" id="btnDailyNext" onclick="dailyNext()" data-i18n="daily_next">Próximo →</button>
+    </div>
+  </div>
+</div>
+
+<div id="delivery-modal" class="modal-overlay dp-modal-overlay" onclick="closeDeliveryPlanOverlay(event)">
+  <div class="modal-box dp-modal-box">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="dp_title">Delivery Plan</div>
+      <div class="modal-actions">
+        <button class="modal-maximize" type="button" id="btnDeliveryMax" onclick="toggleDeliveryPlanMaximize()" data-i18n-title="dp_maximize" title="Maximizar">⤢</button>
+        <button class="modal-close" type="button" onclick="closeDeliveryPlan()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body dp-modal-body" id="delivery-body"></div>
+  </div>
+</div>
+
+<div id="burndown-modal" class="modal-overlay" style="z-index:650" onclick="closeBurndownOverlay(event)">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="burndown-title"></div>
+        <div class="modal-sub" id="burndown-sub"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-maximize" type="button" id="btnBurndownMax" onclick="toggleBurndownMaximize()" data-i18n-title="burndown_maximize" title="Maximizar">⤢</button>
+        <button class="modal-close" type="button" onclick="closeBurndown()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="burndown-body"></div>
+  </div>
+</div>
+
+<!-- Copilot Config Modal -->
+<div id="copilot-config-modal" class="modal-overlay copilot-config-overlay" onclick="closeCopilotConfigOverlay(event)">
+  <div class="modal-box copilot-config-box">
+    <div class="modal-head">
+      <div class="modal-title">🤖 Copilot Project — <span data-i18n="ai_config_title">Configuração da IA</span></div>
+      <div class="modal-actions">
+        <button class="modal-close" type="button" onclick="closeCopilotConfig()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body copilot-config-body">
+      <p class="copilot-config-hint" data-i18n="ai_config_hint">Configure as credenciais da sua IA. Os dados ficam salvos localmente em config.json.</p>
+      <div class="copilot-config-form">
+        <label>
+          <span data-i18n="ai_endpoint_label">Endpoint</span>
+          <input id="ai-endpoint" type="url" placeholder="https://minha-empresa.openai.azure.com/" autocomplete="off">
+          <small data-i18n="ai_endpoint_hint">URL base da API (Azure OpenAI, OpenAI-compatible, etc.)</small>
+        </label>
+        <label>
+          <span data-i18n="ai_apikey_label">API Key</span>
+          <input id="ai-apikey" type="password" placeholder="sk-..." autocomplete="off">
+        </label>
+        <label>
+          <span data-i18n="ai_model_label">Model / Deployment</span>
+          <input id="ai-model" type="text" placeholder="gpt-4o" autocomplete="off">
+          <small data-i18n="ai_model_hint">Nome do modelo ou deployment (ex: gpt-4o, claude-opus-4-6)</small>
+        </label>
+        <label>
+          <span data-i18n="ai_apiversion_label">API Version <span style="opacity:.5">(opcional)</span></span>
+          <input id="ai-apiversion" type="text" placeholder="2024-02-01" autocomplete="off">
+          <small data-i18n="ai_apiversion_hint">Necessário apenas para Azure OpenAI</small>
+        </label>
+      </div>
+      <div id="copilot-config-status" class="copilot-config-status"></div>
+      <div class="copilot-config-actions">
+        <button id="btnCopilotTest" type="button" onclick="testCopilotConnection()" data-i18n="ai_btn_test">🔌 Testar conexão</button>
+        <button id="btnCopilotSave" type="button" class="copilot-save-btn" onclick="saveCopilotConfig()" data-i18n="ai_btn_save">💾 Salvar e abrir chat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Copilot Chat Panel (floating) -->
+<div id="copilot-chat-panel" class="copilot-panel">
+  <div class="copilot-panel-head" id="copilot-panel-head">
+    <div class="copilot-chat-title">🤖 Copilot Project</div>
+    <div class="modal-actions">
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" data-i18n-title="btn_settings" title="Configurações">⚙️</button>
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="clearCopilotChat()" data-i18n-title="ai_new_chat" title="Nova conversa">🗑</button>
+      <button class="modal-maximize" type="button" id="btnCopilotChatMax" onclick="toggleCopilotMaximize()" data-i18n-title="ai_maximize" title="Maximizar">⤢</button>
+      <button class="modal-maximize" type="button" id="btnCopilotChatMin" onclick="toggleCopilotMinimize()" data-i18n-title="ai_minimize" title="Minimizar">−</button>
+      <button class="modal-close" type="button" onclick="closeCopilotChat()">✕</button>
+    </div>
+  </div>
+  <div class="copilot-panel-body" id="copilot-panel-body">
+    <div class="copilot-chat-messages" id="copilot-chat-messages"></div>
+    <div class="copilot-chat-input-wrap">
+      <textarea id="copilot-input" class="copilot-input" rows="1" placeholder="Pergunte sobre seus projetos..." onkeydown="copilotInputKeydown(event)" data-i18n-placeholder="ai_input_placeholder"></textarea>
+      <button id="btnCopilotSend" class="copilot-send-btn" type="button" onclick="sendCopilotMessage()">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- Feedback Modal -->
+<div id="feedback-modal" class="modal-overlay" onclick="closeFeedbackOverlay(event)">
+  <div class="modal-box feedback-box">
+    <div class="modal-head">
+      <div class="modal-title">💬 <span data-i18n="fb_title">Feedback</span></div>
+      <div class="modal-actions">
+        <button class="modal-close" type="button" onclick="closeFeedback()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body feedback-body">
+      <p class="feedback-hint" data-i18n="fb_hint">Share suggestions, report bugs or ask for help. Your message will be sent directly to the development team.</p>
+      <div class="feedback-form">
+        <label>
+          <span data-i18n="fb_type_label">Type</span>
+          <select id="fb-type" class="fb-select">
+            <option value="bug" data-i18n="fb_type_bug">🐛 Bug Report</option>
+            <option value="suggestion" data-i18n="fb_type_suggestion">💡 Suggestion</option>
+            <option value="help" data-i18n="fb_type_help">❓ Help Request</option>
+            <option value="other" data-i18n="fb_type_other">📝 Other</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="fb_title_label">Title</span>
+          <input id="fb-title" type="text" class="fb-input" data-i18n-placeholder="fb_title_placeholder" placeholder="Brief description" autocomplete="off">
+        </label>
+        <label>
+          <span data-i18n="fb_desc_label">Description</span>
+          <textarea id="fb-desc" class="fb-textarea" rows="5" data-i18n-placeholder="fb_desc_placeholder" placeholder="Describe in detail..."></textarea>
+        </label>
+      </div>
+      <div id="fb-status" class="fb-status"></div>
+      <div class="feedback-actions">
+        <button id="fb-submit" type="button" class="fb-submit-btn" onclick="submitFeedback()" data-i18n="fb_submit">📤 Send Feedback</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Feedback Success Modal -->
+<div id="feedback-success-modal" class="modal-overlay" onclick="closeFeedbackSuccessOverlay(event)">
+  <div class="modal-box feedback-success-box">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="fb_success_title">Feedback registered</div>
+      <div class="modal-actions">
+        <button class="modal-close" type="button" onclick="closeFeedbackSuccess()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body feedback-success-body">
+      <p data-i18n="fb_success_msg">Your feedback has been registered. You can access it by clicking the link below.</p>
+      <a id="fb-success-link" href="#" target="_blank" class="fb-success-link" data-i18n="fb_success_link">View on GitHub</a>
+    </div>
+    <div class="feedback-actions">
+      <button type="button" class="fb-submit-btn" onclick="closeFeedbackSuccess()" data-i18n="fb_success_close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Remove Modal -->
+<div id="confirm-remove-modal" class="confirm-overlay" onclick="cancelRemoveProject(event)">
+  <div class="confirm-box">
+    <div class="confirm-icon">🗑️</div>
+    <div class="confirm-title" data-i18n="confirm_remove_title">Remover projeto</div>
+    <div class="confirm-msg">
+      <span data-i18n="confirm_remove_msg">Deseja remover</span>
+      <strong id="confirm-remove-name"></strong>
+      <span data-i18n="confirm_remove_msg2">do monitoramento?</span>
+    </div>
+    <div class="confirm-actions">
+      <button class="confirm-btn-cancel" type="button" onclick="cancelRemoveProject()" data-i18n="confirm_cancel">Cancelar</button>
+      <button class="confirm-btn-ok" type="button" onclick="confirmRemoveProject()" data-i18n="confirm_remove_ok">Remover</button>
+    </div>
+  </div>
+</div>
+
+<!-- UAT Modal -->
+<div id="uat-modal" class="modal-overlay" onclick="closeUATOverlay(event)">
+  <div class="modal-box uat-modal-box">
+    <div class="modal-head">
+      <div class="modal-title">UAT — <span id="uat-modal-title"></span></div>
+      <div class="modal-actions">
+        <button class="modal-refresh" id="uat-refresh-btn" type="button" onclick="refreshUAT()" title="Refresh">↻</button>
+        <button class="modal-maximize" id="uat-modal-max" type="button" onclick="toggleUATMax()">⤢</button>
+        <button class="modal-close" type="button" onclick="closeUAT()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body uat-modal-body" id="uat-modal-body"></div>
+  </div>
+</div>
+
+<!-- Items Modal (reusable) -->
+<div id="items-modal" class="modal-overlay" style="z-index:700" onclick="closeItemsModalOverlay(event)">
+  <div class="modal-box items-modal-box">
+    <div class="modal-head">
+      <div class="modal-title" id="items-modal-title"></div>
+      <div class="modal-actions">
+        <button class="modal-maximize" id="items-modal-max" type="button" onclick="toggleItemsModalMax()">&#x2922;</button>
+        <button class="modal-close" type="button" onclick="closeItemsModal()">✕</button>
+      </div>
+    </div>
+    <div id="items-modal-filters"></div>
+    <div class="modal-body items-modal-body" id="items-modal-body"></div>
+  </div>
+</div>
+
+<!-- Report Modal -->
+<div id="report-modal" class="modal-overlay" onclick="closeReportOverlay(event)">
+  <div class="modal-box report-modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Monthly Review — <span id="report-modal-title"></span></div>
+      <div class="modal-actions">
+        <select id="report-month-sel" class="report-month-sel" onchange="reportChangeMonth(this.value)"></select>
+        <button class="modal-refresh" id="report-refresh-btn" type="button" onclick="reportRefresh()" title="Refresh">↻</button>
+        <button class="btn-ai-report" type="button" onclick="reportOpenCopilot()" title="Analisar com IA">✦ IA</button>
+        <button class="btn-sn-config" type="button" onclick="openReportSnConfig()" title="Configurar Service Now">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 5a3 3 0 100 6A3 3 0 008 5zm0 4.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/><path d="M14.45 9.05l-.9-.52a5.84 5.84 0 000-1.06l.9-.52a.75.75 0 00.27-1.02l-1-1.73a.75.75 0 00-1.02-.28l-.9.52a5.93 5.93 0 00-.92-.53V2.75A.75.75 0 0010 2H6a.75.75 0 00-.75.75V3.9a5.93 5.93 0 00-.92.53l-.9-.52a.75.75 0 00-1.02.28l-1 1.73a.75.75 0 00.27 1.02l.9.52a5.84 5.84 0 000 1.06l-.9.52a.75.75 0 00-.27 1.02l1 1.73a.75.75 0 001.02.28l.9-.52c.29.2.6.37.92.53v1.17c0 .41.34.75.75.75h4a.75.75 0 00.75-.75v-1.17c.32-.16.63-.33.92-.53l.9.52a.75.75 0 001.02-.28l1-1.73a.75.75 0 00-.27-1.02z"/></svg>
+        </button>
+        <button class="modal-maximize" id="report-modal-max" type="button" onclick="toggleReportMax()">⤢</button>
+        <button class="modal-close" type="button" onclick="closeReport()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body report-modal-body" id="report-modal-body"></div>
+  </div>
+</div>
+
+<!-- Service Now Config Modal (individual por projeto) -->
+<div id="sn-config-modal" class="sn-config-overlay" onclick="closeSnConfigOverlay(event)">
+  <div class="sn-config-box">
+    <div class="sn-config-header">
+      <div>
+        <div class="sn-config-title">Service Now</div>
+        <div class="sn-config-subtitle" id="snm-subtitle"></div>
+      </div>
+      <button class="modal-close" onclick="closeSnConfig()">&#x2715;</button>
+    </div>
+    <div class="sn-config-body">
+
+      <!-- Credenciais globais -->
+      <div class="snm-section">
+        <div class="snm-section-title">Credenciais globais</div>
+        <div class="snm-fields">
+          <div class="snm-field">
+            <label class="snm-label">INSTANCE</label>
+            <input type="text" id="snm-instance" class="snm-input-full" placeholder="empresa.service-now.com" autocomplete="off">
+          </div>
+          <div class="snm-field">
+            <label class="snm-label">USERNAME</label>
+            <input type="text" id="snm-user" class="snm-input-full" placeholder="usuario" autocomplete="off">
+          </div>
+          <div class="snm-field">
+            <label class="snm-label">PASSWORD / TOKEN</label>
+            <input type="password" id="snm-pass" class="snm-input-full" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" autocomplete="off">
+          </div>
+        </div>
+        <div class="snm-actions-row">
+          <button class="snm-btn" onclick="snConfigTest()">Testar conexão</button>
+          <button class="snm-btn snm-btn-primary" onclick="snConfigSaveGlobal()">Salvar credenciais</button>
+          <span id="snm-global-status" class="snm-status"></span>
+        </div>
+      </div>
+
+      <!-- Assignment group do projeto -->
+      <div class="snm-section">
+        <div class="snm-section-title">Assignment Group do projeto</div>
+        <div class="snm-field">
+          <label class="snm-label">SYS_ID ou NOME DO GRUPO</label>
+          <input type="text" id="snm-ag" class="snm-input-full" placeholder="ex: 8a4dde73c6112278017a6a4baf547aa7" autocomplete="off">
+        </div>
+        <div class="snm-field">
+          <label class="snm-label">NOME DE EXIBIÇÃO</label>
+          <input type="text" id="snm-ag-name" class="snm-input-full" placeholder="ex: TI - Suporte Alpha" autocomplete="off">
+        </div>
+        <div class="snm-actions-row">
+          <button class="snm-btn snm-btn-primary" onclick="snConfigSaveProject()">Salvar grupo</button>
+          <span id="snm-proj-status" class="snm-status"></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  if (localStorage.getItem('sn-az-banner-dismissed') === '1') {
+    var b = document.getElementById('snAzBanner');
+    if (b) b.style.display = 'none';
+  }
+  if (localStorage.getItem('sn-az-cta-dismissed') === '1') {
+    var c = document.getElementById('snAzCta');
+    if (c) c.style.display = 'none';
+  }
+})();
+function dismissSnBanner() {
+  localStorage.setItem('sn-az-banner-dismissed', '1');
+  var b = document.getElementById('snAzBanner');
+  if (b) { b.style.opacity = '0'; b.style.transform = 'translateY(-6px)'; setTimeout(function(){b.style.display='none';},300); }
+}
+function dismissSnCta() {
+  localStorage.setItem('sn-az-cta-dismissed', '1');
+  var c = document.getElementById('snAzCta');
+  if (c) { c.style.opacity = '0'; setTimeout(function(){c.style.display='none';},300); }
+}
+</script>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

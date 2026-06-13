@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IT-04 — Plano de Entrega · Backlog Health</title>
+<style>
+/* ─── Design tokens ──────────────────────────────────────────── */
+:root {
+  --bg-page:   #020617;
+  --bg-card:   #0f172a;
+  --bg-border: #1e293b;
+  --bg-el:     #1e293b;
+  --bg-el2:    #334155;
+  --text-1:    #f1f5f9;
+  --text-2:    #cbd5e1;
+  --text-muted:#94a3b8;
+  --text-faint:#64748b;
+  --c-blue:    #60a5fa;
+  --c-blue-bg: #1e3a5f;
+  --c-blue-bd: #2d5a8e;
+  --c-green:   #22c55e;
+  --c-green-bg:#14532d;
+  --c-green-bd:#166534;
+  --c-yellow:  #f59e0b;
+  --c-yellow-bg:#422006;
+  --c-red:     #ef4444;
+  --c-red-bg:  #450a0a;
+  --c-purple:  #a78bfa;
+  --c-purple-bg:#2e1065;
+  --hover-bg:  rgba(255,255,255,.04);
+  --shadow:    0 4px 24px rgba(0,0,0,.45);
+  --modal-bg:  rgba(0,0,0,.75);
+  --radius:    8px;
+  --radius-sm: 4px;
+}
+[data-theme="light"] {
+  --bg-page:   #f1f5f9;
+  --bg-card:   #ffffff;
+  --bg-border: #e2e8f0;
+  --bg-el:     #f8fafc;
+  --bg-el2:    #e2e8f0;
+  --text-1:    #0f172a;
+  --text-2:    #1e293b;
+  --text-muted:#475569;
+  --text-faint:#94a3b8;
+  --c-blue:    #2563eb;
+  --c-blue-bg: #dbeafe;
+  --c-blue-bd: #93c5fd;
+  --c-green:   #16a34a;
+  --c-green-bg:#dcfce7;
+  --c-green-bd:#86efac;
+  --c-yellow:  #d97706;
+  --c-yellow-bg:#fef3c7;
+  --c-red:     #dc2626;
+  --c-red-bg:  #fee2e2;
+  --hover-bg:  rgba(0,0,0,.04);
+  --shadow:    0 4px 24px rgba(0,0,0,.12);
+  --modal-bg:  rgba(0,0,0,.45);
+}
+
+/* ─── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+body {
+  background: var(--bg-page);
+  color: var(--text-1);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  transition: background .2s, color .2s;
+}
+
+/* ─── Top bar ────────────────────────────────────────────────── */
+.topbar {
+  height: 52px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--bg-border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-1);
+  text-decoration: none;
+  letter-spacing: -.02em;
+}
+.topbar-logo svg { color: var(--c-blue); flex-shrink: 0; }
+.topbar-sep { flex: 1; }
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bg-border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  text-decoration: none;
+}
+.btn-ghost:hover { background: var(--hover-bg); color: var(--text-1); border-color: var(--bg-el2); }
+.topbar-label {
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-el);
+  border: 1px solid var(--bg-border);
+  font-family: monospace;
+}
+
+/* ─── Page overlay / Modal backdrop ─────────────────────────── */
+.page-content {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px 32px;
+  overflow-y: auto;
+}
+.overlay {
+  position: fixed;
+  inset: 52px 0 0 0;
+  background: var(--modal-bg);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px 32px;
+  z-index: 100;
+  overflow-y: auto;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  transition: opacity .2s;
+}
+.overlay.hidden { display: none; }
+
+/* ─── Modal ──────────────────────────────────────────────────── */
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow), 0 0 0 1px rgba(255,255,255,.03);
+  width: 100%;
+  max-width: 1100px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modal-in .2s ease;
+  transition: max-width .25s ease;
+}
+.modal.maximized { max-width: 100%; max-height: calc(100vh - 52px - 48px); border-radius: 8px; }
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(-12px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ─── Modal header ───────────────────────────────────────────── */
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--bg-border);
+  flex-shrink: 0;
+}
+.modal-icon {
+  width: 36px; height: 36px;
+  background: var(--c-blue-bg);
+  border: 1px solid var(--c-blue-bd);
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.modal-icon svg { color: var(--c-blue); }
+.modal-titles { flex: 1; min-width: 0; }
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1.2;
+}
+.modal-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.modal-actions { display: flex; gap: 6px; }
+.icon-btn {
+  width: 30px; height: 30px;
+  background: transparent;
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.icon-btn:hover { background: var(--hover-bg); color: var(--text-1); border-color: var(--bg-el2); }
+
+/* ─── Modal body ─────────────────────────────────────────────── */
+.modal-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ─── Left panel ─────────────────────────────────────────────── */
+.side-panel {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--bg-border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 16px;
+  gap: 4px;
+}
+.side-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+  margin-top: 4px;
+}
+.side-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.btn-link {
+  font-size: 12px;
+  color: var(--c-blue);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color .15s;
+}
+.btn-link:hover { color: var(--text-1); }
+.project-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .15s;
+  user-select: none;
+}
+.project-check:hover { background: var(--hover-bg); }
+.project-check input[type=checkbox] {
+  width: 15px; height: 15px;
+  accent-color: var(--c-blue);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.avatar {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  flex-shrink: 0;
+  letter-spacing: -.01em;
+}
+.avatar-red    { background: rgba(239,68,68,.2);  color: var(--c-red); border: 1px solid rgba(239,68,68,.3); }
+.avatar-yellow { background: rgba(245,158,11,.2); color: var(--c-yellow); border: 1px solid rgba(245,158,11,.3); }
+.avatar-green  { background: rgba(34,197,94,.2);  color: var(--c-green); border: 1px solid rgba(34,197,94,.3); }
+.project-name {
+  font-size: 13px;
+  color: var(--text-2);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-divider { height: 1px; background: var(--bg-border); margin: 10px 0; }
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.legend-swatch {
+  width: 28px; height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.swatch-past   { background: var(--bg-el2); border: 1px solid var(--bg-border); }
+.swatch-curr   { background: var(--c-blue-bg); border: 1px solid var(--c-blue-bd); }
+.swatch-future {
+  background: var(--bg-el);
+  border: 1px dashed var(--bg-el2);
+}
+.legend-hoje {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.swatch-hoje {
+  width: 2px; height: 12px;
+  background: var(--c-red);
+  margin: 0 13px 0 6px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ─── Right panel / Timeline ─────────────────────────────────── */
+.timeline-panel {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.timeline-scroll {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.timeline-inner {
+  min-width: 700px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* Month/sprint header */
+.timeline-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--bg-border);
+}
+.month-row {
+  display: flex;
+  border-bottom: 1px solid var(--bg-border);
+}
+.month-row .row-label-col { flex-shrink: 0; }
+.month-cell {
+  border-right: 1px solid var(--bg-border);
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  text-align: center;
+}
+.month-cell:last-child { border-right: none; }
+
+.sprint-row {
+  display: flex;
+}
+.sprint-row .row-label-col { flex-shrink: 0; }
+.sprint-cell {
+  border-right: 1px solid var(--bg-border);
+  padding: 5px 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+.sprint-cell.current {
+  background: rgba(96,165,250,.05);
+  color: var(--c-blue);
+  font-weight: 700;
+}
+.sprint-cell:last-child { border-right: none; }
+.sprint-date { font-size: 10px; color: var(--text-faint); }
+.sprint-cell.current .sprint-date { color: var(--c-blue); opacity: .7; }
+
+/* Row label column (fixed left inside scroll) */
+.row-label-col {
+  width: 140px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  border-right: 1px solid var(--bg-border);
+}
+
+/* Rows */
+.gantt-rows { flex: 1; position: relative; }
+.gantt-row {
+  display: flex;
+  height: 64px;
+  border-bottom: 1px solid var(--bg-border);
+  position: relative;
+  transition: opacity .2s;
+}
+.gantt-row:last-child { border-bottom: none; }
+.gantt-row.hidden { opacity: 0; pointer-events: none; display: none; }
+
+.row-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 12px;
+  gap: 4px;
+}
+.row-project-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.health-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 99px;
+  width: fit-content;
+}
+.health-pill.red    { background: var(--c-red-bg);    color: var(--c-red);    border: 1px solid rgba(239,68,68,.3); }
+.health-pill.yellow { background: var(--c-yellow-bg); color: var(--c-yellow); border: 1px solid rgba(245,158,11,.3); }
+.health-pill.green  { background: var(--c-green-bg);  color: var(--c-green);  border: 1px solid rgba(34,197,94,.3); }
+
+/* Bars container */
+.bars-container {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 8px 4px;
+  gap: 2px;
+  overflow: hidden;
+}
+
+/* Sprint bar */
+.sprint-bar {
+  height: 48px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6px 10px;
+  cursor: pointer;
+  position: relative;
+  transition: filter .15s, transform .15s;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.sprint-bar:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
+.sprint-bar.past {
+  background: var(--bg-el2);
+  border: 1px solid var(--bg-border);
+}
+.sprint-bar.current {
+  background: var(--c-blue-bg);
+  border: 1px solid var(--c-blue-bd);
+  box-shadow: 0 0 0 1px rgba(96,165,250,.08), 0 2px 8px rgba(96,165,250,.12);
+}
+.sprint-bar.current::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--c-blue);
+  border-radius: 6px 0 0 6px;
+  animation: pulse-bar 2s ease-in-out infinite;
+}
+@keyframes pulse-bar {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
+}
+.sprint-bar.future {
+  background: var(--bg-el);
+  border: 1px dashed var(--bg-el2);
+}
+.sprint-bar.empty-slot {
+  background: transparent;
+  border: none;
+  cursor: default;
+}
+.sprint-bar.empty-slot:hover { filter: none; transform: none; }
+
+.bar-sprint-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.sprint-bar.current .bar-sprint-label { color: var(--c-blue); }
+.sprint-bar.past .bar-sprint-label { color: var(--text-faint); }
+.sprint-bar.future .bar-sprint-label { color: var(--text-faint); }
+
+.bar-sub {
+  font-size: 10px;
+  color: var(--text-faint);
+  line-height: 1;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sprint-bar.current .bar-sub { color: rgba(96,165,250,.6); }
+
+.bar-check {
+  position: absolute;
+  top: 6px; right: 8px;
+  color: var(--c-green);
+  font-size: 11px;
+  opacity: .8;
+}
+.issue-badge {
+  position: absolute;
+  top: 5px; right: 7px;
+  background: var(--c-red-bg);
+  border: 1px solid rgba(239,68,68,.4);
+  color: var(--c-red);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+/* HOJE line */
+.hoje-line {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 0;
+  border-left: 2px dashed var(--c-red);
+  z-index: 20;
+  pointer-events: none;
+  transition: left .3s ease;
+}
+.hoje-label {
+  position: absolute;
+  top: -1px;
+  left: 4px;
+  background: var(--c-red);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 3px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+/* ─── Tooltip ────────────────────────────────────────────────── */
+.tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  font-size: 12px;
+  min-width: 180px;
+  opacity: 0;
+  transition: opacity .1s;
+  color: var(--text-2);
+}
+.tooltip.visible { opacity: 1; }
+.tooltip-title { font-weight: 700; color: var(--text-1); margin-bottom: 6px; font-size: 13px; }
+.tooltip-row { display: flex; justify-content: space-between; gap: 12px; margin-top: 3px; }
+.tooltip-key { color: var(--text-faint); }
+.tooltip-val { color: var(--text-2); font-weight: 600; }
+.tooltip-status-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+.status-past   { background: var(--bg-el2); color: var(--text-muted); }
+.status-curr   { background: var(--c-blue-bg); color: var(--c-blue); border: 1px solid var(--c-blue-bd); }
+.status-future { background: var(--bg-el); color: var(--text-faint); border: 1px dashed var(--bg-el2); }
+
+/* ─── Modal footer ───────────────────────────────────────────── */
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid var(--bg-border);
+  flex-shrink: 0;
+}
+.footer-ts {
+  font-size: 12px;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.footer-ts svg { color: var(--text-faint); flex-shrink: 0; }
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--c-blue-bg);
+  border: 1px solid var(--c-blue-bd);
+  color: var(--c-blue);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, filter .15s;
+}
+.btn-primary:hover { filter: brightness(1.1); }
+
+/* ─── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-el2); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+/* ─── Utility ────────────────────────────────────────────────── */
+.flex-center { display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════
+     TOP BAR
+════════════════════════════════════════════════════ -->
+<header class="topbar">
+  <a href="#" class="topbar-logo" aria-label="Backlog Health">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+    Backlog Health
+  </a>
+  <span class="topbar-label">IT-04</span>
+  <div class="topbar-sep"></div>
+  <button class="btn-ghost" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema">
+    <svg id="theme-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+    Tema
+  </button>
+  <a href="#" class="btn-ghost" onclick="closeModal(event)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+    Dashboard
+  </a>
+</header>
+
+<!-- ════════════════════════════════════════════════════
+     OVERLAY + MODAL
+════════════════════════════════════════════════════ -->
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="Plano de Entrega">
+  <div class="modal" id="modal" role="document">
+
+    <!-- Modal header -->
+    <div class="modal-header">
+      <div class="modal-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          <line x1="8" y1="14" x2="16" y2="14"/>
+        </svg>
+      </div>
+      <div class="modal-titles">
+        <div class="modal-title">Plano de Entrega</div>
+        <div class="modal-subtitle">Sprint 47 em andamento &middot; 3 projetos</div>
+      </div>
+      <div class="modal-actions">
+        <button class="icon-btn" id="maximize-btn" onclick="toggleMaximize()" title="Maximizar" aria-label="Maximizar modal">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+        </button>
+        <button class="icon-btn" onclick="closeModal(event)" title="Fechar" aria-label="Fechar modal">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Modal body -->
+    <div class="modal-body">
+
+      <!-- Left panel -->
+      <aside class="side-panel" aria-label="Painel lateral">
+        <div class="side-label">Projetos</div>
+        <div class="side-actions">
+          <button class="btn-link" onclick="selectAll()">Selecionar todos</button>
+          <button class="btn-link" onclick="clearAll()">Limpar</button>
+        </div>
+
+        <label class="project-check" for="chk-alpha">
+          <input type="checkbox" id="chk-alpha" checked onchange="toggleRow('alpha')">
+          <span class="avatar avatar-red">AL</span>
+          <span class="project-name">Alpha Squad</span>
+        </label>
+
+        <label class="project-check" for="chk-beta">
+          <input type="checkbox" id="chk-beta" checked onchange="toggleRow('beta')">
+          <span class="avatar avatar-yellow">BP</span>
+          <span class="project-name">Beta Platform</span>
+        </label>
+
+        <label class="project-check" for="chk-gamma">
+          <input type="checkbox" id="chk-gamma" checked onchange="toggleRow('gamma')">
+          <span class="avatar avatar-green">GX</span>
+          <span class="project-name">Gamma Experience</span>
+        </label>
+
+        <div class="side-divider"></div>
+
+        <div class="side-label">Legenda</div>
+
+        <div class="legend-item">
+          <span class="legend-swatch swatch-past"></span>
+          Passado
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch swatch-curr"></span>
+          Atual
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch swatch-future"></span>
+          Futuro
+        </div>
+        <div class="legend-hoje">
+          <span class="swatch-hoje"></span>
+          Hoje
+        </div>
+      </aside>
+
+      <!-- Right panel: Gantt timeline -->
+      <div class="timeline-panel" role="region" aria-label="Linha do tempo de sprints">
+        <div class="timeline-scroll" id="timeline-scroll">
+          <div class="timeline-inner" id="timeline-inner">
+
+            <!-- Header: months -->
+            <div class="timeline-header" id="timeline-header">
+              <div class="month-row" id="month-row">
+                <div class="row-label-col" style="border-bottom:1px solid var(--bg-border);"></div>
+                <!-- month cells injected by JS -->
+              </div>
+              <div class="sprint-row" id="sprint-row">
+                <div class="row-label-col"></div>
+                <!-- sprint header cells injected by JS -->
+              </div>
+            </div>
+
+            <!-- Rows -->
+            <div class="gantt-rows" id="gantt-rows">
+              <!-- HOJE line -->
+              <div class="hoje-line" id="hoje-line">
+                <span class="hoje-label">HOJE</span>
+              </div>
+              <!-- Project rows injected by JS -->
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div><!-- /modal-body -->
+
+    <!-- Modal footer -->
+    <div class="modal-footer">
+      <div class="footer-ts">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+        Atualizado ha 3 min
+      </div>
+      <button class="btn-primary" onclick="closeModal(event)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+        Fechar
+      </button>
+    </div>
+
+  </div><!-- /modal -->
+</div><!-- /overlay -->
+
+<!-- Tooltip -->
+<div class="tooltip" id="tooltip" role="tooltip"></div>
+
+<!-- ════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ─── Sprint data ───────────────────────────────────────────────
+// Total timeline: Apr 7 → Jul 21, 2026 = 105 days
+const TIMELINE_START = new Date(2026, 3, 7);  // Apr 7
+const TIMELINE_END   = new Date(2026, 6, 21); // Jul 21
+const TODAY          = new Date(2026, 5, 9);  // Jun 9
+
+const SPRINTS = [
+  { id:'s44', label:'S44', name:'Sprint 44', start: new Date(2026,3,7),  end: new Date(2026,3,22), status:'past'    },
+  { id:'s45', label:'S45', name:'Sprint 45', start: new Date(2026,3,23), end: new Date(2026,4,8),  status:'past'    },
+  { id:'s46', label:'S46', name:'Sprint 46', start: new Date(2026,4,9),  end: new Date(2026,4,26), status:'past'    },
+  { id:'s47', label:'S47', name:'Sprint 47', start: new Date(2026,5,2),  end: new Date(2026,5,17), status:'current' },
+  { id:'s48', label:'S48', name:'Sprint 48', start: new Date(2026,5,18), end: new Date(2026,6,3),  status:'future'  },
+  { id:'s49', label:'S49', name:'Sprint 49', start: new Date(2026,6,4),  end: new Date(2026,6,21), status:'future'  },
+];
+
+// Each project's sprint participation + metadata
+const PROJECTS = [
+  {
+    id: 'alpha',
+    name: 'Alpha Squad',
+    avatarClass: 'avatar-red',
+    avatarText: 'AL',
+    health: { label: 'Critico', cls: 'red' },
+    sprints: {
+      s44: { participates: true, issues: 0 },
+      s45: { participates: true, issues: 0 },
+      s46: { participates: true, issues: 0 },
+      s47: { participates: true, issues: 8 },
+      s48: { participates: true, issues: 0 },
+      s49: { participates: true, issues: 0 },
+    },
+    tooltip: {
+      s44: { pts: '42 pts entregues', velocity: '94%' },
+      s45: { pts: '38 pts entregues', velocity: '88%' },
+      s46: { pts: '45 pts entregues', velocity: '100%' },
+      s47: { pts: '31 pts planejados', velocity: 'Em andamento' },
+      s48: { pts: '40 pts planejados', velocity: '-' },
+      s49: { pts: '40 pts planejados', velocity: '-' },
+    },
+  },
+  {
+    id: 'beta',
+    name: 'Beta Platform',
+    avatarClass: 'avatar-yellow',
+    avatarText: 'BP',
+    health: { label: 'Atencao', cls: 'yellow' },
+    sprints: {
+      s44: { participates: true,  issues: 0 },
+      s45: { participates: true,  issues: 0 },
+      s46: { participates: true,  issues: 0 },
+      s47: { participates: true,  issues: 2 },
+      s48: { participates: true,  issues: 0 },
+      s49: { participates: false, issues: 0 },
+    },
+    tooltip: {
+      s44: { pts: '29 pts entregues', velocity: '96%' },
+      s45: { pts: '33 pts entregues', velocity: '91%' },
+      s46: { pts: '28 pts entregues', velocity: '87%' },
+      s47: { pts: '35 pts planejados', velocity: 'Em andamento' },
+      s48: { pts: '35 pts planejados', velocity: '-' },
+      s49: { pts: '-', velocity: '-' },
+    },
+  },
+  {
+    id: 'gamma',
+    name: 'Gamma Experience',
+    avatarClass: 'avatar-green',
+    avatarText: 'GX',
+    health: { label: 'Saudavel', cls: 'green' },
+    sprints: {
+      s44: { participates: false, issues: 0 },
+      s45: { participates: true,  issues: 0 },
+      s46: { participates: true,  issues: 0 },
+      s47: { participates: true,  issues: 0 },
+      s48: { participates: true,  issues: 0 },
+      s49: { participates: true,  issues: 0 },
+    },
+    tooltip: {
+      s44: { pts: '-', velocity: '-' },
+      s45: { pts: '22 pts entregues', velocity: '100%' },
+      s46: { pts: '25 pts entregues', velocity: '100%' },
+      s47: { pts: '28 pts planejados', velocity: 'Em andamento' },
+      s48: { pts: '28 pts planejados', velocity: '-' },
+      s49: { pts: '28 pts planejados', velocity: '-' },
+    },
+  },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────
+function daysBetween(a, b) {
+  return Math.round((b - a) / 86400000);
+}
+const TOTAL_DAYS = daysBetween(TIMELINE_START, TIMELINE_END); // 105
+
+function pct(date) {
+  const d = daysBetween(TIMELINE_START, date);
+  return Math.max(0, Math.min(100, (d / TOTAL_DAYS) * 100));
+}
+function sprintWidthPct(sprint) {
+  // width = (duration / total) * 100
+  const dur = daysBetween(sprint.start, sprint.end);
+  return (dur / TOTAL_DAYS) * 100;
+}
+function fmtDate(d) {
+  return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+}
+
+// ─── Month groupings ──────────────────────────────────────────
+// Compute visible month spans across timeline
+function buildMonths() {
+  const months = [];
+  let cur = new Date(TIMELINE_START.getFullYear(), TIMELINE_START.getMonth(), 1);
+  const endMonth = new Date(TIMELINE_END.getFullYear(), TIMELINE_END.getMonth(), 1);
+  while (cur <= endMonth) {
+    const mStart = new Date(Math.max(TIMELINE_START, cur));
+    const nextM = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    const mEnd   = new Date(Math.min(TIMELINE_END, nextM));
+    const days   = daysBetween(mStart, mEnd);
+    months.push({
+      label: cur.toLocaleDateString('pt-BR', { month: 'short' }).replace('.','').replace(/^\w/, c => c.toUpperCase()),
+      pctWidth: (days / TOTAL_DAYS) * 100,
+    });
+    cur = nextM;
+  }
+  return months;
+}
+
+// ─── Build timeline DOM ──────────────────────────────────────
+function buildTimeline() {
+  const monthRow  = document.getElementById('month-row');
+  const sprintRow = document.getElementById('sprint-row');
+  const ganttRows = document.getElementById('gantt-rows');
+
+  // Month headers
+  buildMonths().forEach(m => {
+    const cell = document.createElement('div');
+    cell.className = 'month-cell';
+    cell.style.width = m.pctWidth + '%';
+    cell.style.minWidth = (m.pctWidth / 100 * 700) + 'px';
+    cell.textContent = m.label;
+    monthRow.appendChild(cell);
+  });
+
+  // Sprint header cells
+  SPRINTS.forEach(s => {
+    const cell = document.createElement('div');
+    cell.className = 'sprint-cell' + (s.status === 'current' ? ' current' : '');
+    cell.style.width = sprintWidthPct(s) + '%';
+    cell.style.minWidth = (sprintWidthPct(s) / 100 * 700) + 'px';
+    cell.innerHTML = `
+      <span>${s.label}</span>
+      <span class="sprint-date">${fmtDate(s.start)} – ${fmtDate(s.end)}</span>
+    `;
+    sprintRow.appendChild(cell);
+  });
+
+  // Project rows
+  PROJECTS.forEach(proj => {
+    const row = document.createElement('div');
+    row.className = 'gantt-row';
+    row.id = 'row-' + proj.id;
+
+    // Label col
+    const labelCol = document.createElement('div');
+    labelCol.className = 'row-label-col row-label';
+    labelCol.innerHTML = `
+      <span class="row-project-name" title="${proj.name}">${proj.name}</span>
+      <span class="health-pill ${proj.health.cls}">${proj.health.label}</span>
+    `;
+
+    // Bars container
+    const barsCol = document.createElement('div');
+    barsCol.className = 'bars-container';
+
+    SPRINTS.forEach(s => {
+      const sp = proj.sprints[s.id];
+      const bar = document.createElement('div');
+      const widthPct = sprintWidthPct(s);
+      // Subtract 4px gap and 2px for each bar from total
+      bar.style.width = 'calc(' + widthPct + '% - 4px)';
+      bar.style.minWidth = 'calc(' + (widthPct / 100 * 700) + 'px - 4px)';
+
+      if (!sp || !sp.participates) {
+        bar.className = 'sprint-bar empty-slot';
+        barsCol.appendChild(bar);
+        return;
+      }
+
+      bar.className = 'sprint-bar ' + s.status;
+
+      // Past: checkmark
+      if (s.status === 'past') {
+        bar.innerHTML = `
+          <span class="bar-sprint-label">${s.label}</span>
+          <span class="bar-sub">${fmtDate(s.start)} – ${fmtDate(s.end)}</span>
+          <span class="bar-check" aria-label="Concluido">&#10003;</span>
+        `;
+      }
+      // Current: optional issue badge
+      else if (s.status === 'current') {
+        const badge = sp.issues > 0
+          ? `<span class="issue-badge" aria-label="${sp.issues} problemas">${sp.issues} issues</span>`
+          : '';
+        bar.innerHTML = `
+          <span class="bar-sprint-label">${s.label}</span>
+          <span class="bar-sub">${fmtDate(s.start)} – ${fmtDate(s.end)}</span>
+          ${badge}
+        `;
+      }
+      // Future
+      else {
+        bar.innerHTML = `
+          <span class="bar-sprint-label">${s.label}</span>
+          <span class="bar-sub">${fmtDate(s.start)} – ${fmtDate(s.end)}</span>
+        `;
+      }
+
+      // Tooltip events
+      const tt = proj.tooltip[s.id];
+      bar.addEventListener('mouseenter', (e) => showTooltip(e, s, proj, tt));
+      bar.addEventListener('mousemove',  moveTooltip);
+      bar.addEventListener('mouseleave', hideTooltip);
+      bar.addEventListener('focus',      (e) => showTooltip(e, s, proj, tt));
+      bar.addEventListener('blur',       hideTooltip);
+      bar.setAttribute('tabindex', '0');
+      bar.setAttribute('role', 'button');
+      bar.setAttribute('aria-label', `${proj.name} - ${s.name}: ${s.status}`);
+
+      barsCol.appendChild(bar);
+    });
+
+    row.appendChild(labelCol);
+    row.appendChild(barsCol);
+    ganttRows.appendChild(row);
+  });
+
+  // HOJE line: position after rows are in DOM
+  positionHoje();
+}
+
+// ─── HOJE line ────────────────────────────────────────────────
+function positionHoje() {
+  const hojeEl = document.getElementById('hoje-line');
+  const barsContainers = document.querySelectorAll('.bars-container');
+  if (!barsContainers.length) return;
+
+  // The bars containers take flex:1 of the modal minus the label col (140px)
+  // We position relative to gantt-rows; the bars-container starts at 140px left
+  // HOJE fraction = pct(TODAY)
+  const fraction = pct(TODAY) / 100;
+
+  // Gantt rows occupies full width; label col is 140px
+  // We cannot easily calculate px without render, so we use a percentage approach
+  // relative to the gantt-rows element.
+  // gantt-rows = full width; label col is 140px inside each row.
+  // So the bars area starts at ~140px and extends to the full width.
+  // We'll use a CSS custom property approach with JS after layout.
+
+  const ganttRows = document.getElementById('gantt-rows');
+  // Listen to first paint
+  requestAnimationFrame(() => {
+    const ganttW = ganttRows.offsetWidth;
+    const barsW  = ganttW - 140; // subtract label col
+    const lineLeft = 140 + fraction * barsW;
+    hojeEl.style.left = lineLeft + 'px';
+  });
+}
+
+// ─── Tooltip ─────────────────────────────────────────────────
+let tooltipEl;
+function statusLabel(status) {
+  if (status === 'past')    return '<span class="tooltip-status-badge status-past">Concluido</span>';
+  if (status === 'current') return '<span class="tooltip-status-badge status-curr">Em andamento</span>';
+  return '<span class="tooltip-status-badge status-future">Planejado</span>';
+}
+function showTooltip(e, sprint, proj, tt) {
+  tooltipEl = document.getElementById('tooltip');
+  tooltipEl.innerHTML = `
+    <div class="tooltip-title">${sprint.name} &mdash; ${proj.name}</div>
+    <div class="tooltip-row">
+      <span class="tooltip-key">Periodo</span>
+      <span class="tooltip-val">${fmtDate(sprint.start)} – ${fmtDate(sprint.end)}</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-key">Capacidade</span>
+      <span class="tooltip-val">${tt ? tt.pts : '-'}</span>
+    </div>
+    <div class="tooltip-row">
+      <span class="tooltip-key">Velocidade</span>
+      <span class="tooltip-val">${tt ? tt.velocity : '-'}</span>
+    </div>
+    ${statusLabel(sprint.status)}
+  `;
+  tooltipEl.classList.add('visible');
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  if (!tooltipEl) return;
+  const x = e.clientX + 14;
+  const y = e.clientY + 14;
+  const tw = tooltipEl.offsetWidth;
+  const th = tooltipEl.offsetHeight;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  tooltipEl.style.left = (x + tw > vw - 8 ? x - tw - 20 : x) + 'px';
+  tooltipEl.style.top  = (y + th > vh - 8 ? y - th - 20 : y) + 'px';
+}
+function hideTooltip() {
+  tooltipEl = document.getElementById('tooltip');
+  tooltipEl.classList.remove('visible');
+}
+
+// ─── Sidebar interactions ─────────────────────────────────────
+function toggleRow(id) {
+  const row = document.getElementById('row-' + id);
+  if (row) row.classList.toggle('hidden');
+}
+function selectAll() {
+  ['alpha','beta','gamma'].forEach(id => {
+    document.getElementById('chk-' + id).checked = true;
+    const row = document.getElementById('row-' + id);
+    if (row) row.classList.remove('hidden');
+  });
+}
+function clearAll() {
+  ['alpha','beta','gamma'].forEach(id => {
+    document.getElementById('chk-' + id).checked = false;
+    const row = document.getElementById('row-' + id);
+    if (row) row.classList.add('hidden');
+  });
+}
+
+// ─── Maximize ────────────────────────────────────────────────
+let maximized = false;
+function toggleMaximize() {
+  maximized = !maximized;
+  document.getElementById('modal').classList.toggle('maximized', maximized);
+  const btn = document.getElementById('maximize-btn');
+  btn.title = maximized ? 'Restaurar' : 'Maximizar';
+  btn.setAttribute('aria-label', maximized ? 'Restaurar modal' : 'Maximizar modal');
+  btn.innerHTML = maximized
+    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+         <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
+         <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
+       </svg>`
+    : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+         <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+         <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+       </svg>`;
+  requestAnimationFrame(positionHoje);
+}
+
+// ─── Close modal ──────────────────────────────────────────────
+function closeModal(e) {
+  e.preventDefault();
+  const overlay = document.getElementById('overlay');
+  overlay.style.opacity = '0';
+  overlay.style.transition = 'opacity .2s';
+  setTimeout(() => overlay.classList.add('hidden'), 200);
+}
+
+// ─── Theme toggle ─────────────────────────────────────────────
+const MOON_ICON = `<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/>
+  <line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/>
+  <line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`;
+const SUN_ICON = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`;
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.getElementById('theme-icon').innerHTML = isDark ? SUN_ICON : MOON_ICON;
+}
+
+// ─── Keyboard: Escape closes modal ───────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal(e);
+});
+
+// ─── Reposition HOJE on resize ───────────────────────────────
+window.addEventListener('resize', positionHoje);
+
+// ─── Init ─────────────────────────────────────────────────────
+buildTimeline();
+</script>
+</body>
+</html>

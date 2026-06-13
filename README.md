@@ -1,26 +1,29 @@
 # Backlog Health Dashboard
 
-Dashboard para monitoramento e análise de saúde dos backlogs de projetos no **Azure DevOps**. Visualize métricas de User Stories, filtre por sprint e identifique rapidamente itens sem estimativa, sem responsável, bugs e itens em UAT.
+Dashboard Node.js local para monitoramento e análise de saúde dos backlogs de projetos no **Azure DevOps**. Visualize métricas de User Stories, filtre por sprint e identifique rapidamente itens sem estimativa, sem responsável, bugs, itens em UAT e muito mais — tudo em uma única tela.
 
 ---
 
 ## Funcionalidades
 
-- Indicadores de saúde por projeto (Saudável / Atenção / Crítico) com tooltip explicando o motivo do alerta
-- **Suporte a dois modos por projeto** — *User Story* (Story Points) ou *Task* (Horas: RemainingWork / OriginalEstimate), configurável por projeto na tela de setup
-- Métricas agregadas: User Stories/Tasks (abertas + fechadas), sem estimativa, sem responsável e bugs ativos
-- Agrupamento por sprint ordenado cronologicamente
-- Seção "Visualizar User Stories" por card com tabela filtrada (toggle expansível)
-- Modal de detalhes com indicadores, gráficos de distribuição, cronograma de sprints e tabela de distribuição por sprint
-- **Gráfico de burndown por sprint** — acessível via coluna "Ações" na tabela de distribuição, com linha ideal, linha real e marcador de hoje
-- **Apresentação de Daily Standup** — modal em carrossel com métricas e User Stories da sprint atual, botão de burndown integrado
-- **Delivery Plan** — timeline compartilhada de todos os projetos lado a lado, com blocos de sprint posicionados por data, filtro por projeto e herança dos filtros de sprint do dashboard principal
-- **Copilot Project (IA)** — assistente de IA integrado ao dashboard com contexto rico dos projetos monitorados (ver seção abaixo)
-- Filtros por sprint com persistência no navegador
-- **Suporte a múltiplos idiomas** — Português, Inglês (padrão) e Espanhol, alternável pelo seletor PT/EN/ES no header
-- **Distribuição como app Windows nativo** — `BacklogHealth.exe` via wrapper WebView2, sem instalar Node.js ou browser
-- Temas claro e escuro com cores adaptadas por tema (blocos de sprint passados usam tons suaves no tema claro)
-- Atualização automática a cada 5 minutos
+- **Indicadores de saúde** por projeto (Saudável / Atenção / Crítico) com tooltip explicando o motivo
+- **Dois modos por projeto** — *User Story* (Story Points) ou *Task* (Horas), configurável no setup
+- Métricas por card: User Stories/Tasks, sem estimativa, sem responsável, bugs ativos
+- **Filtro por sprint** com seleção múltipla, datas e persistência no browser
+- **Modal de Detalhes** — indicadores de saúde, distribuição por status/responsável/sprint, cronograma Gantt, burndown
+- **Gráfico de Burndown** por sprint — linha ideal, linha real, marcador de hoje
+- **Daily Standup** — carrossel com métricas da sprint atual, navegável por teclado, botão por card para entrar direto no projeto
+- **Delivery Plan** — timeline compartilhada de todos os projetos com blocos de sprint posicionados por data
+- **UAT Dashboard** — planos de teste por projeto com acordeão, pills de filtro, indicadores e progresso
+- **Team Capacity** — métricas por desenvolvedor, configuração de capacidade em horas, tendência de entrega
+- **Review Mensal** — relatório consolidado Azure DevOps + Service Now (incidentes, PRBs, entrega, qualidade)
+- **Copilot IA** — assistente integrado com contexto rico dos projetos (Azure AI Foundry / Azure OpenAI / OpenAI)
+- **Suporte a múltiplos times** por projeto — cada time monitorado de forma isolada
+- **Alias de projeto** — renomear o nome exibido sem alterar configuração do servidor
+- **i18n** — Português, Inglês (padrão) e Espanhol
+- **Tema claro/escuro** com persistência no browser — sincroniza automaticamente com a preferência do Windows no app Electron
+- **App Windows nativo** — instalador NSIS ou versão portátil via Electron, sem instalar Node.js
+- **Atualizações no app** — banner aparece quando uma nova versão é publicada; baixe e instale sem sair do dashboard
 
 ---
 
@@ -29,8 +32,8 @@ Dashboard para monitoramento e análise de saúde dos backlogs de projetos no **
 - **Node.js v18+** — [Download](https://nodejs.org/)
 - Conta no **Azure DevOps** com acesso aos projetos desejados
 - **Personal Access Token (PAT)** com as permissões:
-  - `Work Items (Read)`
-  - `Project and Team (Read)`
+  - `Work Items (Read)` — obrigatório
+  - `Project and Team (Read)` — recomendado
 
 > **Como gerar o PAT:** Azure DevOps → User Settings → Personal Access Tokens → New Token
 
@@ -39,12 +42,14 @@ Dashboard para monitoramento e análise de saúde dos backlogs de projetos no **
 ## Instalação
 
 ```bash
-# 1. Clone o repositório
 git clone https://github.com/mauriliosfc/BacklogHealth.git
 cd BacklogHealth
 
-# 2. (Opcional) Instale o nodemon para hot reload em desenvolvimento
+# Opcional: instalar nodemon para hot reload em desenvolvimento
 npm install -g nodemon
+
+# Instalar dependências de dev (apenas para testes)
+npm install
 ```
 
 Não há dependências de produção — apenas módulos nativos do Node.js são utilizados.
@@ -53,32 +58,58 @@ Não há dependências de produção — apenas módulos nativos do Node.js são
 
 ## Configuração
 
-Na primeira execução, o dashboard abre uma tela de configuração onde você deve informar:
+Na primeira execução, o dashboard abre uma tela de configuração onde você informa:
 
 | Campo | Descrição | Exemplo |
 |-------|-----------|---------|
-| **Organização** | Nome da organização **ou** URL completa do Azure DevOps | `minha-empresa` · `https://empresa.visualstudio.com/` |
-| **PAT** | Personal Access Token gerado no Azure DevOps | `xxxxxxxxxxxxxxxxxxxx` |
+| **Organização** | Nome da org ou URL completa do Azure DevOps | `minha-empresa` · `https://empresa.visualstudio.com/` |
+| **PAT** | Personal Access Token | `xxxxxxxxxxxxxxxxxxxx` |
 
-Após preencher, clique em **"Testar conexão e carregar projetos"**, selecione os projetos que deseja monitorar e clique em **"Salvar e abrir dashboard"**.
+Após preencher, clique em **"Testar conexão e carregar projetos"**, selecione os projetos e clique em **"Salvar"**.
 
-As configurações são salvas automaticamente em `config.json` (ignorado pelo Git para proteger suas credenciais).
+As configurações são salvas em `config.json` (ignorado pelo Git).
 
-Para alterar a configuração posteriormente, clique no botão ⚙️ no cabeçalho do dashboard ou acesse `http://localhost:3030/settings`.
+Para alterar posteriormente: botão ⚙️ no cabeçalho ou `http://localhost:3030/settings`.
 
 ---
 
 ## Executando
 
 ```bash
-# Modo desenvolvimento (com hot reload — não reabre o navegador a cada reinício)
+# Desenvolvimento (hot reload — não reabre o navegador a cada reinício)
 nodemon server.js
 
-# Modo produção (abre o navegador automaticamente)
+# Produção (abre o navegador automaticamente)
 node server.js
 ```
 
-O servidor sobe na porta **3030**. Para encerrar, pressione `Ctrl+C`.
+O servidor sobe na porta **3030**. Para encerrar: `Ctrl+C`.
+
+---
+
+## Testes
+
+```bash
+npm test                # roda todos os testes
+npm run test:watch      # modo watch (re-executa ao salvar)
+npm run test:coverage   # exibe cobertura por arquivo
+```
+
+259 testes unitários cobrindo handlers de domínio, utilitários e funções puras de configuração.
+
+---
+
+## Build — distribuição como .exe
+
+```bash
+npm run electron:build
+```
+
+Gera em `dist/electron/`:
+- `Backlog Health Setup x.x.x.exe` — instalador NSIS (~76MB); cria atalho no Desktop e Menu Iniciar
+- `Backlog Health x.x.x.exe` — versão portátil; execute direto, sem instalar
+
+As releases são publicadas em [github.com/mauriliosfc/BacklogHealth/releases](https://github.com/mauriliosfc/BacklogHealth/releases). O app detecta novas versões automaticamente e exibe um banner para download e instalação.
 
 ---
 
@@ -86,66 +117,71 @@ O servidor sobe na porta **3030**. Para encerrar, pressione `Ctrl+C`.
 
 ```
 BacklogHealth/
-├── server.js           # Entry point: HTTP server, rotas, serve arquivos de public/ dinamicamente
-├── config.js           # Gerenciamento de configuração + parseOrgInput (detecta formato da org)
-├── azureClient.js      # Cliente HTTP para a API REST do Azure DevOps (usa cfg.baseUrl)
-├── projectService.js   # Lógica de negócio: queries, cálculo de saúde, cards HTML
+├── server.js              # Thin router ~190 linhas + helpers json()/page()
+├── config.js              # Gerenciamento de config + parseOrgInput, getDisplayName
+├── azureClient.js         # Cliente HTTPS para a API REST do Azure DevOps
+├── projectService.js      # Queries WIQL, cards HTML, fetchProjectDetail, fetchUATPlans
+├── teamCapacityService.js # fetchTeamCapacity — tasks por dev/sprint
+├── reportService.js       # buildReport, cache JSON 6h (Azure + Service Now)
+├── servicenowClient.js    # snGet — HTTPS Basic auth para a Table API do SN
+├── aiClient.js            # chatCompletion, testConnection (Foundry / Azure OAI / genérico)
+├── electron/
+│   ├── main.js            # BrowserWindow, tema da barra de título, IPC, update check
+│   ├── preload.js         # contextBridge — expõe electronAPI ao renderer
+│   └── updater.js         # checkForUpdates, downloadUpdate via GitHub Releases API
+├── handlers/              # Funções puras async — sem req/res, reutilizáveis por IPC
+│   ├── utils.js           # HttpError, httpError(), readBody()
+│   ├── state.js           # Singleton cachedHTML
+│   ├── dashboard.js       # renderDashboard, renderSetup, buildAndCache
+│   ├── projects.js        # listProjects, setup, removeProject
+│   ├── azure.js           # getDetail, getTeamCapacity, getUAT, getReportFields, getContext
+│   ├── ai.js              # getAiConfig, saveAiCfg, testAiConnection, chat
+│   ├── report.js          # getReportConfig, saveReportConfig, getReport, getIncidents
+│   ├── sn.js              # getSnCfg, saveSnCfg, testSn
+│   └── feedback.js        # submitFeedback
 ├── utils/
-│   ├── health.js       # calcHealth — fonte única compartilhada com o frontend
-│   ├── paginate.js     # paginatedItems — busca em lotes de 200
-│   └── iterMap.js      # fetchIterMap — busca de sprints/iterations
+│   ├── paths.js           # DATA_DIR, CONFIG_PATH, CACHE_DIR (pronto para Electron)
+│   ├── health.js          # calcHealth — compartilhado com frontend
+│   ├── paginate.js        # paginatedItems — lotes de 200
+│   └── iterMap.js         # fetchIterMap — sprints/iterations com fallback
 ├── public/
-│   ├── style.css       # Todo o CSS (temas claro/escuro, dashboard, setup)
-│   ├── app.js          # Entry point ES Module: importa módulos e expõe ao window
-│   ├── i18n/
-│   │   ├── pt.json     # Traduções em Português
-│   │   ├── en.json     # Traduções em Inglês (padrão)
-│   │   └── es.json     # Traduções em Espanhol
-│   └── modules/
-│       ├── constants.js  # US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES
-│       ├── health.js     # calcHealth (browser)
-│       ├── utils.js      # fmtD, buildSprintData
-│       ├── theme.js      # setTheme, toggleTheme
-│       ├── timer.js      # startTimer, doRefresh
-│       ├── filters.js    # applyFilter, initFilters, toggleDropdown, toggleUS, initHealthBadges
-│       ├── i18n.js       # initI18n, t, setLocale, getLocale, applyTranslations
-│       ├── detail.js     # loadDetailData, buildDetailHTML, buildTimeline
-│       ├── daily.js      # openDaily, buildDailySlide
-│       ├── burndown.js   # openBurndown, buildBurndownChart, openBurndownFromDaily
-│       ├── deliveryPlan.js # openDeliveryPlan, buildDeliveryPlan, filtros de projeto
-│       └── copilot.js    # openCopilot, sendCopilotMessage, contexto rico de projetos
-├── aiClient.js           # Cliente HTTP para Azure AI Foundry, Azure OpenAI e APIs compatíveis
+│   ├── style.css          # Todo o CSS (dark/light, Electron, scrollbar, zero duplicatas)
+│   ├── app.js             # Entry point ES Module
+│   ├── i18n/              # pt.json, en.json (padrão), es.json
+│   └── modules/           # constants, health, utils, filters, detail, daily,
+│                          # burndown, teamCapacity, copilot, report, snConfig,
+│                          # itemsModal, alias, deliveryPlan, updater, theme, timer, i18n
 ├── views/
-│   ├── dashboard.html  # Template HTML do dashboard
-│   └── setup.html      # Template HTML da tela de configuração
-├── wrapper/
-│   ├── BacklogHealth.csproj  # Projeto C# WPF (.NET Framework 4.8)
-│   └── MainWindow.xaml.cs    # Inicia server.exe, aguarda porta 3030, abre WebView2
-├── config.json         # Credenciais e projetos monitorados (gerado automaticamente, não versionado)
-├── nodemon.json        # Configuração do hot reload
-└── .gitignore
+│   ├── dashboard.html     # Template com tokens {{ORG}}, {{CARDS}}, etc.
+│   ├── setup.html         # Template da tela de configuração
+│   └── report.html        # Template do Review Mensal
+├── tests/
+│   ├── unit/              # 259 testes (handlers, utils, config)
+│   └── integration/       # Planejado: supertest + nock
+├── dist/electron/         # Distribuição Electron (não versionado)
+├── docs/
+│   └── decisions.md       # Histórico de decisões arquiteturais
+└── config.json            # Credenciais (gerado automaticamente, não versionado)
 ```
 
 ---
 
-## Indicadores de Saúde — Dashboard Principal
+## Indicadores de Saúde
 
-Os cards exibem métricas baseadas exclusivamente em **User Stories**:
+Baseados exclusivamente em **User Stories** (ou Tasks, conforme o modo do projeto):
 
 | Métrica | Descrição |
 |---------|-----------|
 | **User Stories** | Total de US (abertas e fechadas) |
-| **Sem Estimativa** | US abertas sem Story Points definidos |
-| **Sem Responsável** | US abertas sem assigned to |
+| **Sem Estimativa** | US abertas sem Story Points |
+| **Sem Responsável** | US abertas sem Assigned To |
 | **Bugs Abertos** | Bugs com estado Active, In Progress ou New |
 
 | Status | Condição |
 |--------|----------|
-| 🟢 **Saudável** | Sem alertas ativos |
-| 🟡 **Atenção** | US sem estimativa >30% ou sem responsável >20% ou >5 bugs |
-| 🔴 **Crítico** | US sem estimativa >50% ou >10 bugs |
-
-> Passe o mouse sobre o badge de saúde para ver o motivo detalhado do alerta.
+| Saudável | Sem alertas ativos |
+| Atenção | Sem estimativa >30% ou sem responsável >20% ou >5 bugs |
+| Crítico | Sem estimativa >50% ou >10 bugs |
 
 ---
 
@@ -153,58 +189,51 @@ Os cards exibem métricas baseadas exclusivamente em **User Stories**:
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `GET` | `/` | Dashboard principal |
-| `GET` | `/settings` | Página de configurações |
-| `GET` | `/refresh` | Recarrega dados do Azure DevOps |
-| `GET` | `/detail?project=NOME` | Detalhes completos de um projeto (JSON) |
-| `GET` | `/api/projects?org=X&pat=Y` | Lista projetos disponíveis |
-| `POST` | `/setup` | Salva configuração |
-| `GET` | `/ai/config` | Verifica se a IA está configurada |
+| `GET` | `/` | Dashboard principal (HTML) |
+| `GET` | `/refresh` | Recarrega dados e retorna HTML atualizado |
+| `GET` | `/settings` | Tela de configurações |
+| `GET` | `/api/projects?org=X&pat=Y` | Lista projetos disponíveis para o PAT |
+| `POST` | `/setup` | Salva configuração (preserva ai, github, servicenow) |
+| `POST` | `/api/remove-project` | Remove projeto do monitoramento |
+| `GET` | `/detail?project=NAME` | Detalhes completos de um projeto (JSON) |
+| `GET` | `/api/team-capacity?project=NAME` | Dados de capacidade por desenvolvedor |
+| `GET` | `/api/uat?project=NAME` | Planos de teste e test points |
+| `GET` | `/ai/config` | Configuração da IA (endpoint, model, apiVersion) |
 | `POST` | `/ai/config` | Salva credenciais da IA |
-| `POST` | `/ai/test` | Testa conexão com a IA |
-| `POST` | `/ai/context` | Retorna contexto rico dos projetos para a IA |
-| `POST` | `/ai/chat` | Envia mensagem para a IA e retorna resposta |
+| `POST` | `/ai/test` | Testa conexão com o provedor de IA |
+| `POST` | `/ai/context` | Contexto rico dos projetos para a IA |
+| `POST` | `/ai/chat` | Envia mensagem e retorna resposta da IA |
+| `GET` | `/api/report?project=NAME&month=YYYY-MM` | Review Mensal (JSON) |
+| `GET` | `/api/report-config?project=NAME` | Configuração do relatório por projeto |
+| `POST` | `/api/report-config` | Salva configuração do relatório |
+| `GET` | `/api/report-fields?project=NAME` | Campos disponíveis para gráficos de agrupamento |
+| `GET` | `/api/sn-config?project=NAME` | Configuração do Service Now (sem expor senha) |
+| `POST` | `/api/sn-config` | Salva credenciais SN e/ou assignmentGroup por projeto |
+| `POST` | `/api/sn-test` | Testa conexão com o Service Now |
+| `POST` | `/api/feedback` | Cria GitHub Issue com o feedback do usuário |
 
 ---
 
-## Copilot Project (IA)
+## Copilot IA
 
-O Copilot Project é um assistente de IA integrado ao dashboard, acessível pelo botão **🤖 Copilot** no header.
-
-### Configuração
-
-Na primeira abertura, o Copilot solicita as credenciais da IA:
-
-| Campo | Descrição | Exemplo |
-|-------|-----------|---------|
-| **Endpoint** | URL base da API | `https://sua-org.openai.azure.com/` · `https://copilot.services.ai.azure.com/api/projects/.../...` |
-| **API Key** | Chave de autenticação | `sk-...` ou chave Azure |
-| **Model / Deployment** | Nome do modelo ou deployment | `gpt-4o` · `gpt-5.4-mini` |
-| **API Version** | Versão da API (apenas Azure OpenAI) | `2024-02-01` |
-
-As credenciais são salvas localmente em `config.json` e podem ser alteradas a qualquer momento pelo botão ⚙️ dentro do chat.
+Assistente integrado ao dashboard, acessível pelo botão **Copilot** no header.
 
 ### Provedores suportados
 
-| Provedor | Detecção automática | Observações |
-|----------|-------------------|-------------|
-| **Azure AI Foundry** | URL contém `services.ai.azure.com` | System prompt injetado como prefixo da mensagem do usuário (restrição do agent) |
-| **Azure OpenAI** | URL contém `openai.azure.com` | Usa header `api-key`; requer `apiVersion` |
-| **OpenAI / compatível** | demais URLs | Usa header `Authorization: Bearer` |
+| Provedor | Detecção | Observação |
+|----------|----------|------------|
+| **Azure AI Foundry** | URL contém `services.ai.azure.com` | System prompt injetado como prefixo da mensagem (restrição do agent) |
+| **Azure OpenAI** | URL contém `openai.azure.com` | Header `api-key`; requer `apiVersion` |
+| **OpenAI / compatível** | demais URLs | Header `Authorization: Bearer` |
 
-### Contexto enviado à IA
+### Configuração
 
-Ao abrir o chat, o Copilot busca automaticamente os dados de todos os projetos monitorados via `/ai/context`, respeitando os filtros de sprint ativos no dashboard. O contexto inclui, por projeto:
-
-- **Resumo Geral** — total de itens, User Stories, Story Points, horas de tasks e bugs, bugs abertos
-- **Indicadores de Saúde** — taxa de conclusão, % em UAT, taxa de bugs, cobertura de estimativas
-- **US por Status** — distribuição de estados (New, Active, Closed, etc.)
-- **US por Responsável** — distribuição por membro da equipe (top 15)
-- **Distribuição por Sprint** — por sprint: total de US, concluídas, %, Story Points, horas
-- **Sprint Atual** — lista completa de US da sprint ativa com título, estado, pontos e responsável
-- **Itens problemáticos** — US sem estimativa, US sem responsável, bugs abertos (até 30 cada)
-
-O contexto completo é reenviado a cada mensagem para garantir que o assistente tenha acesso aos dados mesmo em provedores que não persistem o system prompt entre turnos (ex.: Azure AI Foundry agents).
+| Campo | Exemplo |
+|-------|---------|
+| Endpoint | `https://sua-org.openai.azure.com/` |
+| API Key | `sk-...` ou chave Azure |
+| Model / Deployment | `gpt-4o` |
+| API Version (Azure OAI) | `2024-02-01` |
 
 ---
 

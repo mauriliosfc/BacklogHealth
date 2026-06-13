@@ -3,6 +3,7 @@ export function setTheme(t) {
   localStorage.setItem('theme', t);
   const btn = document.getElementById('btnTheme');
   if (btn) { btn.textContent = t === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19'; btn.title = t === 'dark' ? 'Tema claro' : 'Tema escuro'; }
+  window.electronAPI?.themeChanged(t);
 }
 
 export function toggleTheme() {

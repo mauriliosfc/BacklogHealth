@@ -2,6 +2,7 @@ const { azureGet, azurePost } = require("./azureClient");
 const { calcHealth }    = require("./utils/health");
 const { paginatedItems } = require("./utils/paginate");
 const { fetchIterMap }  = require("./utils/iterMap");
+const { getCfg }        = require("./config");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -43,24 +44,26 @@ async function fetchProject(projectConfig) {
       : "Microsoft.VSTS.Scheduling.StoryPoints";
 
     const fields = `System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,${estimateField},System.IterationPath,Microsoft.VSTS.Common.StackRank`;
-    const [detailsValue, { map: iterMap, currentSprint }] = await Promise.all([
+    const [detailsValue, { map: iterMap, currentSprint }, planData] = await Promise.all([
       paginatedItems(projectName, allIds, fields),
       fetchIterMap(projectName, team),
+      azureGet(`${encodeURIComponent(projectName)}/_apis/testplan/plans?api-version=7.0`).catch(() => null),
     ]);
+    const testPlanCount = planData ? (planData.count || (planData.value || []).length) : 0;
 
     // When monitoring a specific team, restrict items to that team's sprints only
     const items = team
       ? detailsValue.filter(i => (i.fields?.['System.IterationPath'] || '') in iterMap)
       : detailsValue;
 
-    return { project: displayName, items, sprint: currentSprint, iterMap, error: null, workItemType };
+    return { project: displayName, items, sprint: currentSprint, iterMap, error: null, workItemType, testPlanCount };
   } catch (e) {
     return { project: displayName, items: [], sprint: null, error: e.message, workItemType };
   }
 }
 
 async function fetchProjectDetail(identifier) {
-  const { getProjectConfig } = require('./config.js');
+  const { getProjectConfig, getCfg } = require('./config.js');
   const projectConfig = getProjectConfig(identifier) || { name: identifier, workItemType: 'User Story' };
   const project      = projectConfig.name;
   const team         = projectConfig.team || undefined;
@@ -128,7 +131,10 @@ async function fetchProjectDetail(identifier) {
           pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null;
         }
 
+        const baseUrl = getCfg().baseUrl || '';
         return {
+          id:        i.id,
+          url:       i.id && baseUrl ? `${baseUrl}/_workitems/edit/${i.id}` : "",
           state:     i.fields?.["System.State"] || "",
           type:      i.fields?.["System.WorkItemType"] || "",
           pts,
@@ -157,7 +163,7 @@ function projectInitials(name) {
 }
 
 function buildCardHTML(results, baseUrl = '') {
-  return results.map(({ project, items, sprint, iterMap = {}, error, workItemType = 'User Story' }) => {
+  return results.map(({ project, items, sprint, iterMap = {}, error, workItemType = 'User Story', testPlanCount = 0 }) => {
     if (error) return `
       <div class="card error">
         <h2>❌ ${project}</h2>
@@ -194,7 +200,7 @@ function buildCardHTML(results, baseUrl = '') {
     }, 0);
     const closedCount = mainItems.filter(i => CLOSED_STATES.includes(i.fields?.["System.State"])).length;
 
-    const health = calcHealth(total, semEst, semResp, bugs);
+    const health = calcHealth(openItems.length, semEst, semResp, bugs, getCfg().health);
 
     // Labels dinâmicos baseados no modo
     const itemLabel = isTaskMode ? 'Tasks' : 'User Stories';
@@ -233,126 +239,67 @@ function buildCardHTML(results, baseUrl = '') {
       }
 
       return {
+        id: i.id,
+        title: i.fields?.["System.Title"] || "",
+        url: i.id && baseUrl ? `${baseUrl}/_workitems/edit/${i.id}` : "",
         iteration: i.fields?.["System.IterationPath"] || "",
         type: i.fields?.["System.WorkItemType"] || "",
         state: i.fields?.["System.State"] || "",
         pts,
         assigned: !!i.fields?.["System.AssignedTo"],
+        assignedTo: i.fields?.["System.AssignedTo"]?.displayName || "",
       };
-    })).replace(/</g, "\\u003c");
+    })).replace(/</g, "\\u003c").replace(/'/g, "&#39;");
 
-    const mainTotal = mainItems.length;
-    const grouped = {};
-    mainItems.forEach(i => {
-      const key = i.fields?.["System.IterationPath"] || "Sem Sprint";
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(i);
-    });
-    const sortedGroups = Object.keys(grouped).sort((a, b) => {
-      const aS = iterMap[a]?.start, bS = iterMap[b]?.start;
-      if (aS && bS) return new Date(aS) - new Date(bS);
-      return a.localeCompare(b);
-    });
-
-    const rows = sortedGroups.map(groupKey => {
-      const groupItems = grouped[groupKey];
-      const groupLabel = groupKey.includes("\\") ? groupKey.split("\\").pop() : groupKey;
-      const isCurrent = sprint && (groupKey === sprint || groupKey.endsWith("\\" + sprint));
-      const safeGroup = groupKey.replace(/"/g, "&quot;");
-      const iter = iterMap[groupKey] || {};
-      const dateRange = fmtRange(iter);
-      const header = `<tr class="group-header${isCurrent ? " current-group" : ""}" data-group="${safeGroup}">
-        <td colspan="5">
-          <span class="group-label">${groupLabel}${isCurrent ? ` 📅 <span data-i18n="sprint_current">atual</span>` : ""}</span>
-          ${dateRange ? `<span class="group-date">${dateRange}</span>` : ""}
-          <span class="group-count">${groupItems.length} item${groupItems.length !== 1 ? "s" : ""}</span>
-        </td>
-      </tr>`;
-
-      const itemRows = groupItems.map(i => {
-        const state = i.fields?.["System.State"] || "?";
-        const title = i.fields?.["System.Title"] || "";
-        const assigned = i.fields?.["System.AssignedTo"]?.displayName || "—";
-
-        let pts = null;
-        let ptsDisplay = "";
-        if (isTaskMode) {
-          pts = i.fields?.["Microsoft.VSTS.Scheduling.RemainingWork"];
-          if (pts == null || pts === 0) {
-            pts = i.fields?.["Microsoft.VSTS.Scheduling.OriginalEstimate"];
-          }
-          ptsDisplay = pts != null ? pts + " hrs" : '<span class="badge yellow" data-i18n="badge_no_est">Sem estimativa</span>';
-        } else {
-          pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"];
-          ptsDisplay = pts != null ? pts + " pts" : '<span class="badge yellow" data-i18n="badge_no_est">Sem estimativa</span>';
-        }
-
-        const iteration = groupKey.replace(/"/g, "&quot;");
-        const order = i.fields?.["Microsoft.VSTS.Common.StackRank"] ?? 999999;
-        const stateClass = ["Active","In Progress","Doing"].includes(state) ? "blue"
-          : ["Closed","Done","Resolved"].includes(state) ? "green"
-          : ["Blocked","Impediment"].includes(state) ? "red" : "gray";
-        const wiUrl = i.id && baseUrl ? `${baseUrl}/_workitems/edit/${i.id}` : "";
-        return `
-          <tr data-iteration="${iteration}" data-order="${order}" data-id="${i.id}" data-url="${wiUrl.replace(/"/g, "&quot;")}">
-            <td>${title}</td>
-            <td><span class="badge ${stateClass}">${state}</span></td>
-            <td>${ptsDisplay}</td>
-            <td>${assigned === "—" ? '<span class="badge red" data-i18n="badge_no_resp">Sem responsável</span>' : assigned}</td>
-          </tr>`;
-      }).join("");
-
-      return header + itemRows;
-    }).join("");
 
     // ── Sprint progress bar ──────────────────────────────────────────────────
-    let progressPct = 0, barVariant = 'green', sprintLabel = sprint || '';
+    let progressPct = 0, barVariant = 'green';
+    let curSprintTotal = 0, curSprintClosed = 0;
     if (sprint) {
       const curMain = mainItems.filter(i => {
         const it = i.fields?.['System.IterationPath'] || '';
         return it === sprint || it.endsWith('\\' + sprint);
       });
       const curClosed = curMain.filter(i => CLOSED_STATES.includes(i.fields?.['System.State']));
+      curSprintTotal  = curMain.length;
+      curSprintClosed = curClosed.length;
       if (curMain.length > 0) {
         progressPct = Math.min(Math.round(curClosed.length / curMain.length * 100), 100);
         barVariant = progressPct >= 60 ? 'green' : progressPct >= 30 ? 'yellow' : 'red';
       }
     }
     const sprintBarHtml = sprint ? `
-      <div class="sprint-bar-wrap">
-        <div class="sprint-bar-info">
-          <span class="sprint-bar-name sprint">📅 ${sprint}</span>
-          <span class="sprint-bar-pct ${barVariant}">${progressPct}% <span data-i18n="sprint_progress">Progress</span></span>
+      <div class="card-prog">
+        <div class="prog-row">
+          <span class="prog-lbl" data-i18n="prog_closed_total">Closed / Total</span>
+          <span class="prog-pct">${curSprintClosed} / ${curSprintTotal} · ${progressPct}%</span>
         </div>
-        <div class="sprint-bar-track">
-          <div class="sprint-bar-fill ${barVariant}" style="width:${progressPct}%"></div>
-        </div>
+        <div class="prog-track"><div class="prog-fill ${barVariant}" style="width:${progressPct}%"></div></div>
       </div>` : '';
 
     // ── Health pill ──────────────────────────────────────────────────────────
     const healthLabels = { green: 'Healthy', yellow: 'Attention', red: 'Critical' };
     const healthPill = `<span class="health-pill ${health[1]} card-health" title="${health[2]}"><span class="health-dot"></span>${healthLabels[health[1]] || health[0]}</span>`;
 
-    // ── Collapsible section label ────────────────────────────────────────────
-    const sectionProblems = semEst + semResp;
-    const sectionLabel = `<span data-i18n="btn_view_items">View Items</span>`;
-    const sectionBadge = health[1] === 'red'
-      ? `<span class="badge red">${sectionProblems} <span data-i18n="us_section_required">Required</span></span>`
-      : health[1] === 'yellow'
-        ? `<span class="badge yellow">${semEst} <span data-i18n="us_section_pending">Pending</span></span>`
-        : `<span class="badge green">${openItems.length} <span data-i18n="us_section_active">Active</span></span>`;
-
     // ── Project icon ─────────────────────────────────────────────────────────
     const iconColor = projectIconColor(project);
     const initials  = projectInitials(project);
 
-    // ── Footer action button ─────────────────────────────────────────────────
-    const actionBtn = health[1] === 'red'
-      ? `<button class="btn-fix-health" type="button" onclick="openDetails(this)" data-i18n="btn_fix_health">Fix Backlog Health</button>`
-      : `<button class="btn-detail btn-detail-main" type="button" onclick="openDetails(this)" data-i18n="btn_details">Project Details</button>`;
+    const actionBtn = `<button class="ca" type="button" onclick="openDetails(this)" data-i18n="btn_details">Details</button>`;
+
+    const sprintDotColor = health[1] === 'red' ? 'var(--c-red2)' : health[1] === 'yellow' ? 'var(--c-yellow2)' : 'var(--c-green2)';
+
+    // ── Sem sprint (itens sem iteração atribuída) ────────────────────────────
+    const noSprint = openItems.filter(i => {
+      const it = i.fields?.['System.IterationPath'] || '';
+      return !it.includes('\\');
+    }).length;
+    const noSprintHtml = `<div class="card-issues"${noSprint === 0 ? ' style="display:none"' : ''}><div class="itag i" onclick="openCardStat(this,'noSprint')"><span class="no-sprint-val">${noSprint}</span>&nbsp;<span data-i18n="itag_no_sprint">sem sprint</span></div></div>`;
 
     return `
       <div class="card" data-project="${project.replace(/"/g, "&quot;")}" data-items='${itemsJson}' data-itermap='${JSON.stringify(iterMap).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}' data-workitemtype="${workItemType}">
+
+        <div class="health-hbar ${health[1]}"></div>
 
         <!-- header -->
         <div class="card-header">
@@ -360,9 +307,23 @@ function buildCardHTML(results, baseUrl = '') {
             <div class="card-icon" style="background:${iconColor}">${initials}</div>
             <div class="card-header-info">
               <div class="card-name-row">
-                <span class="drag-handle" data-i18n-title="btn_drag" title="Reordenar">⠿</span>
                 <h2 class="card-project-title">${project}</h2>
-                <button class="btn-rename" type="button" onclick="startRename(this)" data-i18n-title="btn_rename" title="Renomear projeto">✏️</button>
+              </div>
+              <div class="card-sprint-row">
+                <span class="sprint-dot" style="background:${sprintDotColor}"></span>
+                <div class="custom-select card-sprint-select">
+                  <button class="select-trigger" type="button" onclick="toggleDropdown(this)">
+                    <span class="select-value" data-i18n="all_sprints">All sprints</span>
+                    <span class="select-arrow">▾</span>
+                  </button>
+                  <div class="select-panel">
+                    <div class="select-options">${options}</div>
+                    <div class="select-footer">
+                      <button type="button" onclick="clearFilter(this)" data-i18n="clear_filter">✕ Clear</button>
+                    </div>
+                  </div>
+                </div>
+                <span class="card-sprint-type">· ${isTaskMode ? 'Task' : 'User Story'}</span>
               </div>
             </div>
           </div>
@@ -370,60 +331,135 @@ function buildCardHTML(results, baseUrl = '') {
         </div>
 
         <!-- stats -->
-        <div class="stats">
-          <div class="stat"><div class="stat-label card-label" data-i18n="${itemLabelKey}">${itemLabel}</div><div class="stat-val card-total">${total}</div></div>
-          ${totalPts !== null ? `<div class="stat"><div class="stat-label" data-i18n="stat_pts">Story Points</div><div class="stat-val card-pts">${totalPts}</div></div>` : ''}
-          <div class="stat"><div class="stat-label" data-i18n="stat_progress">Progress</div><div class="stat-val card-progress" style="font-size:18px">${closedCount}/${total}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_bugs">Open Bugs</div><div class="stat-val ${bugs > 3 ? "crit" : ""} card-bugs">${bugs}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_no_est">No Estimate</div><div class="stat-val ${semEst > 2 ? "warn" : ""} card-semest">${semEst}</div></div>
-          <div class="stat"><div class="stat-label" data-i18n="stat_no_resp">No Assignee</div><div class="stat-val ${semResp > 2 ? "warn" : ""} card-semresp">${semResp}</div></div>
+        <span class="card-open" style="display:none">${openItems.length}</span>
+        <div class="card-stats">
+          <div class="cstat" onclick="openCardStat(this,'us')">
+            <div class="cstat-lbl" data-i18n="cstat_total">Total</div>
+            <div class="cstat-val card-total">${total}</div>
+            <div class="cstat-sub">${itemLabel.toLowerCase()}</div>
+          </div>
+          <div class="cstat" onclick="openCardStat(this,'bugs')">
+            <div class="cstat-lbl" data-i18n="stat_bugs">Open Bugs</div>
+            <div class="cstat-val ${bugs > 3 ? 'c' : bugs > 0 ? 'w' : 'g'} card-bugs">${bugs}</div>
+            <div class="cstat-sub">${bugs === 0 ? `<span data-i18n="cstat_none">none active</span>` : `<span data-i18n="cstat_need_attention">need attention</span>`}</div>
+          </div>
+          <div class="cstat" onclick="openCardStat(this,'noEst')">
+            <div class="cstat-lbl" data-i18n="stat_no_est">No Estimate</div>
+            <div class="cstat-val ${semEst > 2 ? 'c' : semEst > 0 ? 'w' : 'g'} card-semest">${semEst}</div>
+            <div class="cstat-sub">${semEst > 2 ? `<span data-i18n="cstat_above_limit">above limit</span>` : `<span data-i18n="cstat_within_limit">within limit</span>`}</div>
+          </div>
+          <div class="cstat" onclick="openCardStat(this,'noResp')">
+            <div class="cstat-lbl" data-i18n="stat_no_resp">No Assignee</div>
+            <div class="cstat-val ${semResp > 2 ? 'c' : semResp > 0 ? 'w' : 'g'} card-semresp">${semResp}</div>
+            <div class="cstat-sub">${semResp === 0 ? `<span data-i18n="cstat_all_assigned">all assigned</span>` : `<span data-i18n="cstat_unassigned">unassigned</span>`}</div>
+          </div>
         </div>
 
         <!-- sprint progress -->
         ${sprintBarHtml}
 
-        <!-- sprint filter (functional, compact) -->
-        <div class="filter-bar">
-          <label class="filter-label" data-i18n="filter_label">🔍 Sprint</label>
-          <div class="custom-select">
-            <button class="select-trigger" type="button" onclick="toggleDropdown(this)">
-              <span class="select-value" data-i18n="all_sprints">All sprints</span>
-              <span class="select-arrow">▾</span>
-            </button>
-            <div class="select-panel">
-              <div class="select-options">${options}</div>
-              <div class="select-footer">
-                <button type="button" onclick="clearFilter(this)" data-i18n="clear_filter">✕ Clear</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- collapsible US section -->
-        <div class="us-section">
-          <button class="btn-us-toggle card-summary" type="button" onclick="toggleUS(this)">
-            <span class="us-toggle-icon">▶</span>
-            ${sectionLabel}
-            <span class="us-toggle-count">${sectionBadge}</span>
-          </button>
-          <div class="us-table" hidden>
-            <table>
-              <thead><tr><th data-i18n="th_title">Title</th><th data-i18n="th_status">Status</th><th data-i18n="th_estimate">Estimate</th><th data-i18n="th_assignee">Assignee</th></tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-        </div>
+        <!-- issue tags -->
+        ${noSprintHtml}
 
         <!-- footer -->
         <div class="card-footer">
-          <button class="btn-remove-footer" type="button" onclick="removeProject(this)" data-i18n-title="btn_remove_project" title="Remover projeto">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M1 3h10M4 3V2h4v1M2 3l.5 7.5a1 1 0 001 .5h5a1 1 0 001-.5L10 3"/></svg>
-            <span data-i18n="btn_remove_short">Remove</span>
-          </button>
-          ${actionBtn}
+          <div class="card-footer-actions">
+            ${actionBtn}
+            <button class="ca" type="button" onclick="openDailyForProject(this.closest('[data-project]').dataset.project)" data-i18n="btn_daily">Daily</button>
+            <button class="ca" type="button" onclick="openBurndownFromDaily(this.closest('[data-project]').dataset.project)" data-i18n="btn_burndown">Burndown</button>
+            <button class="ca" type="button" onclick="openUAT(this)" data-i18n="btn_uat">UAT</button>
+            <button class="ca" type="button" onclick="openReport(this)" data-i18n="btn_monthly_review">Monthly Review</button>
+          </div>
+          <span class="foot-sep"></span>
+          <div class="more-wrap">
+            <button class="btn-more" type="button" onclick="toggleCardMore(this)" title="More options">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+            </button>
+            <div class="more-panel">
+              <div class="more-item" onclick="startRename(this)">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                <span data-i18n="btn_rename">Rename project</span>
+              </div>
+              <div class="more-divider"></div>
+              <div class="more-item danger btn-remove-project" onclick="removeProject(this)">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                <span data-i18n="btn_remove_project">Remove project</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>`;
   }).join("");
 }
 
-module.exports = { fetchProject, fetchProjectDetail, buildCardHTML, calcHealth, fmtDate };
+async function _fetchTestPoints(project, planId, suiteId) {
+  let allPoints = [], skip = 0;
+  const top = 1000;
+  while (true) {
+    let data;
+    try {
+      data = await azureGet(
+        `${encodeURIComponent(project)}/_apis/testplan/Plans/${planId}/Suites/${suiteId}/TestPoint?isRecursive=true&$top=${top}&$skip=${skip}&api-version=7.0`
+      );
+    } catch (_) { break; }
+    const pts = data.value || [];
+    allPoints = allPoints.concat(pts);
+    if (pts.length < top) break;
+    skip += top;
+    if (skip > 10000) break;
+  }
+
+  return allPoints;
+}
+
+async function fetchUATPlans(identifier) {
+  const { getProjectConfig, getCfg } = require('./config.js');
+  const projectConfig = getProjectConfig(identifier) || { name: identifier };
+  const project  = projectConfig.name;
+  const baseUrl  = getCfg().baseUrl || '';
+  const data     = await azureGet(`${encodeURIComponent(project)}/_apis/testplan/plans?api-version=7.0`);
+  const plans = await Promise.all((data.value || []).map(async p => {
+    let passCount = 0, failCount = 0, blockedCount = 0, notExecutedCount = 0, points = [];
+    const rootSuiteId = p.rootSuite && p.rootSuite.id;
+    if (rootSuiteId) {
+      try {
+        const raw = await _fetchTestPoints(project, p.id, rootSuiteId);
+        points = raw.map(pt => {
+          const outcome = ((pt.results && pt.results.outcome) || pt.outcome || '').toLowerCase();
+          if      (outcome === 'passed')  passCount++;
+          else if (outcome === 'failed')  failCount++;
+          else if (outcome === 'blocked') blockedCount++;
+          else                            notExecutedCount++;
+          const tcRef = pt.testCaseReference || pt.testCase || {};
+          return {
+            id:         pt.id,
+            testCaseId: tcRef.id || null,
+            name:       tcRef.name || '',
+            tester:     (pt.tester  && pt.tester.displayName) || '',
+            outcome,
+            priority:   typeof pt.priority === 'number' ? pt.priority : 0,
+          };
+        });
+      } catch (_) {}
+    }
+    const totalCount = passCount + failCount + blockedCount + notExecutedCount;
+    return {
+      id:              p.id,
+      name:            p.name || '',
+      iteration:       p.iteration || '',
+      state:           p.state || '',
+      startDate:       p.startDate || null,
+      endDate:         p.endDate   || null,
+      url:             p.id ? `${baseUrl}/${encodeURIComponent(project)}/_testPlans/execute?planId=${p.id}` : '',
+      passCount,
+      failCount,
+      blockedCount,
+      notExecutedCount,
+      totalCount,
+      points,
+    };
+  }));
+  return { plans };
+}
+
+module.exports = { fetchProject, fetchProjectDetail, buildCardHTML, calcHealth, fmtDate, fetchUATPlans };

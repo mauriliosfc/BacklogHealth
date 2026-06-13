@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Backlog Health Dashboard</title>
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
-<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);if(navigator.userAgent.indexOf('Electron')!==-1)document.body.classList.add('electron-app');})();</script>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body class="dashboard-body">
@@ -15,7 +15,7 @@
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div class="sidebar-logo-row">
-        <div class="sidebar-logo-icon">📋</div>
+        <div class="sidebar-logo-icon"><img src="/icons/icon.svg" width="28" height="28" alt="Backlog Health" style="display:block;border-radius:6px;"></div>
         <div>
           <div class="sidebar-logo-name">Backlog Health</div>
           <div class="sidebar-logo-sub">DEVOPS INTELLIGENCE</div>
@@ -25,54 +25,92 @@
     </div>
 
     <nav class="sidebar-nav">
-      <a class="sidebar-link active" id="sidebar-link-dashboard" href="#" onclick="showDashboardView();return false">
+      <a class="sidebar-link active" id="sidebar-link-dashboard" href="#" title="Dashboard" onclick="showDashboardView();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
         </span>
-        Dashboard
+        <span class="sl-label">Dashboard</span>
       </a>
-      <a class="sidebar-link" id="sidebar-link-tc" href="#" onclick="openTeamCapacity();return false">
+      <a class="sidebar-link" id="sidebar-link-tc" href="#" title="Team Capacity" onclick="openTeamCapacity();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4.5" r="2.5"/><circle cx="11" cy="4.5" r="2.5"/><path d="M1 13.5c0-2.2 1.8-4 4-4s4 1.8 4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M9.5 10.2c.5-.1 1-.2 1.5-.2 2.2 0 4 1.8 4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
         </span>
-        Team Capacity
+        <span class="sl-label">Team Capacity</span>
       </a>
-      <a class="sidebar-link" href="#" onclick="openDeliveryPlan();return false">
+      <a class="sidebar-link" id="sidebar-link-dp" href="#" title="Delivery Plan" onclick="openDeliveryPlan();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="3" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 1v4M11 1v4M1 7h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </span>
-        <span data-i18n="dp_title">Delivery Plan</span>
+        <span class="sl-label" data-i18n="dp_title">Delivery Plan</span>
       </a>
-      <a class="sidebar-link" href="#" onclick="openDaily();return false">
+      <a class="sidebar-link" href="#" title="Daily Standup" onclick="openDaily();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v4l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </span>
-        Daily Standup
+        <span class="sl-label">Daily Standup</span>
       </a>
-      <a class="sidebar-link" href="#" onclick="openCopilot();return false">
+      <a class="sidebar-link" href="#" title="Copilot AI" onclick="openCopilot();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5C4.41 1.5 1.5 4.08 1.5 7.25c0 1.73.8 3.27 2.07 4.33L3 13.5l2.18-1.09A7.15 7.15 0 008 13c3.59 0 6.5-2.58 6.5-5.75S11.59 1.5 8 1.5z"/></svg>
         </span>
-        Copilot AI
+        <span class="sl-label">Copilot AI</span>
       </a>
     </nav>
 
     <div class="sidebar-footer">
-      <a class="sidebar-link sidebar-link-sm" href="#" onclick="openFeedback();return false">
+      <a class="sidebar-link sidebar-link-sm" href="#" title="Feedback" onclick="openFeedback();return false">
         <span class="sidebar-link-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2h12a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 3v-3H2a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
         </span>
-        <span data-i18n="fb_sidebar">Feedback</span>
+        <span class="sl-label" data-i18n="fb_sidebar">Feedback</span>
       </a>
-      <a class="sidebar-link sidebar-link-sm" href="/settings">
+      <a class="sidebar-link sidebar-link-sm" href="/settings" title="Settings">
         <span class="sidebar-link-icon">⚙️</span>
-        <span data-i18n="btn_settings">Settings</span>
+        <span class="sl-label" data-i18n="btn_settings">Settings</span>
       </a>
+      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" title="Minimizar menu">
+        <span class="sidebar-link-icon">
+          <svg class="sl-icon-collapse" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg class="sl-icon-expand" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="sl-label">Minimizar</span>
+      </button>
     </div>
   </aside>
 
   <!-- ── Main ── -->
   <main class="main-content">
+
+    <!-- Banner de atualização (oculto até Electron emitir update:available) -->
+    <div id="update-banner" style="display:none">
+      <span class="upd-icon">↑</span>
+
+      <!-- Estado: aguardando clique -->
+      <div id="upd-state-idle" class="upd-state" style="display:flex">
+        <span class="upd-text">Nova versão disponível: <strong id="upd-version"></strong></span>
+        <button class="upd-btn upd-btn-primary" onclick="updDownload()">Baixar e instalar</button>
+      </div>
+
+      <!-- Estado: baixando -->
+      <div id="upd-state-downloading" class="upd-state" style="display:none">
+        <span class="upd-text">Baixando… <span id="upd-pct">0%</span></span>
+        <div class="upd-progress"><div id="upd-bar" class="upd-progress-bar"></div></div>
+      </div>
+
+      <!-- Estado: pronto para instalar -->
+      <div id="upd-state-ready" class="upd-state" style="display:none">
+        <span class="upd-text">Download concluído.</span>
+        <button class="upd-btn upd-btn-primary" onclick="updInstall()">Instalar agora</button>
+      </div>
+
+      <!-- Estado: erro -->
+      <div id="upd-state-error" class="upd-state" style="display:none">
+        <span class="upd-text upd-text-err">Erro ao baixar: <span id="upd-error-msg"></span></span>
+        <button class="upd-btn" onclick="updDownload()">Tentar novamente</button>
+      </div>
+
+      <button class="upd-dismiss" onclick="updDismiss()" title="Dispensar">✕</button>
+    </div>
 
     <!-- Top bar -->
     <div class="topbar">
@@ -91,9 +129,16 @@
       </div>
     </div>
 
-    <!-- View toolbar -->
+    <!-- View toolbar + health filter chips (same row) -->
     <div class="cards-toolbar">
-      <div class="cards-toolbar-left"></div>
+      <div class="cards-toolbar-left filter-row" id="health-filter-row">
+        <span class="filter-row-lbl" data-i18n="filter_health">Health</span>
+        <button class="fchip active" data-health="all" onclick="toggleHealthFilter(this)" data-i18n="filter_all">All</button>
+        <button class="fchip" data-health="red" onclick="toggleHealthFilter(this)"><span class="fchip-dot" style="background:var(--c-red)"></span><span data-i18n="filter_critical">Critical</span></button>
+        <button class="fchip" data-health="yellow" onclick="toggleHealthFilter(this)"><span class="fchip-dot" style="background:var(--c-yellow)"></span><span data-i18n="filter_attention">Attention</span></button>
+        <button class="fchip" data-health="green" onclick="toggleHealthFilter(this)"><span class="fchip-dot" style="background:var(--c-green)"></span><span data-i18n="filter_healthy">Healthy</span></button>
+        <button class="btn-health-cfg" onclick="openHealthConfig()" title="Configurar critérios de saúde">&#9881;</button>
+      </div>
       <div class="cards-toolbar-right">
         <button class="btn-view-toggle" id="btnViewToggle" onclick="toggleView()" title="Alternar visualização">
           <svg id="iconViewGrid" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
@@ -107,8 +152,18 @@
       <div id="tc-body"></div>
     </div>
 
+    <!-- Delivery Plan view (shown instead of cards when active) -->
+    <div id="dp-view">
+      <div class="dp-view-head">
+        <span class="dp-view-title" data-i18n="dp_title">Delivery Plan</span>
+        <button class="dp-refresh-btn" type="button" onclick="openDeliveryPlan()" title="Atualizar">↺</button>
+      </div>
+      <div class="dp-view-body" id="delivery-body"></div>
+    </div>
+
     <!-- Cards grid -->
-    <div id="content" class="cards-grid">
+    <div id="content" class="cards-grid {{EMPTY_CLASS}}">
+      {{SUMMARY_BAR}}
       {{CARDS}}
       <!-- Empty slot: add new project -->
       <div class="card card-empty" onclick="location.href='/settings'" title="Add project">
@@ -147,6 +202,7 @@
     <div class="daily-head">
       <div class="daily-head-title" data-i18n="daily_title">📅 Daily Standup</div>
       <div class="daily-head-actions">
+        <button class="modal-refresh" id="btnDailyRefresh" onclick="refreshDaily()" title="Refresh">↻</button>
         <button class="modal-maximize" id="btnDailyMax" onclick="toggleDailyMaximize()" data-i18n-title="daily_expand" title="Expandir">⤢</button>
         <button class="modal-close" onclick="closeDaily()" data-i18n-title="btn_close" title="Fechar">✕</button>
       </div>
@@ -162,18 +218,6 @@
   </div>
 </div>
 
-<div id="delivery-modal" class="modal-overlay dp-modal-overlay" onclick="closeDeliveryPlanOverlay(event)">
-  <div class="modal-box dp-modal-box">
-    <div class="modal-head">
-      <div class="modal-title" data-i18n="dp_title">Delivery Plan</div>
-      <div class="modal-actions">
-        <button class="modal-maximize" type="button" id="btnDeliveryMax" onclick="toggleDeliveryPlanMaximize()" data-i18n-title="dp_maximize" title="Maximizar">⤢</button>
-        <button class="modal-close" type="button" onclick="closeDeliveryPlan()">✕</button>
-      </div>
-    </div>
-    <div class="modal-body dp-modal-body" id="delivery-body"></div>
-  </div>
-</div>
 
 <div id="burndown-modal" class="modal-overlay" style="z-index:650" onclick="closeBurndownOverlay(event)">
   <div class="modal-box">
@@ -195,7 +239,7 @@
 <div id="copilot-config-modal" class="modal-overlay copilot-config-overlay" onclick="closeCopilotConfigOverlay(event)">
   <div class="modal-box copilot-config-box">
     <div class="modal-head">
-      <div class="modal-title">🤖 Copilot Project — <span data-i18n="ai_config_title">Configuração da IA</span></div>
+      <div class="modal-title">Copilot Project — <span data-i18n="ai_config_title">Configuração da IA</span></div>
       <div class="modal-actions">
         <button class="modal-close" type="button" onclick="closeCopilotConfig()">✕</button>
       </div>
@@ -225,8 +269,8 @@
       </div>
       <div id="copilot-config-status" class="copilot-config-status"></div>
       <div class="copilot-config-actions">
-        <button id="btnCopilotTest" type="button" onclick="testCopilotConnection()" data-i18n="ai_btn_test">🔌 Testar conexão</button>
-        <button id="btnCopilotSave" type="button" class="copilot-save-btn" onclick="saveCopilotConfig()" data-i18n="ai_btn_save">💾 Salvar e abrir chat</button>
+        <button id="btnCopilotTest" type="button" onclick="testCopilotConnection()" data-i18n="ai_btn_test">Testar conexão</button>
+        <button id="btnCopilotSave" type="button" class="copilot-save-btn" onclick="saveCopilotConfig()" data-i18n="ai_btn_save">Salvar e abrir chat</button>
       </div>
     </div>
   </div>
@@ -235,23 +279,52 @@
 <!-- Copilot Chat Panel (floating) -->
 <div id="copilot-chat-panel" class="copilot-panel">
   <div class="copilot-panel-head" id="copilot-panel-head">
-    <div class="copilot-chat-title">🤖 Copilot Project</div>
+    <div class="copilot-head-info">
+      <div class="copilot-ai-icon">AI</div>
+      <div>
+        <div class="copilot-chat-title">Copilot Project</div>
+        <div class="copilot-model-badge">
+          <span class="copilot-model-dot"></span>
+          <span id="copilotModelName">IA</span>
+        </div>
+      </div>
+    </div>
     <div class="modal-actions">
-      <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" data-i18n-title="btn_settings" title="Configurações">⚙️</button>
-      <button class="modal-maximize copilot-settings-btn" type="button" onclick="clearCopilotChat()" data-i18n-title="ai_new_chat" title="Nova conversa">🗑</button>
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="openCopilotSettings()" data-i18n-title="btn_settings" title="Configurações">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      </button>
+      <button class="modal-maximize copilot-settings-btn" type="button" onclick="clearCopilotChat()" data-i18n-title="ai_new_chat" title="Nova conversa">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+      </button>
       <button class="modal-maximize" type="button" id="btnCopilotChatMax" onclick="toggleCopilotMaximize()" data-i18n-title="ai_maximize" title="Maximizar">⤢</button>
       <button class="modal-maximize" type="button" id="btnCopilotChatMin" onclick="toggleCopilotMinimize()" data-i18n-title="ai_minimize" title="Minimizar">−</button>
       <button class="modal-close" type="button" onclick="closeCopilotChat()">✕</button>
     </div>
   </div>
   <div class="copilot-panel-body" id="copilot-panel-body">
+    <div id="copilot-confirm-bar" class="copilot-confirm-bar" style="display:none">
+      <span data-i18n="ai_clear_confirm">Limpar conversa?</span>
+      <div class="copilot-confirm-actions">
+        <button onclick="confirmClearCopilot()" data-i18n="ai_clear_yes">Confirmar</button>
+        <button onclick="hideCopilotConfirm()" data-i18n="ai_clear_no">Cancelar</button>
+      </div>
+    </div>
     <div class="copilot-chat-messages" id="copilot-chat-messages"></div>
     <div class="copilot-chat-input-wrap">
       <textarea id="copilot-input" class="copilot-input" rows="1" placeholder="Pergunte sobre seus projetos..." onkeydown="copilotInputKeydown(event)" data-i18n-placeholder="ai_input_placeholder"></textarea>
-      <button id="btnCopilotSend" class="copilot-send-btn" type="button" onclick="sendCopilotMessage()">➤</button>
+      <button id="btnCopilotSend" class="copilot-send-btn" type="button" onclick="sendCopilotMessage()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
     </div>
   </div>
 </div>
+
+<!-- Copilot backdrop + FAB -->
+<div id="copilot-backdrop" class="copilot-backdrop" onclick="closeCopilotChat()"></div>
+<button class="copilot-fab" id="copilotFab" onclick="copilotFabClick()" aria-label="Copilot IA">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+  <span class="copilot-fab-dot" id="copilotFabDot"></span>
+</button>
 
 <!-- Feedback Modal -->
 <div id="feedback-modal" class="modal-overlay" onclick="closeFeedbackOverlay(event)">
@@ -323,6 +396,114 @@
     <div class="confirm-actions">
       <button class="confirm-btn-cancel" type="button" onclick="cancelRemoveProject()" data-i18n="confirm_cancel">Cancelar</button>
       <button class="confirm-btn-ok" type="button" onclick="confirmRemoveProject()" data-i18n="confirm_remove_ok">Remover</button>
+    </div>
+  </div>
+</div>
+
+<!-- UAT Modal -->
+<div id="uat-modal" class="modal-overlay" onclick="closeUATOverlay(event)">
+  <div class="modal-box uat-modal-box">
+    <div class="modal-head">
+      <div class="modal-title">UAT — <span id="uat-modal-title"></span></div>
+      <div class="modal-actions">
+        <button class="modal-refresh" id="uat-refresh-btn" type="button" onclick="refreshUAT()" title="Refresh">↻</button>
+        <button class="modal-maximize" id="uat-modal-max" type="button" onclick="toggleUATMax()">⤢</button>
+        <button class="modal-close" type="button" onclick="closeUAT()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body uat-modal-body" id="uat-modal-body"></div>
+  </div>
+</div>
+
+<!-- Items Modal (reusable) -->
+<div id="items-modal" class="modal-overlay" style="z-index:700" onclick="closeItemsModalOverlay(event)">
+  <div class="modal-box items-modal-box">
+    <div class="modal-head">
+      <div class="modal-title" id="items-modal-title"></div>
+      <div class="modal-actions">
+        <button class="modal-maximize" id="items-modal-max" type="button" onclick="toggleItemsModalMax()">&#x2922;</button>
+        <button class="modal-close" type="button" onclick="closeItemsModal()">✕</button>
+      </div>
+    </div>
+    <div id="items-modal-filters"></div>
+    <div class="modal-body items-modal-body" id="items-modal-body"></div>
+  </div>
+</div>
+
+<!-- Report Modal -->
+<div id="report-modal" class="modal-overlay" onclick="closeReportOverlay(event)">
+  <div class="modal-box report-modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Monthly Review — <span id="report-modal-title"></span></div>
+      <div class="modal-actions">
+        <select id="report-month-sel" class="report-month-sel" onchange="reportChangeMonth(this.value)"></select>
+        <button class="modal-refresh" id="report-refresh-btn" type="button" onclick="reportRefresh()" title="Refresh">↻</button>
+        <button class="btn-ai-report" type="button" onclick="reportOpenCopilot()" title="Analisar com IA">✦ IA</button>
+        <button class="btn-sn-config" type="button" onclick="openReportSnConfig()" title="Configurar Service Now">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 5a3 3 0 100 6A3 3 0 008 5zm0 4.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/><path d="M14.45 9.05l-.9-.52a5.84 5.84 0 000-1.06l.9-.52a.75.75 0 00.27-1.02l-1-1.73a.75.75 0 00-1.02-.28l-.9.52a5.93 5.93 0 00-.92-.53V2.75A.75.75 0 0010 2H6a.75.75 0 00-.75.75V3.9a5.93 5.93 0 00-.92.53l-.9-.52a.75.75 0 00-1.02.28l-1 1.73a.75.75 0 00.27 1.02l.9.52a5.84 5.84 0 000 1.06l-.9.52a.75.75 0 00-.27 1.02l1 1.73a.75.75 0 001.02.28l.9-.52c.29.2.6.37.92.53v1.17c0 .41.34.75.75.75h4a.75.75 0 00.75-.75v-1.17c.32-.16.63-.33.92-.53l.9.52a.75.75 0 001.02-.28l1-1.73a.75.75 0 00-.27-1.02z"/></svg>
+        </button>
+        <button class="modal-maximize" id="report-modal-max" type="button" onclick="toggleReportMax()">⤢</button>
+        <button class="modal-close" type="button" onclick="closeReport()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body report-modal-body" id="report-modal-body"></div>
+  </div>
+</div>
+
+<!-- Service Now Config Modal -->
+<div id="sn-config-modal" class="sn-config-overlay" onclick="closeSnConfigOverlay(event)">
+  <div class="sn-config-box">
+    <div class="sn-config-header">
+      <div class="snm-header-info">
+        <div class="snm-icon">SN</div>
+        <div>
+          <div class="sn-config-title">ServiceNow</div>
+          <div class="sn-config-subtitle" id="snm-subtitle"></div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeSnConfig()">&#x2715;</button>
+    </div>
+    <div class="sn-config-body">
+
+      <!-- Credenciais globais -->
+      <div class="snm-section">
+        <div class="snm-section-title">Credenciais globais</div>
+        <div class="snm-field">
+          <label class="snm-label">INSTANCE</label>
+          <input type="text" id="snm-instance" class="snm-input-full" placeholder="empresa.service-now.com" autocomplete="off">
+        </div>
+        <div class="snm-field">
+          <label class="snm-label">USERNAME</label>
+          <input type="text" id="snm-user" class="snm-input-full" placeholder="usuario" autocomplete="off">
+        </div>
+        <div class="snm-field">
+          <label class="snm-label">PASSWORD / TOKEN</label>
+          <input type="password" id="snm-pass" class="snm-input-full" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" autocomplete="off">
+        </div>
+        <div class="snm-actions-row">
+          <button class="snm-btn" onclick="snConfigTest()">Testar conexão</button>
+          <button class="snm-btn snm-btn-primary" onclick="snConfigSaveGlobal()">Salvar credenciais</button>
+          <span id="snm-global-status" class="snm-status"></span>
+        </div>
+      </div>
+
+      <!-- Assignment group do projeto -->
+      <div class="snm-section">
+        <div class="snm-section-title">Assignment Group</div>
+        <div class="snm-field">
+          <label class="snm-label">SYS_ID ou NOME DO GRUPO</label>
+          <input type="text" id="snm-ag" class="snm-input-full" placeholder="ex: 8a4dde73c611..." autocomplete="off">
+        </div>
+        <div class="snm-field">
+          <label class="snm-label">NOME DE EXIBIÇÃO</label>
+          <input type="text" id="snm-ag-name" class="snm-input-full" placeholder="ex: TI - Suporte Alpha" autocomplete="off">
+        </div>
+        <div class="snm-actions-row">
+          <button class="snm-btn snm-btn-primary" onclick="snConfigSaveProject()">Salvar grupo</button>
+          <span id="snm-proj-status" class="snm-status"></span>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>

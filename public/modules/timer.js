@@ -23,33 +23,37 @@ export function startTimer() {
 }
 
 export async function doRefresh() {
-  const btn = document.getElementById('btnRefresh');
+  const btn     = document.getElementById('btnRefresh');
   const content = document.getElementById('content');
+  if (!btn) return;
   btn.classList.add('loading');
   btn.title = t('btn_refreshing');
-  content.classList.add('loading');
+  if (content) content.classList.add('loading');
   document.getElementById('timer').textContent = t('timer_updating');
   try {
     const resp = await fetch('/refresh');
     const html = await resp.text();
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-    document.getElementById('content').innerHTML = doc.getElementById('content').innerHTML;
-    document.getElementById('lastUpdate').textContent = doc.getElementById('lastUpdate').textContent;
+    const newContent = doc.getElementById('content');
+    if (content && newContent) content.innerHTML = newContent.innerHTML;
+    const newUpdate = doc.getElementById('lastUpdate');
+    if (newUpdate) document.getElementById('lastUpdate').textContent = newUpdate.textContent;
     applyTranslations();
     initFilters();
     applyOrder();
     applyAliases();
+    if (typeof window.reapplySnDismissed === 'function') window.reapplySnDismissed();
+    if (typeof window.reapplyHealthFilter === 'function') window.reapplyHealthFilter();
     const savedView = localStorage.getItem('dashView') || 'grid';
-    const contentEl = document.getElementById('content');
-    if (savedView === 'list' && contentEl.classList.contains('cards-grid')) {
-      contentEl.classList.replace('cards-grid', 'cards-list');
+    if (content && savedView === 'list' && content.classList.contains('cards-grid')) {
+      content.classList.replace('cards-grid', 'cards-list');
     }
   } catch(e) {
     console.error('Erro ao atualizar:', e);
   }
   btn.classList.remove('loading');
   btn.title = t('btn_refresh');
-  content.classList.remove('loading');
+  if (content) content.classList.remove('loading');
   startTimer();
 }

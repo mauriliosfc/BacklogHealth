@@ -4,6 +4,45 @@ import { getAlias } from './alias.js';
 let _history = [];
 let _richContext = null;
 let _contextLoading = false;
+let _unreadCount = 0;
+
+// ── Internal state helpers ────────────────────────────────────────────────────
+
+function _updateFabState() {
+  const panel    = document.getElementById('copilot-chat-panel');
+  const fab      = document.getElementById('copilotFab');
+  const backdrop = document.getElementById('copilot-backdrop');
+  if (!panel || !fab || !backdrop) return;
+  const isOpen = panel.classList.contains('open');
+  const isMin  = panel.classList.contains('minimized');
+  const isMax  = panel.classList.contains('maximized');
+  fab.style.display = (!isOpen || isMin) ? 'flex' : 'none';
+  backdrop.classList.toggle('active', isOpen && !isMin && !isMax);
+}
+
+function _setUnread() {
+  _unreadCount++;
+  document.getElementById('copilotFab')?.classList.add('has-unread');
+}
+
+function _clearUnread() {
+  _unreadCount = 0;
+  document.getElementById('copilotFab')?.classList.remove('has-unread');
+}
+
+// ── FAB ───────────────────────────────────────────────────────────────────────
+
+export function copilotFabClick() {
+  const panel = document.getElementById('copilot-chat-panel');
+  if (panel.classList.contains('open') && panel.classList.contains('minimized')) {
+    panel.classList.remove('minimized');
+    document.getElementById('btnCopilotChatMin').textContent = '−';
+    _clearUnread();
+    _updateFabState();
+  } else {
+    openCopilot();
+  }
+}
 
 // ── Config modal ──────────────────────────────────────────────────────────────
 
@@ -121,10 +160,64 @@ export function openCopilotChat() {
   }
 
   panel.classList.add('open');
+  _clearUnread();
+  _updateFabState();
+  document.getElementById('copilot-input').focus();
+
+  fetch('/ai/config').then(r => r.json()).then(data => {
+    const nameEl = document.getElementById('copilotModelName');
+    if (nameEl && data.model) nameEl.textContent = data.model;
+  }).catch(() => {});
+}
+
+// ── Abre o chat com contexto pré-injetado (ex: Monthly Review Report) ─────────
+// Não chama /ai/context — o contextStr já contém os dados estruturados.
+// Reinicia o histórico para conversa focada no relatório.
+export async function openCopilotWithContext(contextStr) {
+  const resp = await fetch('/ai/config');
+  const { configured } = await resp.json();
+  if (!configured) { openCopilotConfig(); return; }
+
+  _history        = [];
+  _richContext    = contextStr;
+  _contextLoading = false;
+
+  const messages = document.getElementById('copilot-chat-messages');
+  messages.innerHTML = '<div class="copilot-welcome">' + t('ai_welcome') + '</div>';
+
+  const badge = document.createElement('div');
+  badge.className = 'copilot-ctx-status';
+  badge.textContent = 'Dados do Monthly Review carregados. Pode perguntar!';
+  messages.appendChild(badge);
+  setTimeout(() => badge.remove(), 4000);
+
+  const panel = document.getElementById('copilot-chat-panel');
+  panel.classList.remove('minimized');
+  document.getElementById('btnCopilotChatMin').textContent = '\u2212';
+  panel.classList.add('open');
+  _clearUnread();
+  _updateFabState();
   document.getElementById('copilot-input').focus();
 }
 
 export function clearCopilotChat() {
+  const bar = document.getElementById('copilot-confirm-bar');
+  if (bar) { bar.style.display = 'flex'; return; }
+  _doClearChat();
+}
+
+export function confirmClearCopilot() {
+  const bar = document.getElementById('copilot-confirm-bar');
+  if (bar) bar.style.display = 'none';
+  _doClearChat();
+}
+
+export function hideCopilotConfirm() {
+  const bar = document.getElementById('copilot-confirm-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+function _doClearChat() {
   _history = [];
   _richContext = null;
   _contextLoading = false;
@@ -138,7 +231,7 @@ async function _loadRichContext() {
   const indicator = document.createElement('div');
   indicator.id = 'copilot-ctx-loading';
   indicator.className = 'copilot-ctx-status';
-  indicator.textContent = '⏳ Carregando dados dos projetos...';
+  indicator.textContent = 'Carregando dados dos projetos...';
   document.getElementById('copilot-chat-messages').appendChild(indicator);
   try {
     // coleta filtros ativos do dashboard (localStorage)
@@ -159,14 +252,14 @@ async function _loadRichContext() {
         if (alias !== p.name) p.alias = alias;
       });
       _richContext = JSON.stringify(data, null, 2);
-      indicator.textContent = '✅ Dados dos projetos carregados.';
+      indicator.textContent = 'Dados dos projetos carregados.';
       setTimeout(() => indicator.remove(), 2000);
     } else {
-      indicator.textContent = '⚠️ Falha ao carregar dados: ' + (data.error || 'desconhecido');
+      indicator.textContent = 'Falha ao carregar dados: ' + (data.error || 'desconhecido');
     }
   } catch (e) {
     console.error('[copilot] context load error:', e.message);
-    indicator.textContent = '⚠️ Erro: ' + e.message;
+    indicator.textContent = 'Erro: ' + e.message;
   }
   _contextLoading = false;
 }
@@ -174,9 +267,10 @@ async function _loadRichContext() {
 export function closeCopilotChat() {
   const panel = document.getElementById('copilot-chat-panel');
   panel.classList.remove('open', 'minimized');
-  // reset posição para o canto padrão ao fechar
   panel.style.left = ''; panel.style.top = '';
   panel.style.right = '24px'; panel.style.bottom = '24px';
+  _clearUnread();
+  _updateFabState();
 }
 
 export function closeCopilotChatOverlay() { /* no-op — painel flutuante não tem overlay */ }
@@ -193,6 +287,8 @@ export function toggleCopilotMinimize() {
   const isMin = panel.classList.toggle('minimized');
   btn.textContent = isMin ? '\u002b' : '\u2212';
   btn.title = isMin ? t('ai_restore') : t('ai_minimize');
+  if (!isMin) _clearUnread();
+  _updateFabState();
 }
 
 export function toggleCopilotMaximize() {
@@ -205,6 +301,7 @@ export function toggleCopilotMaximize() {
   btn.title = isMax ? t('ai_restore') : t('ai_maximize');
   // maximizar cancela o minimizar
   if (isMax) panel.classList.remove('minimized');
+  _updateFabState();
 }
 
 // mantido para não quebrar referências antigas
@@ -251,6 +348,7 @@ export async function sendCopilotMessage() {
       _history.push({ role: 'user', content: message });
       _history.push({ role: 'assistant', content: data.reply });
       if (_history.length > 20) _history = _history.slice(-20);
+      if (document.getElementById('copilot-chat-panel')?.classList.contains('minimized')) _setUnread();
     } else {
       _appendMessage('error', data.error || t('ai_err_generic'));
     }
@@ -266,11 +364,12 @@ export async function sendCopilotMessage() {
 
 function _appendMessage(role, text) {
   const wrap = document.getElementById('copilot-chat-messages');
-  const div = document.createElement('div');
-  div.className = 'copilot-msg copilot-msg--' + role;
+
+  const now = new Date();
+  const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
   const escaped = text
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
   const html = escaped
     .split('\n')
     .map(line => {
@@ -287,21 +386,59 @@ function _appendMessage(role, text) {
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code>$1</code>');
-  div.innerHTML = html;
-  wrap.appendChild(div);
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'copilot-msg copilot-msg--' + role;
+  msgDiv.innerHTML = html;
+
+  const timeDiv = document.createElement('div');
+  timeDiv.className = 'copilot-msg-time';
+  timeDiv.textContent = timeStr;
+
+  const bodyDiv = document.createElement('div');
+  bodyDiv.className = 'copilot-row-body';
+  bodyDiv.appendChild(msgDiv);
+  bodyDiv.appendChild(timeDiv);
+
+  const row = document.createElement('div');
+  row.className = 'copilot-row copilot-row--' + role;
+  if (role === 'assistant') {
+    const avatar = document.createElement('div');
+    avatar.className = 'copilot-avatar';
+    avatar.textContent = 'AI';
+    row.appendChild(avatar);
+  }
+  row.appendChild(bodyDiv);
+
+  wrap.appendChild(row);
   wrap.scrollTop = wrap.scrollHeight;
-  return div;
+  return row;
 }
 
 let _thinkingCounter = 0;
 function _appendThinking() {
   const id = 'thinking-' + (++_thinkingCounter);
   const wrap = document.getElementById('copilot-chat-messages');
-  const div = document.createElement('div');
-  div.id = id;
-  div.className = 'copilot-msg copilot-msg--thinking';
-  div.innerHTML = '<span class="copilot-dots"><span></span><span></span><span></span></span>';
-  wrap.appendChild(div);
+
+  const avatar = document.createElement('div');
+  avatar.className = 'copilot-avatar';
+  avatar.textContent = 'AI';
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'copilot-msg copilot-msg--thinking';
+  msgDiv.innerHTML = '<span class="copilot-dots"><span></span><span></span><span></span></span>';
+
+  const bodyDiv = document.createElement('div');
+  bodyDiv.className = 'copilot-row-body';
+  bodyDiv.appendChild(msgDiv);
+
+  const row = document.createElement('div');
+  row.id = id;
+  row.className = 'copilot-row copilot-row--assistant';
+  row.appendChild(avatar);
+  row.appendChild(bodyDiv);
+
+  wrap.appendChild(row);
   wrap.scrollTop = wrap.scrollHeight;
   return id;
 }

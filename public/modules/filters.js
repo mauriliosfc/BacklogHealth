@@ -1,6 +1,7 @@
 import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes } from './constants.js';
 import { calcHealth } from './health.js';
 import { t } from './i18n.js';
+import { openItemsModal } from './itemsModal.js';
 
 export function toggleDropdown(trigger) {
   const panel = trigger.nextElementSibling;
@@ -25,7 +26,7 @@ export function toggleDropdown(trigger) {
 }
 
 document.addEventListener('click', e => {
-  if (!e.target.closest('.custom-select')) {
+  if (!e.target.closest('.custom-select') && !e.target.closest('.items-filter-select')) {
     document.querySelectorAll('.select-panel.open').forEach(p => {
       p.classList.remove('open');
       p.previousElementSibling.classList.remove('open');
@@ -61,21 +62,42 @@ export function saveFilter(card, selected) {
   else localStorage.setItem('filter_' + project, JSON.stringify(selected));
 }
 
+function syncSumBar() {
+  const cards = document.querySelectorAll('#content .card[data-project]');
+  if (!cards.length) return;
+
+  const wiEl     = document.getElementById('sum-workitems');
+  const issueEl  = document.getElementById('sum-issues');
+
+  if (wiEl) {
+    let total = 0;
+    cards.forEach(c => { total += parseInt(c.querySelector('.card-total')?.textContent, 10) || 0; });
+    wiEl.textContent = total;
+  }
+
+  if (issueEl) {
+    let issues = 0;
+    cards.forEach(c => {
+      issues += parseInt(c.querySelector('.card-semest')?.textContent,  10) || 0;
+      issues += parseInt(c.querySelector('.card-semresp')?.textContent, 10) || 0;
+      issues += parseInt(c.querySelector('.card-bugs')?.textContent,    10) || 0;
+    });
+    issueEl.textContent = issues || '—';
+    issueEl.classList.toggle('sum-val--warn', issues > 0);
+  }
+
+  const openEl = document.getElementById('sum-open');
+  if (openEl) {
+    let open = 0;
+    cards.forEach(c => { open += parseInt(c.querySelector('.card-open')?.textContent, 10) || 0; });
+    openEl.textContent = open;
+  }
+}
+
 export function applyFilter(card, selected) {
   const allItems = JSON.parse(card.dataset.items);
   const workItemType = card.dataset.workitemtype || 'User Story';
   const ITEM_TYPES = getItemTypes(workItemType);
-  const isTaskMode = workItemType === 'Task';
-
-  card.querySelectorAll('tbody tr[data-iteration]').forEach(row => {
-    row.style.display = (selected.length === 0 || selected.includes(row.dataset.iteration)) ? '' : 'none';
-  });
-
-  card.querySelectorAll('tbody tr.group-header').forEach(header => {
-    const group = header.dataset.group;
-    const hasVisible = selected.length === 0 || selected.includes(group);
-    header.style.display = hasVisible ? '' : 'none';
-  });
 
   const filtered = selected.length === 0 ? allItems : allItems.filter(i => selected.includes(i.iteration));
   const filteredItems = filtered.filter(i => ITEM_TYPES.includes(i.type));
@@ -85,47 +107,102 @@ export function applyFilter(card, selected) {
   const semResp = openItems.filter(i => !i.assigned).length;
   const bugs = filtered.filter(i => i.type === 'Bug' && ACTIVE_BUG_STATES.includes(i.state)).length;
 
-  card.querySelector('.card-total').textContent = total;
+  // Stats grid
+  const totalEl = card.querySelector('.card-total');
+  if (totalEl) totalEl.textContent = total;
 
   const semEstEl = card.querySelector('.card-semest');
-  semEstEl.textContent = semEst;
-  semEstEl.className = 'stat-val card-semest' + (semEst > 2 ? ' warn' : '');
+  if (semEstEl) {
+    semEstEl.textContent = semEst;
+    semEstEl.className = 'cstat-val card-semest ' + (semEst > 2 ? 'c' : semEst > 0 ? 'w' : 'g');
+  }
 
   const semRespEl = card.querySelector('.card-semresp');
-  semRespEl.textContent = semResp;
-  semRespEl.className = 'stat-val card-semresp' + (semResp > 2 ? ' warn' : '');
+  if (semRespEl) {
+    semRespEl.textContent = semResp;
+    semRespEl.className = 'cstat-val card-semresp ' + (semResp > 2 ? 'c' : semResp > 0 ? 'w' : 'g');
+  }
 
   const bugsEl = card.querySelector('.card-bugs');
-  bugsEl.textContent = bugs;
-  bugsEl.className = 'stat-val card-bugs' + (bugs > 3 ? ' crit' : '');
-
-  const ptsEl = card.querySelector('.card-pts');
-  if (ptsEl && !isTaskMode) {
-    const totalPts = filteredItems.reduce((sum, i) => sum + (i.pts != null ? i.pts : 0), 0);
-    ptsEl.textContent = totalPts;
+  if (bugsEl) {
+    bugsEl.textContent = bugs;
+    bugsEl.className = 'cstat-val card-bugs ' + (bugs > 3 ? 'c' : bugs > 0 ? 'w' : 'g');
   }
 
-  const progressEl = card.querySelector('.card-progress');
-  if (progressEl) {
-    const closedCount = filteredItems.filter(i => CLOSED_STATES.includes(i.state)).length;
-    progressEl.textContent = closedCount + '/' + total;
+  // Sprint progress bar
+  const progPctEl = card.querySelector('.prog-pct');
+  const progFillEl = card.querySelector('.prog-fill');
+  if (progPctEl && progFillEl) {
+    const closed = filteredItems.filter(i => CLOSED_STATES.includes(i.state)).length;
+    const pct = total > 0 ? Math.min(Math.round(closed / total * 100), 100) : 0;
+    const variant = pct >= 60 ? 'green' : pct >= 30 ? 'yellow' : 'red';
+    progPctEl.textContent = closed + ' / ' + total + ' · ' + pct + '%';
+    progFillEl.style.width = pct + '%';
+    progFillEl.className = 'prog-fill ' + variant;
   }
 
-  const health = calcHealth(total, semEst, semResp, bugs);
+  // Health bar + pill
+  const health = calcHealth(openItems.length, semEst, semResp, bugs);
+  const hbarEl = card.querySelector('.health-hbar');
+  if (hbarEl) hbarEl.className = 'health-hbar ' + health[1];
   const healthEl = card.querySelector('.card-health');
-  healthEl.textContent = health[0];
-  healthEl.className = 'badge big card-health ' + health[1];
-  healthEl.title = health[2];
-
-  const itemCount = filteredItems.length;
-  const summaryBtn = card.querySelector('.card-summary');
-  summaryBtn.querySelector('.us-toggle-count').textContent = '(' + itemCount + ')';
-
-  // Atualizar label dinamicamente
-  const cardLabel = card.querySelector('.card-label');
-  if (cardLabel) {
-    cardLabel.textContent = isTaskMode ? t('stat_tasks') : t('stat_us');
+  if (healthEl) {
+    healthEl.className = 'health-pill card-health ' + health[1];
+    healthEl.title = health[2];
   }
+
+  // Open items counter (hidden, used by syncSumBar)
+  const openEl = card.querySelector('.card-open');
+  if (openEl) openEl.textContent = openItems.length;
+
+  // Sem sprint indicator
+  const noSprint = openItems.filter(i => !i.iteration.includes('\\')).length;
+  const noSprintVal = card.querySelector('.no-sprint-val');
+  const issuesEl = card.querySelector('.card-issues');
+  if (noSprintVal) noSprintVal.textContent = noSprint;
+  if (issuesEl) issuesEl.style.display = noSprint === 0 ? 'none' : '';
+
+  syncSumBar();
+}
+
+export function openCardStat(statEl, stat) {
+  const card = statEl.closest('.card');
+  const allItems = JSON.parse(card.dataset.items);
+  const workItemType = card.dataset.workitemtype || 'User Story';
+  const ITEM_TYPES = getItemTypes(workItemType);
+  const project = card.dataset.project;
+
+  const selected = JSON.parse(localStorage.getItem('filter_' + project) || '[]');
+  const filtered = selected.length === 0 ? allItems : allItems.filter(i => selected.includes(i.iteration));
+
+  const mainItems = filtered.filter(i => ITEM_TYPES.includes(i.type));
+  const openItems = mainItems.filter(i => !CLOSED_STATES.includes(i.state));
+
+  let title, items, showPts = false, defaultFilters = null;
+
+  if (stat === 'us') {
+    title = t(workItemType === 'Task' ? 'stat_tasks' : 'stat_us');
+    items = mainItems;
+    showPts = true;
+  } else if (stat === 'noEst') {
+    title = t('stat_no_est');
+    items = openItems.filter(i => i.pts == null || i.pts === 0);
+    showPts = true;
+  } else if (stat === 'noResp') {
+    title = t('stat_no_resp');
+    items = openItems.filter(i => !i.assigned);
+    showPts = true;
+  } else if (stat === 'bugs') {
+    title = t('stat_bugs');
+    items = filtered.filter(i => i.type === 'Bug');
+    defaultFilters = [...ACTIVE_BUG_STATES];
+  } else if (stat === 'noSprint') {
+    title = t('stat_no_sprint');
+    items = openItems.filter(i => !i.iteration.includes('\\'));
+    showPts = true;
+  }
+
+  openItemsModal({ title, items, showPts, defaultFilters });
 }
 
 export function toggleUS(btn) {
@@ -157,22 +234,23 @@ export function initFilters() {
 
     applyFilter(card, selected);
   });
+  syncSumBar();
 }
 
 export function initHealthBadges() {
   document.querySelectorAll('.card[data-project]').forEach(card => {
     const allItems = JSON.parse(card.dataset.items);
     const filteredUS = allItems.filter(i => US_TYPES.includes(i.type));
-    const total = filteredUS.length;
     const openUS = filteredUS.filter(i => !CLOSED_STATES.includes(i.state));
     const semEst = openUS.filter(i => i.pts == null).length;
     const semResp = openUS.filter(i => !i.assigned).length;
     const bugs = allItems.filter(i => i.type === 'Bug' && ACTIVE_BUG_STATES.includes(i.state)).length;
-    const health = calcHealth(total, semEst, semResp, bugs);
+    const health = calcHealth(openUS.length, semEst, semResp, bugs);
+    const hbarEl = card.querySelector('.health-hbar');
+    if (hbarEl) hbarEl.className = 'health-hbar ' + health[1];
     const healthEl = card.querySelector('.card-health');
     if (healthEl) {
-      healthEl.textContent = health[0];
-      healthEl.className = 'badge big card-health ' + health[1];
+      healthEl.className = 'health-pill card-health ' + health[1];
       healthEl.title = health[2];
     }
   });

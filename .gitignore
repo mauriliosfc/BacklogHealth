@@ -1,5 +1,10 @@
 # Credenciais — NUNCA subir para o repositório
 config.json
+xconfig.json
+snconfig.json
+
+# Dependências
+node_modules/
 
 # Build
 dist/
@@ -8,3 +13,9 @@ wrapper/obj/
 
 # Pasta interna do Claude Code
 .claude/
+
+# Cache de relatórios (gerado em runtime, TTL 6h)
+cache/
+
+# Cobertura de testes (gerado pelo Jest)
+coverage/

@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backlog Health — IT-03 Capacidade do Time</title>
+<style>
+:root {
+  --bg-page:#020617;--bg-card:#0f172a;--bg-border:#1e293b;--bg-el:#1e293b;--bg-el2:#334155;
+  --text-1:#f1f5f9;--text-2:#cbd5e1;--text-muted:#94a3b8;--text-faint:#64748b;
+  --c-blue:#60a5fa;--c-blue-bg:#1e3a5f;--c-blue-bd:#2d5a8e;
+  --c-green:#22c55e;--c-green-bg:#14532d;--c-green-bd:#166534;
+  --c-yellow:#f59e0b;--c-yellow-bg:#422006;
+  --c-red:#ef4444;--c-red-bg:#450a0a;
+  --c-purple:#a78bfa;--c-purple-bg:#2e1065;
+  --hover-bg:rgba(255,255,255,.04);--shadow:0 4px 24px rgba(0,0,0,.45);--modal-bg:rgba(0,0,0,.75);
+  --sb-w:220px;--r-sm:6px;--r-md:10px;--r-lg:14px;--r-xl:18px;--t:.18s ease;
+}
+[data-theme="light"]{
+  --bg-page:#f0f4f8;--bg-card:#fff;--bg-border:#e2e8f0;--bg-el:#f8fafc;--bg-el2:#e2e8f0;
+  --text-1:#0f172a;--text-2:#1e293b;--text-muted:#475569;--text-faint:#94a3b8;
+  --c-blue:#2563eb;--c-blue-bg:#dbeafe;--c-blue-bd:#93c5fd;
+  --c-green:#16a34a;--c-green-bg:#dcfce7;--c-green-bd:#86efac;
+  --c-yellow:#d97706;--c-yellow-bg:#fef3c7;
+  --c-red:#dc2626;--c-red-bg:#fee2e2;
+  --c-purple:#7c3aed;--c-purple-bg:#f5f3ff;
+  --hover-bg:rgba(0,0,0,.04);--shadow:0 4px 24px rgba(0,0,0,.1);--modal-bg:rgba(0,0,0,.5);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg-page);color:var(--text-1);font-size:14px;line-height:1.5;overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+a{color:var(--c-blue);text-decoration:none}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--bg-el2);border-radius:99px}
+
+/* ── APP SHELL ── */
+.app{display:flex;height:100vh;width:100vw;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sb-w);flex-shrink:0;background:var(--bg-card);border-right:1px solid var(--bg-border);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.sb-logo{display:flex;align-items:center;gap:10px;padding:15px 14px;border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.sb-logo-icon{width:32px;height:32px;border-radius:var(--r-md);flex-shrink:0;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff}
+.sb-logo-name{font-size:13px;font-weight:700;color:var(--text-1)}
+.sb-logo-sub{font-size:10px;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase}
+.sb-nav{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:1px}
+.nav-sep{font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;padding:10px 8px 4px;margin-top:4px}
+.ni{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:var(--r-md);color:var(--text-muted);font-size:13px;font-weight:500;cursor:pointer;transition:all var(--t);border:1px solid transparent}
+.ni:hover{background:var(--hover-bg);color:var(--text-1)}
+.ni.active{background:var(--c-blue-bg);border-color:var(--c-blue-bd);color:var(--c-blue)}
+.ni svg{flex-shrink:0;opacity:.75}
+.ni.active svg{opacity:1}
+.nav-count{margin-left:auto;font-size:11px;color:var(--text-faint);background:var(--bg-el);padding:1px 7px;border-radius:99px}
+.sb-foot{padding:8px;border-top:1px solid var(--bg-border);display:flex;flex-direction:column;gap:1px;flex-shrink:0}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow:hidden}
+
+/* ── TOPBAR ── */
+.topbar{display:flex;align-items:center;gap:10px;padding:0 18px;height:54px;background:var(--bg-card);border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.tb-left{display:flex;flex-direction:column;gap:1px;min-width:0;flex-shrink:0}
+.tb-title{font-size:15px;font-weight:700;color:var(--text-1);line-height:1}
+.tb-sub{font-size:11px;color:var(--text-muted)}
+.tb-sep{flex:1}
+.tb-selectors{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.sel-btn{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:var(--r-md);font-size:13px;font-weight:600;color:var(--text-1);background:var(--bg-el);border:1px solid var(--bg-border);cursor:pointer;transition:all var(--t);white-space:nowrap;position:relative}
+.sel-btn:hover{border-color:var(--bg-el2);background:var(--bg-el2)}
+.sel-btn svg{color:var(--text-faint);flex-shrink:0}
+.sel-dd{position:absolute;top:calc(100% + 6px);left:0;z-index:400;background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-lg);padding:5px;min-width:200px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transform:translateY(-4px);transition:all .15s}
+.sel-dd.open{opacity:1;pointer-events:all;transform:none}
+.sel-dd-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-md);font-size:13px;color:var(--text-muted);cursor:pointer;transition:all var(--t)}
+.sel-dd-item:hover{background:var(--hover-bg);color:var(--text-1)}
+.sel-dd-item.active{color:var(--c-blue)}
+.sel-dd-item-dot{width:7px;height:7px;border-radius:50%;background:var(--c-blue);flex-shrink:0;opacity:0}
+.sel-dd-item.active .sel-dd-item-dot{opacity:1}
+.icon-btn{width:34px;height:34px;border-radius:var(--r-md);background:var(--bg-el);border:1px solid var(--bg-border);color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--t);flex-shrink:0}
+.icon-btn:hover{color:var(--text-1);border-color:var(--bg-el2)}
+.refresh-btn{display:flex;align-items:center;gap:6px;padding:6px 13px;border-radius:var(--r-md);font-size:13px;font-weight:600;color:var(--text-muted);background:var(--bg-el);border:1px solid var(--bg-border);cursor:pointer;transition:all var(--t);white-space:nowrap}
+.refresh-btn:hover{color:var(--text-1);border-color:var(--bg-el2)}
+.refresh-btn svg{transition:transform .6s}
+.refresh-btn.spinning svg{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── CONTENT ── */
+.content{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:16px}
+
+/* ── SUMMARY CARDS ── */
+.sum-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.sum-card{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-lg);padding:16px 18px;display:flex;flex-direction:column;gap:6px;transition:border-color var(--t)}
+.sum-card:hover{border-color:var(--bg-el2)}
+.sum-card-header{display:flex;align-items:center;justify-content:space-between}
+.sum-card-lbl{font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase}
+.sum-card-icon{width:26px;height:26px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sum-card-val{font-size:28px;font-weight:800;color:var(--text-1);line-height:1}
+.sum-card-desc{font-size:12px;color:var(--text-muted)}
+.sum-card-sub{font-size:11px;color:var(--text-faint)}
+.prog-track{height:5px;background:var(--bg-el2);border-radius:99px;overflow:hidden}
+.prog-fill{height:100%;border-radius:99px;transition:width .4s ease}
+.prog-fill.blue{background:var(--c-blue)}
+.prog-fill.green{background:var(--c-green)}
+.prog-fill.yellow{background:var(--c-yellow)}
+.prog-fill.red{background:var(--c-red)}
+
+/* ── TWO-COL LAYOUT ── */
+.two-col{display:grid;grid-template-columns:65fr 35fr;gap:14px;min-height:0}
+
+/* ── SECTION CARDS ── */
+.sec-card{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-xl);display:flex;flex-direction:column;overflow:hidden}
+.sec-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.sec-title{font-size:13px;font-weight:700;color:var(--text-1)}
+.sec-sub{font-size:11px;color:var(--text-muted);margin-top:1px}
+.sec-body{flex:1;overflow:auto}
+
+/* ── MEMBER TABLE ── */
+.mem-table{width:100%;border-collapse:collapse}
+.mem-table th{font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.7px;text-transform:uppercase;padding:8px 12px;text-align:left;white-space:nowrap;position:sticky;top:0;background:var(--bg-card);border-bottom:1px solid var(--bg-border);z-index:1}
+.mem-table td{padding:8px 12px;border-bottom:1px solid var(--bg-border);vertical-align:middle}
+.mem-table tr:last-child td{border-bottom:none}
+.mem-table tr.row-warn{background:rgba(245,158,11,.05)}
+.mem-table tr.row-crit{background:rgba(239,68,68,.05)}
+.mem-table tr:hover td{background:var(--hover-bg);cursor:pointer}
+.mem-table tr.row-warn:hover td{background:rgba(245,158,11,.09)}
+.mem-table tr.row-crit:hover td{background:rgba(239,68,68,.09)}
+
+/* Avatar */
+.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;letter-spacing:-.5px;color:#fff}
+.av-blue{background:#1d4ed8}
+.av-green{background:#15803d}
+.av-purple{background:#6d28d9}
+.av-yellow{background:#b45309}
+.av-teal{background:#0d9488}
+.av-red{background:#b91c1c}
+.av-pink{background:#be185d}
+.av-orange{background:#c2410c}
+
+.mem-name-cell{display:flex;align-items:center;gap:8px}
+.mem-name{font-size:13px;font-weight:600;color:var(--text-1);white-space:nowrap}
+.func-badge{font-size:10px;font-weight:600;color:var(--text-faint);background:var(--bg-el);padding:2px 7px;border-radius:99px;white-space:nowrap}
+
+/* Absence badge */
+.abs-badge{display:inline-flex;align-items:center;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(245,158,11,.15);color:var(--c-yellow);border:1px solid rgba(245,158,11,.3);white-space:nowrap}
+
+/* Occupation inline bar */
+.occ-cell{display:flex;align-items:center;gap:8px}
+.occ-bar-track{width:56px;height:5px;background:var(--bg-el2);border-radius:99px;overflow:hidden;flex-shrink:0}
+.occ-bar-fill{height:100%;border-radius:99px}
+.occ-val{font-size:12px;font-weight:700;white-space:nowrap}
+.occ-g{background:var(--c-green);color:var(--c-green)}
+.occ-y{background:var(--c-yellow);color:var(--c-yellow)}
+.occ-r{background:var(--c-red);color:var(--c-red)}
+
+.table-foot-note{padding:9px 14px;font-size:10px;color:var(--text-faint);border-top:1px solid var(--bg-border);flex-shrink:0}
+
+/* ── DONUT CHART ── */
+.donut-wrap{display:flex;flex-direction:column;align-items:center;padding:16px}
+.donut-svg-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center}
+.donut-center{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.donut-center-val{font-size:22px;font-weight:800;color:var(--text-1);line-height:1}
+.donut-center-lbl{font-size:10px;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
+.donut-legend{width:100%;display:flex;flex-direction:column;gap:6px;padding:0 4px;margin-top:4px}
+.dl-item{display:flex;align-items:center;gap:7px;font-size:12px;padding:2px 0}
+.dl-dot{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.dl-label{flex:1;color:var(--text-2)}
+.dl-val{font-weight:700;color:var(--text-1)}
+.dl-pct{color:var(--text-faint);margin-left:3px}
+
+/* Donut tooltip */
+.donut-tooltip{position:fixed;background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-md);padding:8px 12px;font-size:12px;box-shadow:var(--shadow);pointer-events:none;z-index:600;opacity:0;transition:opacity .12s;white-space:nowrap}
+.donut-tooltip.visible{opacity:1}
+.dt-name{font-weight:700;color:var(--text-1);margin-bottom:2px}
+.dt-val{color:var(--text-muted)}
+
+/* Demand card */
+.demand-card{margin:0 12px 12px;background:var(--bg-el);border:1px solid var(--bg-border);border-radius:var(--r-md);padding:12px 14px;display:flex;flex-direction:column;gap:5px}
+.demand-label{font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.7px;text-transform:uppercase}
+.demand-main{display:flex;align-items:center;gap:8px}
+.act-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;background:var(--c-blue-bg);border:1px solid var(--c-blue-bd);color:var(--c-blue)}
+.demand-hours{font-size:13px;font-weight:600;color:var(--text-1)}
+.demand-note{font-size:11px;color:var(--text-muted)}
+
+/* ── TIMELINE ── */
+.timeline-card{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-xl);overflow:hidden}
+.tl-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--bg-border)}
+.tl-title{font-size:13px;font-weight:700;color:var(--text-1)}
+.tl-sub{font-size:11px;color:var(--text-muted)}
+.tl-grid-wrap{overflow-x:auto;padding:12px 16px 14px}
+.tl-grid{display:grid;grid-template-rows:auto;gap:0}
+.tl-header-row{display:grid;grid-template-columns:160px repeat(10,1fr);gap:0;margin-bottom:6px}
+.tl-day-header{display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 2px;border-radius:var(--r-sm);font-size:10px;font-weight:700;color:var(--text-faint);text-transform:uppercase}
+.tl-day-header.today{background:var(--c-blue-bg);color:var(--c-blue);border:1px solid var(--c-blue-bd)}
+.tl-day-name{font-size:9px;font-weight:700;letter-spacing:.5px}
+.tl-day-num{font-size:12px;font-weight:800}
+.tl-member-label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text-2)}
+.tl-row{display:grid;grid-template-columns:160px repeat(10,1fr);gap:0;padding:5px 0;border-bottom:1px solid var(--bg-border)}
+.tl-row:last-child{border-bottom:none}
+.tl-cell{display:flex;align-items:center;justify-content:center;height:26px;margin:0 2px;border-radius:4px;font-size:10px;font-weight:700}
+.tl-cell.present{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.2)}
+.tl-cell.absent{background:rgba(148,163,184,.08);border:1px solid rgba(148,163,184,.15);color:var(--text-faint);letter-spacing:.5px}
+.tl-cell.today-col{background:rgba(96,165,250,.08);border-color:rgba(96,165,250,.25)}
+.tl-cell.absent-today{background:rgba(148,163,184,.12);border:1px dashed rgba(148,163,184,.3);color:var(--text-faint)}
+.tl-present-dot{width:5px;height:5px;border-radius:50%;background:var(--c-green)}
+.tl-other-rows .tl-cell{opacity:.5}
+
+/* ── MEMBER DETAIL PANEL ── */
+.panel-overlay{position:fixed;inset:0;z-index:500;pointer-events:none}
+.panel-overlay.open{pointer-events:all}
+.panel-backdrop{position:absolute;inset:0;background:var(--modal-bg);opacity:0;transition:opacity .25s}
+.panel-overlay.open .panel-backdrop{opacity:1}
+.panel-drawer{position:absolute;top:0;right:0;bottom:0;width:320px;background:var(--bg-card);border-left:1px solid var(--bg-border);display:flex;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .25s ease;box-shadow:var(--shadow)}
+.panel-overlay.open .panel-drawer{transform:translateX(0)}
+.panel-head{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.panel-av{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0;color:#fff}
+.panel-meta{flex:1;min-width:0}
+.panel-name{font-size:15px;font-weight:700;color:var(--text-1)}
+.panel-role{font-size:12px;color:var(--text-muted);margin-top:1px}
+.panel-close{width:28px;height:28px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:var(--text-faint);cursor:pointer;transition:all var(--t);flex-shrink:0}
+.panel-close:hover{background:var(--hover-bg);color:var(--text-1)}
+.panel-body{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+.panel-sprint-line{font-size:12px;color:var(--text-muted);background:var(--bg-el);border-radius:var(--r-sm);padding:5px 10px;text-align:center}
+.panel-stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.panel-stat{background:var(--bg-el);border:1px solid var(--bg-border);border-radius:var(--r-md);padding:10px 12px;display:flex;flex-direction:column;gap:3px}
+.panel-stat-lbl{font-size:9px;font-weight:700;color:var(--text-faint);letter-spacing:.7px;text-transform:uppercase}
+.panel-stat-val{font-size:18px;font-weight:800;color:var(--text-1);line-height:1}
+.panel-stat-sub{font-size:10px;color:var(--text-muted)}
+.panel-section-title{font-size:11px;font-weight:700;color:var(--text-faint);letter-spacing:.7px;text-transform:uppercase;margin-bottom:2px}
+.panel-wi-table{width:100%;border-collapse:collapse}
+.panel-wi-table td{padding:6px 0;border-bottom:1px solid var(--bg-border);font-size:12px;vertical-align:top}
+.panel-wi-table tr:last-child td{border-bottom:none}
+.panel-wi-id{color:var(--c-blue);font-weight:600;white-space:nowrap;padding-right:8px}
+.panel-wi-title{color:var(--text-2);line-height:1.4;flex:1}
+.panel-wi-pts{font-weight:700;color:var(--text-1);white-space:nowrap;padding-left:8px}
+.panel-wi-state{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;margin-top:2px}
+.state-ip{background:var(--c-blue-bg);color:var(--c-blue)}
+.state-todo{background:var(--bg-el2);color:var(--text-muted)}
+.panel-wi-total{padding-top:7px;border-top:2px solid var(--bg-border);font-size:12px;color:var(--text-muted)}
+.panel-act-bars{display:flex;flex-direction:column;gap:7px}
+.act-bar-row{display:flex;align-items:center;gap:8px;font-size:12px}
+.act-bar-label{width:110px;color:var(--text-2);flex-shrink:0;font-weight:500}
+.act-bar-track{flex:1;height:6px;background:var(--bg-el2);border-radius:99px;overflow:hidden}
+.act-bar-fill{height:100%;border-radius:99px}
+.act-bar-val{width:32px;text-align:right;font-weight:700;color:var(--text-1);flex-shrink:0}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-lg);padding:11px 18px;font-size:13px;font-weight:600;color:var(--text-1);box-shadow:var(--shadow);z-index:700;opacity:0;transform:translateX(24px);transition:opacity .2s,transform .2s;pointer-events:none;display:flex;align-items:center;gap:8px}
+.toast.show{opacity:1;transform:none}
+.toast-dot{width:7px;height:7px;border-radius:50%;background:var(--c-green);flex-shrink:0}
+
+/* ── SKELETON FLASH ── */
+.skel{background:linear-gradient(90deg,var(--bg-el) 25%,var(--bg-el2) 50%,var(--bg-el) 75%);background-size:200% 100%;animation:shimmer 1.2s infinite;border-radius:4px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skel-row td{padding:10px 12px}
+.skel-bar{height:12px;border-radius:4px}
+
+/* Loading overlay for table */
+.table-loading{position:relative}
+.table-loading-overlay{position:absolute;inset:0;background:var(--bg-card);opacity:.7;z-index:10;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-faint)}
+.spinner-small{width:18px;height:18px;border:2px solid var(--bg-el2);border-top-color:var(--c-blue);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── SIDEBAR ── -->
+  <nav class="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="sb-logo-name">Backlog Health</div>
+        <div class="sb-logo-sub">Azure DevOps</div>
+      </div>
+    </div>
+
+    <div class="sb-nav">
+      <span class="nav-sep">Visao Geral</span>
+      <div class="ni">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+        <span class="nav-count">3</span>
+      </div>
+      <div class="ni">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        Daily Report
+      </div>
+      <div class="ni">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Burndown
+      </div>
+
+      <span class="nav-sep">Time</span>
+      <div class="ni active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Capacidade do Time
+      </div>
+      <div class="ni">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Delivery Plan
+      </div>
+
+      <span class="nav-sep">Relatorios</span>
+      <div class="ni">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Review Mensal
+      </div>
+      <div class="ni">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Incidentes SN
+      </div>
+
+      <span class="nav-sep">IA</span>
+      <div class="ni">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Copilot
+      </div>
+    </div>
+
+    <div class="sb-foot">
+      <div class="ni">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Configuracoes
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── MAIN ── -->
+  <div class="main">
+
+    <!-- ── TOPBAR ── -->
+    <div class="topbar">
+      <div class="tb-left">
+        <div class="tb-title">Capacidade do Time</div>
+        <div class="tb-sub">Alocacao e disponibilidade por sprint</div>
+      </div>
+
+      <div class="tb-sep"></div>
+
+      <!-- Project selector -->
+      <div class="tb-selectors">
+        <div class="sel-btn" id="proj-btn" onclick="toggleProjDd(event)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span id="proj-label">Alpha Squad</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <div class="sel-dd" id="proj-dd" onclick="event.stopPropagation()">
+            <div class="sel-dd-item active" onclick="selectProject('Alpha Squad',this)">
+              <span class="sel-dd-item-dot"></span>Alpha Squad
+            </div>
+            <div class="sel-dd-item" onclick="selectProject('Beta Platform',this)">
+              <span class="sel-dd-item-dot"></span>Beta Platform
+            </div>
+            <div class="sel-dd-item" onclick="selectProject('Gamma Experience',this)">
+              <span class="sel-dd-item-dot"></span>Gamma Experience
+            </div>
+          </div>
+        </div>
+
+        <!-- Sprint selector -->
+        <div class="sel-btn" id="sprint-btn" onclick="toggleSprintDd(event)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span id="sprint-label">Sprint 47 &middot; 02/06 &ndash; 17/06</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <div class="sel-dd" id="sprint-dd" onclick="event.stopPropagation()">
+            <div class="sel-dd-item" onclick="selectSprint('Sprint 46','Sprint 46 &middot; 19/05 &ndash; 03/06',this)">
+              <span class="sel-dd-item-dot"></span>Sprint 46 &middot; 19/05 &ndash; 03/06
+            </div>
+            <div class="sel-dd-item active" onclick="selectSprint('Sprint 47','Sprint 47 &middot; 02/06 &ndash; 17/06',this)">
+              <span class="sel-dd-item-dot"></span>Sprint 47 &middot; 02/06 &ndash; 17/06
+            </div>
+            <div class="sel-dd-item" onclick="selectSprint('Sprint 48','Sprint 48 &middot; 18/06 &ndash; 03/07',this)">
+              <span class="sel-dd-item-dot"></span>Sprint 48 &middot; 18/06 &ndash; 03/07
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="refresh-btn" id="refresh-btn" onclick="doRefresh()">
+        <svg id="refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5.08"/></svg>
+        Atualizar
+      </button>
+
+      <button class="icon-btn" onclick="toggleTheme()" title="Alternar tema">
+        <svg id="theme-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+
+    <!-- ── CONTENT ── -->
+    <div class="content">
+
+      <!-- Section 1: Summary cards -->
+      <div class="sum-bar">
+
+        <div class="sum-card">
+          <div class="sum-card-header">
+            <div class="sum-card-lbl">Capacidade Total</div>
+            <div class="sum-card-icon" style="background:var(--c-blue-bg);color:var(--c-blue)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+          </div>
+          <div class="sum-card-val">240h</div>
+          <div class="sum-card-desc">Horas disponiveis no sprint</div>
+          <div class="sum-card-sub">8 membros &middot; 15 dias uteis</div>
+        </div>
+
+        <div class="sum-card">
+          <div class="sum-card-header">
+            <div class="sum-card-lbl">Capacidade Restante</div>
+            <div class="sum-card-icon" style="background:var(--c-green-bg);color:var(--c-green)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+          <div class="sum-card-val" style="color:var(--c-green)">112h</div>
+          <div class="sum-card-desc">Horas ainda disponiveis</div>
+          <div class="prog-track" style="margin:4px 0 2px"><div class="prog-fill blue" style="width:53%"></div></div>
+          <div class="sum-card-sub">53% alocado</div>
+        </div>
+
+        <div class="sum-card">
+          <div class="sum-card-header">
+            <div class="sum-card-lbl">Folgas e Ausencias</div>
+            <div class="sum-card-icon" style="background:var(--c-yellow-bg);color:var(--c-yellow)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="1" x2="21" y2="21"/></svg>
+            </div>
+          </div>
+          <div class="sum-card-val" style="color:var(--c-yellow)">3</div>
+          <div class="sum-card-desc">Membros com ausencias</div>
+          <div class="sum-card-sub">Total: 12 dias de ausencia</div>
+        </div>
+
+        <div class="sum-card">
+          <div class="sum-card-header">
+            <div class="sum-card-lbl">Story Points vs Capacidade</div>
+            <div class="sum-card-icon" style="background:var(--c-purple-bg);color:var(--c-purple)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+          </div>
+          <div class="sum-card-val" style="color:var(--c-purple)">26 US</div>
+          <div class="sum-card-desc">Work items no sprint</div>
+          <div class="sum-card-sub">Estimado: 128pts &middot; ~1,14pts/h</div>
+        </div>
+
+      </div>
+
+      <!-- Section 2: Two-column -->
+      <div class="two-col">
+
+        <!-- LEFT: Member table -->
+        <div class="sec-card">
+          <div class="sec-head">
+            <div>
+              <div class="sec-title">Alocacao por Membro</div>
+              <div class="sec-sub">Sprint 47 &middot; Alpha Squad &middot; 8 membros</div>
+            </div>
+          </div>
+          <div class="sec-body" id="table-body-wrap">
+            <table class="mem-table" id="mem-table">
+              <thead>
+                <tr>
+                  <th>Membro</th>
+                  <th>Funcao</th>
+                  <th>Cap/dia</th>
+                  <th>Dias uteis</th>
+                  <th>Ausencias</th>
+                  <th>Total disp.</th>
+                  <th>Atividade</th>
+                  <th>Ocupacao</th>
+                </tr>
+              </thead>
+              <tbody id="members-tbody">
+                <!-- Filled by JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="table-foot-note" id="table-note">
+            Capacidade calculada pelo Azure DevOps &middot; Sprint 47 &middot; Atualizado 09/06/2026 09:41
+          </div>
+        </div>
+
+        <!-- RIGHT: Donut chart -->
+        <div class="sec-card">
+          <div class="sec-head">
+            <div>
+              <div class="sec-title">Distribuicao por Atividade</div>
+              <div class="sec-sub">Horas alocadas por categoria</div>
+            </div>
+          </div>
+          <div class="sec-body" style="overflow:hidden">
+            <div class="donut-wrap">
+              <div class="donut-svg-wrap">
+                <svg id="donut-svg" width="170" height="170" viewBox="0 0 170 170"></svg>
+                <div class="donut-center">
+                  <span class="donut-center-val" id="donut-center-val">240h</span>
+                  <span class="donut-center-lbl">Total</span>
+                </div>
+              </div>
+              <div class="donut-legend" id="donut-legend"></div>
+            </div>
+
+            <div class="demand-card">
+              <div class="demand-label">Atividade com mais demanda</div>
+              <div class="demand-main">
+                <span class="act-pill">Development</span>
+                <span class="demand-hours">145h &mdash; 4 membros</span>
+              </div>
+              <div class="demand-note">Maior sobrecarga: Felipe Lima (95%)</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Section 3: Timeline -->
+      <div class="timeline-card">
+        <div class="tl-head">
+          <div>
+            <div class="tl-title">Calendario de Ausencias &mdash; Sprint 47</div>
+            <div class="tl-sub">Membros com ausencias registradas no sprint</div>
+          </div>
+        </div>
+        <div class="tl-grid-wrap">
+          <div id="timeline-container"></div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Member detail panel -->
+<div class="panel-overlay" id="panel-overlay">
+  <div class="panel-backdrop" onclick="closePanel()"></div>
+  <div class="panel-drawer" id="panel-drawer">
+    <div class="panel-head">
+      <div class="panel-av" id="panel-av"></div>
+      <div class="panel-meta">
+        <div class="panel-name" id="panel-name"></div>
+        <div class="panel-role" id="panel-role"></div>
+      </div>
+      <div class="panel-close" onclick="closePanel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </div>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+  </div>
+</div>
+
+<!-- Donut tooltip -->
+<div class="donut-tooltip" id="donut-tooltip">
+  <div class="dt-name" id="dt-name"></div>
+  <div class="dt-val" id="dt-val"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span class="toast-dot"></span>
+  <span id="toast-msg">Dados atualizados</span>
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+
+const MEMBERS = [
+  { id:0, initials:'AC', color:'av-blue',   name:'Ana Carolina Silva', role:'Tech Lead',    capDay:6, workDays:15, absences:0,  absenceDates:[],             total:90,  activity:'Development',   occ:85, wiItems:[{id:'US-4801',title:'Definir arquitetura do modulo de notificacoes',pts:13,state:'Em progresso'},{id:'US-4812',title:'Code review backlog items',pts:8,state:'Concluido'},{id:'US-4824',title:'Documentar APIs internas',pts:5,state:'A fazer'}], actBreak:[{label:'Development',h:70,c:'#60a5fa'},{label:'Code Review',h:20,c:'#a78bfa'}] },
+  { id:1, initials:'BM', color:'av-green',  name:'Bruno Martins',      role:'Dev Senior',   capDay:6, workDays:15, absences:2,  absenceDates:['05/06','06/06'], total:78,  activity:'Development',   occ:90, wiItems:[{id:'US-4821',title:'Implementar autenticacao OAuth',pts:13,state:'Em progresso'},{id:'US-4835',title:'Refatorar servico de usuarios',pts:8,state:'A fazer'},{id:'US-4849',title:'Testes de integracao',pts:5,state:'A fazer'}], actBreak:[{label:'Development',h:65,c:'#60a5fa'},{label:'Code Review',h:13,c:'#a78bfa'}] },
+  { id:2, initials:'CS', color:'av-purple', name:'Carla Souza',         role:'Dev Pleno',    capDay:6, workDays:15, absences:0,  absenceDates:[],             total:90,  activity:'Development',   occ:70, wiItems:[{id:'US-4808',title:'Migrar endpoints legados para v2',pts:8,state:'Em progresso'},{id:'US-4831',title:'Criar testes unitarios modulo pagamento',pts:5,state:'A fazer'}], actBreak:[{label:'Development',h:58,c:'#60a5fa'},{label:'Testing',h:14,c:'#22c55e'}] },
+  { id:3, initials:'DF', color:'av-yellow', name:'Daniel Ferreira',     role:'Dev Junior',   capDay:4, workDays:15, absences:5,  absenceDates:['02/06','03/06','04/06','05/06','06/06'], total:40, activity:'Development', occ:60, wiItems:[{id:'US-4840',title:'Ajustar formularios de cadastro',pts:5,state:'A fazer'},{id:'US-4851',title:'Corrigir validacoes de CPF',pts:3,state:'A fazer'}], actBreak:[{label:'Development',h:28,c:'#60a5fa'},{label:'Meetings',h:12,c:'#f59e0b'}] },
+  { id:4, initials:'EC', color:'av-teal',   name:'Elena Costa',         role:'QA Engineer',  capDay:6, workDays:15, absences:0,  absenceDates:[],             total:90,  activity:'Testing',       occ:75, wiItems:[{id:'US-4802',title:'Plano de testes regressivos v3.5',pts:8,state:'Em progresso'},{id:'US-4815',title:'Automacao de testes de UI',pts:13,state:'A fazer'},{id:'US-4838',title:'Testes de performance endpoint checkout',pts:5,state:'A fazer'}], actBreak:[{label:'Testing',h:62,c:'#22c55e'},{label:'Documentation',h:18,c:'#94a3b8'}] },
+  { id:5, initials:'FL', color:'av-red',    name:'Felipe Lima',         role:'Scrum Master', capDay:4, workDays:15, absences:3,  absenceDates:['09/06','10/06','11/06'], total:48, activity:'Meetings', occ:95, wiItems:[{id:'US-4800',title:'Preparar retrospectiva sprint 46',pts:2,state:'Concluido'},{id:'US-4845',title:'Roadmap Q3 alinhamento stakeholders',pts:3,state:'Em progresso'}], actBreak:[{label:'Meetings',h:38,c:'#f59e0b'},{label:'Planning',h:10,c:'#60a5fa'}] },
+  { id:6, initials:'GR', color:'av-pink',   name:'Gabriela Rocha',      role:'UX Designer',  capDay:6, workDays:15, absences:2,  absenceDates:['12/06','13/06'], total:78, activity:'Design',      occ:65, wiItems:[{id:'US-4807',title:'Redesign fluxo de checkout mobile',pts:8,state:'Em progresso'},{id:'US-4822',title:'Prototipo tela de configuracoes',pts:5,state:'A fazer'}], actBreak:[{label:'Design',h:48,c:'#a78bfa'},{label:'Research',h:22,c:'#60a5fa'}] },
+  { id:7, initials:'HA', color:'av-orange', name:'Henrique Alves',      role:'DevOps',       capDay:4, workDays:15, absences:0,  absenceDates:[],             total:60,  activity:'Infrastructure',occ:80, wiItems:[{id:'US-4803',title:'Configurar pipeline CI/CD staging',pts:8,state:'Em progresso'},{id:'US-4828',title:'Monitoramento k8s alertas criticos',pts:5,state:'A fazer'}], actBreak:[{label:'Infrastructure',h:44,c:'#f97316'},{label:'Monitoring',h:16,c:'#22c55e'}] },
+];
+
+const ACTIVITIES = [
+  { label:'Development',    h:145, color:'#60a5fa' },
+  { label:'Testing',        h:68,  color:'#22c55e' },
+  { label:'Design',         h:51,  color:'#a78bfa' },
+  { label:'Infrastructure', h:22,  color:'#f97316' },
+  { label:'Meetings',       h:19,  color:'#f59e0b' },
+];
+const TOTAL_H = ACTIVITIES.reduce((s,a)=>s+a.h,0); // ~305 — normalize for display
+
+const SPRINT_DAYS = [
+  {label:'Seg',num:'02',today:false},
+  {label:'Ter',num:'03',today:false},
+  {label:'Qua',num:'04',today:false},
+  {label:'Qui',num:'05',today:false},
+  {label:'Sex',num:'06',today:false},
+  {label:'Seg',num:'09',today:false},
+  {label:'Ter',num:'10',today:true},
+  {label:'Qua',num:'11',today:false},
+  {label:'Qui',num:'12',today:false},
+  {label:'Sex',num:'13',today:false},
+];
+
+// Members shown in timeline (only with absences)
+const TIMELINE_MEMBERS = [1, 3, 5]; // Bruno, Daniel, Felipe
+
+// Absence day ranges by member id
+const ABSENCE_MAP = {
+  1: ['05','06'],
+  3: ['02','03','04','05','06'],
+  5: ['09','10','11'],
+};
+
+// ── RENDER TABLE ───────────────────────────────────────────────────────────────
+
+function occClass(v) {
+  if (v > 85) return 'occ-r';
+  if (v >= 70) return 'occ-y';
+  return 'occ-g';
+}
+
+function renderTable(members) {
+  const tbody = document.getElementById('members-tbody');
+  tbody.innerHTML = members.map(m => {
+    const cls = occClass(m.occ);
+    let rowCls = '';
+    if (m.occ > 85) rowCls = 'row-crit';
+    else if (m.absences >= 3) rowCls = 'row-warn';
+
+    const absCell = m.absences > 0
+      ? `<span class="abs-badge">${m.absences}d</span>`
+      : `<span style="color:var(--text-faint);font-size:12px">—</span>`;
+
+    return `<tr class="${rowCls}" onclick="openPanel(${m.id})">
+      <td>
+        <div class="mem-name-cell">
+          <div class="av ${m.color}">${m.initials}</div>
+          <span class="mem-name">${m.name}</span>
+        </div>
+      </td>
+      <td><span class="func-badge">${m.role}</span></td>
+      <td style="font-weight:600;color:var(--text-2)">${m.capDay}h</td>
+      <td style="color:var(--text-2)">${m.workDays}</td>
+      <td>${absCell}</td>
+      <td style="font-weight:700;color:var(--text-1)">${m.total}h</td>
+      <td style="color:var(--text-muted);font-size:12px">${m.activity}</td>
+      <td>
+        <div class="occ-cell">
+          <div class="occ-bar-track">
+            <div class="occ-bar-fill ${cls}" style="width:${m.occ}%"></div>
+          </div>
+          <span class="occ-val ${cls}">${m.occ}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── DONUT CHART ────────────────────────────────────────────────────────────────
+
+function buildDonut() {
+  const svg = document.getElementById('donut-svg');
+  const cx = 85, cy = 85, r = 62, stroke = 22;
+  const circumference = 2 * Math.PI * r;
+  const total = ACTIVITIES.reduce((s,a)=>s+a.h,0);
+  const gap = 3; // gap in px between segments
+
+  let offset = -0.25 * circumference; // start at top
+  const paths = [];
+
+  ACTIVITIES.forEach((act, i) => {
+    const frac = act.h / total;
+    const segLen = frac * circumference - gap;
+    const dashArray = `${segLen} ${circumference - segLen}`;
+
+    const el = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    el.setAttribute('cx', cx);
+    el.setAttribute('cy', cy);
+    el.setAttribute('r', r);
+    el.setAttribute('fill','none');
+    el.setAttribute('stroke', act.color);
+    el.setAttribute('stroke-width', stroke);
+    el.setAttribute('stroke-dasharray', dashArray);
+    el.setAttribute('stroke-dashoffset', -offset);
+    el.setAttribute('stroke-linecap','butt');
+    el.style.cursor = 'pointer';
+    el.style.transition = 'stroke-width .15s, opacity .15s';
+
+    el.addEventListener('mouseenter', e => {
+      el.setAttribute('stroke-width', stroke + 5);
+      showDonutTooltip(e, act);
+    });
+    el.addEventListener('mousemove', e => moveDonutTooltip(e));
+    el.addEventListener('mouseleave', () => {
+      el.setAttribute('stroke-width', stroke);
+      hideDonutTooltip();
+    });
+
+    svg.appendChild(el);
+    offset += frac * circumference;
+  });
+
+  // Legend
+  const legend = document.getElementById('donut-legend');
+  legend.innerHTML = ACTIVITIES.map(act => {
+    const pct = Math.round(act.h / total * 100);
+    return `<div class="dl-item">
+      <div class="dl-dot" style="background:${act.color}"></div>
+      <span class="dl-label">${act.label}</span>
+      <span class="dl-val">${act.h}h</span>
+      <span class="dl-pct">(${pct}%)</span>
+    </div>`;
+  }).join('');
+}
+
+function showDonutTooltip(e, act) {
+  const pct = Math.round(act.h / ACTIVITIES.reduce((s,a)=>s+a.h,0) * 100);
+  document.getElementById('dt-name').textContent = act.label;
+  document.getElementById('dt-val').textContent = `${act.h}h — ${pct}% do total`;
+  const t = document.getElementById('donut-tooltip');
+  t.classList.add('visible');
+  moveDonutTooltip(e);
+}
+function moveDonutTooltip(e) {
+  const t = document.getElementById('donut-tooltip');
+  t.style.left = (e.clientX + 14) + 'px';
+  t.style.top = (e.clientY - 10) + 'px';
+}
+function hideDonutTooltip() {
+  document.getElementById('donut-tooltip').classList.remove('visible');
+}
+
+// ── TIMELINE ──────────────────────────────────────────────────────────────────
+
+function buildTimeline() {
+  const container = document.getElementById('timeline-container');
+
+  // Header row
+  let html = `<div class="tl-header-row">
+    <div></div>`;
+  SPRINT_DAYS.forEach(d => {
+    html += `<div class="tl-day-header${d.today?' today':''}">
+      <span class="tl-day-name">${d.label}</span>
+      <span class="tl-day-num">${d.num}</span>
+    </div>`;
+  });
+  html += `</div>`;
+
+  // Member rows
+  TIMELINE_MEMBERS.forEach(mid => {
+    const m = MEMBERS[mid];
+    const absDays = ABSENCE_MAP[mid] || [];
+    html += `<div class="tl-row">
+      <div class="tl-member-label">
+        <div class="av ${m.color}" style="width:22px;height:22px;font-size:8px">${m.initials}</div>
+        <span style="font-size:12px">${m.name.split(' ')[0]} ${m.name.split(' ')[1]}</span>
+      </div>`;
+    SPRINT_DAYS.forEach(d => {
+      const isAbsent = absDays.includes(d.num);
+      const isToday = d.today;
+      if (isAbsent && isToday) {
+        html += `<div class="tl-cell absent-today">A</div>`;
+      } else if (isAbsent) {
+        html += `<div class="tl-cell absent">A</div>`;
+      } else if (isToday) {
+        html += `<div class="tl-cell today-col"><div class="tl-present-dot" style="background:var(--c-blue)"></div></div>`;
+      } else {
+        html += `<div class="tl-cell present"><div class="tl-present-dot"></div></div>`;
+      }
+    });
+    html += `</div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+// ── MEMBER PANEL ──────────────────────────────────────────────────────────────
+
+function openPanel(memberId) {
+  const m = MEMBERS[memberId];
+  const overlay = document.getElementById('panel-overlay');
+
+  document.getElementById('panel-av').className = `panel-av ${m.color}`;
+  document.getElementById('panel-av').textContent = m.initials;
+  document.getElementById('panel-name').textContent = m.name;
+  document.getElementById('panel-role').textContent = m.role;
+
+  const absText = m.absences > 0
+    ? `${m.absences} dias (${m.absenceDates.join(', e ')})`
+    : 'Nenhuma';
+
+  const occCls = occClass(m.occ);
+
+  const wiRows = m.wiItems.map(wi => {
+    const stCls = wi.state === 'Em progresso' ? 'state-ip' : wi.state === 'Concluido' ? 'state-ip' : 'state-todo';
+    return `<tr>
+      <td class="panel-wi-id">${wi.id}</td>
+      <td class="panel-wi-title">
+        ${wi.title}<br>
+        <span class="panel-wi-state ${stCls}">${wi.state}</span>
+      </td>
+      <td class="panel-wi-pts">${wi.pts}pts</td>
+    </tr>`;
+  }).join('');
+
+  const totalPts = m.wiItems.reduce((s,wi)=>s+wi.pts,0);
+
+  const maxH = Math.max(...m.actBreak.map(a=>a.h));
+
+  const actBars = m.actBreak.map(a => {
+    const pct = Math.round(a.h / maxH * 100);
+    return `<div class="act-bar-row">
+      <span class="act-bar-label">${a.label}</span>
+      <div class="act-bar-track"><div class="act-bar-fill" style="width:${pct}%;background:${a.c}"></div></div>
+      <span class="act-bar-val">${a.h}h</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('panel-body').innerHTML = `
+    <div class="panel-sprint-line">Sprint 47 &middot; Alpha Squad</div>
+
+    <div class="panel-stats-grid">
+      <div class="panel-stat">
+        <div class="panel-stat-lbl">Capacidade/dia</div>
+        <div class="panel-stat-val">${m.capDay}h</div>
+      </div>
+      <div class="panel-stat">
+        <div class="panel-stat-lbl">Dias uteis</div>
+        <div class="panel-stat-val">${m.workDays}</div>
+      </div>
+      <div class="panel-stat">
+        <div class="panel-stat-lbl">Total disponivel</div>
+        <div class="panel-stat-val">${m.total}h</div>
+      </div>
+      <div class="panel-stat">
+        <div class="panel-stat-lbl">Ocupacao</div>
+        <div class="panel-stat-val ${occCls}" style="font-size:18px">${m.occ}%</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-section-title" style="margin-bottom:5px">Ausencias</div>
+      <div style="font-size:13px;color:${m.absences > 0 ? 'var(--c-yellow)' : 'var(--text-muted)'}">${absText}</div>
+    </div>
+
+    <div>
+      <div class="panel-section-title">Work Items atribuidos</div>
+      <table class="panel-wi-table" style="margin-top:6px">
+        <tbody>${wiRows}</tbody>
+      </table>
+      <div class="panel-wi-total">
+        <span style="color:var(--text-faint)">Total atribuido:</span>
+        <strong style="color:var(--text-1);margin-left:4px">${totalPts}pts</strong>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-section-title">Distribuicao de atividades</div>
+      <div class="panel-act-bars" style="margin-top:8px">${actBars}</div>
+    </div>
+  `;
+
+  overlay.classList.add('open');
+}
+
+function closePanel() {
+  document.getElementById('panel-overlay').classList.remove('open');
+}
+
+// ── SELECTORS ─────────────────────────────────────────────────────────────────
+
+function toggleProjDd(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('proj-dd');
+  const isOpen = dd.classList.contains('open');
+  closeAllDd();
+  if (!isOpen) dd.classList.add('open');
+}
+
+function toggleSprintDd(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('sprint-dd');
+  const isOpen = dd.classList.contains('open');
+  closeAllDd();
+  if (!isOpen) dd.classList.add('open');
+}
+
+function closeAllDd() {
+  document.querySelectorAll('.sel-dd').forEach(d => d.classList.remove('open'));
+}
+
+function selectProject(name, el) {
+  document.getElementById('proj-label').textContent = name;
+  document.querySelectorAll('#proj-dd .sel-dd-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  closeAllDd();
+  flashTableLoading();
+}
+
+function selectSprint(name, label, el) {
+  document.getElementById('sprint-label').innerHTML = label;
+  document.querySelectorAll('#sprint-dd .sel-dd-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  closeAllDd();
+}
+
+document.addEventListener('click', () => closeAllDd());
+
+// ── TABLE LOADING FLASH ────────────────────────────────────────────────────────
+
+function flashTableLoading() {
+  const wrap = document.getElementById('table-body-wrap');
+  const overlay = document.createElement('div');
+  overlay.className = 'table-loading-overlay';
+  overlay.innerHTML = '<div class="spinner-small"></div>Carregando...';
+  wrap.style.position = 'relative';
+  wrap.appendChild(overlay);
+  setTimeout(() => {
+    overlay.remove();
+  }, 380);
+}
+
+// ── REFRESH ────────────────────────────────────────────────────────────────────
+
+function doRefresh() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  btn.disabled = true;
+  btn.style.opacity = '.7';
+  setTimeout(() => {
+    btn.classList.remove('spinning');
+    btn.disabled = false;
+    btn.style.opacity = '';
+    showToast('Dados atualizados');
+  }, 1500);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── THEME ─────────────────────────────────────────────────────────────────────
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  const icon = document.getElementById('theme-icon');
+  if (!isDark) {
+    icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+  } else {
+    icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+
+renderTable(MEMBERS);
+buildDonut();
+buildTimeline();
+</script>
+</body>
+</html>

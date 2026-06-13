@@ -40,20 +40,25 @@ export function setAlias(projectName, alias) {
 }
 
 export function applyAliases() {
-  document.querySelectorAll('#content .card[data-project]').forEach(card => {
-    const name = card.dataset.project;
+  const sel = '#content .card[data-project], #content .sn-inc-card[data-project]';
+  document.querySelectorAll(sel).forEach(card => {
+    const name  = card.dataset.project;
     const alias = getAlias(name);
-    const h2 = card.querySelector('h2.card-project-title');
-    if (h2) h2.textContent = alias;
-    _updateIcon(card, alias);
+    const titleEl = card.querySelector('.card-project-title');
+    if (titleEl) titleEl.textContent = alias;
+    // SN cards use priority-based avatar colors — don't override them
+    if (!card.classList.contains('sn-inc-card')) {
+      _updateIcon(card, alias);
+    }
   });
 }
 
 export function startRename(btn) {
-  const card = btn.closest('.card');
+  const card = btn.closest('.card, .sn-inc-card');
+  if (!card) return;
   const projectName = card.dataset.project;
-  const h2 = card.querySelector('h2.card-project-title');
-  if (!h2) return;
+  const titleEl = card.querySelector('.card-project-title');
+  if (!titleEl) return;
 
   const currentAlias = getAlias(projectName);
   const input = document.createElement('input');
@@ -62,9 +67,9 @@ export function startRename(btn) {
   input.value = currentAlias !== projectName ? currentAlias : '';
   input.placeholder = projectName;
 
-  h2.hidden = true;
+  titleEl.hidden = true;
   btn.hidden = true;
-  h2.parentElement.insertBefore(input, h2);
+  titleEl.parentElement.insertBefore(input, titleEl);
   input.focus();
 
   let done = false;
@@ -75,9 +80,11 @@ export function startRename(btn) {
     const val = input.value.trim();
     setAlias(projectName, val || projectName);
     const newAlias = getAlias(projectName);
-    h2.textContent = newAlias;
-    _updateIcon(card, newAlias);
-    h2.hidden = false;
+    titleEl.textContent = newAlias;
+    if (!card.classList.contains('sn-inc-card')) {
+      _updateIcon(card, newAlias);
+    }
+    titleEl.hidden = false;
     btn.hidden = false;
     input.remove();
   }
@@ -85,7 +92,7 @@ export function startRename(btn) {
   function cancel() {
     if (done) return;
     done = true;
-    h2.hidden = false;
+    titleEl.hidden = false;
     btn.hidden = false;
     input.remove();
   }

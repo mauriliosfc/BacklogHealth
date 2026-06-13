@@ -1,11 +1,7 @@
-const fs       = require("fs");
-const nodePath  = require("path");
+const fs          = require("fs");
+const { CONFIG_PATH } = require('./utils/paths');
 
-const PORT        = 3030;
-// Quando rodando como .exe (PKG), __dirname aponta para o filesystem virtual
-// somente leitura. Salvar config.json ao lado do executável em vez disso.
-const CONFIG_DIR  = process.pkg ? nodePath.dirname(process.execPath) : __dirname;
-const CONFIG_PATH = nodePath.join(CONFIG_DIR, "config.json");
+const PORT = 3030;
 
 let cfg = {};
 
@@ -31,22 +27,23 @@ function parseOrgInput(input) {
 function loadConfig() {
   try {
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
-    if (raw.org && raw.pat && Array.isArray(raw.projects) && raw.projects.length) {
-      // compatibilidade: configs sem baseUrl usam dev.azure.com
-      if (!raw.baseUrl) raw.baseUrl = `https://dev.azure.com/${raw.org}`;
 
-      // Migração automática: converter string[] para object[]
-      if (raw.projects && raw.projects.length > 0) {
-        raw.projects = raw.projects.map(p =>
-          typeof p === 'string'
-            ? { name: p, workItemType: 'User Story' }
-            : { name: p.name, workItemType: p.workItemType || 'User Story', ...(p.team ? { team: p.team } : {}) }
-        );
-      }
+    // Always load whatever is on disk so SN-only / partial configs survive restart.
+    // compatibilidade: configs sem baseUrl usam dev.azure.com
+    if (!raw.baseUrl && raw.org) raw.baseUrl = `https://dev.azure.com/${raw.org}`;
 
-      cfg = raw;
-      return true;
+    // Migração automática: converter string[] para object[]
+    if (raw.projects && raw.projects.length > 0) {
+      raw.projects = raw.projects.map(p =>
+        typeof p === 'string'
+          ? { name: p, workItemType: 'User Story' }
+          : { ...p, workItemType: p.workItemType || 'User Story' }
+      );
     }
+
+    cfg = raw;
+    // Return true only when Azure is fully configured (projects to fetch exist)
+    return !!(raw.org && raw.pat && Array.isArray(raw.projects) && raw.projects.length);
   } catch (_) {}
   cfg = {};
   return false;
@@ -100,4 +97,51 @@ function getGithubCfg() {
   return cfg.github || null;
 }
 
-module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg };
+function getSnConfig() {
+  return cfg.servicenow || null;
+}
+
+function saveSnConfig({ instance, user, pass, assignmentGroups } = {}, projectGroup = null) {
+  if (instance !== undefined || user !== undefined || pass !== undefined || assignmentGroups !== undefined) {
+    cfg.servicenow = {
+      ...(cfg.servicenow || {}),
+      ...(instance         !== undefined ? { instance }         : {}),
+      ...(user             !== undefined ? { user }             : {}),
+      ...(pass             !== undefined ? { pass }             : {}),
+      ...(assignmentGroups !== undefined ? { assignmentGroups } : {}),
+    };
+  }
+  if (projectGroup) {
+    const { projectName, assignmentGroup, assignmentGroupName, slaThresholds, slaEnabled } = projectGroup;
+    const proj = (cfg.projects || []).find(p => getDisplayName(p) === projectName || p.name === projectName);
+    if (proj) {
+      const existing = proj.servicenow || {};
+      proj.servicenow = {
+        ...existing,
+        ...(assignmentGroup     !== undefined ? { assignmentGroup }     : {}),
+        ...(assignmentGroupName !== undefined ? { assignmentGroupName } : {}),
+        ...(slaEnabled          !== undefined ? { slaEnabled: slaEnabled === true } : {}),
+        ...(slaThresholds                     ? { slaThresholds }                   : {}),
+      };
+    }
+  }
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+}
+
+function getProjectSnGroup(displayName) {
+  const proj = (cfg.projects || []).find(p => getDisplayName(p) === displayName || p.name === displayName);
+  return proj?.servicenow || null;
+}
+
+// Returns one of: 'empty' | 'sn-only' | 'azure' | 'full'
+function getAppMode() {
+  const hasAzure = !!(cfg.org && cfg.pat && Array.isArray(cfg.projects) && cfg.projects.length);
+  const sn = cfg.servicenow;
+  const hasSN = !!(sn && sn.instance && sn.user && sn.pass);
+  if (hasAzure && hasSN) return 'full';
+  if (hasAzure)          return 'azure';
+  if (hasSN)             return 'sn-only';
+  return 'empty';
+}
+
+module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg, getSnConfig, saveSnConfig, getProjectSnGroup, getAppMode };

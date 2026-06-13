@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backlog Health — Protótipo it01b — Estados do Dashboard</title>
+<style>
+:root {
+  --bg-page:#020617;--bg-card:#0f172a;--bg-border:#1e293b;--bg-el:#1e293b;--bg-el2:#334155;
+  --text-1:#f1f5f9;--text-2:#cbd5e1;--text-muted:#94a3b8;--text-faint:#64748b;
+  --c-blue:#60a5fa;--c-blue-bg:#1e3a5f;--c-blue-bd:#2d5a8e;
+  --c-green:#22c55e;--c-green-bg:#14532d;--c-green-bd:#166534;
+  --c-yellow:#f59e0b;--c-yellow-bg:#422006;
+  --c-red:#ef4444;--c-red-bg:#450a0a;
+  --c-purple:#a78bfa;--c-purple-bg:#2e1065;--c-purple-bd:#5b21b6;
+  --c-teal:#2dd4bf;--c-teal-bg:#042f2e;
+  --hover-bg:rgba(255,255,255,.04);--shadow:0 4px 24px rgba(0,0,0,.45);--modal-bg:rgba(0,0,0,.75);
+  --sb-w:220px;--r-sm:6px;--r-md:10px;--r-lg:14px;--r-xl:18px;--t:.18s ease;
+}
+[data-theme="light"]{
+  --bg-page:#f0f4f8;--bg-card:#fff;--bg-border:#e2e8f0;--bg-el:#f8fafc;--bg-el2:#e2e8f0;
+  --text-1:#0f172a;--text-2:#1e293b;--text-muted:#475569;--text-faint:#94a3b8;
+  --c-blue:#2563eb;--c-blue-bg:#dbeafe;--c-blue-bd:#93c5fd;
+  --c-green:#16a34a;--c-green-bg:#dcfce7;--c-green-bd:#86efac;
+  --c-yellow:#d97706;--c-yellow-bg:#fef3c7;
+  --c-red:#dc2626;--c-red-bg:#fee2e2;
+  --c-purple:#7c3aed;--c-purple-bg:#f5f3ff;--c-purple-bd:#c4b5fd;
+  --c-teal:#0d9488;--c-teal-bg:#f0fdfa;
+  --hover-bg:rgba(0,0,0,.04);--shadow:0 4px 24px rgba(0,0,0,.1);--modal-bg:rgba(0,0,0,.5);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg-page);color:var(--text-1);font-size:14px;line-height:1.5;overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+a{color:var(--c-blue);text-decoration:none}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--bg-el2);border-radius:99px}
+.app{display:flex;height:100vh;width:100vw;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sb-w);flex-shrink:0;background:var(--bg-card);border-right:1px solid var(--bg-border);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.sb-logo{display:flex;align-items:center;gap:10px;padding:15px 14px;border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.sb-logo-icon{width:32px;height:32px;border-radius:var(--r-md);flex-shrink:0;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff}
+.sb-logo-name{font-size:13px;font-weight:700;color:var(--text-1)}
+.sb-logo-sub{font-size:10px;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase}
+.sb-nav{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:1px}
+.nav-sep{font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;padding:10px 8px 4px;margin-top:4px}
+.ni{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:var(--r-md);color:var(--text-muted);font-size:13px;font-weight:500;cursor:pointer;transition:all var(--t);border:1px solid transparent;position:relative}
+.ni:hover{background:var(--hover-bg);color:var(--text-1)}
+.ni.active{background:var(--c-blue-bg);border-color:var(--c-blue-bd);color:var(--c-blue)}
+.ni svg{flex-shrink:0;opacity:.75}
+.ni.active svg{opacity:1}
+.ni.locked{opacity:.45;cursor:default}
+.ni.locked:hover{background:transparent;color:var(--text-muted)}
+.lock-icon{margin-left:auto;flex-shrink:0;opacity:.5}
+.nav-count{margin-left:auto;font-size:11px;color:var(--text-faint);background:var(--bg-el);padding:1px 7px;border-radius:99px}
+.sb-foot{padding:8px;border-top:1px solid var(--bg-border);display:flex;flex-direction:column;gap:1px;flex-shrink:0}
+
+/* tooltip for locked items */
+.ni-tooltip{display:none;position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);background:var(--bg-el2);color:var(--text-2);font-size:11px;font-weight:500;padding:4px 9px;border-radius:var(--r-md);border:1px solid var(--bg-border);white-space:nowrap;z-index:200;box-shadow:var(--shadow);pointer-events:none}
+.ni.locked:hover .ni-tooltip{display:block}
+
+/* ── MAIN + TOPBAR ── */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:10px;padding:0 18px;height:54px;background:var(--bg-card);border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.tb-left{display:flex;flex-direction:column;gap:1px;min-width:0}
+.tb-title{font-size:15px;font-weight:700;color:var(--text-1);line-height:1}
+.tb-sub{font-size:11px;color:var(--text-muted)}
+.tb-sep{flex:1}
+.status-pill{display:flex;align-items:center;gap:6px;padding:4px 11px;border-radius:99px;font-size:11px;font-weight:600;border:1px solid;white-space:nowrap;flex-shrink:0}
+.status-pill.ok{background:var(--c-green-bg);border-color:var(--c-green-bd);color:var(--c-green)}
+.status-pill.warn{background:var(--c-yellow-bg);border-color:#78350f;color:var(--c-yellow)}
+.status-pill.crit{background:var(--c-red-bg);border-color:#7f1d1d;color:var(--c-red)}
+.status-pill.gray{background:var(--bg-el);border-color:var(--bg-border);color:var(--text-muted)}
+.status-pill.purple{background:var(--c-purple-bg);border-color:var(--c-purple-bd);color:var(--c-purple)}
+.s-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.icon-btn{width:34px;height:34px;border-radius:var(--r-md);background:var(--bg-el);border:1px solid var(--bg-border);color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--t);flex-shrink:0}
+.icon-btn:hover{color:var(--text-1);border-color:var(--bg-el2)}
+
+/* ── PROTOTYPE BAR ── */
+.proto-bar{display:flex;align-items:center;gap:12px;padding:7px 18px;background:var(--bg-card);border-bottom:2px dashed rgba(45,212,191,.3);flex-shrink:0}
+.proto-lbl{font-size:11px;font-weight:700;color:var(--c-teal);letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+.proto-btns{display:flex;gap:4px}
+.proto-btn{padding:4px 12px;border-radius:var(--r-md);font-size:12px;font-weight:600;color:var(--text-muted);background:var(--bg-el);border:1px solid var(--bg-border);cursor:pointer;transition:all var(--t)}
+.proto-btn:hover{color:var(--text-1);border-color:var(--bg-el2)}
+.proto-btn.active{background:var(--c-teal-bg);border-color:rgba(45,212,191,.4);color:var(--c-teal)}
+.proto-sep{flex:1}
+.proto-note{font-size:10px;color:var(--text-faint);font-style:italic}
+
+/* ── CONTENT ── */
+.content{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:16px}
+
+/* ── STATE PANELS ── */
+.state-panel{display:none;animation:fadeIn .25s ease}
+.state-panel.active{display:flex;flex-direction:column;gap:16px}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 15px;border-radius:var(--r-md);font-size:13px;font-weight:600;cursor:pointer;border:1px solid;transition:all var(--t);font-family:inherit}
+.btn-primary{background:var(--c-blue);border-color:var(--c-blue);color:#fff}
+.btn-primary:hover{opacity:.88}
+.btn-secondary{background:var(--bg-el);border-color:var(--bg-border);color:var(--text-1)}
+.btn-secondary:hover{border-color:var(--bg-el2)}
+.btn-ghost{background:transparent;border-color:var(--bg-border);color:var(--text-muted)}
+.btn-ghost:hover{background:var(--hover-bg);color:var(--text-1);border-color:var(--bg-el2)}
+.btn-purple{background:var(--c-purple-bg);border-color:var(--c-purple-bd);color:var(--c-purple)}
+.btn-purple:hover{opacity:.88}
+.btn-sm{padding:5px 11px;font-size:12px}
+
+/* ── EMPTY STATE ── */
+.empty-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:40px;min-height:400px}
+.empty-svg-area{width:220px;height:160px;position:relative;display:flex;align-items:center;justify-content:center}
+.empty-text{text-align:center;display:flex;flex-direction:column;gap:8px}
+.empty-title{font-size:20px;font-weight:800;color:var(--text-1)}
+.empty-sub{font-size:13px;color:var(--text-muted);line-height:1.6;max-width:340px;margin:0 auto}
+.empty-actions{display:flex;align-items:center;gap:10px}
+.empty-sn-section{width:100%;max-width:500px;margin:0 auto}
+.empty-sn-divider{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.empty-sn-divider::before,.empty-sn-divider::after{content:'';flex:1;height:1px;background:var(--bg-border)}
+.empty-sn-divider-text{font-size:11px;color:var(--text-faint);white-space:nowrap}
+.sn-hint-card{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-lg);padding:14px 18px;display:flex;align-items:center;gap:14px;transition:border-color var(--t)}
+.sn-hint-card:hover{border-color:var(--c-purple-bd)}
+.sn-hint-text{flex:1;min-width:0}
+.sn-hint-title{font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px}
+.sn-hint-sub{font-size:11px;color:var(--text-faint);line-height:1.5}
+
+/* ── SN ONLY STATE ── */
+.azure-banner{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--c-blue-bg);border:1px solid var(--c-blue-bd);border-radius:var(--r-lg);transition:all .3s}
+.azure-banner.dismissed{display:none}
+.banner-icon{width:30px;height:30px;border-radius:var(--r-md);background:rgba(96,165,250,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--c-blue)}
+.banner-text{flex:1;min-width:0}
+.banner-title{font-size:13px;font-weight:600;color:var(--text-1)}
+.banner-sub{font-size:11px;color:var(--text-muted)}
+.banner-dismiss{width:26px;height:26px;border-radius:var(--r-sm);color:var(--text-faint);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--t);flex-shrink:0}
+.banner-dismiss:hover{background:rgba(255,255,255,.08);color:var(--text-1)}
+
+/* ── KPI BAR ── */
+.sum-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.sum-stat{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-lg);padding:14px 16px;display:flex;flex-direction:column;gap:5px;transition:border-color var(--t)}
+.sum-stat:hover{border-color:var(--bg-el2)}
+.sum-lbl{font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;display:flex;align-items:center;gap:5px}
+.sum-val{font-size:26px;font-weight:800;color:var(--text-1);line-height:1}
+.sum-sub{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px}
+.t-up{color:var(--c-green)}.t-dn{color:var(--c-red)}.t-ok{color:var(--c-green)}
+
+/* ── SECTION HEADER ── */
+.section-head{display:flex;align-items:center;gap:10px}
+.section-title{font-size:14px;font-weight:700;color:var(--text-1);flex:1}
+.refresh-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:var(--r-md);font-size:12px;font-weight:600;color:var(--text-muted);background:var(--bg-el);border:1px solid var(--bg-border);cursor:pointer;transition:all var(--t)}
+.refresh-btn:hover{color:var(--text-1);border-color:var(--bg-el2)}
+
+/* ── INCIDENT GROUP CARDS ── */
+.inc-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.inc-card{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-xl);display:flex;flex-direction:column;overflow:hidden;transition:border-color var(--t),box-shadow var(--t)}
+.inc-card:hover{border-color:var(--bg-el2);box-shadow:var(--shadow)}
+.inc-hbar{height:3px;flex-shrink:0}
+.inc-head{padding:12px 14px 10px;display:flex;align-items:flex-start;gap:10px}
+.inc-head-text{flex:1;min-width:0}
+.inc-group-name{font-size:13px;font-weight:700;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px}
+.inc-open-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;background:var(--bg-el);border:1px solid var(--bg-border);color:var(--text-muted)}
+.inc-prio-row{display:flex;align-items:center;gap:6px;padding:0 14px 10px;border-bottom:1px solid var(--bg-border)}
+.prio-item{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600}
+.prio-badge{padding:1px 6px;border-radius:99px;font-size:10px;font-weight:800}
+.prio-badge.p1{background:var(--c-red-bg);color:var(--c-red);border:1px solid #7f1d1d}
+.prio-badge.p2{background:var(--c-yellow-bg);color:var(--c-yellow);border:1px solid #78350f}
+.prio-badge.p3{background:var(--bg-el);color:var(--text-faint);border:1px solid var(--bg-border)}
+.prio-sep{color:var(--bg-el2);font-size:10px}
+.inc-list{display:flex;flex-direction:column;gap:0;flex:1}
+.inc-row{padding:8px 14px;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid var(--bg-border);cursor:pointer;transition:background var(--t)}
+.inc-row:hover{background:var(--hover-bg)}
+.inc-row:last-child{border-bottom:none}
+.inc-number{font-size:11px;font-weight:700;color:var(--text-faint);white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums}
+.inc-row-text{flex:1;min-width:0}
+.inc-row-title{font-size:12px;font-weight:600;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inc-row-meta{font-size:10px;color:var(--text-faint);margin-top:1px}
+.inc-foot{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-top:1px solid var(--bg-border)}
+.inc-foot-link{font-size:12px;color:var(--c-blue);cursor:pointer;font-weight:600;transition:opacity var(--t)}
+.inc-foot-link:hover{opacity:.8}
+.inc-mttr{font-size:11px;color:var(--text-faint)}
+
+/* ── AZURE CTA ── */
+.azure-cta{background:var(--bg-card);border:2px dashed var(--bg-border);border-radius:var(--r-xl);padding:22px;transition:all var(--t)}
+.azure-cta:hover{border-color:var(--c-blue-bd);background:var(--c-blue-bg)}
+.azure-cta-inner{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.azure-cta-icon{width:44px;height:44px;border-radius:var(--r-lg);background:var(--c-blue-bg);border:1px solid var(--c-blue-bd);display:flex;align-items:center;justify-content:center;color:var(--c-blue)}
+.azure-cta:hover .azure-cta-icon{background:rgba(96,165,250,.2)}
+.azure-cta-title{font-size:16px;font-weight:800;color:var(--text-1)}
+.azure-cta-sub{font-size:13px;color:var(--text-muted);max-width:380px;line-height:1.6}
+.azure-cta-features{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.feat-chip{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:500;background:var(--bg-el);border:1px solid var(--bg-border);color:var(--text-muted)}
+.feat-chip svg{color:var(--c-green);flex-shrink:0}
+
+/* ── NORMAL STATE — CARDS ── */
+.normal-note{background:var(--c-blue-bg);border:1px solid var(--c-blue-bd);border-radius:var(--r-lg);padding:10px 15px;font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px}
+.normal-note strong{color:var(--text-1)}
+.cards-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.proj-card{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-xl);display:flex;flex-direction:column;overflow:hidden;transition:border-color var(--t),box-shadow var(--t)}
+.proj-card:hover{border-color:var(--bg-el2);box-shadow:var(--shadow)}
+.hbar{height:3px;width:100%;flex-shrink:0}
+.hbar.g{background:var(--c-green)}.hbar.y{background:var(--c-yellow)}.hbar.r{background:var(--c-red)}
+.card-head{display:flex;align-items:center;gap:11px;padding:13px 15px 10px}
+.card-av{width:36px;height:36px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;letter-spacing:-.5px}
+.card-meta{flex:1;min-width:0}
+.card-name{font-size:14px;font-weight:700;color:var(--text-1)}
+.card-sub{font-size:11px;color:var(--text-faint);margin-top:2px}
+.h-pill{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;flex-shrink:0;border:1px solid}
+.h-pill.g{background:var(--c-green-bg);border-color:var(--c-green-bd);color:var(--c-green)}
+.h-pill.y{background:var(--c-yellow-bg);border-color:#78350f;color:var(--c-yellow)}
+.h-pill.r{background:var(--c-red-bg);border-color:#7f1d1d;color:var(--c-red)}
+.h-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.card-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bg-border);border-top:1px solid var(--bg-border)}
+.cstat{background:var(--bg-card);padding:9px 11px;display:flex;flex-direction:column;gap:2px}
+.cstat-lbl{font-size:9px;font-weight:700;color:var(--text-faint);letter-spacing:.7px;text-transform:uppercase}
+.cstat-val{font-size:16px;font-weight:800;line-height:1;color:var(--text-1)}
+.cstat-val.w{color:var(--c-yellow)}.cstat-val.c{color:var(--c-red)}.cstat-val.g{color:var(--c-green)}
+.cstat-sub{font-size:10px;color:var(--text-faint)}
+.card-prog{padding:7px 15px 6px;border-top:1px solid var(--bg-border)}
+.prog-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.prog-lbl{font-size:10px;color:var(--text-faint)}
+.prog-pct{font-size:10px;font-weight:700;color:var(--text-muted)}
+.prog-track{height:4px;background:var(--bg-el2);border-radius:99px;overflow:hidden}
+.prog-fill{height:100%;border-radius:99px}
+.prog-fill.g{background:var(--c-green)}.prog-fill.y{background:var(--c-yellow)}.prog-fill.r{background:var(--c-red)}
+.card-foot{display:flex;align-items:center;gap:4px;padding:7px 11px;border-top:1px solid var(--bg-border)}
+.ca{display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:var(--r-sm);font-size:12px;font-weight:600;color:var(--text-muted);border:1px solid transparent;transition:all var(--t);white-space:nowrap;cursor:pointer}
+.ca:hover{background:var(--hover-bg);color:var(--text-1);border-color:var(--bg-border)}
+.ca.p{color:var(--c-blue)}.ca.p:hover{background:var(--c-blue-bg);border-color:var(--c-blue-bd)}
+.foot-sep{flex:1}
+
+/* ── MODALS ── */
+.modal-overlay{position:fixed;inset:0;background:var(--modal-bg);display:flex;align-items:center;justify-content:center;z-index:500;padding:24px;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal-box{background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-xl);width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column;box-shadow:var(--shadow);transform:translateY(8px) scale(.98);transition:transform .2s}
+.modal-overlay.open .modal-box{transform:none}
+.modal-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--bg-border);flex-shrink:0}
+.modal-icon{width:34px;height:34px;border-radius:var(--r-md);flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--c-blue-bg);color:var(--c-blue);border:1px solid var(--c-blue-bd)}
+.modal-tg{flex:1;min-width:0}
+.modal-title{font-size:15px;font-weight:700;color:var(--text-1)}
+.modal-sub{font-size:12px;color:var(--text-muted);margin-top:1px}
+.mbtn{width:30px;height:30px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:all var(--t);cursor:pointer}
+.mbtn:hover{background:var(--hover-bg);color:var(--text-1)}
+.mbtn.close:hover{background:var(--c-red-bg);color:var(--c-red)}
+.modal-body{flex:1;overflow-y:auto;padding:20px}
+.modal-foot{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--bg-border);flex-shrink:0;justify-content:flex-end}
+
+/* how-it-works modal */
+.feature-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--bg-border)}
+.feature-row:last-child{border-bottom:none}
+.feature-icon{width:36px;height:36px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--bg-el);border:1px solid var(--bg-border);color:var(--text-muted)}
+.feature-text{}
+.feature-title{font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:3px}
+.feature-sub{font-size:12px;color:var(--text-muted);line-height:1.55}
+
+/* ── TOASTS ── */
+.toast-stack{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:9000}
+.toast{display:flex;align-items:flex-start;gap:10px;padding:12px 15px;border-radius:var(--r-lg);border:1px solid;font-size:13px;box-shadow:var(--shadow);max-width:320px;transform:translateX(120%);transition:transform .3s ease;background:var(--bg-card)}
+.toast.show{transform:none}
+.toast.success{border-color:var(--c-green-bd)}.toast.error{border-color:#7f1d1d}.toast.info{border-color:var(--c-blue-bd)}
+.toast-ico{flex-shrink:0;margin-top:1px}
+.toast.success .toast-ico{color:var(--c-green)}.toast.error .toast-ico{color:var(--c-red)}.toast.info .toast-ico{color:var(--c-blue)}
+.toast-t{font-weight:700;color:var(--text-1);margin-bottom:1px;font-size:13px}
+.toast-m{color:var(--text-muted);font-size:12px}
+
+svg{display:inline-block;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-icon">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+      </svg>
+    </div>
+    <div><div class="sb-logo-name">Backlog Health</div><div class="sb-logo-sub" id="sb-logo-sub">Azure DevOps</div></div>
+  </div>
+
+  <nav class="sb-nav" id="sb-nav">
+    <!-- nav items are rendered by JS based on state -->
+  </nav>
+
+  <div class="sb-foot">
+    <div class="ni" onclick="showToast('info','Feedback','Obrigado pelo feedback!')">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      Feedback
+    </div>
+    <div class="ni" onclick="showToast('info','Configuracoes','Abrindo pagina de configuracao...')">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Configuracoes
+    </div>
+  </div>
+</aside>
+
+<!-- ═══════════════ MAIN ═══════════════ -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar" id="topbar">
+    <div class="tb-left">
+      <div class="tb-title">Backlog Health</div>
+      <div class="tb-sub" id="topbar-sub"></div>
+    </div>
+    <div id="topbar-pill"></div>
+    <div class="tb-sep"></div>
+    <div id="topbar-extra"></div>
+    <button class="icon-btn" onclick="toggleTheme()" title="Alternar tema" id="theme-btn">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="theme-icon">
+        <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- PROTOTYPE BAR -->
+  <div class="proto-bar">
+    <span class="proto-lbl">Estado do prototipo:</span>
+    <div class="proto-btns">
+      <button class="proto-btn active" id="btn-state-empty" onclick="switchState('empty')">Sem projetos</button>
+      <button class="proto-btn" id="btn-state-sn" onclick="switchState('sn')">Modo SN Only</button>
+      <button class="proto-btn" id="btn-state-normal" onclick="switchState('normal')">Dashboard normal</button>
+    </div>
+    <div class="proto-sep"></div>
+    <span class="proto-note">Controle de prototipo — nao aparece na versao final</span>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content" id="main-content">
+
+    <!-- ═══ STATE 1: SEM PROJETOS ═══ -->
+    <div class="state-panel active" id="state-empty">
+
+      <!-- Empty illustration + call to action -->
+      <div class="empty-wrap">
+        <!-- SVG illustration: ghost card grid + magnifying glass -->
+        <div class="empty-svg-area">
+          <svg width="220" height="155" viewBox="0 0 220 155" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- ghost card 1 (top-left) -->
+            <rect x="8" y="10" width="80" height="58" rx="8" stroke="var(--text-faint)" stroke-width="1.5" stroke-dasharray="5 4" fill="none" opacity=".5"/>
+            <rect x="18" y="22" width="42" height="5" rx="2.5" fill="var(--bg-el2)" opacity=".6"/>
+            <rect x="18" y="32" width="30" height="4" rx="2" fill="var(--bg-el2)" opacity=".4"/>
+            <rect x="18" y="46" width="50" height="3" rx="1.5" fill="var(--bg-el2)" opacity=".3"/>
+            <rect x="18" y="53" width="38" height="3" rx="1.5" fill="var(--bg-el2)" opacity=".25"/>
+
+            <!-- ghost card 2 (top-right) -->
+            <rect x="132" y="10" width="80" height="58" rx="8" stroke="var(--text-faint)" stroke-width="1.5" stroke-dasharray="5 4" fill="none" opacity=".4"/>
+            <rect x="142" y="22" width="48" height="5" rx="2.5" fill="var(--bg-el2)" opacity=".5"/>
+            <rect x="142" y="32" width="34" height="4" rx="2" fill="var(--bg-el2)" opacity=".35"/>
+            <rect x="142" y="46" width="52" height="3" rx="1.5" fill="var(--bg-el2)" opacity=".25"/>
+
+            <!-- ghost card 3 (bottom, centered, dimmer) -->
+            <rect x="70" y="82" width="80" height="58" rx="8" stroke="var(--text-faint)" stroke-width="1.5" stroke-dasharray="5 4" fill="none" opacity=".3"/>
+            <rect x="80" y="94" width="40" height="5" rx="2.5" fill="var(--bg-el2)" opacity=".4"/>
+            <rect x="80" y="104" width="28" height="4" rx="2" fill="var(--bg-el2)" opacity=".3"/>
+            <rect x="80" y="118" width="48" height="3" rx="1.5" fill="var(--bg-el2)" opacity=".2"/>
+
+            <!-- magnifying glass (center) -->
+            <g opacity=".7">
+              <circle cx="110" cy="56" r="20" stroke="var(--text-faint)" stroke-width="2" fill="var(--bg-card)"/>
+              <line x1="124" y1="70" x2="134" y2="80" stroke="var(--text-faint)" stroke-width="2.5" stroke-linecap="round"/>
+              <!-- subtle cross-hairs inside -->
+              <line x1="110" y1="44" x2="110" y2="68" stroke="var(--bg-el2)" stroke-width="1" stroke-dasharray="2 2" opacity=".6"/>
+              <line x1="98" y1="56" x2="122" y2="56" stroke="var(--bg-el2)" stroke-width="1" stroke-dasharray="2 2" opacity=".6"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="empty-text">
+          <div class="empty-title">Nenhum projeto ainda</div>
+          <div class="empty-sub">Adicione seus projetos Azure DevOps para comecar a monitorar a saude do backlog.</div>
+        </div>
+
+        <div class="empty-actions">
+          <button class="btn btn-primary" onclick="showToast('info','Configuracoes','Abre a tela de configuracoes do Azure DevOps')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+            Configurar Azure DevOps
+          </button>
+          <button class="btn btn-ghost" onclick="openHowModal()">
+            Saiba como funciona &rarr;
+          </button>
+        </div>
+
+        <!-- SN hint -->
+        <div class="empty-sn-section">
+          <div class="empty-sn-divider">
+            <span class="empty-sn-divider-text">Ou conecte apenas o ServiceNow</span>
+          </div>
+          <div class="sn-hint-card">
+            <div style="width:36px;height:36px;border-radius:var(--r-md);background:var(--c-purple-bg);border:1px solid var(--c-purple-bd);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--c-purple)">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div class="sn-hint-text">
+              <div class="sn-hint-title">Prefere comecar pelos incidentes?</div>
+              <div class="sn-hint-sub">Funciona sem o Azure DevOps para monitoramento de incidentes.</div>
+            </div>
+            <button class="btn btn-purple btn-sm" onclick="showToast('info','ServiceNow','Abre configuracao do ServiceNow')">
+              Configurar ServiceNow &rarr;
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /state-empty -->
+
+    <!-- ═══ STATE 2: SN ONLY ═══ -->
+    <div class="state-panel" id="state-sn">
+
+      <!-- Azure banner (dismissable) -->
+      <div class="azure-banner" id="azure-banner">
+        <div class="banner-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div class="banner-text">
+          <div class="banner-title">Habilite o Azure DevOps para monitorar backlog, sprints e capacidade do time.</div>
+          <div class="banner-sub">Voce pode manter o ServiceNow ativo e usar os dois juntos.</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="showToast('info','Azure DevOps','Abrindo configuracao do Azure DevOps...')">Conectar Azure DevOps</button>
+        <button class="banner-dismiss" onclick="dismissBanner()" title="Dispensar">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- KPI bar -->
+      <div class="sum-bar">
+        <div class="sum-stat">
+          <div class="sum-lbl">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Incidentes Abertos
+          </div>
+          <div class="sum-val" style="color:var(--c-red)">7</div>
+          <div class="sum-sub">3 P1 &middot; 2 P2 &middot; 2 P3</div>
+          <div class="sum-sub" style="margin-top:2px"><span class="t-dn">&#8593;</span>&nbsp;+2 vs ontem</div>
+        </div>
+        <div class="sum-stat">
+          <div class="sum-lbl">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Resolvidos este mes
+          </div>
+          <div class="sum-val">41</div>
+          <div class="sum-sub">taxa: 85% no prazo</div>
+          <div class="sum-sub" style="margin-top:2px"><span class="t-ok">&#8595;</span>&nbsp;&#8209;18% vs mes passado</div>
+        </div>
+        <div class="sum-stat">
+          <div class="sum-lbl">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            MTTR Medio
+          </div>
+          <div class="sum-val">4.2<span style="font-size:14px;font-weight:500;color:var(--text-faint)">h</span></div>
+          <div class="sum-sub">Mean Time to Resolve</div>
+          <div class="sum-sub" style="margin-top:2px"><span class="t-ok">&#8595;</span>&nbsp;&#8209;0.8h vs mes passado</div>
+        </div>
+        <div class="sum-stat">
+          <div class="sum-lbl">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+            Grupos Ativos
+          </div>
+          <div class="sum-val">3</div>
+          <div class="sum-sub">com incidentes abertos</div>
+        </div>
+      </div>
+
+      <!-- Section header -->
+      <div class="section-head">
+        <div class="section-title">Incidentes por Grupo &mdash; Junho 2026</div>
+        <button class="refresh-btn" onclick="showToast('info','Atualizado','Dados atualizados com sucesso')">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+          Atualizar
+        </button>
+      </div>
+
+      <!-- Incident group cards -->
+      <div class="inc-cards">
+
+        <!-- Card: Squad Alpha — AMS -->
+        <div class="inc-card">
+          <div class="inc-hbar" style="background:var(--c-red)"></div>
+          <div class="inc-head">
+            <div style="width:34px;height:34px;border-radius:var(--r-md);background:var(--c-blue-bg);border:1px solid var(--c-blue-bd);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:var(--c-blue)">SA</div>
+            <div class="inc-head-text">
+              <div class="inc-group-name">Squad Alpha &mdash; AMS</div>
+              <div class="inc-open-badge">3 abertos</div>
+            </div>
+          </div>
+          <div class="inc-prio-row">
+            <div class="prio-item"><span class="prio-badge p1">P1</span> <span style="font-size:13px;font-weight:700;color:var(--c-red)">2</span></div>
+            <span class="prio-sep">&middot;</span>
+            <div class="prio-item"><span class="prio-badge p2">P2</span> <span style="font-size:13px;font-weight:700;color:var(--c-yellow)">1</span></div>
+            <span class="prio-sep">&middot;</span>
+            <div class="prio-item"><span class="prio-badge p3">P3</span> <span style="font-size:13px;font-weight:700;color:var(--text-faint)">0</span></div>
+          </div>
+          <div class="inc-list">
+            <div class="inc-row" onclick="showToast('info','INC0013487','Abrindo incidente no ServiceNow...')">
+              <div>
+                <span class="prio-badge p2" style="display:inline-block;margin-bottom:2px">P2</span>
+              </div>
+              <div class="inc-row-text">
+                <div class="inc-row-title">Sincronizacao com Azure falhou</div>
+                <div class="inc-row-meta">INC0013487 &middot; ha 2 dias</div>
+              </div>
+            </div>
+            <div class="inc-row" onclick="showToast('info','INC0013198','Abrindo incidente no ServiceNow...')">
+              <div>
+                <span class="prio-badge p1" style="display:inline-block;margin-bottom:2px">P1</span>
+              </div>
+              <div class="inc-row-text">
+                <div class="inc-row-title">Erro 500 no relatorio mensal</div>
+                <div class="inc-row-meta">INC0013198 &middot; ha 5 dias</div>
+              </div>
+            </div>
+          </div>
+          <div class="inc-foot">
+            <span class="inc-foot-link" onclick="showToast('info','Squad Alpha','Exibindo 3 incidentes abertos')">Ver todos os 3 incidentes &rarr;</span>
+            <span class="inc-mttr">MTTR: 3.1h</span>
+          </div>
+        </div>
+
+        <!-- Card: Plataforma Beta -->
+        <div class="inc-card">
+          <div class="inc-hbar" style="background:var(--c-yellow)"></div>
+          <div class="inc-head">
+            <div style="width:34px;height:34px;border-radius:var(--r-md);background:var(--c-yellow-bg);border:1px solid #78350f;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:var(--c-yellow)">PB</div>
+            <div class="inc-head-text">
+              <div class="inc-group-name">Plataforma Beta</div>
+              <div class="inc-open-badge">2 abertos</div>
+            </div>
+          </div>
+          <div class="inc-prio-row">
+            <div class="prio-item"><span class="prio-badge p1">P1</span> <span style="font-size:13px;font-weight:700;color:var(--text-faint)">0</span></div>
+            <span class="prio-sep">&middot;</span>
+            <div class="prio-item"><span class="prio-badge p2">P2</span> <span style="font-size:13px;font-weight:700;color:var(--c-yellow)">1</span></div>
+            <span class="prio-sep">&middot;</span>
+            <div class="prio-item"><span class="prio-badge p3">P3</span> <span style="font-size:13px;font-weight:700;color:var(--text-faint)">1</span></div>
+          </div>
+          <div class="inc-list">
+            <div class="inc-row" onclick="showToast('info','INC0013512','Abrindo incidente no ServiceNow...')">
+              <div>
+                <span class="prio-badge p2" style="display:inline-block;margin-bottom:2px">P2</span>
+              </div>
+              <div class="inc-row-text">
+                <div class="inc-row-title">Timeout na integracao de pagamentos</div>
+                <div class="inc-row-meta">INC0013512 &middot; ha 1 dia</div>
+              </div>
+            </div>
+            <div class="inc-row" onclick="showToast('info','INC0013401','Abrindo incidente no ServiceNow...')">
+              <div>
+                <span class="prio-badge p3" style="display:inline-block;margin-bottom:2px">P3</span>
+              </div>
+              <div class="inc-row-text">
+                <div class="inc-row-title">Lentidao no painel de metricas</div>
+                <div class="inc-row-meta">INC0013401 &middot; ha 3 dias</div>
+              </div>
+            </div>
+          </div>
+          <div class="inc-foot">
+            <span class="inc-foot-link" onclick="showToast('info','Plataforma Beta','Exibindo 2 incidentes abertos')">Ver todos os 2 incidentes &rarr;</span>
+            <span class="inc-mttr">MTTR: 5.4h</span>
+          </div>
+        </div>
+
+        <!-- Card: Gamma Support -->
+        <div class="inc-card">
+          <div class="inc-hbar" style="background:var(--c-red)"></div>
+          <div class="inc-head">
+            <div style="width:34px;height:34px;border-radius:var(--r-md);background:var(--c-purple-bg);border:1px solid var(--c-purple-bd);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:var(--c-purple)">GS</div>
+            <div class="inc-head-text">
+              <div class="inc-group-name">Gamma Support</div>
+              <div class="inc-open-badge">2 abertos</div>
+            </div>
+          </div>
+          <div class="inc-prio-row">
+            <div class="prio-item"><span class="prio-badge p1">P1</span> <span style="font-size:13px;font-weight:700;color:var(--c-red)">1</span></div>
+            <span class="prio-sep">&middot;</span>
+            <div class="prio-item"><span class="prio-badge p2">P2</span> <span style="font-size:13px;font-weight:700;color:var(--text-faint)">0</span></div>
+            <span class="prio-sep">&middot;</span>
+            <div class="prio-item"><span class="prio-badge p3">P3</span> <span style="font-size:13px;font-weight:700;color:var(--text-faint)">1</span></div>
+          </div>
+          <div class="inc-list">
+            <div class="inc-row" onclick="showToast('info','INC0013555','Abrindo incidente no ServiceNow...')">
+              <div>
+                <span class="prio-badge p1" style="display:inline-block;margin-bottom:2px">P1</span>
+              </div>
+              <div class="inc-row-text">
+                <div class="inc-row-title">Falha critica no modulo de autenticacao</div>
+                <div class="inc-row-meta">INC0013555 &middot; ha 6 horas</div>
+              </div>
+            </div>
+            <div class="inc-row" onclick="showToast('info','INC0013488','Abrindo incidente no ServiceNow...')">
+              <div>
+                <span class="prio-badge p3" style="display:inline-block;margin-bottom:2px">P3</span>
+              </div>
+              <div class="inc-row-text">
+                <div class="inc-row-title">Notificacoes de email atrasadas</div>
+                <div class="inc-row-meta">INC0013488 &middot; ha 4 dias</div>
+              </div>
+            </div>
+          </div>
+          <div class="inc-foot">
+            <span class="inc-foot-link" onclick="showToast('info','Gamma Support','Exibindo 2 incidentes abertos')">Ver todos os 2 incidentes &rarr;</span>
+            <span class="inc-mttr">MTTR: 6.2h</span>
+          </div>
+        </div>
+
+      </div><!-- /inc-cards -->
+
+      <!-- Ativar Azure CTA -->
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">Ativar monitoramento de backlog</div>
+        <div class="azure-cta">
+          <div class="azure-cta-inner">
+            <div class="azure-cta-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </div>
+            <div class="azure-cta-title">Conecte o Azure DevOps</div>
+            <div class="azure-cta-sub">Habilite o monitoramento de backlog, sprints e capacidade do time. Voce pode manter o ServiceNow ativo e usar os dois juntos.</div>
+            <div class="azure-cta-features">
+              <div class="feat-chip">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                Cards de saude do backlog por projeto
+              </div>
+              <div class="feat-chip">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                Burndown e plano de entrega
+              </div>
+              <div class="feat-chip">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                Capacidade do time por sprint
+              </div>
+              <div class="feat-chip">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                Correlacao incidente x projeto
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="showToast('info','Azure DevOps','Abrindo configuracao do Azure DevOps...')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Configurar Azure DevOps
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /state-sn -->
+
+    <!-- ═══ STATE 3: NORMAL ═══ -->
+    <div class="state-panel" id="state-normal">
+
+      <div class="normal-note">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+        <span><strong>Dashboard normal</strong> &mdash; 3 projetos Azure DevOps configurados. Esta e a visao de referencia.</span>
+      </div>
+
+      <div class="cards-grid">
+
+        <!-- Card Alpha Squad — Critico -->
+        <div class="proj-card">
+          <div class="hbar r"></div>
+          <div class="card-head">
+            <div class="card-av" style="background:#450a0a;color:#ef4444">AL</div>
+            <div class="card-meta">
+              <div class="card-name">Alpha Squad</div>
+              <div class="card-sub">Sprint 47 &middot; User Story</div>
+            </div>
+            <div class="h-pill r"><div class="h-dot"></div>62%</div>
+          </div>
+          <div class="card-stats">
+            <div class="cstat">
+              <div class="cstat-lbl">Total</div>
+              <div class="cstat-val">24</div>
+              <div class="cstat-sub">US</div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-lbl">Sem Estim.</div>
+              <div class="cstat-val c">9</div>
+              <div class="cstat-sub">acima do limite</div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-lbl">Sem Resp.</div>
+              <div class="cstat-val w">4</div>
+              <div class="cstat-sub">sem atribuicao</div>
+            </div>
+          </div>
+          <div class="card-prog">
+            <div class="prog-row">
+              <span class="prog-lbl">Progresso do sprint</span>
+              <span class="prog-pct">33%</span>
+            </div>
+            <div class="prog-track"><div class="prog-fill r" style="width:33%"></div></div>
+          </div>
+          <div class="card-foot">
+            <button class="ca p" onclick="showToast('info','Detalhes','Abrindo detalhes do Alpha Squad...')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              Detalhes
+            </button>
+            <button class="ca" onclick="showToast('info','Daily','Abrindo daily do Alpha Squad...')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Daily
+            </button>
+            <button class="ca" onclick="showToast('info','Burndown','Abrindo burndown...')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              Burndown
+            </button>
+          </div>
+        </div>
+
+        <!-- Card Beta Platform — Atencao -->
+        <div class="proj-card">
+          <div class="hbar y"></div>
+          <div class="card-head">
+            <div class="card-av" style="background:#422006;color:#f59e0b">BP</div>
+            <div class="card-meta">
+              <div class="card-name">Beta Platform</div>
+              <div class="card-sub">Sprint 47 &middot; User Story</div>
+            </div>
+            <div class="h-pill y"><div class="h-dot"></div>78%</div>
+          </div>
+          <div class="card-stats">
+            <div class="cstat">
+              <div class="cstat-lbl">Total</div>
+              <div class="cstat-val">31</div>
+              <div class="cstat-sub">US</div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-lbl">Sem Estim.</div>
+              <div class="cstat-val w">3</div>
+              <div class="cstat-sub">dentro do limite</div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-lbl">Sem Resp.</div>
+              <div class="cstat-val g">0</div>
+              <div class="cstat-sub">todos atribuidos</div>
+            </div>
+          </div>
+          <div class="card-prog">
+            <div class="prog-row">
+              <span class="prog-lbl">Progresso do sprint</span>
+              <span class="prog-pct">58%</span>
+            </div>
+            <div class="prog-track"><div class="prog-fill y" style="width:58%"></div></div>
+          </div>
+          <div class="card-foot">
+            <button class="ca p" onclick="showToast('info','Detalhes','Abrindo detalhes do Beta Platform...')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              Detalhes
+            </button>
+            <button class="ca" onclick="showToast('info','Daily','Abrindo daily do Beta Platform...')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Daily
+            </button>
+            <button class="ca" onclick="showToast('info','Burndown','Abrindo burndown...')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              Burndown
+            </button>
+          </div>
+        </div>
+
+        <!-- Card Gamma Experience — Saudavel -->
+        <div class="proj-card">
+          <div class="hbar g"></div>
+          <div class="card-head">
+            <div class="card-av" style="background:#14532d;color:#22c55e">GX</div>
+            <div class="card-meta">
+              <div class="card-name">Gamma Experience</div>
+              <div class="card-sub">Sprint 47 &middot; Task</div>
+            </div>
+            <div class="h-pill g"><div class="h-dot"></div>91%</div>
+          </div>
+          <div class="card-stats">
+            <div class="cstat">
+              <div class="cstat-lbl">Total</div>
+              <div class="cstat-val">18</div>
+              <div class="cstat-sub">Tasks</div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-lbl">Sem Estim.</div>
+              <div class="cstat-val g">0</div>
+              <div class="cstat-sub">excelente</div>
+            </div>
+            <div class="cstat">
+              <div class="cstat-lbl">Sem Resp.</div>
+              <div class="cstat-val g">0</div>
+              <div class="cstat-sub">todos atribuidos</div>
+            </div>
+          </div>
+          <div class="card-prog">
+            <div class="prog-row">
+              <span class="prog-lbl">Progresso do sprint</span>
+              <span class="prog-pct">72%</span>
+            </div>
+            <div class="prog-track"><div class="prog-fill g" style="width:72%"></div></div>
+          </div>
+          <div class="card-foot">
+            <button class="ca p" onclick="showToast('info','Detalhes','Abrindo detalhes do Gamma Experience...')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              Detalhes
+            </button>
+            <button class="ca" onclick="showToast('info','Daily','Abrindo daily do Gamma Experience...')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Daily
+            </button>
+            <button class="ca" onclick="showToast('info','Burndown','Abrindo burndown...')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              Burndown
+            </button>
+          </div>
+        </div>
+
+      </div><!-- /cards-grid -->
+    </div><!-- /state-normal -->
+
+  </div><!-- /content -->
+</main>
+</div><!-- /app -->
+
+<!-- ═══════════════ MODAL: COMO FUNCIONA ═══════════════ -->
+<div class="modal-overlay" id="modal-how" onclick="handleOverlayClick(event,'modal-how')">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-head">
+      <div class="modal-icon">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+      </div>
+      <div class="modal-tg">
+        <div class="modal-title">Como funciona o Backlog Health</div>
+        <div class="modal-sub">Visao geral das funcionalidades principais</div>
+      </div>
+      <button class="mbtn close" onclick="closeModal('modal-how')">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="feature-row">
+        <div class="feature-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </div>
+        <div class="feature-text">
+          <div class="feature-title">Saude do backlog em tempo real</div>
+          <div class="feature-sub">Veja quantas stories estao sem estimativa, sem responsavel e sem criterio de aceite.</div>
+        </div>
+      </div>
+      <div class="feature-row">
+        <div class="feature-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </div>
+        <div class="feature-text">
+          <div class="feature-title">Burndown e plano de sprint</div>
+          <div class="feature-sub">Acompanhe a entrega do sprint com graficos de burndown e plano de entrega.</div>
+        </div>
+      </div>
+      <div class="feature-row">
+        <div class="feature-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        </div>
+        <div class="feature-text">
+          <div class="feature-title">Capacidade do time</div>
+          <div class="feature-sub">Visualize a alocacao e disponibilidade de cada membro por sprint.</div>
+        </div>
+      </div>
+      <div class="feature-row">
+        <div class="feature-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="feature-text">
+          <div class="feature-title">Incidentes correlacionados</div>
+          <div class="feature-sub">Vincule incidentes do ServiceNow ao projeto para analise no Review Mensal.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-how')">Fechar</button>
+      <button class="btn btn-primary btn-sm" onclick="closeModal('modal-how');showToast('info','Configuracoes','Abrindo configuracoes...')">Comecar configuracao</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TOAST STACK ═══════════════ -->
+<div class="toast-stack" id="toast-stack"></div>
+
+<script>
+// ── STATE MANAGEMENT ────────────────────────────────────────────────────────
+let currentState = 'empty';
+let bannerDismissed = false;
+
+const STATE_CONFIG = {
+  empty: {
+    sub: '',
+    pillHtml: '<div class="status-pill gray"><div class="s-dot"></div>Nenhum projeto configurado</div>',
+    extraHtml: '',
+    sbLogoSub: 'Azure DevOps',
+    navItems: [
+      { icon: iconGrid, label: 'Dashboard', active: true },
+      { icon: iconCalendar, label: 'Daily Standup', locked: false, toastMsg: ['info','Daily','Configure um projeto para acessar o Daily'] },
+      { icon: iconList, label: 'Plano de Entrega', locked: false, toastMsg: ['info','Plano','Configure um projeto para acessar o Plano'] },
+      { icon: iconUsers, label: 'Capacidade do Time', locked: false, toastMsg: ['info','Capacidade','Configure um projeto para acessar Capacidade'] },
+      { sep: 'Ferramentas' },
+      { icon: iconReport, label: 'Review Mensal', toastMsg: ['info','Review','Configure um projeto para acessar o Review'] },
+      { icon: iconAI, label: 'Copilot IA', toastMsg: ['info','Copilot','Abrindo assistente de IA...'] },
+    ]
+  },
+  sn: {
+    sub: 'Conectado · empresa.service-now.com',
+    pillHtml: '<div class="status-pill purple"><div class="s-dot"></div>Modo ServiceNow</div>',
+    extraHtml: '<button class="icon-btn" onclick="showToast(\'info\',\'Configuracoes\',\'Abrindo configuracoes...\')" title="Configuracoes"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>',
+    sbLogoSub: 'ServiceNow',
+    navItems: [
+      { icon: iconGrid, label: 'Dashboard', active: true },
+      { icon: iconCalendar, label: 'Daily Standup', locked: true },
+      { icon: iconList, label: 'Plano de Entrega', locked: true },
+      { icon: iconUsers, label: 'Capacidade do Time', locked: true },
+      { sep: 'Ferramentas' },
+      { icon: iconReport, label: 'Review Mensal', toastMsg: ['info','Review','Abrindo review mensal...'] },
+      { icon: iconAI, label: 'Copilot IA', toastMsg: ['info','Copilot','Abrindo assistente de IA...'] },
+    ]
+  },
+  normal: {
+    sub: 'Sprint 47 · 3 projetos monitorados',
+    pillHtml: '<div class="status-pill warn"><div class="s-dot"></div>1 projeto com atencao</div>',
+    extraHtml: '',
+    sbLogoSub: 'Azure DevOps',
+    navItems: [
+      { icon: iconGrid, label: 'Dashboard', active: true, count: '3' },
+      { icon: iconCalendar, label: 'Daily Standup', toastMsg: ['info','Daily','Abrindo daily standup...'] },
+      { icon: iconList, label: 'Plano de Entrega', toastMsg: ['info','Plano','Abrindo timeline de sprints...'] },
+      { icon: iconUsers, label: 'Capacidade do Time', toastMsg: ['info','Capacidade','Abrindo capacidade do time...'] },
+      { sep: 'Projetos' },
+      { avatar: { initials:'AL', bg:'#450a0a', color:'#ef4444' }, label: 'Alpha Squad', badge: '2' },
+      { avatar: { initials:'BP', bg:'#422006', color:'#f59e0b' }, label: 'Beta Platform' },
+      { avatar: { initials:'GX', bg:'#14532d', color:'#22c55e' }, label: 'Gamma Experience' },
+      { sep: 'Ferramentas' },
+      { icon: iconReport, label: 'Review Mensal', toastMsg: ['info','Review','Abrindo review mensal...'] },
+      { icon: iconAI, label: 'Copilot IA', toastMsg: ['info','Copilot','Abrindo assistente de IA...'] },
+    ]
+  }
+};
+
+// ── SVG ICONS ────────────────────────────────────────────────────────────────
+function iconGrid() {
+  return `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`;
+}
+function iconCalendar() {
+  return `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`;
+}
+function iconList() {
+  return `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>`;
+}
+function iconUsers() {
+  return `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>`;
+}
+function iconReport() {
+  return `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>`;
+}
+function iconAI() {
+  return `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>`;
+}
+function iconLock() {
+  return `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`;
+}
+
+// ── RENDER NAV ───────────────────────────────────────────────────────────────
+function renderNav(state) {
+  const cfg = STATE_CONFIG[state];
+  const nav = document.getElementById('sb-nav');
+  document.getElementById('sb-logo-sub').textContent = cfg.sbLogoSub;
+
+  let html = '';
+  for (const item of cfg.navItems) {
+    if (item.sep) {
+      html += `<div class="nav-sep">${item.sep}</div>`;
+      continue;
+    }
+    const isLocked = !!item.locked;
+    const cls = ['ni', item.active ? 'active' : '', isLocked ? 'locked' : ''].filter(Boolean).join(' ');
+
+    let iconHtml = '';
+    if (item.icon) {
+      iconHtml = item.icon();
+    } else if (item.avatar) {
+      iconHtml = `<div style="width:15px;height:15px;border-radius:4px;background:${item.avatar.bg};border:1px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:${item.avatar.color};line-height:1">${item.avatar.initials}</div>`;
+    }
+
+    let rightHtml = '';
+    if (isLocked) {
+      rightHtml = `<span class="lock-icon">${iconLock()}</span><div class="ni-tooltip">Requer Azure DevOps</div>`;
+    } else if (item.badge) {
+      rightHtml = `<span style="margin-left:auto;background:var(--c-red);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;line-height:1.6">${item.badge}</span>`;
+    } else if (item.count) {
+      rightHtml = `<span class="nav-count">${item.count}</span>`;
+    }
+
+    let onclick = '';
+    if (!isLocked && item.toastMsg) {
+      const args = item.toastMsg.map(v => `'${v}'`).join(',');
+      onclick = `onclick="showToast(${args})"`;
+    }
+
+    html += `<div class="${cls}" ${onclick}>${iconHtml}${item.label}${rightHtml}</div>`;
+  }
+  nav.innerHTML = html;
+}
+
+// ── RENDER TOPBAR ────────────────────────────────────────────────────────────
+function renderTopbar(state) {
+  const cfg = STATE_CONFIG[state];
+  document.getElementById('topbar-sub').textContent = cfg.sub;
+  document.getElementById('topbar-pill').innerHTML = cfg.pillHtml;
+  document.getElementById('topbar-extra').innerHTML = cfg.extraHtml;
+}
+
+// ── SWITCH STATE ─────────────────────────────────────────────────────────────
+function switchState(state) {
+  // update buttons
+  ['empty','sn','normal'].forEach(s => {
+    document.getElementById('btn-state-' + s).classList.toggle('active', s === state);
+  });
+  // hide all panels
+  document.querySelectorAll('.state-panel').forEach(p => p.classList.remove('active'));
+  // show target
+  const panel = document.getElementById('state-' + state);
+  if (panel) {
+    // force reflow to trigger animation
+    panel.classList.remove('active');
+    void panel.offsetWidth;
+    panel.classList.add('active');
+  }
+  currentState = state;
+  renderNav(state);
+  renderTopbar(state);
+  // restore banner if switching back to sn
+  if (state === 'sn' && !bannerDismissed) {
+    const banner = document.getElementById('azure-banner');
+    if (banner) banner.classList.remove('dismissed');
+  }
+}
+
+// ── BANNER DISMISS ──────────────────────────────────────────────────────────
+function dismissBanner() {
+  const banner = document.getElementById('azure-banner');
+  if (banner) {
+    banner.style.transition = 'opacity .3s, transform .3s, max-height .3s, margin .3s, padding .3s';
+    banner.style.opacity = '0';
+    banner.style.transform = 'translateY(-6px)';
+    banner.style.maxHeight = banner.offsetHeight + 'px';
+    setTimeout(() => {
+      banner.style.maxHeight = '0';
+      banner.style.padding = '0';
+      banner.style.marginBottom = '0';
+      banner.style.border = 'none';
+      setTimeout(() => banner.classList.add('dismissed'), 300);
+    }, 200);
+    bannerDismissed = true;
+  }
+}
+
+// ── THEME ────────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  const icon = document.getElementById('theme-icon');
+  if (isDark) {
+    icon.innerHTML = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+  } else {
+    icon.innerHTML = '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>';
+  }
+}
+
+// ── MODALS ────────────────────────────────────────────────────────────────────
+function openHowModal() {
+  document.getElementById('modal-how').classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+function handleOverlayClick(e, id) {
+  if (e.target === e.currentTarget) closeModal(id);
+}
+
+// ── TOASTS ───────────────────────────────────────────────────────────────────
+let toastCounter = 0;
+function showToast(type, title, msg) {
+  const stack = document.getElementById('toast-stack');
+  const id = 'toast-' + (++toastCounter);
+  const icons = {
+    success: '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    error: '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    info: '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>'
+  };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.id = id;
+  el.innerHTML = `<div class="toast-ico">${icons[type]||icons.info}</div><div><div class="toast-t">${title}</div><div class="toast-m">${msg}</div></div>`;
+  stack.appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 350);
+  }, 3200);
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+renderNav('empty');
+renderTopbar('empty');
+</script>
+</body>
+</html>
