@@ -48,8 +48,7 @@ function buildSummaryBar(results) {
   if (!ok.length) return '';
   const CLOSED = ['Closed', 'Done', 'Resolved', 'Removed'];
   const ACTIVE  = ['Active', 'In Progress', 'New'];
-  let totalItems = 0, totalIssues = 0;
-  const sprintNames = [];
+  let totalItems = 0, totalOpen = 0, totalIssues = 0;
   for (const r of ok) {
     const isTask = r.workItemType === 'Task';
     const TYPES  = isTask ? ['Task'] : ['User Story', 'Product Backlog Item', 'Requirement'];
@@ -65,12 +64,9 @@ function buildSummaryBar(results) {
       i.fields?.['System.WorkItemType'] === 'Bug' && ACTIVE.includes(i.fields?.['System.State'])
     ).length;
     totalItems  += mains.length;
+    totalOpen   += opens.length;
     totalIssues += semEst + semResp + bugs;
-    if (r.sprint) sprintNames.push(r.sprint);
   }
-  const sprintLabel = sprintNames.length === 0 ? '—'
-    : sprintNames.every(s => s === sprintNames[0]) ? sprintNames[0]
-    : 'Multiple';
   const issueClass = totalIssues > 0 ? ' sum-val--warn' : '';
   return `<div class="sum-bar" id="sum-bar">
     <div class="sum-stat">
@@ -79,18 +75,18 @@ function buildSummaryBar(results) {
       <div class="sum-sub" data-i18n="sum_monitored">monitored</div>
     </div>
     <div class="sum-stat">
-      <div class="sum-lbl">Sprint</div>
-      <div class="sum-val sum-val--md">${sprintLabel}</div>
-      <div class="sum-sub" data-i18n="sum_current_sprint">current sprint</div>
+      <div class="sum-lbl" data-i18n="sum_items">Total Itens</div>
+      <div class="sum-val" id="sum-workitems">${totalItems}</div>
+      <div class="sum-sub" data-i18n="sum_in_backlog">no backlog</div>
     </div>
     <div class="sum-stat">
-      <div class="sum-lbl" data-i18n="sum_items">Work Items</div>
-      <div class="sum-val">${totalItems}</div>
-      <div class="sum-sub" data-i18n="sum_in_backlog">in backlog</div>
+      <div class="sum-lbl" data-i18n="sum_open">Itens Abertos</div>
+      <div class="sum-val" id="sum-open">${totalOpen}</div>
+      <div class="sum-sub" data-i18n="sum_open_sub">em aberto</div>
     </div>
     <div class="sum-stat">
       <div class="sum-lbl" data-i18n="sum_issues">Issues</div>
-      <div class="sum-val${issueClass}">${totalIssues || '—'}</div>
+      <div class="sum-val${issueClass}" id="sum-issues">${totalIssues || '—'}</div>
       <div class="sum-sub" data-i18n="sum_need_attention">need attention</div>
     </div>
   </div>`;
@@ -163,6 +159,8 @@ async function buildSNCache() {
     KPI_P2:        kpi.totalP2,
     KPI_P3:        kpi.totalP3,
     KPI_GROUPS:    kpi.activeGroups,
+    KPI_RESOLVED:  kpi.resolvedThisMonth,
+    KPI_MTTR:      kpi.mttr,
     SECTION_MONTH: `Incidents by Group — ${month}`,
     CARDS:         cardsHtml,
   });

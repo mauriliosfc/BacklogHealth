@@ -59,25 +59,24 @@ describe('buildSummaryBar', () => {
     expect(html).toContain('>3<'); // 1 + 2 = 3 US
   });
 
-  test('exibe nome do sprint quando todos os projetos têm o mesmo sprint', () => {
-    const results = [
-      { items: [], sprint: 'Sprint 42', workItemType: 'User Story' },
-      { items: [], sprint: 'Sprint 42', workItemType: 'User Story' },
-    ];
-    expect(buildSummaryBar(results)).toContain('Sprint 42');
-  });
-
-  test('exibe Multiple quando sprints diferem entre projetos', () => {
-    const results = [
-      { items: [], sprint: 'Sprint 1', workItemType: 'User Story' },
-      { items: [], sprint: 'Sprint 2', workItemType: 'User Story' },
-    ];
-    expect(buildSummaryBar(results)).toContain('Multiple');
-  });
-
-  test('exibe — quando nenhum projeto tem sprint', () => {
+  test('exibe indicador de Itens Abertos no sum-bar', () => {
     const results = [{ items: [], workItemType: 'User Story' }];
-    expect(buildSummaryBar(results)).toContain('>—<');
+    expect(buildSummaryBar(results)).toContain('sum_open');
+    expect(buildSummaryBar(results)).toContain('id="sum-open"');
+  });
+
+  test('conta itens abertos corretamente (exclui Closed/Done/Resolved/Removed)', () => {
+    const results = [{
+      workItemType: 'User Story',
+      items: [
+        { fields: { 'System.WorkItemType': 'User Story', 'System.State': 'Active' } },
+        { fields: { 'System.WorkItemType': 'User Story', 'System.State': 'New' } },
+        { fields: { 'System.WorkItemType': 'User Story', 'System.State': 'Closed' } },
+        { fields: { 'System.WorkItemType': 'User Story', 'System.State': 'Done' } },
+      ],
+    }];
+    const html = buildSummaryBar(results);
+    expect(html).toContain('id="sum-open">2<');
   });
 
   test('aplica sum-val--warn quando há issues', () => {

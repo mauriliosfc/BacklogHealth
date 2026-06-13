@@ -27,6 +27,7 @@ async function json(res, fn) {
     res.end(JSON.stringify(data));
   } catch (e) {
     const status = e instanceof HttpError ? e.status : 500;
+    if (status === 500) console.error('[server] 500 error:', e);
     res.writeHead(status, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: e.message }));
   }

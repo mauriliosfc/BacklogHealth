@@ -35,6 +35,27 @@ function _initials(name) {
     .slice(0, 2) || '??';
 }
 
+// ── MTTR helpers (exported for tests) ────────────────────────────────────────
+
+function _calcMttr(incs) {
+  let total = 0, count = 0;
+  for (const inc of incs) {
+    const opened   = _snRaw(inc.opened_at);
+    const resolved = _snRaw(inc.resolved_at);
+    if (!opened || !resolved) continue;
+    const diff = new Date(resolved) - new Date(opened);
+    if (diff > 0) { total += diff; count++; }
+  }
+  return count > 0 ? total / count / 3_600_000 : null; // hours
+}
+
+function _fmtMttr(hours) {
+  if (hours == null) return '—';
+  if (hours < 1)  return '< 1h';
+  if (hours < 24) return `${Math.round(hours)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+}
+
 // ── Data fetch ────────────────────────────────────────────────────────────────
 
 async function fetchSNGroups(snCfg) {
@@ -128,8 +149,9 @@ async function fetchSNGroups(snCfg) {
 // ── HTML builders ─────────────────────────────────────────────────────────────
 
 function _incCardHTML(g) {
-  const openCount = g.total;
-  const hbarColor = g.p1 > 0 ? 'var(--c-red)' : g.p2 > 0 ? 'var(--c-yellow)' : 'var(--c-blue)';
+  const openCount  = g.total;
+  const hbarColor  = g.p1 > 0 ? 'var(--c-red)' : g.p2 > 0 ? 'var(--c-yellow)' : 'var(--c-blue)';
+  const avatarCls  = g.p1 > 0 ? 'sn-avatar-red' : g.p2 > 0 ? 'sn-avatar-yellow' : '';
 
   const incRows = g.incidents.map(inc => `
     <div class="sn-inc-row" onclick="window.open('${escHtml(inc.url)}','_blank')">
@@ -140,25 +162,54 @@ function _incCardHTML(g) {
       </div>
     </div>`).join('');
 
-  return `<div class="sn-inc-card" data-group="${escHtml(g.name)}">
+  return `<div class="sn-inc-card" data-project="${escHtml(g.name)}" data-group="${escHtml(g.name)}">
   <div class="sn-inc-hbar" style="background:${hbarColor}"></div>
   <div class="sn-inc-head">
-    <div class="sn-inc-avatar">${escHtml(_initials(g.name))}</div>
+    <div class="sn-inc-avatar ${avatarCls} card-icon" title="Arrastar para reordenar">${escHtml(_initials(g.name))}</div>
     <div class="sn-inc-head-text">
-      <div class="sn-inc-group-name">${escHtml(g.name)}</div>
+      <div class="sn-inc-group-name card-project-title">${escHtml(g.name)}</div>
       <span class="sn-inc-open-badge">${openCount} open</span>
     </div>
   </div>
-  <div class="sn-inc-prio-row">
-    <div class="sn-prio-item"><span class="sn-prio-badge sn-p1">P1</span> <span class="sn-prio-num${g.p1 > 0 ? ' sn-p1-num' : ''}">${g.p1}</span></div>
-    <span class="sn-prio-sep">·</span>
-    <div class="sn-prio-item"><span class="sn-prio-badge sn-p2">P2</span> <span class="sn-prio-num${g.p2 > 0 ? ' sn-p2-num' : ''}">${g.p2}</span></div>
-    <span class="sn-prio-sep">·</span>
-    <div class="sn-prio-item"><span class="sn-prio-badge sn-p3">P3</span> <span class="sn-prio-num">${g.p3}</span></div>
+  <div class="sn-inc-stats-row">
+    <div class="sn-stat-cell">
+      <div class="sn-stat-val${g.p1 > 0 ? ' sn-stat-red' : ' sn-stat-muted'}">${g.p1}</div>
+      <div class="sn-stat-lbl"><span class="sn-prio-badge sn-p1">P1</span></div>
+    </div>
+    <div class="sn-stat-sep"></div>
+    <div class="sn-stat-cell">
+      <div class="sn-stat-val${g.p2 > 0 ? ' sn-stat-yellow' : ' sn-stat-muted'}">${g.p2}</div>
+      <div class="sn-stat-lbl"><span class="sn-prio-badge sn-p2">P2</span></div>
+    </div>
+    <div class="sn-stat-sep"></div>
+    <div class="sn-stat-cell">
+      <div class="sn-stat-val sn-stat-muted">${g.p3}</div>
+      <div class="sn-stat-lbl"><span class="sn-prio-badge sn-p3">P3</span></div>
+    </div>
   </div>
   <div class="sn-inc-list">${incRows}</div>
-  <div class="sn-inc-foot">
-    <button class="sn-inc-foot-link" onclick="openSNGroupIncidents(this)">View all ${openCount} →</button>
+  <div class="card-footer">
+    <div class="card-footer-actions">
+      <button class="ca" type="button" onclick="openSNGroupIncidents(this)">Ver todos os incidentes</button>
+      <button class="ca" type="button" onclick="openReport(this)">Monthly Review</button>
+    </div>
+    <span class="foot-sep"></span>
+    <div class="more-wrap">
+      <button class="btn-more" type="button" onclick="toggleCardMore(this)" title="Mais opcoes">
+        <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      </button>
+      <div class="more-panel">
+        <div class="more-item" onclick="startRename(this)">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          <span>Renomear</span>
+        </div>
+        <div class="more-divider"></div>
+        <div class="more-item danger" onclick="hideSNGroup(this)">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          <span>Ocultar</span>
+        </div>
+      </div>
+    </div>
   </div>
 </div>`;
 }
@@ -170,21 +221,73 @@ function buildIncidentCardsHTML(groups) {
   return `<div class="sn-inc-cards">${groups.map(g => _incCardHTML(g)).join('')}</div>`;
 }
 
+// ── Resolved incidents (this calendar month) ──────────────────────────────────
+
+async function fetchSNResolved(snCfg, groupNames) {
+  const now   = new Date();
+  const y     = now.getFullYear();
+  const m     = now.getMonth();
+  const start = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+  const nextY = m === 11 ? y + 1 : y;
+  const nextM = String(m === 11 ? 1 : m + 2).padStart(2, '0');
+  const end   = `${nextY}-${nextM}-01`;
+
+  const fields = 'sys_id,opened_at,resolved_at';
+  const qs     = `sysparm_fields=${fields}&sysparm_display_value=all&sysparm_limit=1000`;
+  const stateQ = 'state=6^ORstate=7';
+
+  let incs;
+  if (groupNames && groupNames.length > 0) {
+    const results = await Promise.all(
+      groupNames.map(name => {
+        const q = `assignment_group.name=${encodeURIComponent(name)}^${stateQ}^resolved_at>=${start}^resolved_at<${end}`;
+        return snGet(snCfg, `table/incident?sysparm_query=${q}&${qs}`)
+          .then(r => r.result || [])
+          .catch(() => []);
+      })
+    );
+    const seen = new Set();
+    incs = results.flat().filter(inc => {
+      const id = _snRaw(inc.sys_id);
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  } else {
+    const q = `${stateQ}^resolved_at>=${start}^resolved_at<${end}`;
+    const data = await snGet(snCfg, `table/incident?sysparm_query=${q}&${qs}`);
+    incs = data.result || [];
+  }
+  return incs;
+}
+
 // ── Public: called by dashboard.js buildAndCache ──────────────────────────────
 
 async function fetchAndBuildCards() {
-  const cfg   = getCfg();
-  const snCfg = cfg.servicenow;
+  const cfg        = getCfg();
+  const snCfg      = cfg.servicenow;
+  const groupNames = Array.isArray(snCfg?.assignmentGroups) && snCfg.assignmentGroups.length > 0
+    ? snCfg.assignmentGroups : null;
 
   try {
-    const { groups, kpi } = await fetchSNGroups(snCfg);
+    const [snData, resolvedIncs] = await Promise.all([
+      fetchSNGroups(snCfg),
+      fetchSNResolved(snCfg, groupNames).catch(() => []),
+    ]);
+    const { groups, kpi } = snData;
+    kpi.resolvedThisMonth = resolvedIncs.length;
+    kpi.mttr = _fmtMttr(_calcMttr(resolvedIncs));
     return { kpi, cardsHtml: buildIncidentCardsHTML(groups), error: null };
   } catch (err) {
     const errHtml = `<div class="sn-empty-incidents" style="color:var(--c-red)">
       Failed to load incidents: ${escHtml(err.message)}
     </div>`;
-    return { kpi: { totalOpen: 0, totalP1: 0, totalP2: 0, totalP3: 0, activeGroups: 0 }, cardsHtml: errHtml, error: err.message };
+    return {
+      kpi: { totalOpen: 0, totalP1: 0, totalP2: 0, totalP3: 0, activeGroups: 0, resolvedThisMonth: 0, mttr: '—' },
+      cardsHtml: errHtml,
+      error: err.message,
+    };
   }
 }
 
-module.exports = { fetchSNGroups, buildIncidentCardsHTML, fetchAndBuildCards };
+module.exports = { fetchSNGroups, fetchSNResolved, buildIncidentCardsHTML, fetchAndBuildCards, _calcMttr, _fmtMttr };

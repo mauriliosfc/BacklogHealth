@@ -38,9 +38,10 @@ function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarge
 
 async function getReport({ project, month, groupFields = [], agingState = 'In Review', incidentMonths, deliveryStates, refresh: doRefresh = false }) {
   const cfg         = getCfg();
-  const pcfgReport  = (cfg.projects || []).find(p => getDisplayName(p) === project)
-    || (cfg.projects[0] ? { ...cfg.projects[0] } : null);
-  const resolvedProject = project || (cfg.projects[0] ? getDisplayName(cfg.projects[0]) : '');
+  const projects    = cfg.projects || [];
+  const pcfgReport  = projects.find(p => getDisplayName(p) === project)
+    || (projects[0] ? { ...projects[0] } : null);
+  const resolvedProject = project || (projects[0] ? getDisplayName(projects[0]) : '');
   const nMonths     = Math.max(6, Math.min(24, Math.max(1, parseInt(incidentMonths || pcfgReport?.incidentMonths) || 13)));
   const months      = getLast6Months(nMonths);
   const resolvedMonth = months.includes(month) ? month : months[0];

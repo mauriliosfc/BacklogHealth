@@ -8,15 +8,16 @@ import { openDaily, openDailyForProject, closeDaily, toggleDailyMaximize, dailyP
 import { closeItemsModal, closeItemsModalOverlay, toggleItemsFilter, clearItemsFilter, toggleItemsModalMax, toggleItemsFilterDropdown } from './modules/itemsModal.js';
 import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily, bdTip, bdTipHide } from './modules/burndown.js';
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
-import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDeliveryPlanMaximize, dpToggleRow, dpSelectAll, dpClearAll, dpShowTooltip, dpMoveTooltip, dpHideTooltip, dpPositionHoje } from './modules/deliveryPlan.js';
+import { openDeliveryPlan, dpToggleRow, dpSelectAll, dpClearAll, dpShowTooltip, dpMoveTooltip, dpHideTooltip, dpPositionHoje } from './modules/deliveryPlan.js';
 import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilotConnection, saveCopilotConfig, openCopilotChat, closeCopilotChat, closeCopilotChatOverlay, toggleCopilotChatMaximize, toggleCopilotMinimize, toggleCopilotMaximize, clearCopilotChat, confirmClearCopilot, hideCopilotConfirm, copilotFabClick, openCopilotSettings, copilotInputKeydown, sendCopilotMessage, openCopilotWithContext } from './modules/copilot.js';
 import { getAlias, applyAliases, startRename } from './modules/alias.js';
 import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from './modules/teamCapacity.js';
 import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback, openFeedbackSuccess, closeFeedbackSuccess, closeFeedbackSuccessOverlay } from './modules/feedback.js';
 import { openUAT, closeUAT, closeUATOverlay, toggleUATMax, refreshUAT, uatChangeSprint, uatTogglePlan, uatFilterPlan, uatClearPlanFilter, uatFilterPlanPrio, uatClearPlanPrioFilter } from './modules/uat.js';
-import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportOpenLocationPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot, reportOpenIncidentFilter, reportExportIncidentsCSV, openIncidentsForGroup } from './modules/report.js';
+import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportOpenLocationPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot, reportOpenIncidentFilter, reportExportIncidentsCSV, openIncidentsForGroup, toggleReportIncMax } from './modules/report.js';
 import { openSnConfig, closeSnConfig, closeSnConfigOverlay, snConfigTest, snConfigSaveGlobal, snConfigSaveProject } from './modules/snConfig.js';
+import { initUpdater, updDownload, updInstall, updDismiss } from './modules/updater.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -67,11 +68,8 @@ window.openBurndownFromDaily  = openBurndownFromDaily;
 window.bdTip                  = bdTip;
 window.bdTipHide              = bdTipHide;
 window.setLocale              = setLocale;
-window.openDeliveryPlan           = openDeliveryPlan;
-window.closeDeliveryPlan          = closeDeliveryPlan;
-window.closeDeliveryPlanOverlay   = closeDeliveryPlanOverlay;
-window.toggleDeliveryPlanMaximize = toggleDeliveryPlanMaximize;
-window.dpToggleRow                = dpToggleRow;
+window.openDeliveryPlan = openDeliveryPlan;
+window.dpToggleRow      = dpToggleRow;
 window.dpSelectAll                = dpSelectAll;
 window.dpClearAll                 = dpClearAll;
 window.dpShowTooltip              = dpShowTooltip;
@@ -145,6 +143,7 @@ window.reportOpenIncidentsModal        = reportOpenIncidentsModal;
 window.reportCloseIncidentsModal       = reportCloseIncidentsModal;
 window.reportOpenIncidentFilter        = reportOpenIncidentFilter;
 window.reportExportIncidentsCSV        = reportExportIncidentsCSV;
+window.toggleReportIncMax              = toggleReportIncMax;
 window.reportOpenCopilot               = reportOpenCopilot;
 window.reportOpenAgingPicker          = reportOpenAgingPicker;
 window.reportOpenIncidentVolumePicker = reportOpenIncidentVolumePicker;
@@ -158,6 +157,9 @@ window.snConfigSaveProject   = snConfigSaveProject;
 window.openHealthConfig      = openHealthConfig;
 window.closeHealthConfig     = closeHealthConfig;
 window.saveHealthConfigModal = saveHealthConfigModal;
+window.updDownload           = updDownload;
+window.updInstall            = updInstall;
+window.updDismiss            = updDismiss;
 
 let _activeHealthFilter = 'all';
 window.toggleHealthFilter = function(chip) {
@@ -240,10 +242,15 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// ── View toggle (grid / list) ────────────────────────────────────────────────
+// ── View toggle (grid / list) — DevOps only ──────────────────────────────────
+function _isSNContent() {
+  const c = document.getElementById('content');
+  return c && c.classList.contains('sn-content');
+}
+
 function _applyView(mode) {
   const content = document.getElementById('content');
-  if (!content) return; // SN dashboard or other views without a card grid
+  if (!content || _isSNContent()) return; // skip for SN dashboard
   const iconGrid = document.getElementById('iconViewGrid');
   const iconList = document.getElementById('iconViewList');
   if (mode === 'list') {
@@ -266,8 +273,60 @@ window.toggleView = function() {
   _applyView(next);
 };
 
+// ── SN view toggle (grid / list) ─────────────────────────────────────────────
+function _applySnView(mode) {
+  const content = document.getElementById('content');
+  if (!content || !_isSNContent()) return;
+  const iconGrid = document.getElementById('iconViewGrid');
+  const iconList = document.getElementById('iconViewList');
+  if (mode === 'list') {
+    content.classList.add('sn-view-list');
+    if (iconGrid) iconGrid.style.display = 'none';
+    if (iconList) iconList.style.display = '';
+  } else {
+    content.classList.remove('sn-view-list');
+    if (iconGrid) iconGrid.style.display = '';
+    if (iconList) iconList.style.display = 'none';
+  }
+}
+
+window.toggleSnView = function() {
+  const content = document.getElementById('content');
+  if (!content) return;
+  const isList = content.classList.contains('sn-view-list');
+  const next = isList ? 'grid' : 'list';
+  localStorage.setItem('snView', next);
+  _applySnView(next);
+};
+
+window.hideSNGroup = function(btn) {
+  const card = btn.closest('.sn-inc-card');
+  if (!card) return;
+  card.style.transition = 'opacity .2s';
+  card.style.opacity = '0';
+  setTimeout(() => card.remove(), 200);
+};
+
+window.reapplySnDismissed = function() {
+  if (localStorage.getItem('sn-az-banner-dismissed') === '1') {
+    const b = document.getElementById('snAzBanner');
+    if (b) b.style.display = 'none';
+  }
+  if (localStorage.getItem('sn-az-cta-dismissed') === '1') {
+    const c = document.getElementById('snAzCta');
+    if (c) c.style.display = 'none';
+  }
+};
+
+window.toggleSidebar = function() {
+  const collapsed = document.body.classList.toggle('sidebar-collapsed');
+  localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '');
+};
+
 // Inicialização
+initUpdater();
 setTheme(localStorage.getItem('theme') || 'dark');
+if (localStorage.getItem('sidebarCollapsed')) document.body.classList.add('sidebar-collapsed');
 await initI18n();
 applyTranslations();
 fetch('/api/health-config').then(r => r.json()).then(setThresholds).catch(() => {});
@@ -277,6 +336,7 @@ applyOrder();
 applyAliases();
 initDragOrder();
 _applyView(localStorage.getItem('dashView') || 'grid');
+_applySnView(localStorage.getItem('snView') || 'grid');
 startTimer();
 
 // Restaura a view ativa após reload (ex: troca de idioma)

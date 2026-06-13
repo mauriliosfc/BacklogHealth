@@ -1,6 +1,7 @@
 # Credenciais — NUNCA subir para o repositório
 config.json
 xconfig.json
+snconfig.json
 
 # Dependências
 node_modules/

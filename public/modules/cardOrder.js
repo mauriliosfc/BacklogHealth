@@ -1,10 +1,11 @@
 const STORAGE_KEY = 'cardOrder';
+const CARD_SEL    = '.card[data-project], .sn-inc-card[data-project]';
 let _dragSrc  = null;
 let _fromIcon = false;
 
 function saveOrder() {
   const order = Array.from(
-    document.querySelectorAll('#content .card[data-project]')
+    document.querySelectorAll(`#content ${CARD_SEL}`)
   ).map(c => c.dataset.project);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
 }
@@ -15,8 +16,9 @@ export function applyOrder() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     if (!saved.length) return;
-    const cards = Array.from(content.querySelectorAll('.card[data-project]'));
+    const cards = Array.from(content.querySelectorAll(CARD_SEL));
     if (cards.length < 2) return;
+    const parent = cards[0].parentElement; // #content for DevOps, .sn-inc-cards for SN
     cards.sort((a, b) => {
       const ai = saved.indexOf(a.dataset.project);
       const bi = saved.indexOf(b.dataset.project);
@@ -25,7 +27,7 @@ export function applyOrder() {
       if (bi === -1) return -1;
       return ai - bi;
     });
-    cards.forEach(c => content.appendChild(c));
+    cards.forEach(c => parent.appendChild(c));
     // Keep the empty "add project" card always last
     const emptyCard = content.querySelector('.card-empty');
     if (emptyCard) content.appendChild(emptyCard);
@@ -43,7 +45,7 @@ export function initDragOrder() {
     const icon = e.target.closest('.card-icon');
     if (!icon) return;
     _fromIcon = true;
-    const card = icon.closest('.card[data-project]');
+    const card = icon.closest(CARD_SEL);
     if (card) card.draggable = true;
   });
 
@@ -54,13 +56,13 @@ export function initDragOrder() {
     if (icon.contains(e.relatedTarget)) return; // moved to a child — still inside
     _fromIcon = false;
     if (_dragSrc) return; // don't reset during active drag
-    const card = icon.closest('.card[data-project]');
+    const card = icon.closest(CARD_SEL);
     if (card) card.draggable = false;
   });
 
   content.addEventListener('dragstart', e => {
     if (!_fromIcon) { e.preventDefault(); return; }
-    _dragSrc = e.target.closest('.card[data-project]');
+    _dragSrc = e.target.closest(CARD_SEL);
     if (!_dragSrc) { e.preventDefault(); return; }
     _dragSrc.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
@@ -70,11 +72,11 @@ export function initDragOrder() {
   content.addEventListener('dragover', e => {
     e.preventDefault();
     if (!_dragSrc) return;
-    const target = e.target.closest('.card[data-project]');
+    const target = e.target.closest(CARD_SEL);
     if (!target || target === _dragSrc) return;
     const rect = target.getBoundingClientRect();
     if (e.clientY < rect.top + rect.height / 2) {
-      content.insertBefore(_dragSrc, target);
+      target.parentElement.insertBefore(_dragSrc, target);
     } else {
       target.after(_dragSrc);
     }
