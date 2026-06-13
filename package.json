@@ -1,6 +1,6 @@
 {
   "name": "backlog-health",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Backlog Health Dashboard — Azure DevOps",
   "repository": { "type": "git", "url": "https://github.com/mauriliosfc/BacklogHealth.git" },
   "main": "electron/main.js",
