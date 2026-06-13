@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Backlog Health — {{TITLE}}</title>
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
-<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);if(navigator.userAgent.indexOf('Electron')!==-1)document.body.classList.add('electron-app');})();</script>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body class="setup-body">
@@ -12,7 +12,7 @@
 <!-- ── Top bar ── -->
 <div class="su-topbar">
   <div class="su-topbar-logo">
-    <span class="su-topbar-emoji">📋</span>
+    <img src="/icons/icon.svg" width="28" height="28" alt="Backlog Health" style="display:block;border-radius:6px;">
     <div>
       <div class="su-topbar-name">Backlog Health</div>
       <div class="su-topbar-sub">DEVOPS INTELLIGENCE</div>

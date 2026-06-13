@@ -32,6 +32,13 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--bg-el2); border-top-color: var(--c-blue); border-radius: 50%; animation: spin .7s linear infinite; margin-right: 6px; vertical-align: middle; }
 
+/* ── Scrollbar personalizada (Chromium / Electron) ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-el2); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+::-webkit-scrollbar-corner { background: transparent; }
+
 /* ── Setup page (legacy, kept for compatibility) ── */
 body.setup { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg-page); color: var(--text-1); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
 
@@ -240,6 +247,21 @@ body.sidebar-collapsed .sl-icon-expand { display: block; }
 .main-content { flex: 1; margin-left: var(--sidebar-w); display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; transition: margin-left .22s ease; }
 
 /* ── Topbar ── */
+/* ── Banner de atualização ── */
+#update-banner { align-items: center; gap: 12px; padding: 10px 20px; background: var(--c-blue-bg); border-bottom: 1px solid var(--c-blue-bd); font-size: 13px; flex-shrink: 0; }
+.upd-icon { font-size: 16px; color: var(--c-blue); font-weight: 700; flex-shrink: 0; }
+.upd-state { display: flex; align-items: center; gap: 10px; flex: 1; flex-wrap: wrap; }
+.upd-text { color: var(--text-2); }
+.upd-text-err { color: var(--c-red2); }
+.upd-btn { background: var(--bg-el2); border: 1px solid var(--bg-border); color: var(--text-1); padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all .15s; }
+.upd-btn:hover { background: var(--bg-el); }
+.upd-btn-primary { background: var(--c-blue); border-color: var(--c-blue); color: #fff; }
+.upd-btn-primary:hover { opacity: .85; }
+.upd-progress { flex: 1; min-width: 120px; max-width: 200px; height: 6px; background: var(--bg-el2); border-radius: 99px; overflow: hidden; }
+.upd-progress-bar { height: 100%; width: 0%; background: var(--c-blue); border-radius: 99px; transition: width .3s; }
+.upd-dismiss { background: none; border: none; color: var(--text-faint); font-size: 14px; cursor: pointer; padding: 4px 6px; border-radius: 4px; margin-left: auto; flex-shrink: 0; }
+.upd-dismiss:hover { color: var(--text-1); background: var(--bg-el2); }
+
 .topbar { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 20px 28px; border-bottom: 1px solid var(--bg-border); background: var(--bg-card); flex-wrap: wrap; }
 .topbar-left {}
 .topbar-title { font-size: 22px; font-weight: 800; color: var(--text-1); line-height: 1.2; }
@@ -838,10 +860,13 @@ tr:hover td { background: var(--hover-bg); }
 .btn-delivery { background: var(--bg-el); border: 1px solid var(--bg-border); color: var(--text-2); padding: 6px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s; white-space: nowrap; }
 .btn-delivery:hover { background: var(--bg-el2); color: var(--text-1); }
 
-/* ── Delivery Plan modal ── */
-.dp-modal-overlay { z-index: 580; }
-.dp-modal-box { max-width: 1100px; display: flex; flex-direction: column; max-height: 88vh; }
-.dp-modal-body { padding: 0; overflow: hidden; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* ── Delivery Plan view ── */
+#dp-view { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+.dp-view-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--bg-border); flex-shrink: 0; }
+.dp-view-title { font-size: 20px; font-weight: 800; color: var(--text-1); }
+.dp-refresh-btn { background: none; border: 1px solid var(--bg-border); color: var(--text-muted); border-radius: 8px; padding: 6px 12px; font-size: 16px; cursor: pointer; transition: all .15s; }
+.dp-refresh-btn:hover { background: var(--bg-el); color: var(--text-1); }
+.dp-view-body { padding: 0; overflow: hidden; display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 /* filter bar */
 .dp-filter-bar { position: relative; padding: 12px 20px; border-bottom: 1px solid var(--bg-border); flex-shrink: 0; }
@@ -1821,3 +1846,62 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .su-toggle-slider:before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: var(--text-faint); border-radius: 50%; transition: .2s; }
 .su-toggle input:checked + .su-toggle-slider { background: var(--c-blue); }
 .su-toggle input:checked + .su-toggle-slider:before { transform: translateX(16px); background: #fff; }
+
+/* ── Electron runtime — title bar full-width ─────────────────────────────────
+   titleBarStyle:'hidden' remove a barra nativa. Um pseudo-elemento fixo cria
+   uma faixa full-width com a cor do tema; -webkit-app-region:drag permite
+   arrastar a janela a partir dessa faixa.
+   z-index: 150 — acima da sidebar (100) mas abaixo de todos os modais (500+),
+   para que sobreposições cubram a barra sem interferência. */
+body.electron-app::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--bg-border);
+  -webkit-app-region: drag;
+  z-index: 150;
+}
+body.electron-app .sidebar {
+  padding-top: 36px;
+}
+body.electron-app .main-content {
+  padding-top: 36px;
+}
+/* Overlays confinados à área de conteúdo: abaixo da barra de título e à
+   direita da sidebar. A sidebar e a barra permanecem visíveis com modal aberto. */
+body.electron-app .modal-overlay,
+body.electron-app .confirm-overlay,
+body.electron-app .daily-overlay,
+body.electron-app .copilot-config-overlay,
+body.electron-app .sn-config-overlay,
+body.electron-app .report-inc-modal-overlay {
+  top: 36px;
+  left: var(--sidebar-w);
+}
+body.electron-app.sidebar-collapsed .modal-overlay,
+body.electron-app.sidebar-collapsed .confirm-overlay,
+body.electron-app.sidebar-collapsed .daily-overlay,
+body.electron-app.sidebar-collapsed .copilot-config-overlay,
+body.electron-app.sidebar-collapsed .sn-config-overlay,
+body.electron-app.sidebar-collapsed .report-inc-modal-overlay {
+  left: var(--sidebar-w-col);
+}
+/* Caixas com altura baseada em vh: subtrai os 36px da barra de título
+   para que não extravasem pelo bottom do overlay. */
+body.electron-app .daily-box              { height: calc(90vh - 36px); }
+body.electron-app .daily-overlay.maximized .daily-box { height: calc(100vh - 36px); }
+body.electron-app .report-modal-box      { max-height: calc(90vh - 36px); }
+body.electron-app .modal-overlay.maximized .modal-box { min-height: calc(100vh - 36px); }
+/* Setup page: a faixa cobre o topbar, aumenta padding para empurrar conteúdo */
+body.electron-app .su-topbar {
+  padding-top: calc(36px + 14px);
+}
+/* Botões interativos do topbar ficam acima da faixa (clicáveis) */
+body.electron-app .su-topbar-right {
+  position: relative;
+  z-index: 160;
+}

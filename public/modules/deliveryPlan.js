@@ -6,10 +6,28 @@ const LABEL_W = 140; // px — largura fixa da coluna de label (sticky)
 // ── Estado do módulo ──────────────────────────────────────────────────────────
 let _dpTooltip = null;
 
-// ── Abrir / fechar ────────────────────────────────────────────────────────────
+// ── View switching ────────────────────────────────────────────────────────────
+function _setSidebarActive(id) {
+  document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+}
+
 export function openDeliveryPlan() {
+  document.getElementById('content')?.style.setProperty('display', 'none');
+  document.querySelector('.cards-toolbar')?.style.setProperty('display', 'none');
+  document.getElementById('tc-view').style.display = 'none';
+  document.getElementById('dp-view').style.display = 'flex';
+  _setSidebarActive('sidebar-link-dp');
+  _renderContent();
+}
+
+function _renderContent() {
   const cards = Array.from(document.querySelectorAll('#content .card[data-project]'));
-  if (!cards.length) return;
+  const bodyEl = document.getElementById('delivery-body');
+  if (!cards.length) {
+    bodyEl.innerHTML = '<p style="color:#64748b;padding:32px;text-align:center">' + t('dp_no_data') + '</p>';
+    return;
+  }
 
   const projects = cards.map(card => {
     const name    = card.dataset.project;
@@ -24,38 +42,12 @@ export function openDeliveryPlan() {
     return { name, label, iterMap, selectedSprints, healthCls };
   }).filter(p => Object.values(p.iterMap).some(v => v.start && v.end));
 
-  const bodyEl = document.getElementById('delivery-body');
   if (!projects.length) {
     bodyEl.innerHTML = '<p style="color:#64748b;padding:32px;text-align:center">' + t('dp_no_data') + '</p>';
   } else {
     bodyEl.innerHTML = buildDeliveryPlan(projects);
     requestAnimationFrame(dpPositionHoje);
   }
-
-  const modal = document.getElementById('delivery-modal');
-  modal.classList.add('open', 'maximized');
-  document.getElementById('btnDeliveryMax').textContent = '⤡';
-  document.getElementById('btnDeliveryMax').title = t('dp_restore');
-  document.body.style.overflow = 'hidden';
-}
-
-export function closeDeliveryPlan() {
-  document.getElementById('delivery-modal').classList.remove('open', 'maximized');
-  document.getElementById('btnDeliveryMax').textContent = '⤢';
-  document.body.style.overflow = '';
-}
-
-export function closeDeliveryPlanOverlay(e) {
-  if (e.target === document.getElementById('delivery-modal')) closeDeliveryPlan();
-}
-
-export function toggleDeliveryPlanMaximize() {
-  const modal = document.getElementById('delivery-modal');
-  const btn   = document.getElementById('btnDeliveryMax');
-  const isMax = modal.classList.toggle('maximized');
-  btn.textContent = isMax ? '⤡' : '⤢';
-  btn.title = isMax ? t('dp_restore') : t('dp_maximize');
-  requestAnimationFrame(dpPositionHoje);
 }
 
 // ── Visibilidade de linhas ────────────────────────────────────────────────────
@@ -119,10 +111,6 @@ export function dpPositionHoje() {
 }
 
 // ── Eventos globais ───────────────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
-  const modal = document.getElementById('delivery-modal');
-  if (e.key === 'Escape' && modal && modal.classList.contains('open')) closeDeliveryPlan();
-});
 
 window.addEventListener('resize', dpPositionHoje);
 

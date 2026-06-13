@@ -22,6 +22,7 @@ function saveCapacity(dev, sprint, hrs) {
 export function openTeamCapacity() {
   document.getElementById('content')?.style.setProperty('display', 'none');
   document.querySelector('.cards-toolbar')?.style.setProperty('display', 'none');
+  document.getElementById('dp-view').style.display = 'none';
   document.getElementById('tc-view').style.display = 'block';
 
   _setSidebarActive('sidebar-link-tc');
@@ -33,6 +34,7 @@ export function openTeamCapacity() {
 
 export function showDashboardView() {
   document.getElementById('tc-view').style.display = 'none';
+  document.getElementById('dp-view').style.display = 'none';
   document.getElementById('content')?.style.removeProperty('display');
   document.querySelector('.cards-toolbar')?.style.removeProperty('display');
   _setSidebarActive('sidebar-link-dashboard');

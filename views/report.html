@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Review Mensal — {{PROJECT}}</title>
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
-<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+<script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);if(navigator.userAgent.indexOf('Electron')!==-1)document.body.classList.add('electron-app');})();</script>
 <link rel="stylesheet" href="/style.css">
 <script>
 window.__REPORT_PAYLOAD__  = {{PAYLOAD}};

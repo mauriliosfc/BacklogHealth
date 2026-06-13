@@ -8,7 +8,7 @@ import { openDaily, openDailyForProject, closeDaily, toggleDailyMaximize, dailyP
 import { closeItemsModal, closeItemsModalOverlay, toggleItemsFilter, clearItemsFilter, toggleItemsModalMax, toggleItemsFilterDropdown } from './modules/itemsModal.js';
 import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily, bdTip, bdTipHide } from './modules/burndown.js';
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
-import { openDeliveryPlan, closeDeliveryPlan, closeDeliveryPlanOverlay, toggleDeliveryPlanMaximize, dpToggleRow, dpSelectAll, dpClearAll, dpShowTooltip, dpMoveTooltip, dpHideTooltip, dpPositionHoje } from './modules/deliveryPlan.js';
+import { openDeliveryPlan, dpToggleRow, dpSelectAll, dpClearAll, dpShowTooltip, dpMoveTooltip, dpHideTooltip, dpPositionHoje } from './modules/deliveryPlan.js';
 import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilotConnection, saveCopilotConfig, openCopilotChat, closeCopilotChat, closeCopilotChatOverlay, toggleCopilotChatMaximize, toggleCopilotMinimize, toggleCopilotMaximize, clearCopilotChat, confirmClearCopilot, hideCopilotConfirm, copilotFabClick, openCopilotSettings, copilotInputKeydown, sendCopilotMessage, openCopilotWithContext } from './modules/copilot.js';
 import { getAlias, applyAliases, startRename } from './modules/alias.js';
 import { applyOrder, initDragOrder } from './modules/cardOrder.js';
@@ -17,6 +17,7 @@ import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback, open
 import { openUAT, closeUAT, closeUATOverlay, toggleUATMax, refreshUAT, uatChangeSprint, uatTogglePlan, uatFilterPlan, uatClearPlanFilter, uatFilterPlanPrio, uatClearPlanPrioFilter } from './modules/uat.js';
 import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportOpenLocationPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot, reportOpenIncidentFilter, reportExportIncidentsCSV, openIncidentsForGroup, toggleReportIncMax } from './modules/report.js';
 import { openSnConfig, closeSnConfig, closeSnConfigOverlay, snConfigTest, snConfigSaveGlobal, snConfigSaveProject } from './modules/snConfig.js';
+import { initUpdater, updDownload, updInstall, updDismiss } from './modules/updater.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -67,11 +68,8 @@ window.openBurndownFromDaily  = openBurndownFromDaily;
 window.bdTip                  = bdTip;
 window.bdTipHide              = bdTipHide;
 window.setLocale              = setLocale;
-window.openDeliveryPlan           = openDeliveryPlan;
-window.closeDeliveryPlan          = closeDeliveryPlan;
-window.closeDeliveryPlanOverlay   = closeDeliveryPlanOverlay;
-window.toggleDeliveryPlanMaximize = toggleDeliveryPlanMaximize;
-window.dpToggleRow                = dpToggleRow;
+window.openDeliveryPlan = openDeliveryPlan;
+window.dpToggleRow      = dpToggleRow;
 window.dpSelectAll                = dpSelectAll;
 window.dpClearAll                 = dpClearAll;
 window.dpShowTooltip              = dpShowTooltip;
@@ -159,6 +157,9 @@ window.snConfigSaveProject   = snConfigSaveProject;
 window.openHealthConfig      = openHealthConfig;
 window.closeHealthConfig     = closeHealthConfig;
 window.saveHealthConfigModal = saveHealthConfigModal;
+window.updDownload           = updDownload;
+window.updInstall            = updInstall;
+window.updDismiss            = updDismiss;
 
 let _activeHealthFilter = 'all';
 window.toggleHealthFilter = function(chip) {
@@ -323,6 +324,7 @@ window.toggleSidebar = function() {
 };
 
 // Inicialização
+initUpdater();
 setTheme(localStorage.getItem('theme') || 'dark');
 if (localStorage.getItem('sidebarCollapsed')) document.body.classList.add('sidebar-collapsed');
 await initI18n();
