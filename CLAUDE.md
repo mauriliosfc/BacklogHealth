@@ -21,6 +21,10 @@ dash_azure_gestao_pessoal/
 ├── reportService.js       ← buildReport, fetchAzureReport, fetchSnReport, cacheInvalidate (cache JSON 6h)
 ├── servicenowClient.js    ← snGet (HTTPS Basic auth, mesma estrutura do azureClient)
 ├── aiClient.js            ← chatCompletion, testConnection (Foundry / Azure OpenAI / genérico)
+├── electron/
+│   ├── main.js            ← BrowserWindow, Menu.setApplicationMenu(null), nativeTheme, ipcMain, update check
+│   ├── preload.js         ← contextBridge — expõe electronAPI ao renderer (themeChanged, updater events)
+│   └── updater.js         ← checkForUpdates, downloadUpdate, launchAndQuit (native https, GitHub Releases API)
 ├── handlers/              ← funções puras async — sem req/res, reutilizáveis por HTTP ou Electron IPC
 │   ├── utils.js           ← HttpError, httpError(), readBody()
 │   ├── state.js           ← singleton cachedHTML (getter/setter)
@@ -37,7 +41,7 @@ dash_azure_gestao_pessoal/
 │   ├── paginate.js        ← paginatedItems (lotes de 200)
 │   └── iterMap.js         ← fetchIterMap (classificationnodes + fallback team)
 ├── public/
-│   ├── style.css          ← todo o CSS (dark/light, zero duplicatas)
+│   ├── style.css          ← todo o CSS (dark/light, Electron, scrollbar, zero duplicatas)
 │   ├── app.js             ← entry point ES Module: importa módulos, expõe window globals
 │   ├── i18n/              ← pt.json, en.json (padrão), es.json
 │   └── modules/
@@ -54,22 +58,22 @@ dash_azure_gestao_pessoal/
 │       ├── snConfig.js    ← modal de configuração SN acessível pelo Report Modal
 │       ├── itemsModal.js  ← openItemsModal({ title, items, showPts, defaultFilters })
 │       ├── alias.js       ← getAlias, setAlias, applyAliases
-│       ├── deliveryPlan.js← openDeliveryPlan, buildDeliveryPlan
-│       ├── theme.js       ← setTheme, toggleTheme
+│       ├── deliveryPlan.js← openDeliveryPlan (view, não modal — mesmo padrão do teamCapacity)
+│       ├── updater.js     ← initUpdater, updDownload, updInstall, updDismiss (banner de update)
+│       ├── theme.js       ← setTheme, toggleTheme (notifica Electron via electronAPI.themeChanged)
 │       ├── timer.js       ← startTimer, doRefresh
 │       └── i18n.js        ← initI18n, t(), setLocale, applyTranslations
 ├── views/
-│   ├── dashboard.html     ← template com tokens {{ORG}}, {{CARDS}}, etc.
+│   ├── dashboard.html     ← template com tokens {{ORG}}, {{CARDS}}, etc. + #dp-view + #update-banner
 │   ├── setup.html         ← template da tela de configuração
 │   └── report.html        ← template do Review Mensal
 ├── tests/
 │   ├── unit/
 │   │   ├── config.test.js
-│   │   ├── handlers/      ← ai, azure, projects, report, sn, utils (163 testes)
+│   │   ├── handlers/      ← ai, azure, projects, report, sn, utils (259 testes)
 │   │   └── utils/         ← health, paginate
 │   └── integration/       ← planejado: supertest + nock
-├── wrapper/               ← C# WPF .NET 4.8 — inicia server.exe, abre WebView2
-├── dist/app/              ← BacklogHealth.exe + server.exe (não versionado)
+├── dist/electron/         ← Backlog Health Setup x.x.x.exe + Backlog Health x.x.x.exe (não versionado)
 └── config.json            ← credenciais (gerado automaticamente, não versionado)
 ```
 
@@ -213,7 +217,7 @@ npm run test:coverage   # exibe cobertura por arquivo
 - Mensagens de teste em português
 - Framework: Jest (`jest.config.js` na raiz, `clearMocks: true`)
 
-### Estado atual: 163 testes, 9 suites, todos passando
+### Estado atual: 259 testes, 12 suites, todos passando
 
 | Arquivo | Cobertura |
 |---|---|
@@ -249,6 +253,12 @@ npm run test:coverage   # exibe cobertura por arquivo
 | 159 | `state.js` singleton para `cachedHTML` | Compartilhado entre handlers — não converter em variável local |
 | 160 | `json(res, fn)` e `page(res, fn)` | Padrão para toda nova rota em `server.js` |
 | 161 | `server.js` ~190 linhas de roteamento puro | Manter thin — lógica de negócio fica nos `handlers/` |
+| 162 | `electron/preload.js` com `contextBridge` | `contextIsolation: true` — nunca usar `nodeIntegration: true`; toda comunicação renderer→main via `ipcRenderer` exposto pelo preload |
+| 163 | `titleBarStyle: 'hidden'` + `titleBarOverlay` + `body.electron-app::before` | `titleBarOverlay` estiliza apenas os 3 botões nativos; o pseudo-elemento CSS cobre o restante da largura com `background: var(--bg-card)` e `-webkit-app-region: drag` |
+| 164 | `nativeTheme.on('updated')` + `ipcMain.on('theme-changed')` | OS-level usa `nativeTheme`; toggle interno envia `theme-changed` via IPC — ambos chamam `win.setTitleBarOverlay(colors)` |
+| 165 | Modais com `top: 36px; left: var(--sidebar-w)` no Electron | Botões nativos do Windows são renderizados acima de qualquer CSS z-index — modal começa abaixo da barra; sidebar-collapsed usa `left: var(--sidebar-w-col)` |
+| 166 | Padrão de view: cada `open*` esconde todos os siblings | `openDeliveryPlan` esconde `#tc-view`; `openTeamCapacity` esconde `#dp-view`; `showDashboardView` esconde ambos — manter consistente ao adicionar novas views |
+| 167 | `electron/updater.js` com native `https` | Sem `electron-updater` (exige code signing); GitHub API retorna nomes de asset com pontos (`Backlog.Health.Setup.x.x.x.exe`) — filtro `/setup/i.test(a.name)` continua funcionando |
 
 ---
 
@@ -258,8 +268,13 @@ npm run test:coverage   # exibe cobertura por arquivo
 - [ ] Testes de integração — `server.js` com supertest + nock
 - [ ] `utils/iterMap.js` — testes unitários com azureClient mockado
 
-**Phase 1 — Electron**
-- [ ] Electron wrapper (IPC em vez de HTTP, `ELECTRON_DATA_DIR` via env var)
+**Electron**
+- [x] Electron wrapper com IPC e `ELECTRON_DATA_DIR`
+- [x] Título bar tematico + scrollbar customizada
+- [x] Modais restritos à área de conteúdo
+- [x] Delivery Plan como view (não modal)
+- [x] Sistema de atualização no app (GitHub Releases)
+- [ ] IPC completo — substituir chamadas HTTP por `ipcMain.handle` para rodar sem servidor local
 
 **Features**
 - [ ] Histórico de saúde do backlog (comparar com semanas anteriores)
@@ -273,4 +288,4 @@ npm run test:coverage   # exibe cobertura por arquivo
 
 ---
 
-*Stack: Node.js v18+ · Zero dependências runtime · Jest · PKG · WebView2 (.NET 4.8)*
+*Stack: Node.js v18+ · Zero dependências runtime · Jest · Electron 33 · electron-builder 25*

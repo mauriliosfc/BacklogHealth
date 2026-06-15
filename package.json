@@ -1,16 +1,69 @@
 {
   "name": "backlog-health",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "description": "Backlog Health Dashboard — Azure DevOps",
-  "main": "server.js",
+  "repository": { "type": "git", "url": "https://github.com/mauriliosfc/BacklogHealth.git" },
+  "main": "electron/main.js",
   "bin": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "electron:dev": "electron .",
+    "electron:build": "electron-builder --win",
+    "release": "node scripts/release.js",
     "build": "pkg . --targets node18-win-x64 --output dist/app/server.exe --compress GZip",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
+  },
+  "build": {
+    "appId": "com.backloghealth.app",
+    "productName": "Backlog Health",
+    "copyright": "Copyright 2025",
+    "directories": {
+      "output": "dist/electron"
+    },
+    "files": [
+      "electron/**",
+      "server.js",
+      "config.js",
+      "azureClient.js",
+      "projectService.js",
+      "teamCapacityService.js",
+      "reportService.js",
+      "servicenowClient.js",
+      "aiClient.js",
+      "githubClient.js",
+      "handlers/**",
+      "utils/**",
+      "views/**",
+      "public/**",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Backlog Health"
+    }
   },
   "pkg": {
     "assets": [
@@ -41,6 +94,8 @@
     ]
   },
   "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "jest": "^30.4.2"
   }
 }

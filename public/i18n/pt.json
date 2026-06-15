@@ -435,9 +435,10 @@
   "filter_healthy": "Saudáveis",
   "sum_projects": "Projetos",
   "sum_monitored": "monitorados",
-  "sum_current_sprint": "sprint atual",
-  "sum_items": "Work Items",
+  "sum_items": "Total Itens",
   "sum_in_backlog": "no backlog",
+  "sum_open": "Itens Abertos",
+  "sum_open_sub": "em aberto",
   "sum_issues": "Pendências",
   "sum_need_attention": "precisam atenção"
 }

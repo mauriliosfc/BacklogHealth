@@ -43,6 +43,7 @@ export async function doRefresh() {
     initFilters();
     applyOrder();
     applyAliases();
+    if (typeof window.reapplySnDismissed === 'function') window.reapplySnDismissed();
     if (typeof window.reapplyHealthFilter === 'function') window.reapplyHealthFilter();
     const savedView = localStorage.getItem('dashView') || 'grid';
     if (content && savedView === 'list' && content.classList.contains('cards-grid')) {

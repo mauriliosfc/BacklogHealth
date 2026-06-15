@@ -234,11 +234,21 @@ describe('fetchAndBuildCards', () => {
     expect(result.cardsHtml).toContain('sn-inc-cards');
   });
 
+  test('inclui resolvedThisMonth e mttr no kpi', async () => {
+    const result = await snDash.fetchAndBuildCards();
+    expect(result.kpi).toHaveProperty('resolvedThisMonth');
+    expect(result.kpi).toHaveProperty('mttr');
+    expect(typeof result.kpi.resolvedThisMonth).toBe('number');
+    expect(typeof result.kpi.mttr).toBe('string');
+  });
+
   test('retorna kpi zerado e mensagem de erro quando API falha', async () => {
     snGet.mockRejectedValueOnce(new Error('Connection refused'));
     const result = await snDash.fetchAndBuildCards();
     expect(result.error).toBe('Connection refused');
     expect(result.kpi.totalOpen).toBe(0);
+    expect(result.kpi.resolvedThisMonth).toBe(0);
+    expect(result.kpi.mttr).toBe('—');
     expect(result.cardsHtml).toContain('Failed to load incidents');
     expect(result.cardsHtml).toContain('Connection refused');
   });
@@ -250,5 +260,128 @@ describe('fetchAndBuildCards', () => {
     snGet.mockResolvedValueOnce({ result: SAMPLE_INCIDENTS });
     const result = await snDash.fetchAndBuildCards();
     expect(result.cardsHtml).toContain('myco.service-now.com');
+  });
+});
+
+// ── _calcMttr ─────────────────────────────────────────────────────────────────
+
+describe('_calcMttr', () => {
+  test('retorna null para lista vazia', () => {
+    expect(snDash._calcMttr([])).toBeNull();
+  });
+
+  test('ignora incidentes sem opened_at ou resolved_at', () => {
+    const incs = [
+      { opened_at: '', resolved_at: '2025-06-10 10:00:00' },
+      { opened_at: '2025-06-01 08:00:00', resolved_at: '' },
+    ];
+    expect(snDash._calcMttr(incs)).toBeNull();
+  });
+
+  test('ignora incidentes com diff negativo (resolved anterior ao opened)', () => {
+    const incs = [{ opened_at: '2025-06-05 10:00:00', resolved_at: '2025-06-01 10:00:00' }];
+    expect(snDash._calcMttr(incs)).toBeNull();
+  });
+
+  test('calcula media em horas para um incidente de 24h', () => {
+    const incs = [{ opened_at: '2025-06-01 08:00:00', resolved_at: '2025-06-02 08:00:00' }];
+    expect(snDash._calcMttr(incs)).toBeCloseTo(24, 1);
+  });
+
+  test('calcula media de multiplos incidentes (12h + 24h = 18h)', () => {
+    const incs = [
+      { opened_at: '2025-06-01 00:00:00', resolved_at: '2025-06-01 12:00:00' },
+      { opened_at: '2025-06-02 00:00:00', resolved_at: '2025-06-03 00:00:00' },
+    ];
+    expect(snDash._calcMttr(incs)).toBeCloseTo(18, 1);
+  });
+
+  test('aceita campos no formato {value, display_value} do SN', () => {
+    const incs = [{
+      opened_at:   { value: '2025-06-01 00:00:00', display_value: '01/06/2025' },
+      resolved_at: { value: '2025-06-02 00:00:00', display_value: '02/06/2025' },
+      sys_id:      { value: 'x', display_value: 'x' },
+    }];
+    expect(snDash._calcMttr(incs)).toBeCloseTo(24, 1);
+  });
+});
+
+// ── _fmtMttr ──────────────────────────────────────────────────────────────────
+
+describe('_fmtMttr', () => {
+  test('retorna "—" para null', () => {
+    expect(snDash._fmtMttr(null)).toBe('—');
+  });
+
+  test('retorna "< 1h" para menos de 1 hora', () => {
+    expect(snDash._fmtMttr(0.5)).toBe('< 1h');
+    expect(snDash._fmtMttr(0)).toBe('< 1h');
+  });
+
+  test('retorna horas arredondadas quando < 24h', () => {
+    expect(snDash._fmtMttr(4.6)).toBe('5h');
+    expect(snDash._fmtMttr(12)).toBe('12h');
+    expect(snDash._fmtMttr(23)).toBe('23h');
+  });
+
+  test('retorna dias com 1 casa decimal quando >= 24h', () => {
+    expect(snDash._fmtMttr(24)).toBe('1.0d');
+    expect(snDash._fmtMttr(36)).toBe('1.5d');
+    expect(snDash._fmtMttr(72)).toBe('3.0d');
+  });
+});
+
+// ── fetchSNResolved ───────────────────────────────────────────────────────────
+
+describe('fetchSNResolved', () => {
+  const snCfg = { instance: 'acme.service-now.com', user: 'u', pass: 'p' };
+
+  test('sem grupos: faz uma unica query sem filtro de grupo', async () => {
+    snGet.mockResolvedValue({ result: [] });
+    await snDash.fetchSNResolved(snCfg, null);
+    expect(snGet).toHaveBeenCalledTimes(1);
+    const url = snGet.mock.calls[0][1];
+    expect(url).not.toContain('assignment_group.name');
+    expect(url).toContain('state=6');
+    expect(url).toContain('sysparm_fields=sys_id,opened_at,resolved_at');
+  });
+
+  test('com grupos: faz uma query por grupo', async () => {
+    snGet.mockResolvedValue({ result: [] });
+    await snDash.fetchSNResolved(snCfg, ['GroupA', 'GroupB']);
+    expect(snGet).toHaveBeenCalledTimes(2);
+    expect(snGet.mock.calls[0][1]).toContain('GroupA');
+    expect(snGet.mock.calls[1][1]).toContain('GroupB');
+  });
+
+  test('deduplica incidentes que aparecem em multiplos grupos', async () => {
+    const inc = { sys_id: { value: 'abc123' }, opened_at: { value: '2025-06-01' }, resolved_at: { value: '2025-06-02' } };
+    snGet.mockResolvedValue({ result: [inc] });
+    const result = await snDash.fetchSNResolved(snCfg, ['GroupA', 'GroupB']);
+    expect(result).toHaveLength(1);
+  });
+
+  test('retorna array vazio se chamadas individuais falharem', async () => {
+    snGet.mockRejectedValue(new Error('network error'));
+    const result = await snDash.fetchSNResolved(snCfg, ['GroupA']);
+    expect(result).toEqual([]);
+  });
+
+  test('query inclui filtro de data do mes atual', async () => {
+    snGet.mockResolvedValue({ result: [] });
+    await snDash.fetchSNResolved(snCfg, null);
+    const url = snGet.mock.calls[0][1];
+    const year = new Date().getFullYear();
+    expect(url).toContain(String(year));
+    expect(url).toContain('resolved_at>=');
+    expect(url).toContain('resolved_at<');
+  });
+
+  test('retorna incidentes da resposta da API', async () => {
+    const inc = { sys_id: { value: 'r1' }, opened_at: { value: '2025-06-01 09:00:00' }, resolved_at: { value: '2025-06-02 09:00:00' } };
+    snGet.mockResolvedValue({ result: [inc] });
+    const result = await snDash.fetchSNResolved(snCfg, null);
+    expect(result).toHaveLength(1);
+    expect(result[0].sys_id.value).toBe('r1');
   });
 });

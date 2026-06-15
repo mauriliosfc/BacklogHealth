@@ -331,6 +331,7 @@ function buildCardHTML(results, baseUrl = '') {
         </div>
 
         <!-- stats -->
+        <span class="card-open" style="display:none">${openItems.length}</span>
         <div class="card-stats">
           <div class="cstat" onclick="openCardStat(this,'us')">
             <div class="cstat-lbl" data-i18n="cstat_total">Total</div>

@@ -118,7 +118,8 @@ export async function openDetails(btn) {
 
   const modal = document.getElementById('detail-modal');
   document.getElementById('modal-title').textContent = getAlias(_detailState.project);
-  modal.classList.add('open');
+  modal.classList.add('open', 'maximized');
+  document.getElementById('btnMaximize').textContent = '⤡';
   document.body.style.overflow = 'hidden';
   await loadDetailData(_detailState.project, _detailState.sprints);
 }
