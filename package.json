@@ -10,6 +10,7 @@
     "dev": "nodemon server.js",
     "electron:dev": "electron .",
     "electron:build": "electron-builder --win",
+    "release": "node scripts/release.js",
     "build": "pkg . --targets node18-win-x64 --output dist/app/server.exe --compress GZip",
     "test": "jest",
     "test:watch": "jest --watch",
