@@ -83,8 +83,8 @@ body.setup-body { font-family: 'Segoe UI', system-ui, sans-serif; background: va
 .su-save-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 13px; background: #06b6d4; border: none; color: #fff; font-size: 15px; font-weight: 700; border-radius: 10px; cursor: pointer; transition: opacity .2s; }
 .su-save-btn:hover:not(:disabled) { opacity: .85; }
 .su-save-btn:disabled { opacity: .5; cursor: not-allowed; }
-.su-back-link { display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; text-decoration: none; padding: 6px; transition: color .2s; }
-.su-back-link:hover { color: var(--text-1); }
+.su-back-link { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid rgba(239,68,68,.35); border-radius: 8px; color: #f87171; font-size: 13px; font-weight: 500; text-decoration: none; background: rgba(239,68,68,.07); transition: color .15s, border-color .15s, background .15s; }
+.su-back-link:hover { color: #fca5a5; border-color: rgba(239,68,68,.6); background: rgba(239,68,68,.13); }
 
 /* Right panel */
 .su-right { flex: 1; padding: 32px 28px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
@@ -129,6 +129,17 @@ body.setup-body { font-family: 'Segoe UI', system-ui, sans-serif; background: va
 .su-wit-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; background: none; border: none; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s; }
 .su-wit-btn.active { background: var(--c-blue); color: #fff; font-weight: 600; }
 .su-wit-btn:not(.active):hover { background: var(--bg-el2); color: var(--text-1); }
+
+/* SN mapping tab */
+.su-snmap-hint { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 0; }
+.su-snmap-row { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--bg-border); }
+.su-snmap-proj { display: flex; align-items: center; gap: 8px; flex: 0 0 220px; min-width: 0; overflow: hidden; }
+.su-snmap-proj-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex: none; }
+.su-snmap-proj-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.su-snmap-inputs { display: flex; gap: 8px; flex: 1; min-width: 0; }
+.su-snmap-inputs .su-input { font-size: 12px; padding: 6px 10px; }
+.su-snmap-gname { flex: 1; min-width: 0; }
+.su-snmap-ag { width: 200px; flex: none; font-family: monospace; }
 
 /* Help section */
 .su-help { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 32px 24px; border: 1px dashed var(--bg-border); border-radius: 12px; gap: 8px; margin-top: 4px; }
@@ -1761,7 +1772,7 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .su-tab-panel.active { display: flex; }
 
 /* Scrollable body */
-.su-tab-body { flex: 1; overflow-y: auto; }
+.su-tab-body { flex: 1; overflow-y: auto; padding-bottom: 72px; }
 .su-tab-inner { max-width: 880px; padding: 32px 32px 24px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 
 /* Page header */
@@ -1770,9 +1781,13 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .su-tab-page-title { font-size: 24px; font-weight: 800; color: var(--text-1); }
 .su-tab-page-sub { font-size: 13px; color: var(--text-muted); }
 
-/* Tab footer with save button */
-.su-tab-footer { display: flex; align-items: center; gap: 14px; padding: 14px 32px; background: var(--bg-card); border-top: 1px solid var(--bg-border); flex-shrink: 0; }
-.su-tab-footer .su-save-btn { width: auto; padding: 10px 22px; margin: 0; font-size: 13px; }
+/* Tab footer (legacy — hidden, replaced by .su-fixed-footer) */
+.su-tab-footer { display: none; }
+
+/* Fixed bottom bar */
+.su-fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 12px 32px; background: var(--bg-card); border-top: 1px solid var(--bg-border); z-index: 100; }
+.su-footer-actions { display: flex; align-items: center; gap: 14px; }
+.su-footer-actions .su-save-btn { width: auto; padding: 10px 22px; margin: 0; font-size: 13px; }
 
 /* Inline save message */
 .su-tab-save-msg { display: none; align-items: center; font-size: 13px; font-weight: 500; }
@@ -1811,6 +1826,19 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 
 /* SN per-project card */
 .su-sn-proj-card { margin-top: 4px; display: flex; flex-direction: column; gap: 14px; }
+
+/* SN assignment groups multiselect */
+.sn-ms-wrap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 10px; border: 1px solid var(--bg-border); border-radius: 8px; background: var(--bg-page); cursor: text; min-height: 42px; transition: border-color .15s; }
+.sn-ms-wrap:focus-within { border-color: #06b6d4; }
+.sn-ms-input { flex: 1; min-width: 140px; background: none; border: none; outline: none; color: var(--text-1); font-size: 13px; padding: 2px 0; }
+.sn-ms-input::placeholder { color: var(--text-faint); }
+.sn-ms-dropdown { border: 1px solid var(--bg-border); border-radius: 8px; background: var(--bg-card); max-height: 220px; overflow-y: auto; margin-top: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+.sn-ms-opt { padding: 9px 14px; font-size: 13px; cursor: pointer; color: var(--text-2); transition: background .1s; }
+.sn-ms-opt:hover { background: var(--bg-el); color: var(--text-1); }
+.sn-ms-opt mark { background: none; color: #06b6d4; font-weight: 600; }
+.sn-group-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px 3px 10px; background: var(--bg-el); border: 1px solid var(--bg-border); border-radius: 20px; font-size: 12px; color: var(--text-2); white-space: nowrap; }
+.sn-group-chip-rm { background: none; border: none; cursor: pointer; color: var(--text-faint); font-size: 15px; line-height: 1; padding: 0; transition: color .15s; }
+.sn-group-chip-rm:hover { color: #ef4444; }
 
 /* SN per-project table */
 .sn-proj-table { width: 100%; border-collapse: collapse; font-size: 13px; }

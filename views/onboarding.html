@@ -74,7 +74,7 @@ input{font-family:inherit}
 
 /* ── THEME TOGGLE ── */
 .theme-btn{
-  position:fixed;top:16px;right:18px;z-index:100;
+  position:fixed;top:16px;left:18px;z-index:100;
   width:36px;height:36px;border-radius:var(--r-md);
   background:var(--bg-card);border:1px solid var(--bg-border);
   color:var(--text-muted);display:flex;align-items:center;justify-content:center;
@@ -583,7 +583,7 @@ input{font-family:inherit}
 /* ════════════════════════════════
    SCREEN 4 — DONE
 ════════════════════════════════ */
-#screen4{
+#screen5{
   flex-direction:column;align-items:center;justify-content:center;
   min-height:100vh;padding:40px 20px;
 }
@@ -647,6 +647,20 @@ input{font-family:inherit}
 .cb-ai{background:var(--bg-el2);align-self:flex-start}
 
 .done-btns{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+
+/* ════════════════════════════════
+   SCREEN 4 — SN MAPPING
+════════════════════════════════ */
+#screen4{flex-direction:column;align-items:center;overflow-y:auto}
+.sn-map-row{display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg-card);border:1px solid var(--bg-border);border-radius:var(--r-md);margin-bottom:8px}
+.sn-map-proj{display:flex;align-items:center;gap:10px;flex:0 0 200px;min-width:0;overflow:hidden}
+.sn-map-icon{width:32px;height:32px;border-radius:var(--r-sm);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff}
+.sn-map-name{font-size:13px;font-weight:600;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sn-map-arrow{color:var(--text-faint);flex-shrink:0}
+.sn-map-select{flex:1;padding:7px 10px;background:var(--bg-el);border:1px solid var(--bg-border);border-radius:var(--r-md);color:var(--text-1);font-size:13px;outline:none;cursor:pointer;transition:border-color var(--t)}
+.sn-map-select:focus{border-color:var(--c-purple)}
+.sn-map-select option{background:var(--bg-card)}
+.sn-map-empty{text-align:center;padding:32px 20px;color:var(--text-muted);font-size:13px}
 
 /* ── UTILS ── */
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
@@ -805,7 +819,8 @@ input{font-family:inherit}
       <div class="step-dot active" id="sd1-1"></div>
       <div class="step-dot" id="sd1-2"></div>
       <div class="step-dot" id="sd1-3"></div>
-      <span class="step-label" data-i18n="ob_step1_of3">Step 1 of 3</span>
+      <div class="step-dot hidden" id="sd1-4"></div>
+      <span class="step-label" id="step-label-s1" data-i18n="ob_step1_of3">Step 1 of 3</span>
     </div>
     <div class="step-area">
       <div class="step-header">
@@ -912,7 +927,8 @@ input{font-family:inherit}
       <div class="step-dot done"></div>
       <div class="step-dot active"></div>
       <div class="step-dot"></div>
-      <span class="step-label" data-i18n="ob_step2_of3">Step 2 of 3</span>
+      <div class="step-dot hidden" id="sd2-4"></div>
+      <span class="step-label" id="step-label-s2" data-i18n="ob_step2_of3">Step 2 of 3</span>
     </div>
     <div class="step-area">
       <div class="step-header">
@@ -1083,8 +1099,9 @@ input{font-family:inherit}
     <div class="step-bar">
       <div class="step-dot done"></div>
       <div class="step-dot done"></div>
-      <div class="step-dot active"></div>
-      <span class="step-label" data-i18n="ob_step3_of3">Step 3 of 3</span>
+      <div class="step-dot active" id="sd3-3"></div>
+      <div class="step-dot hidden" id="sd3-4"></div>
+      <span class="step-label" id="s3-step-label" data-i18n="ob_step3_of3">Step 3 of 3</span>
     </div>
     <div class="step-area">
       <div class="step-header">
@@ -1154,6 +1171,37 @@ input{font-family:inherit}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           <span data-i18n="ob_back_btn">Back</span>
         </button>
+        <button class="btn btn-primary" onclick="goToOrFinish()">
+          <span id="lblFinish3" data-i18n="ob_finish_btn">Finish Setup</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       SCREEN 4 — SN MAPPING
+  ══════════════════════════════ -->
+  <div class="screen" id="screen4" style="flex-direction:column">
+    <div class="step-bar">
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+      <span class="step-label" data-i18n="ob_step4_of4">Step 4 of 4</span>
+    </div>
+    <div class="step-area">
+      <div class="step-header">
+        <div class="step-breadcrumb" data-i18n="ob_initial_setup">Initial setup</div>
+        <div class="step-title" data-i18n="ob_step4_title">Link projects to ServiceNow</div>
+        <div class="step-subtitle" data-i18n="ob_step4_sub">Associate each Azure DevOps project with its ServiceNow assignment group.</div>
+      </div>
+      <div id="snMappingList" style="width:100%"></div>
+      <div class="step-footer" style="margin-top:24px">
+        <button class="btn btn-ghost" onclick="goTo(3)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <span data-i18n="ob_back_btn">Back</span>
+        </button>
         <button class="btn btn-primary" onclick="finishSetup()">
           <span data-i18n="ob_finish_btn">Finish Setup</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -1163,9 +1211,9 @@ input{font-family:inherit}
   </div>
 
   <!-- ══════════════════════════════
-       SCREEN 4 — DONE
+       SCREEN 5 — DONE
   ══════════════════════════════ -->
-  <div class="screen" id="screen4">
+  <div class="screen" id="screen5">
     <div class="done-wrap">
 
       <div class="checkmark-wrap">
@@ -1251,6 +1299,7 @@ const state = {
   showAll: false,
   snGroups: [],         // from SN test
   selectedSNGroups: new Set(),
+  projectSnGroups: {},  // { "ProjectName": "SN group name" } — set on Screen 4
 };
 
 /* ════════════════
@@ -1275,7 +1324,8 @@ function goTo(n) {
 function activateScreen(n) {
   if (n === 2) prepareScreen2();
   if (n === 3) prepareScreen3();
-  if (n === 4) prepareScreen4();
+  if (n === 4) prepareScreen4Mapping();
+  if (n === 5) prepareScreen5();
 
   const next = document.getElementById('screen' + n);
   next.classList.add('active');
@@ -1285,7 +1335,7 @@ function activateScreen(n) {
   }));
   currentScreen = n;
 
-  if (n === 2 || n === 3) next.scrollTop = 0;
+  if (n === 2 || n === 3 || n === 4) next.scrollTop = 0;
 }
 
 /* ════════════════
@@ -1355,6 +1405,38 @@ function updateSelectionVisual() {
 
   const btn = document.getElementById('btnContinue1');
   btn.disabled = !state.selection;
+  updateStepLabels();
+}
+
+function updateStepLabels() {
+  const wantsBoth = state.selection === 'C' || state.selection === 'AB';
+  const total = wantsBoth ? 4 : 3;
+  // Use window._t only when available AND when it returns a translated value (not the raw key)
+  const tr = (key, fb) => {
+    if (!window._t) return fb;
+    const v = window._t(key);
+    return (v && v !== key) ? v : fb;
+  };
+
+  const el1 = document.getElementById('step-label-s1');
+  const el2 = document.getElementById('step-label-s2');
+  const el3 = document.getElementById('s3-step-label');
+  const d14  = document.getElementById('sd1-4');
+  const d24  = document.getElementById('sd2-4');
+  const d34  = document.getElementById('sd3-4');
+  const d33  = document.getElementById('sd3-3');
+
+  if (el1) el1.textContent = 'Step 1 of ' + total;
+  if (el2) el2.textContent = 'Step 2 of ' + total;
+  if (el3) el3.textContent = 'Step 3 of ' + total;
+
+  if (d14) d14.classList.toggle('hidden', !wantsBoth);
+  if (d24) d24.classList.toggle('hidden', !wantsBoth);
+  if (d34) d34.classList.toggle('hidden', !wantsBoth);
+  if (d33) d33.classList.toggle('active', !wantsBoth);
+
+  const lbl3 = document.getElementById('lblFinish3');
+  if (lbl3) lbl3.textContent = wantsBoth ? tr('ob_continue_btn', 'Continue') : tr('ob_finish_btn', 'Finish Setup');
 }
 
 updateSelectionVisual();
@@ -1474,7 +1556,7 @@ async function testSN() {
         body: JSON.stringify({ instance, user, pass }),
       });
       const gData = await gResp.json();
-      const newGroups = (gData.groups || []).map(name => ({ name }));
+      const newGroups = (gData.groups || []).map(g => (typeof g === 'object' && g !== null) ? g : { name: g, sys_id: '' });
 
       // Only reset selections when the group list actually changed (different SN instance / different groups).
       // If the user is just re-testing the same instance, preserve existing selections.
@@ -1586,9 +1668,17 @@ function _multiCard(p, realIdx) {
   </div>`;
 }
 
+function goToOrFinish() {
+  const wantsAz = state.selection === 'A' || state.selection === 'AB' || state.selection === 'C';
+  const wantsSn = state.selection === 'B' || state.selection === 'AB' || state.selection === 'C';
+  if (wantsAz && wantsSn) goTo(4);
+  else finishSetup();
+}
+
 function prepareScreen3() {
   const wantsAz = state.selection === 'A' || state.selection === 'AB' || state.selection === 'C';
   const wantsSn = state.selection === 'B' || state.selection === 'AB' || state.selection === 'C';
+  updateStepLabels();
 
   document.getElementById('azProjectsSection').classList.toggle('hidden', !wantsAz);
   document.getElementById('snGroupsSection').classList.toggle('hidden', !wantsSn);
@@ -1599,7 +1689,7 @@ function prepareScreen3() {
 
   // Update screen title directly — applyTranslations is not re-run here,
   // so we set textContent using window._t() (available after module init).
-  const _tt = (key, fb) => (window._t && window._t(key)) || fb;
+  const _tt = (key, fb) => { const v = window._t && window._t(key); return (v && v !== key) ? v : fb; };
   const titleEl = document.getElementById('s3title');
   const subEl   = document.getElementById('s3sub');
   if (wantsAz && wantsSn) {
@@ -1771,6 +1861,55 @@ function selectAllSNGroups(select) {
 }
 
 /* ════════════════
+   SCREEN 4 — MAPPING
+════════════════ */
+function prepareScreen4Mapping() {
+  renderSnMapping();
+}
+
+function renderSnMapping() {
+  const list = document.getElementById('snMappingList');
+  if (!list) return;
+  const bases = [...new Set([...state.selectedKeys].map(k => k.split('|')[0]))];
+  if (!bases.length) {
+    list.innerHTML = '<div class="sn-map-empty">Select Azure projects in the previous step first.</div>';
+    return;
+  }
+  const noOption = '<option value="">— Select group —</option>';
+  list.innerHTML = bases.map(base => {
+    const idx   = state.loadedProjects.findIndex(p => p.name === base);
+    const color = PROJECT_COLORS[(idx >= 0 ? idx : 0) % PROJECT_COLORS.length];
+    const current = state.projectSnGroups[base] || {};
+    const currentKey = current.sys_id || current.name || '';
+    const availableGroups = state.snGroups.filter(g => state.selectedSNGroups.has(g.name || g));
+    const opts = availableGroups.map(g => {
+      const val = g.sys_id || g.name || '';
+      return `<option value="${escHtml(val)}"${val === currentKey ? ' selected' : ''}>${escHtml(g.name || g)}</option>`;
+    }).join('');
+    return `<div class="sn-map-row">
+      <div class="sn-map-proj">
+        <div class="sn-map-icon" style="background:${color}">${escHtml(base[0] || '?')}</div>
+        <div class="sn-map-name" title="${escHtml(base)}">${escHtml(base)}</div>
+      </div>
+      <svg class="sn-map-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      <select class="sn-map-select" data-proj="${escHtml(base)}" onchange="setSnMapping(this)">
+        ${noOption}${opts}
+      </select>
+    </div>`;
+  }).join('');
+}
+
+function setSnMapping(sel) {
+  const proj = sel.dataset.proj;
+  if (sel.value) {
+    const optEl = sel.options[sel.selectedIndex];
+    state.projectSnGroups[proj] = { sys_id: sel.value, name: optEl ? optEl.textContent : sel.value };
+  } else {
+    delete state.projectSnGroups[proj];
+  }
+}
+
+/* ════════════════
    FINISH SETUP
 ════════════════ */
 async function finishSetup() {
@@ -1814,6 +1953,17 @@ async function finishSetup() {
           return; // Do not advance to Done screen on failure
         }
         azOk = true;
+        // Save per-project SN group mapping (set on Screen 4)
+        if (wantsSn && Object.keys(state.projectSnGroups).length > 0) {
+          const saves = Object.entries(state.projectSnGroups)
+            .filter(([, g]) => g && g.name)
+            .map(([project, g]) => fetch('/api/sn-config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ project, assignmentGroupName: g.name, assignmentGroup: g.sys_id || '' }),
+            }));
+          await Promise.allSettled(saves);
+        }
       } catch (err) {
         showToast('Azure setup error: ' + err.message, 'error');
         return; // Do not advance to Done screen on error
@@ -1861,13 +2011,13 @@ async function finishSetup() {
   // to /onboarding on next visit (even when no Azure config was provided).
   await fetch('/api/complete-onboarding', { method: 'POST' }).catch(() => {});
 
-  goTo(4);
+  goTo(5);
 }
 
 /* ════════════════
-   SCREEN 4 — DONE
+   SCREEN 5 — DONE
 ════════════════ */
-function prepareScreen4() {
+function prepareScreen5() {
   const sel = state.selection;
   const nProj = new Set(Array.from(state.selectedKeys).map(k => k.split('|')[0])).size;
   const checkSvg = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
@@ -1927,6 +2077,7 @@ import { initI18n, applyTranslations, t, setLocale, getLocale } from '/modules/i
 await initI18n();
 applyTranslations();
 window._t = t;
+updateStepLabels(); // reaplica labels dinâmicos que applyTranslations() sobrescreveu
 window.setLocale = (lang) => {
   setLocale(lang);
   // setLocale in i18n.js calls location.reload() after saving to localStorage

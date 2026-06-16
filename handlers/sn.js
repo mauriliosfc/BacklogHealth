@@ -11,6 +11,8 @@ function getSnCfg({ project = '' } = {}) {
     resp.assignmentGroupName = grp?.assignmentGroupName || '';
     resp.slaEnabled          = grp?.slaEnabled          === true;
     resp.slaThresholds       = grp?.slaThresholds       || null;
+  } else {
+    resp.assignmentGroups = Array.isArray(sn?.assignmentGroups) ? sn.assignmentGroups : [];
   }
   return resp;
 }
@@ -62,19 +64,28 @@ async function fetchGroups({ instance, user, pass } = {}) {
       'sysparm_limit=1000',
     ].join('&');
     const data = await snGet(snCfg, `table/incident?${qs}`);
-    const names = [...new Set(
-      (data.result || [])
-        .map(r => {
-          const v = r.assignment_group;
-          if (!v) return '';
-          return (typeof v === 'object' ? (v.display_value || v.value) : v) || '';
-        })
-        .filter(Boolean)
-    )].sort();
-    return { groups: names };
+    const seen = new Map();
+    (data.result || []).forEach(r => {
+      const v = r.assignment_group;
+      if (!v) return;
+      const sys_id = typeof v === 'object' ? (v.value || '') : '';
+      const name   = typeof v === 'object' ? (v.display_value || v.value || '') : (v || '');
+      if (!name) return;
+      const key = sys_id || name;
+      if (!seen.has(key)) seen.set(key, { name, sys_id });
+    });
+    const groups = [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return { groups };
   } catch (e) {
     return { error: e.message, groups: [] };
   }
+}
+
+// Fetches groups using credentials already saved in config (no need to pass them again).
+async function fetchGroupsFromConfig() {
+  const sn = getSnConfig();
+  if (!sn?.instance || !sn?.user || !sn?.pass) httpError(400, 'ServiceNow not configured.');
+  return fetchGroups({ instance: sn.instance, user: sn.user, pass: sn.pass });
 }
 
 function getAllProjectsSnCfg() {
@@ -88,4 +99,4 @@ function getAllProjectsSnCfg() {
   };
 }
 
-module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, getAllProjectsSnCfg };
+module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg };

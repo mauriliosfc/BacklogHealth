@@ -56,6 +56,12 @@
         <span class="su-tab-dirty" id="dirty-projects" style="display:none" title="Unsaved changes"></span>
       </button>
 
+      <button class="su-tab-btn" data-tab="sn-link" id="tab-sn-link" onclick="switchTab('sn-link')" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5.5 8.5l3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M3.5 6.5l-1 1a2.12 2.12 0 103 3l1-1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 3.5l1-1a2.12 2.12 0 113 3l-1 1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span data-i18n="settings_tab_sn_link">Integração SN</span>
+        <span class="su-tab-badge" id="tab-badge-sn-link"></span>
+      </button>
+
       <button class="su-tab-btn" data-tab="ai" onclick="switchTab('ai')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5C4 1.5 1.5 3.5 1.5 6c0 1.2.6 2.3 1.5 3.1V12l2.5-1.5A6.3 6.3 0 007 10.5c3 0 5.5-2 5.5-4.5S10 1.5 7 1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="4.5" cy="6" r=".7" fill="currentColor"/><circle cx="7" cy="6" r=".7" fill="currentColor"/><circle cx="9.5" cy="6" r=".7" fill="currentColor"/></svg>
         <span data-i18n="settings_tab_ai">Copilot AI</span>
@@ -63,9 +69,6 @@
         <span class="su-tab-dirty" id="dirty-ai" style="display:none" title="Unsaved changes"></span>
       </button>
 
-    </div>
-    <div class="su-tabs-bar-end">
-      {{BACK_LINK}}
     </div>
   </div>
 
@@ -174,13 +177,6 @@
           </div>
         </div>
       </div>
-      <div class="su-tab-footer">
-        <button class="su-save-btn" id="btn-save-azure" onclick="doSaveAzure()">
-          <span class="spinner" id="sp-azure" style="display:none"></span>
-          <span id="lbl-save-azure" data-i18n="settings_save_azure">Save Credentials</span>
-        </button>
-        <span class="su-tab-save-msg" id="azure-msg" style="display:none"></span>
-      </div>
     </div>
 
     <!-- ─────────────────────── ServiceNow ─────────────────────── -->
@@ -221,6 +217,21 @@
             <button class="su-test-btn" onclick="snTest()" data-i18n="sn_test_btn">Test Connection</button>
           </div>
 
+          <!-- Global assignment groups multiselect -->
+          <div class="su-form-card">
+            <div class="su-sn-proj-title" data-i18n="settings_sn_groups_title">Assignment Groups</div>
+            <div class="su-hint" data-i18n="settings_sn_groups_hint">Groups monitored for incidents in reports. Required in SN-only mode.</div>
+            <div class="sn-ms-wrap" id="sn-ms-wrap" onclick="document.getElementById('sn-ms-input').focus()">
+              <input class="sn-ms-input" id="sn-ms-input" type="text"
+                placeholder="Search and select groups…" autocomplete="off"
+                oninput="snMsFilter(this.value)"
+                onkeydown="snMsKeydown(event)"
+                onfocus="snMsOpen()"
+                onblur="setTimeout(snMsClose,160)">
+            </div>
+            <div class="sn-ms-dropdown" id="sn-ms-dropdown" style="display:none"></div>
+          </div>
+
           <!-- Per-project assignment group -->
           <div class="su-form-card su-sn-proj-card">
             <div class="su-sn-proj-title" data-i18n="settings_sn_proj_section">Per-project Assignment Group</div>
@@ -240,13 +251,6 @@
           </div>
 
         </div>
-      </div>
-      <div class="su-tab-footer">
-        <button class="su-save-btn" id="btn-save-sn" onclick="snSaveAndMark()">
-          <span class="spinner" id="sp-sn" style="display:none"></span>
-          <span id="lbl-save-sn" data-i18n="settings_save_sn">Save ServiceNow</span>
-        </button>
-        <span class="su-tab-save-msg" id="sn-msg" style="display:none"></span>
       </div>
     </div>
 
@@ -279,12 +283,18 @@
 
         </div>
       </div>
-      <div class="su-tab-footer">
-        <button class="su-save-btn" id="btn-save" onclick="doSave()">
-          <span class="spinner" id="sp-save" style="display:none"></span>
-          <span id="lbl-save" data-i18n="setup_btn_save">Save and Open Dashboard</span>
-        </button>
-        <span class="su-tab-save-msg" id="projects-msg" style="display:none"></span>
+    </div>
+
+    <!-- ─────────────────────── Integração SN ─────────────────────── -->
+    <div class="su-tab-panel" id="panel-sn-link">
+      <div class="su-tab-body">
+        <div class="su-tab-inner">
+          <div class="su-tab-page-header">
+            <h1 class="su-tab-page-title" data-i18n="settings_tab_sn_link">Integração SN</h1>
+          </div>
+          <p class="su-section-desc" data-i18n="settings_sn_link_desc">Associe cada projeto Azure ao grupo de atribuição correspondente no ServiceNow.</p>
+          <div class="su-snmap-panel" id="sn-mapping-list"></div>
+        </div>
       </div>
     </div>
 
@@ -378,13 +388,6 @@
 
         </div>
       </div>
-      <div class="su-tab-footer">
-        <button class="su-save-btn" id="btn-save-ai" onclick="doSaveAI()">
-          <span class="spinner" id="sp-ai" style="display:none"></span>
-          <span id="lbl-save-ai" data-i18n="settings_save_ai">Save AI Config</span>
-        </button>
-        <span class="su-tab-save-msg" id="ai-msg" style="display:none"></span>
-      </div>
     </div>
 
   </div>
@@ -392,6 +395,49 @@
 
 </div>
 <!-- end .su-tabs-layout -->
+
+<!-- ── Fixed bottom bar ── -->
+<div id="su-fixed-footer" class="su-fixed-footer">
+  <div class="su-footer-actions" id="footer-azure">
+    <span class="su-tab-save-msg" id="azure-msg" style="display:none"></span>
+    <button class="su-save-btn" id="btn-save-azure" onclick="doSaveAzure()">
+      <span class="spinner" id="sp-azure" style="display:none"></span>
+      <span id="lbl-save-azure" data-i18n="settings_save_azure">Save Credentials</span>
+    </button>
+  </div>
+  <div class="su-footer-actions" id="footer-sn" style="display:none">
+    <span class="su-tab-save-msg" id="sn-msg" style="display:none"></span>
+    <button class="su-save-btn" id="btn-save-sn" onclick="snSaveAndMark()">
+      <span class="spinner" id="sp-sn" style="display:none"></span>
+      <span id="lbl-save-sn" data-i18n="settings_save_sn">Save ServiceNow</span>
+    </button>
+  </div>
+  <div class="su-footer-actions" id="footer-projects" style="display:none">
+    <span class="su-tab-save-msg" id="projects-msg" style="display:none"></span>
+    <button class="su-save-btn" id="btn-save" onclick="doSave()">
+      <span class="spinner" id="sp-save" style="display:none"></span>
+      <span id="lbl-save" data-i18n="setup_btn_save">Save and Open Dashboard</span>
+    </button>
+  </div>
+  <div class="su-footer-actions" id="footer-sn-link" style="display:none">
+    <span class="su-tab-save-msg" id="sn-link-msg" style="display:none"></span>
+    <button class="su-save-btn" id="btn-save-sn-link" onclick="doSaveSnMapping()">
+      <span class="spinner" id="sp-sn-link" style="display:none"></span>
+      <span id="lbl-save-sn-link" data-i18n="settings_sn_link_save">Salvar Mapeamento</span>
+    </button>
+  </div>
+  <div class="su-footer-actions" id="footer-ai" style="display:none">
+    <span class="su-tab-save-msg" id="ai-msg" style="display:none"></span>
+    <button class="su-save-btn" id="btn-save-ai" onclick="doSaveAI()">
+      <span class="spinner" id="sp-ai" style="display:none"></span>
+      <span id="lbl-save-ai" data-i18n="settings_save_ai">Save AI Config</span>
+    </button>
+  </div>
+  <a class="su-back-link" href="/" data-i18n="setup_back">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to Dashboard
+  </a>
+</div>
 
 <script type="module">
   import { initI18n, applyTranslations, t, setLocale, getLocale } from '/modules/i18n.js';
@@ -419,14 +465,22 @@
 
   let ALL_PROJECTS = [];
   let SELECTED_SET = new Set(Object.keys(WORK_ITEM_TYPES));
+  let _snConfigured = false;
+  let _snProjMap = {};
+  function _snBaseKey(key) { const i = key.indexOf('|'); return i >= 0 ? key.slice(0, i) : key; }
+  function _snSafeKey(key) { return key.replace(/[^a-zA-Z0-9]/g, '_'); }
 
   // ── Tab switching ────────────────────────────────────────────────────────
   function switchTab(tab) {
     document.querySelectorAll('.su-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.su-tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
-    if (tab === 'sn')       _snLoadAllProjects();
+    document.querySelectorAll('.su-footer-actions').forEach(a => a.style.display = 'none');
+    const fa = document.getElementById('footer-' + tab);
+    if (fa) fa.style.display = 'flex';
+    if (tab === 'sn')       { _snLoadAllProjects(); _snLoadGlobalGroups(); }
     if (tab === 'ai')       aiLoad();
     if (tab === 'projects') updateTabBadgeProjects();
+    if (tab === 'sn-link')  renderSnMapping();
     try { sessionStorage.setItem('settings_tab', tab); } catch(_) {}
   }
 
@@ -435,8 +489,9 @@
     try {
       const urlTab  = new URLSearchParams(location.search).get('tab');
       const storTab = sessionStorage.getItem('settings_tab');
-      const tab = (urlTab && ['azure','sn','projects','ai'].includes(urlTab)) ? urlTab : storTab;
-      if (tab && ['azure','sn','projects','ai'].includes(tab)) switchTab(tab);
+      const allowed = ['azure','sn','projects','sn-link','ai'];
+      const tab = (urlTab && allowed.includes(urlTab)) ? urlTab : storTab;
+      if (tab && allowed.includes(tab)) switchTab(tab);
     } catch(_) {}
   })();
 
@@ -751,29 +806,32 @@
     updateCount();
     updateTabBadgeProjects();
     markDirty('projects');
+    updateSnMappingTab();
+    const mappingPanel = document.getElementById('panel-sn-link');
+    if (mappingPanel && mappingPanel.classList.contains('active')) renderSnMapping();
   }
 
   function _refreshProjItem(cb, key) {
     const teamRow = cb.closest('.su-team-row');
     if (teamRow) {
       teamRow.classList.toggle('selected', cb.checked);
-      let wit = teamRow.querySelector('.su-wit-wrap');
+      const wit = teamRow.querySelector('.su-wit-wrap');
       if (cb.checked && !wit) {
-        const wrap = document.createElement('div');
-        wrap.innerHTML = _witToggle(key, WORK_ITEM_TYPES[key] || 'User Story');
-        teamRow.appendChild(wrap.firstElementChild);
-      } else if (!cb.checked && wit) { wit.remove(); }
+        teamRow.insertAdjacentHTML('beforeend', _witToggle(key, WORK_ITEM_TYPES[key] || 'User Story'));
+      } else if (!cb.checked && wit) {
+        wit.remove();
+      }
       return;
     }
     const projItem = cb.closest('.su-proj-item');
     if (projItem) {
       projItem.classList.toggle('selected', cb.checked);
-      let wit = projItem.querySelector('.su-wit-wrap');
+      const wit = projItem.querySelector('.su-wit-wrap');
       if (cb.checked && !wit) {
-        const wrap = document.createElement('div');
-        wrap.innerHTML = _witToggle(key, WORK_ITEM_TYPES[key] || 'User Story');
-        projItem.appendChild(wrap.firstElementChild);
-      } else if (!cb.checked && wit) { wit.remove(); }
+        projItem.insertAdjacentHTML('beforeend', _witToggle(key, WORK_ITEM_TYPES[key] || 'User Story'));
+      } else if (!cb.checked && wit) {
+        wit.remove();
+      }
     }
   }
 
@@ -810,6 +868,102 @@
     });
   }
 
+  // ── Save SN groups mapping ────────────────────────────────────────────────
+  async function _saveSnGroups() {
+    if (!_snConfigured) return;
+    const saves = [];
+    const seen  = new Set();
+    for (const key of SELECTED_SET) {
+      const base = _snBaseKey(key);
+      if (seen.has(base)) continue;
+      seen.add(base);
+      const safe    = _snSafeKey(base);
+      const gnameEl = document.getElementById('sn-gname-' + safe);
+      const agEl    = document.getElementById('sn-ag-'    + safe);
+      if (!gnameEl || !agEl) continue;
+      const gname = gnameEl.value.trim();
+      const ag    = agEl.value.trim();
+      if (!gname && !ag) continue;
+      const existing = _snProjMap[base] || {};
+      if (existing.assignmentGroupName === gname && existing.assignmentGroup === ag) continue;
+      saves.push(fetch('/api/sn-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project: base, assignmentGroup: ag, assignmentGroupName: gname }),
+      }));
+    }
+    if (saves.length) await Promise.allSettled(saves);
+  }
+
+  // ── SN mapping tab ────────────────────────────────────────────────────────
+  function renderSnMapping() {
+    const list = document.getElementById('sn-mapping-list');
+    if (!list) return;
+    if (!SELECTED_SET.size) {
+      list.innerHTML = `<div class="su-snmap-hint">${_tr('sn_map_no_projects', 'Selecione projetos na aba Projects primeiro.')}</div>`;
+      return;
+    }
+    const seen = new Set();
+    const rows = [];
+    for (const key of SELECTED_SET) {
+      const base = _snBaseKey(key);
+      if (seen.has(base)) continue;
+      seen.add(base);
+      const safe  = _snSafeKey(base);
+      const p     = _snProjMap[base] || {};
+      const gname = (p.assignmentGroupName || '').replace(/"/g, '&quot;');
+      const ag    = (p.assignmentGroup    || '').replace(/"/g, '&quot;');
+      const color    = _iconColor(base);
+      const initials = _initials(base);
+      rows.push(`<div class="su-snmap-row">
+        <div class="su-snmap-proj">
+          <div class="su-snmap-proj-icon" style="background:${color}">${initials}</div>
+          <div class="su-snmap-proj-name" title="${base.replace(/"/g,'&quot;')}">${base}</div>
+        </div>
+        <div class="su-snmap-inputs">
+          <input class="su-input su-snmap-gname" id="sn-gname-${safe}" value="${gname}" placeholder="${_tr('sn_map_group_name','Nome do grupo')}" autocomplete="off">
+          <input class="su-input su-snmap-ag"    id="sn-ag-${safe}"    value="${ag}"    placeholder="sys_id"                                        autocomplete="off">
+        </div>
+      </div>`);
+    }
+    list.innerHTML = rows.join('');
+  }
+
+  function updateSnMappingTab() {
+    const btn = document.getElementById('tab-sn-link');
+    if (!btn) return;
+    btn.style.display = _snConfigured ? '' : 'none';
+    if (!_snConfigured) {
+      const panel = document.getElementById('panel-sn-link');
+      if (panel && panel.classList.contains('active')) switchTab('projects');
+    }
+    const badge = document.getElementById('tab-badge-sn-link');
+    if (badge && _snConfigured) {
+      const mapped = [...new Set([...SELECTED_SET].map(_snBaseKey))]
+        .filter(b => _snProjMap[b] && _snProjMap[b].assignmentGroup).length;
+      const total  = new Set([...SELECTED_SET].map(_snBaseKey)).size;
+      badge.textContent = total ? `${mapped}/${total}` : '';
+      badge.className   = 'su-tab-badge ' + (mapped === total && total > 0 ? 'su-tab-badge--ok' : 'su-tab-badge--warn');
+    }
+  }
+
+  async function doSaveSnMapping() {
+    const btn = document.getElementById('btn-save-sn-link');
+    btn.disabled = true;
+    document.getElementById('sp-sn-link').style.display = 'inline-block';
+    document.getElementById('lbl-save-sn-link').textContent = _tr('setup_btn_saving', 'Saving…');
+    try {
+      await _saveSnGroups();
+      await _snLoadAllProjects();
+      showMsg('sn-link-msg', 'ok', _tr('settings_sn_link_saved', 'Mapeamento salvo!'));
+    } catch(e) {
+      showMsg('sn-link-msg', 'err', e.message);
+    }
+    btn.disabled = false;
+    document.getElementById('sp-sn-link').style.display = 'none';
+    document.getElementById('lbl-save-sn-link').textContent = _tr('settings_sn_link_save', 'Salvar Mapeamento');
+  }
+
   // ── Save Azure credentials ────────────────────────────────────────────────
   async function doSaveAzure() {
     const org = document.getElementById('inp-org').value.trim();
@@ -830,6 +984,7 @@
       const r    = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.ok) {
+        await _saveSnGroups();
         showMsg('azure-msg', 'ok', _tr('settings_save_azure_ok', 'Credentials saved!'));
         clearDirty('azure');
         updateTabBadges();
@@ -865,7 +1020,7 @@
       const body = 'org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat) + '&projects=' + encodeURIComponent(selected.join(','));
       const r    = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
       const data = await r.json().catch(() => ({}));
-      if (r.ok && data.ok) { location.href = '/'; return; }
+      if (r.ok && data.ok) { await _saveSnGroups(); location.href = '/'; return; }
       showMsg('projects-msg', 'err', data.error || _tr('setup_err_save', 'Error saving settings.'));
     } catch(e) { showMsg('projects-msg', 'err', e.message); }
     btn.disabled = false;
@@ -881,13 +1036,117 @@
       if (d.instance) document.getElementById('sn-instance').value = d.instance;
       if (d.user)     document.getElementById('sn-user').value     = d.user;
       if (d.hasPass)  document.getElementById('sn-pass').placeholder = '••••••••  (saved)';
+      _snGlobalGroups = Array.isArray(d.assignmentGroups) ? [...d.assignmentGroups] : [];
+      snMsRender();
+      _snLoadGlobalGroups();
       const configured = !!(d.instance && d.user);
+      _snConfigured = configured;
+      updateSnMappingTab();
       const banner = document.getElementById('sn-banner');
       if (!configured && banner) banner.style.display = 'flex';
       _setTabBadge('sn', configured, 'settings_configured', 'settings_not_configured');
     } catch(_) {}
   }
+
+  // ── Global assignment groups — multiselect ───────────────────────────────
+  let _snGlobalGroups = [];  // selected (saved to config)
+  let _snAllGroups    = [];  // all available from SN API
+  let _snMsQuery      = '';
+
+  function snMsRender() {
+    const wrap  = document.getElementById('sn-ms-wrap');
+    const input = document.getElementById('sn-ms-input');
+    if (!wrap || !input) return;
+    wrap.querySelectorAll('.sn-group-chip').forEach(el => el.remove());
+    _snGlobalGroups.forEach((g, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'sn-group-chip';
+      chip.innerHTML = `${_snEsc(g)}<button class="sn-group-chip-rm" type="button" onmousedown="event.preventDefault();snMsRemove(${i})" title="Remove">&times;</button>`;
+      wrap.insertBefore(chip, input);
+    });
+    input.placeholder = _snGlobalGroups.length ? '' : 'Search and select groups…';
+    _snMsRenderDropdown();
+  }
+
+  function _snMsRenderDropdown() {
+    const dd = document.getElementById('sn-ms-dropdown');
+    if (!dd) return;
+    const q   = _snMsQuery.toLowerCase();
+    const opts = _snAllGroups.filter(g => !_snGlobalGroups.includes(g) && (!q || g.toLowerCase().includes(q)));
+    if (!opts.length) { dd.style.display = 'none'; return; }
+    dd.innerHTML = opts.map(g =>
+      `<div class="sn-ms-opt" onmousedown="event.preventDefault();snMsSelect('${g.replace(/'/g, "\\'")}')">` +
+      (q ? _snEsc(g).replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'), '<mark>$1</mark>') : _snEsc(g)) +
+      `</div>`
+    ).join('');
+    dd.style.display = 'block';
+  }
+
+  function snMsFilter(val) {
+    _snMsQuery = val;
+    _snMsRenderDropdown();
+  }
+
+  function snMsOpen() {
+    _snMsRenderDropdown();
+  }
+
+  function snMsClose() {
+    const dd = document.getElementById('sn-ms-dropdown');
+    if (dd) dd.style.display = 'none';
+  }
+
+  function snMsSelect(name) {
+    if (name && !_snGlobalGroups.includes(name)) {
+      _snGlobalGroups.push(name);
+      _snSaveGlobalGroups();
+    }
+    const inp = document.getElementById('sn-ms-input');
+    if (inp) { inp.value = ''; inp.focus(); }
+    _snMsQuery = '';
+    snMsRender();
+  }
+
+  function snMsRemove(idx) {
+    _snGlobalGroups.splice(idx, 1);
+    snMsRender();
+    _snSaveGlobalGroups();
+  }
+
+  function snMsKeydown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = e.target.value.trim();
+      if (val) snMsSelect(val);
+    } else if (e.key === 'Escape') {
+      snMsClose();
+    } else if (e.key === 'Backspace' && !e.target.value && _snGlobalGroups.length) {
+      snMsRemove(_snGlobalGroups.length - 1);
+    }
+  }
+
+  async function _snSaveGlobalGroups() {
+    try {
+      await fetch('/api/sn-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignmentGroups: _snGlobalGroups }),
+      });
+    } catch(_) {}
+  }
+
+  async function _snLoadGlobalGroups() {
+    try {
+      const r = await fetch('/api/sn-groups');
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.error) return;
+      _snAllGroups = (d.groups || []).map(g => g.name || g);
+    } catch(_) {}
+    snMsRender();
+  }
   _loadSnConfig();
+  _snLoadAllProjects();
 
   async function snTest() {
     const instance = document.getElementById('sn-instance').value.trim();
@@ -949,7 +1208,11 @@
       const r = await fetch('/api/sn-projects');
       const d = await r.json();
       _snProjData = d.projects || [];
+      _snProjMap = {};
+      _snProjData.forEach(p => { _snProjMap[p.name] = p; });
       _snRenderProjTable();
+      updateSnMappingTab();
+      if (ALL_PROJECTS.length) renderProjectList(ALL_PROJECTS);
     } catch(_) {}
   }
 

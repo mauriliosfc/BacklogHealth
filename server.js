@@ -305,7 +305,12 @@ async function main() {
       return json(res, () => snH.testSn(JSON.parse(body || '{}')));
     }
 
-    // ── POST /api/sn-groups ────────────────────────────────────────────────
+    // ── GET /api/sn-groups (uses saved config credentials) ────────────────
+    if (req.method === 'GET' && url === '/api/sn-groups') {
+      return json(res, () => snH.fetchGroupsFromConfig());
+    }
+
+    // ── POST /api/sn-groups (raw credentials — onboarding) ────────────────
     if (req.method === 'POST' && url === '/api/sn-groups') {
       const body = await readBody(req);
       return json(res, () => snH.fetchGroups(JSON.parse(body || '{}')));
