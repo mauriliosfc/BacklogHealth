@@ -1,7 +1,7 @@
 jest.mock('../../../config');
 jest.mock('../../../servicenowClient');
 
-const { getSnCfg, saveSnCfg, testSn, fetchGroups, getAllProjectsSnCfg } = require('../../../handlers/sn');
+const { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg } = require('../../../handlers/sn');
 const { getSnConfig, saveSnConfig, getProjectSnGroup, getCfg } = require('../../../config');
 const { snGet } = require('../../../servicenowClient');
 
@@ -64,6 +64,31 @@ describe('getSnCfg', () => {
 
     expect(result).not.toHaveProperty('assignmentGroup');
     expect(getProjectSnGroup).not.toHaveBeenCalled();
+  });
+
+  test('retorna assignmentGroups do config quando project não fornecido', () => {
+    getSnConfig.mockReturnValue({ instance: 'x', user: 'u', assignmentGroups: ['IT Support', 'Network Ops'] });
+
+    const { assignmentGroups } = getSnCfg({});
+
+    expect(assignmentGroups).toEqual(['IT Support', 'Network Ops']);
+  });
+
+  test('retorna assignmentGroups vazio quando não configurado', () => {
+    getSnConfig.mockReturnValue({ instance: 'x', user: 'u' });
+
+    const { assignmentGroups } = getSnCfg({});
+
+    expect(assignmentGroups).toEqual([]);
+  });
+
+  test('não expõe assignmentGroups quando project é fornecido', () => {
+    getSnConfig.mockReturnValue({ instance: 'x', user: 'u', assignmentGroups: ['IT Support'] });
+    getProjectSnGroup.mockReturnValue(null);
+
+    const result = getSnCfg({ project: 'Alpha' });
+
+    expect(result).not.toHaveProperty('assignmentGroups');
   });
 });
 
@@ -172,7 +197,7 @@ describe('fetchGroups', () => {
       .rejects.toMatchObject({ status: 400 });
   });
 
-  test('retorna lista de nomes únicos ordenados', async () => {
+  test('retorna lista de objetos {name, sys_id} únicos ordenados', async () => {
     snGet.mockResolvedValue({ result: [
       { assignment_group: 'Network Ops' },
       { assignment_group: 'Database' },
@@ -180,15 +205,19 @@ describe('fetchGroups', () => {
       { assignment_group: 'Application' },
     ]});
     const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
-    expect(groups).toEqual(['Application', 'Database', 'Network Ops']);
+    expect(groups).toEqual([
+      { name: 'Application', sys_id: '' },
+      { name: 'Database',    sys_id: '' },
+      { name: 'Network Ops', sys_id: '' },
+    ]);
   });
 
-  test('suporta campos com formato {value, display_value}', async () => {
+  test('suporta campos com formato {value, display_value} e extrai sys_id', async () => {
     snGet.mockResolvedValue({ result: [
       { assignment_group: { value: 'grp_id', display_value: 'My Group' } },
     ]});
     const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
-    expect(groups).toEqual(['My Group']);
+    expect(groups).toEqual([{ name: 'My Group', sys_id: 'grp_id' }]);
   });
 
   test('ignora linhas sem assignment_group', async () => {
@@ -198,7 +227,7 @@ describe('fetchGroups', () => {
       { assignment_group: '' },
     ]});
     const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
-    expect(groups).toEqual(['Ops']);
+    expect(groups).toEqual([{ name: 'Ops', sys_id: '' }]);
   });
 
   test('retorna { error, groups: [] } quando API falha (não lança exceção)', async () => {
@@ -274,5 +303,28 @@ describe('getAllProjectsSnCfg', () => {
     });
     const { projects } = getAllProjectsSnCfg();
     expect(Object.keys(projects[0])).toEqual(['name', 'assignmentGroup', 'assignmentGroupName']);
+  });
+});
+
+// ── fetchGroupsFromConfig ─────────────────────────────────────────────────────
+
+describe('fetchGroupsFromConfig', () => {
+  test('lança 400 quando SN não configurado', async () => {
+    getSnConfig.mockReturnValue(null);
+    await expect(fetchGroupsFromConfig()).rejects.toMatchObject({ status: 400 });
+  });
+
+  test('lança 400 quando credenciais incompletas', async () => {
+    getSnConfig.mockReturnValue({ instance: 'x', user: 'u' }); // sem pass
+    await expect(fetchGroupsFromConfig()).rejects.toMatchObject({ status: 400 });
+  });
+
+  test('delega para fetchGroups com credenciais salvas', async () => {
+    getSnConfig.mockReturnValue({ instance: 'corp.service-now.com', user: 'admin', pass: 'secret' });
+    snGet.mockResolvedValue({ result: [
+      { assignment_group: { value: 'grp1', display_value: 'IT Support' } },
+    ]});
+    const { groups } = await fetchGroupsFromConfig();
+    expect(groups).toEqual([{ name: 'IT Support', sys_id: 'grp1' }]);
   });
 });
