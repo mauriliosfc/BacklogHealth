@@ -1785,7 +1785,7 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .su-tab-footer { display: none; }
 
 /* Fixed bottom bar */
-.su-fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 12px 32px; background: var(--bg-card); border-top: 1px solid var(--bg-border); z-index: 100; }
+.su-fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: flex-start; padding: 12px 32px; background: var(--bg-card); border-top: 1px solid var(--bg-border); z-index: 100; }
 .su-footer-actions { display: flex; align-items: center; gap: 14px; }
 .su-footer-actions .su-save-btn { width: auto; padding: 10px 22px; margin: 0; font-size: 13px; }
 
@@ -1859,6 +1859,30 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .sn-row-status { font-size: 11px; margin-left: 6px; vertical-align: middle; }
 .sn-proj-empty { color: var(--text-faint); font-size: 13px; padding: 20px 0; text-align: center; }
 .sn-proj-table .su-input { padding: 5px 8px !important; font-size: 12px !important; height: auto !important; }
+
+/* SN inline group selector (Projects tab, per-project) */
+.su-sn-inline { margin: 0 20px 12px; padding: 10px 14px; background: var(--bg-el); border: 1px solid var(--bg-border); border-radius: 8px; position: relative; }
+.su-sn-inline-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+.su-sn-inline-trigger { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--bg-border); border-radius: 6px; background: var(--bg-card); color: var(--text-3); font-size: 12px; cursor: pointer; transition: border-color .15s; }
+.su-sn-inline-trigger:hover { border-color: #06b6d4; color: var(--text-2); }
+.su-sn-inline-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px 5px 12px; background: rgba(6,182,212,.08); border: 1px solid rgba(6,182,212,.3); border-radius: 20px; font-size: 12px; color: #0e7490; font-weight: 500; }
+.su-sn-inline-clear { background: none; border: none; cursor: pointer; color: #0e7490; font-size: 16px; line-height: 1; padding: 0; opacity: .7; transition: opacity .15s; }
+.su-sn-inline-clear:hover { opacity: 1; }
+.su-sn-inline-dd { position: fixed; background: var(--bg-card); border: 1px solid var(--bg-border); border-radius: 8px; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,.18); overflow: hidden; }
+.su-sn-inline-search { width: 100%; padding: 9px 12px; border: none; border-bottom: 1px solid var(--bg-border); background: var(--bg-el); color: var(--text-1); font-size: 12px; outline: none; box-sizing: border-box; }
+.su-sn-inline-opts { max-height: 180px; overflow-y: auto; }
+.su-sn-inline-opt { padding: 8px 12px; font-size: 12px; color: var(--text-2); cursor: pointer; transition: background .1s; }
+.su-sn-inline-opt:hover { background: var(--bg-el); color: var(--text-1); }
+.su-sn-inline-opt mark { background: none; color: #06b6d4; font-weight: 600; }
+.su-sn-inline-empty { padding: 10px 12px; font-size: 12px; color: var(--text-faint); font-style: italic; }
+
+/* SN adaptive mode — DevOps-only info note and CTA */
+.su-sn-devops-note { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; margin-bottom: 16px; background: rgba(6,182,212,.06); border: 1px solid rgba(6,182,212,.2); border-radius: 10px; font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.su-sn-devops-note svg { flex-shrink: 0; margin-top: 1px; color: #06b6d4; }
+.su-sn-cta-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px 24px; border: 1.5px dashed var(--bg-border); border-radius: 12px; background: var(--bg-el); margin-bottom: 16px; }
+.su-sn-cta-card svg { margin-bottom: 12px; opacity: .5; }
+.su-sn-cta-title { font-size: 14px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
+.su-sn-cta-sub { font-size: 12px; color: var(--text-faint); max-width: 400px; line-height: 1.5; }
 
 /* AI behaviors card */
 .su-ai-behaviors-card { display: flex; flex-direction: column; gap: 14px; }
