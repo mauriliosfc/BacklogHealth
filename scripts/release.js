@@ -130,7 +130,21 @@ run(`git push origin v${version}`);
 
 // --- 4. build ---
 console.log('\n[3/4] Build Electron');
-run('npm run electron:build');
+const feedbackCfgPath = path.join(ROOT, 'utils', 'feedbackCfg.js');
+const feedbackCfgTemplate = `// Gerado pelo scripts/release.js — não editar manualmente\n// Token injetado em build time via FEEDBACK_TOKEN; vazio em desenvolvimento\nmodule.exports = { token: '', repo: 'mauriliosfc/BacklogHealth' };\n`;
+const feedbackToken = process.env.FEEDBACK_TOKEN || '';
+if (feedbackToken) {
+  console.log('    Injetando FEEDBACK_TOKEN em utils/feedbackCfg.js');
+  fs.writeFileSync(feedbackCfgPath, `// Gerado pelo scripts/release.js — não editar manualmente\nmodule.exports = { token: '${feedbackToken}', repo: 'mauriliosfc/BacklogHealth' };\n`);
+} else {
+  console.warn('    Aviso: FEEDBACK_TOKEN não definido — feedback ficará desabilitado nesta build');
+}
+try {
+  run('npm run electron:build');
+} finally {
+  fs.writeFileSync(feedbackCfgPath, feedbackCfgTemplate);
+  console.log('    utils/feedbackCfg.js resetado (token removido do disco)');
+}
 
 // --- 5. github release ---
 console.log('\n[4/4] GitHub Release');
