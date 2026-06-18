@@ -1425,6 +1425,8 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .btn-sn-config:hover { color: var(--text); background: var(--bg-el); }
 .btn-ai-report { background: none; border: 1px solid var(--c-blue); color: var(--c-blue); cursor: pointer; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; letter-spacing: .03em; transition: background .15s, color .15s; white-space: nowrap; }
 .btn-ai-report:hover { background: var(--c-blue); color: #fff; }
+.btn-export-html { display: inline-flex; align-items: center; gap: 4px; background: none; border: 1px solid var(--bg-border); color: var(--text-3); cursor: pointer; padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 600; letter-spacing: .03em; transition: border-color .15s, color .15s; white-space: nowrap; }
+.btn-export-html:hover { border-color: var(--text-2); color: var(--text-1); }
 
 /* ── SN Config Modal ─────────────────────────────────────────────────────────── */
 .sn-config-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 820; align-items: center; justify-content: center; backdrop-filter: blur(3px); }

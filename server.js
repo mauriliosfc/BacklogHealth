@@ -74,7 +74,8 @@ async function main() {
     // ── Static files ──────────────────────────────────────────────────────
     const urlPath    = url.split('?')[0];
     const staticPath = nodePath.join(PUBLIC_DIR, urlPath);
-    if (fs.existsSync(staticPath) && fs.statSync(staticPath).isFile()) {
+    const staticSafe = staticPath.startsWith(PUBLIC_DIR + nodePath.sep) || staticPath === PUBLIC_DIR;
+    if (staticSafe && fs.existsSync(staticPath) && fs.statSync(staticPath).isFile()) {
       const ext       = nodePath.extname(staticPath);
       const mimeTypes = { '.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json', '.svg': 'image/svg+xml' };
       res.writeHead(200, { 'Content-Type': (mimeTypes[ext] || 'text/plain') + '; charset=utf-8' });

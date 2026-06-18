@@ -1474,7 +1474,9 @@ function _buildHTML(payload) {
   const savedNotes = localStorage.getItem(`reportNotes::${_reportProject}::${_reportMonth}`) || '';
   const notesBar = `<div class="report-notes-bar">
     <textarea class="report-notes-input" placeholder="Anotações para este relatório..." onchange="reportSaveNotes(this.value)">${_esc(savedNotes)}</textarea>
-    <button class="report-print-btn" onclick="window.print()" title="Imprimir / Exportar PDF">&#128424; Imprimir / PDF</button>
+    <button class="report-print-btn" onclick="exportReportHtml()" title="Exportar como HTML">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3"/><polyline points="10 6 8 8 6 6"/><line x1="8" y1="8" x2="8" y2="2"/></svg>
+      Exportar HTML</button>
   </div>`;
 
   return `
@@ -2515,6 +2517,67 @@ export function toggleReportIncMax() {
   const isMax = panel.classList.toggle('maximized');
   const btn = document.getElementById('report-inc-max-btn');
   if (btn) btn.textContent = isMax ? '⤡' : '⤢';
+}
+
+export async function exportReportHtml() {
+  const body = document.getElementById('report-modal-body');
+  if (!body || !body.innerHTML.trim()) return;
+
+  const project  = _reportProject || '';
+  const month    = _reportMonth   || '';
+  const theme    = document.documentElement.getAttribute('data-theme') || 'dark';
+  const safeName = project.replace(/[^a-zA-Z0-9]/g, '-');
+  const title    = `Review Mensal — ${project}${month ? ' — ' + month : ''}`;
+  const now      = new Date().toLocaleString('pt-BR');
+
+  const css = await fetch('/style.css').then(r => r.text()).catch(() => '');
+
+  const clone = body.cloneNode(true);
+  // strip interactive controls not meaningful in a static export
+  clone.querySelectorAll('.report-chart-edit-btn, .report-field-picker, .report-picker-overlay').forEach(el => el.remove());
+  clone.querySelectorAll('button').forEach(el => el.style.display = 'none');
+  clone.querySelectorAll('[onclick]').forEach(el => el.removeAttribute('onclick'));
+  clone.querySelectorAll('textarea').forEach(el => {
+    const p = document.createElement('p');
+    p.className = 'report-notes-text';
+    p.style.cssText = 'white-space:pre-wrap;margin:0;color:var(--text-2);font-size:13px;line-height:1.6';
+    p.textContent = el.value;
+    el.replaceWith(p);
+  });
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR" data-theme="${theme}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.report-modal-body{height:auto!important;overflow:visible!important;max-height:none!important}
+${css}
+</style>
+</head>
+<body class="report-body">
+<div style="position:sticky;top:0;z-index:100;padding:10px 24px;background:var(--bg-card);border-bottom:1px solid var(--bg-border);display:flex;align-items:center;gap:12px">
+  <span style="font-size:13px;font-weight:700;color:var(--text-1)">Backlog Health</span>
+  <span style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted)">Service Delivery Report</span>
+  <span style="margin-left:auto;font-size:11px;color:var(--text-faint)">${title} &nbsp;&middot;&nbsp; ${now}</span>
+</div>
+<div class="report-modal-body" style="padding:24px 28px">
+${clone.innerHTML}
+</div>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `review-${safeName}${month ? '-' + month : ''}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 export function openIncidentsForGroup(groupName) {

@@ -1230,7 +1230,7 @@
       const r = await fetch('/ai/config');
       const d = await r.json();
       if (d.endpoint)   document.getElementById('ai-endpoint').value     = d.endpoint;
-      if (d.apiKey)     document.getElementById('ai-apikey').placeholder = '••••••••  (saved)';
+      if (d.hasKey)     document.getElementById('ai-apikey').placeholder = '••••••••  (saved)';
       if (d.model)      document.getElementById('ai-model').value        = d.model;
       if (d.apiVersion) document.getElementById('ai-apiversion').value   = d.apiVersion;
       _setTabBadge('ai', d.configured, 'settings_configured', 'settings_not_configured');
