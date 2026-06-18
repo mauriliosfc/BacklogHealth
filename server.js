@@ -78,7 +78,10 @@ async function main() {
     if (staticSafe && fs.existsSync(staticPath) && fs.statSync(staticPath).isFile()) {
       const ext       = nodePath.extname(staticPath);
       const mimeTypes = { '.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json', '.svg': 'image/svg+xml' };
-      res.writeHead(200, { 'Content-Type': (mimeTypes[ext] || 'text/plain') + '; charset=utf-8' });
+      const noCache   = ext === '.js' || ext === '.css';
+      const headers   = { 'Content-Type': (mimeTypes[ext] || 'text/plain') + '; charset=utf-8' };
+      if (noCache) headers['Cache-Control'] = 'no-store';
+      res.writeHead(200, headers);
       res.end(fs.readFileSync(staticPath));
       return;
     }
@@ -323,7 +326,8 @@ async function main() {
   });
 
   server.listen(PORT, () => {
-    console.log(`\n🚀 Dashboard rodando em: http://localhost:${PORT}\n`);
+    console.log(`\n Dashboard rodando em: http://localhost:${PORT}`);
+    console.log(` Servindo arquivos de: ${PUBLIC_DIR}\n`);
   });
 }
 

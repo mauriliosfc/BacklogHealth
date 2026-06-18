@@ -6,6 +6,7 @@ const { paginatedItems } = require('./utils/paginate');
 const { snGet } = require('./servicenowClient');
 
 const { CACHE_DIR } = require('./utils/paths');
+const { calcMttrByPriority, calcReopenRate, calcIncidentAgingBuckets, calcPrbKpis } = require('./utils/itilMetrics');
 
 function _ensureCache() {
   if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -32,7 +33,9 @@ function _writeCache(type, project, month, data, extra) {
 
 function cacheInvalidate(project, month, groupField, snExtra) {
   try { fs.unlinkSync(_cacheFile('azure', project, month, groupField)); } catch (_) {}
-  try { fs.unlinkSync(_cacheFile('sn',    project, month, snExtra));   } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra));         } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v2')); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v3')); } catch (_) {}
 }
 
 // Retorna Set com IterationPaths das sprints do time que se sobrepõem ao período
@@ -359,7 +362,7 @@ async function fetchSnReport(displayName, period) {
     isSysId = false;
   }
 
-  const snCacheKey = String(period.history.length);
+  const snCacheKey = String(period.history.length) + '_v3';
   const cached = _readCache('sn', displayName, period.month, snCacheKey);
   if (cached) return cached;
 
@@ -385,27 +388,34 @@ async function fetchSnReport(displayName, period) {
   const prbQuery              = `${grpFilter}^state!=106^state!=107`;
   const prbResolvedQuery      = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}`;
   const prbOpenedThisMonthQuery = `${grpFilter}^opened_at>=${start}^opened_at<=${end}`;
+  // reopened_time: incidentes reabertos no período (campo nativo do SN)
+  const incReopenedQuery      = `${grpFilter}^reopened_time>=${start}^reopened_time<=${end}`;
   // task_sla: usa business_elapsed_percentage nativo do ServiceNow (calendário útil)
+  // Filtra por task.opened_at (mesma âncora usada nos demais gráficos) para garantir
+  // que apenas incidentes abertos no período entrem no cálculo.
   const taskSlaGrpFilter = isSysId ? `task.assignment_group=${grp}` : `task.assignment_group.name=${grp}`;
-  const taskSlaQuery     = `${taskSlaGrpFilter}^task.resolved_at>=${start}^task.resolved_at<=${end}`;
+  const taskSlaQuery     = `${taskSlaGrpFilter}^task.opened_at>=${start}^task.opened_at<=${end}`;
 
   console.log(`[SN] project="${displayName}" group="${grp}" isSysId=${isSysId}`);
   console.log(`[SN] incQuery: ${incQuery}`);
 
-  const [incRes, incClosedRes, incBacklogRes, prbRes, prbResolvedRes, prbOpenedThisMonthRes, taskSlaRes] = await Promise.all([
+  const [incRes, incClosedRes, incBacklogRes, prbRes, prbResolvedRes, prbOpenedThisMonthRes, taskSlaRes, incReopenedRes] = await Promise.all([
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,priority,cmdb_ci.name,u_additional_res_code,location.name,state&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN incidents error]', e.message); return { result: [] }; }),
-    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at,closed_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
-    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incBacklogQuery)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
-    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,category,state,opened_at&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
+    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at,closed_at,priority&sysparm_limit=1000`).catch(() => ({ result: [] })),
+    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incBacklogQuery)}&sysparm_fields=sys_id,opened_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
+    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,category,state,opened_at,known_error,workaround_instructions,rca_complete&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at&sysparm_limit=200`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedThisMonthQuery)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/task_sla?sysparm_query=${encodeURIComponent(taskSlaQuery)}&sysparm_fields=task,task.priority,business_elapsed_percentage&sysparm_limit=2000`).catch(() => ({ result: [] })),
+    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incReopenedQuery)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
   ]);
 
   const incidents              = incRes.result || [];
   const incClosedRaw           = incClosedRes.result || [];
   const incClosedInPeriod      = [...new Map(incClosedRaw.map(i => [i.sys_id, i])).values()];
-  const incBacklog             = (incBacklogRes.result || []).length;
+  const incBacklogItems        = incBacklogRes.result || [];
+  const incBacklog             = incBacklogItems.length;
+  const incReopenedCount       = (incReopenedRes.result || []).length;
   const prbs                   = prbRes.result || [];
   const prbsResolvedInPeriod   = prbResolvedRes.result || [];
   const prbsOpenedInPeriod     = prbOpenedThisMonthRes.result || [];
@@ -458,6 +468,11 @@ async function fetchSnReport(displayName, period) {
     s.pct       = s.total > 0 ? Math.round(s.withinSla / s.total * 100) : null;
   });
 
+  // ITIL metrics — calculated from already-fetched data, no extra API calls
+  const mttrByPriority  = calcMttrByPriority(incClosedInPeriod);
+  const reopenRate      = calcReopenRate(incReopenedCount, incClosedInPeriod.length);
+  const incAgingBuckets = calcIncidentAgingBuckets(incBacklogItems);
+
   // Histórico mensal — processado em lotes de 4 meses em paralelo (16 req/lote).
   // Reduz de 13 round-trips sequenciais para ~4, sem sobrecarregar o SN.
   const HISTORY_BATCH = 4;
@@ -481,7 +496,7 @@ async function fetchSnReport(displayName, period) {
         const prbOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
         const prbResolvedQ  = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
         const [rIncO, rIncC, rIncCanc, rPrbO, rPrbR] = await Promise.all([
-          snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incOpenedQ)}&sysparm_fields=sys_id,cmdb_ci.name,u_additional_res_code,location.name&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
+          snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incOpenedQ)}&sysparm_fields=sys_id,cmdb_ci.name,u_additional_res_code,location.name,priority&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incCancelledQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
@@ -497,6 +512,7 @@ async function fetchSnReport(displayName, period) {
     const incOpened    = rIncO.result || [];
     const incClosed    = (rIncC.result || []).length;
     const incCancelled = (rIncCanc.result || []).length;
+    let mP1 = 0, mP2 = 0, mP3 = 0;
     incOpened.forEach(i => {
       const name = _snVal(i['cmdb_ci.name']) || 'Outros';
       if (!sysMonthData[name]) sysMonthData[name] = new Array(period.history.length).fill(0);
@@ -509,12 +525,19 @@ async function fetchSnReport(displayName, period) {
       const loc = _snVal(i['location.name']) || 'Não informado';
       if (!locMonthData[loc]) locMonthData[loc] = new Array(period.history.length).fill(0);
       locMonthData[loc][mIdx]++;
+      const prio = _snRaw(i.priority) || '';
+      if (prio === '1') mP1++;
+      else if (prio === '2') mP2++;
+      else if (prio === '3') mP3++;
     });
     monthly.push({
       label:     m,
       opened:    incOpened.length,
       closed:    incClosed,
       cancelled: incCancelled,
+      p1:        mP1,
+      p2:        mP2,
+      p3:        mP3,
     });
     prbMonthly.push({
       label:    m,
@@ -586,7 +609,17 @@ async function fetchSnReport(displayName, period) {
   const now = Date.now();
   const prbList = prbs.map(p => {
     const agingDays = p.opened_at ? Math.floor((now - new Date(p.opened_at).getTime()) / 86400000) : 0;
-    return { id: p.number, title: p.short_description, priority: p.priority, category: p.category, agingDays, state: p.state };
+    return {
+      id:                      p.number,
+      title:                   p.short_description,
+      priority:                p.priority,
+      category:                p.category,
+      agingDays,
+      state:                   p.state,
+      known_error:             _snRaw(p.known_error) === 'true' || p.known_error === true,
+      workaround_instructions: _snVal(p.workaround_instructions) || '',
+      rca_complete:            _snRaw(p.rca_complete) === 'true' || p.rca_complete === true,
+    };
   });
 
   // Avg resolution days for PRBs resolved this period
@@ -604,6 +637,8 @@ async function fetchSnReport(displayName, period) {
   const resolvedThisMonth = prbsResolvedInPeriod.length;
   const openedThisMonth   = prbsOpenedInPeriod.length;
 
+  const prbKpis = calcPrbKpis(prbList);
+
   const data = {
     incidents: {
       total:             incidents.length,
@@ -619,6 +654,11 @@ async function fetchSnReport(displayName, period) {
       byGroupAltMonthly,
       byLocationMonthly,
       monthly,
+      // ITIL
+      mttrByPriority,
+      reopenedCount:  incReopenedCount,
+      reopenRate,
+      agingBuckets:   incAgingBuckets,
     },
     prbs: {
       open:               prbs.length,
@@ -629,6 +669,14 @@ async function fetchSnReport(displayName, period) {
       avgResolutionDays,
       list:               prbList.slice(0, 50),
       monthly:            prbMonthly,
+      // ITIL
+      knownErrorCount:    prbKpis.knownErrorCount,
+      knownErrorPct:      prbKpis.knownErrorPct,
+      withWorkaroundCount: prbKpis.withWorkaroundCount,
+      withWorkaroundPct:  prbKpis.withWorkaroundPct,
+      withRcaCount:       prbKpis.withRcaCount,
+      withRcaPct:         prbKpis.withRcaPct,
+      agingBuckets:       prbKpis.agingBuckets,
     },
   };
 
