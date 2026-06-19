@@ -5,6 +5,9 @@ const net  = require('net');
 
 const PORT = 3030;
 
+// Desabilita cache HTTP do Chromium para garantir que arquivos JS/CSS sejam sempre buscados frescos
+app.commandLine.appendSwitch('disable-http-cache');
+
 // Remove o menu padrão do Electron (File / Edit / View / Window / Help)
 Menu.setApplicationMenu(null);
 
@@ -86,7 +89,7 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  win.loadURL(`http://localhost:${PORT}`);
+  win.webContents.session.clearCache().finally(() => win.loadURL(`http://localhost:${PORT}`));
   win.once('ready-to-show', () => {
     win.show();
     // Checa atualização 8s após a janela aparecer (non-blocking, silencioso)

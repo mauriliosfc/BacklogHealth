@@ -7,7 +7,7 @@ let _reportCharts    = []; // [{type:'sprint'|'volatility'|'donut'|'incidents', 
 let _agingState      = 'In Review'; // estado monitorado nos gráficos de aging (compartilhado)
 let _agingCharts     = [{ size: 'md' }, { size: 'md' }]; // tamanho por gráfico de aging
 let _incidentMonths  = 5;        // months to show in the incidents section
-let _incidentTarget  = 24;       // target mensal de incidentes
+let _incidentTarget  = null;     // target mensal de incidentes (null = não configurado)
 let _incidentGroupBy = 'cmdb_ci'; // 'cmdb_ci' | 'resolution_code'
 let _heatmapMax      = 0;        // 0 = escala automática (relativa ao max dos dados)
 let _heatmapTopN     = 9;        // 0 = mostrar todos; N = top N + "Outros"
@@ -15,14 +15,69 @@ let _locationMonths  = 6;        // 1 | 3 | 6 — meses exibidos no gráfico de 
 let _agingBuckets    = [7, 14, 30, 60]; // thresholds for US aging buckets (days)
 let _deliveryStates  = ['Closed', 'Done', 'Resolved']; // states counted as delivered
 let _slaEnabled      = false;
+let _slaThresholds   = { p1: 4, p2: 8, p3: 72 };
+let _slaTargets      = { p1: 95, p2: 90, p3: 85 };
 let _pickerIdx       = -1; // -1 = add new, >=0 = edit existing chart
-let _lastPayload     = null;
-let _dragSrcIdx      = -1;
+let _lastPayload       = null;
+let _dragSrcIdx        = -1;
+let _activeSectionFilter = 'all';
+let _indicatorCards       = {};   // { incidents: [{id,visible,order}], prbs: [...] }
+let _indicatorCardsPerRow = {};   // { incidents: 4, prbs: 4 }
+let _indConfigSection     = null; // section with open config panel ('incidents'|'prbs'|null)
+let _indDragSrcId         = null;
+let _indDragSrcSection    = null;
+let _incidentCharts  = [];  // [{type:'inc-volume'|'inc-bars'|'inc-heatmap'|'inc-location'|'inc-priority-trend'|'inc-sla-bars', size:'sm'|'md'|'lg'}]
+let _prbCharts       = [];  // [{type:'prb-evolution'|'prb-donut'|'prb-aging'|'prb-oldest'|'prb-category', size:'sm'|'md'|'lg'}]
+let _incPickerIdx    = -1;  // -1 = add new, >=0 = edit existing incident chart
+let _prbPickerIdx    = -1;  // -1 = add new, >=0 = edit existing PRB chart
+let _incChartDragIdx = -1;
+let _prbChartDragIdx = -1;
 
 const _DEFAULT_CHARTS = [
   { type: 'sprint',     size: 'lg' },
   { type: 'volatility', size: 'md' },
   { type: 'donut',      size: 'md', ref: '', label: 'Tipo de Item' },
+];
+
+const _DEFAULT_INCIDENT_CHARTS = [
+  { type: 'inc-volume',   size: 'lg' },
+  { type: 'inc-bars',     size: 'lg' },
+  { type: 'inc-heatmap',  size: 'lg' },
+  { type: 'inc-location', size: 'lg' },
+];
+
+const _DEFAULT_PRB_CHARTS = [
+  { type: 'prb-evolution', size: 'lg' },
+  { type: 'prb-donut',     size: 'md' },
+  { type: 'prb-aging',     size: 'md' },
+  { type: 'prb-oldest',    size: 'lg' },
+];
+
+// Catalog of all configurable indicator cards — source of truth for both sections.
+// defaultVisible: true = shown by default; false = opt-in (new ITIL indicators).
+const _INDICATOR_CATALOG = [
+  // ── Incidents — existing ──
+  { id: 'inc_total',   section: 'incidents', label: 'Abertos no mês',        desc: 'Total de incidentes abertos no período. Compara com o target mensal configurado.',                          defaultVisible: true  },
+  { id: 'inc_closed',  section: 'incidents', label: 'Encerrados no mês',      desc: 'Incidentes resolvidos ou fechados no período. Indica a capacidade de resolução da equipe.',                 defaultVisible: true  },
+  { id: 'inc_backlog', section: 'incidents', label: 'Backlog aberto',          desc: 'Total de incidentes em aberto no fim do período, independente de quando foram criados.',                    defaultVisible: true  },
+  { id: 'inc_mttr',    section: 'incidents', label: 'Tempo médio resolução',   desc: 'MTTR: média de dias entre abertura e fechamento dos incidentes fechados no período.',                      defaultVisible: true  },
+  { id: 'inc_p1',      section: 'incidents', label: 'P1 — Crítico',            desc: 'Incidentes P1 abertos no período. P1 = impacto total no serviço.',                                        defaultVisible: true  },
+  { id: 'inc_p2',      section: 'incidents', label: 'P2 — Alto',              desc: 'Incidentes P2 abertos. Impacto severo, exige resolução rápida conforme SLA.',                              defaultVisible: true  },
+  { id: 'inc_p3',      section: 'incidents', label: 'P3 — Médio',             desc: 'Incidentes P3 abertos. Impacto moderado, dentro do SLA estendido.',                                       defaultVisible: true  },
+  { id: 'inc_target',  section: 'incidents', label: 'vs Target',              desc: 'Percentual do volume em relação ao target mensal. Acima de 100% = alerta.',                                defaultVisible: true  },
+  // ── Incidents — novos ITIL ──
+  { id: 'inc_mttr_p1', section: 'incidents', label: 'MTTR P1 (horas)',         desc: 'Tempo médio de resolução exclusivo para P1 em horas. Meta típica: < 2h.',                                 defaultVisible: false },
+  { id: 'inc_mttr_p2', section: 'incidents', label: 'MTTR P2 (horas)',         desc: 'Tempo médio de resolução para P2 em horas. Meta típica: < 8h.',                                           defaultVisible: false },
+  { id: 'inc_reopen',  section: 'incidents', label: 'Taxa de reabertura',       desc: 'Percentual de incidentes reabertos após fechamento. Meta: < 5%. Alta taxa indica resolução incompleta.',  defaultVisible: false },
+  // ── PRBs — existing ──
+  { id: 'prb_opened',  section: 'prbs', label: 'Abertos no mês',               desc: 'Problemas registrados no período.',                                                                        defaultVisible: true  },
+  { id: 'prb_resolved',section: 'prbs', label: 'Resolvidos no mês',            desc: 'Problemas com causa raiz identificada e solução permanente aplicada no período.',                         defaultVisible: true  },
+  { id: 'prb_backlog', section: 'prbs', label: 'Backlog acumulado',            desc: 'Total de problemas em aberto. Backlog alto indica causas raiz não tratadas.',                              defaultVisible: true  },
+  { id: 'prb_mttr',    section: 'prbs', label: 'Tempo médio resolução',        desc: 'Média de dias entre abertura e resolução dos PRBs fechados no período. Meta: < 30 dias.',                 defaultVisible: true  },
+  // ── PRBs — novos ITIL ──
+  { id: 'prb_ke',      section: 'prbs', label: 'Known Errors',                  desc: 'PRBs com causa conhecida mas sem solução permanente. Permitem workarounds para novos incidentes.',        defaultVisible: false },
+  { id: 'prb_wa',      section: 'prbs', label: 'Com workaround (%)',            desc: 'Percentual de PRBs com workaround documentado. Workarounds reduzem o MTTR de incidentes relacionados.',  defaultVisible: false },
+  { id: 'prb_rca',     section: 'prbs', label: 'RCA completo (%)',              desc: 'Percentual de PRBs com Análise de Causa Raiz concluída. Sem RCA não há prevenção de recorrência.',       defaultVisible: false },
 ];
 
 const _PRB_STATES = {
@@ -35,8 +90,15 @@ const _PRB_STATES = {
 };
 
 async function _loadReportConfig() {
-  let charts   = null;
+  let charts    = null;
   let needsSave = false;
+
+  // Reset state so trocar de projeto não carrega dados do projeto anterior
+  _indicatorCards        = {};
+  _indicatorCardsPerRow  = {};
+  _incidentCharts = [];
+  _prbCharts      = [];
+  _slaTargets     = { p1: 95, p2: 90, p3: 85 };
 
   // 0. Load SLA config from sn-config (parallel, non-blocking)
   fetch('/api/sn-config?' + new URLSearchParams({ project: _reportProject }))
@@ -61,6 +123,11 @@ async function _loadReportConfig() {
     if (Array.isArray(data.deliveryStates) && data.deliveryStates.length)  _deliveryStates = data.deliveryStates;
     if (data.agingState)              _agingState      = data.agingState;
     if (data.agingCharts?.length) _agingCharts    = data.agingCharts;
+    if (data.indicatorCards       != null) _indicatorCards       = data.indicatorCards;
+    if (data.indicatorCardsPerRow != null) _indicatorCardsPerRow = data.indicatorCardsPerRow;
+    if (Array.isArray(data.incidentCharts) && data.incidentCharts.length) _incidentCharts = data.incidentCharts;
+    if (Array.isArray(data.prbCharts)      && data.prbCharts.length)      _prbCharts      = data.prbCharts;
+    if (data.slaTargets != null && typeof data.slaTargets === 'object') _slaTargets = { p1: 95, p2: 90, p3: 85, ...data.slaTargets };
     if (data.reportCharts?.length) {
       charts = data.reportCharts;
     } else if (data.groupFields?.length) {
@@ -91,8 +158,10 @@ async function _loadReportConfig() {
     } catch (_) {}
   }
 
-  // 3. Default
+  // 3. Default — marcar needsSave quando novos campos precisam ser inicializados
   _reportCharts = charts || _DEFAULT_CHARTS.map(c => ({ ...c }));
+  if (!_incidentCharts.length) { _incidentCharts = _DEFAULT_INCIDENT_CHARTS.map(c => ({ ...c })); needsSave = true; }
+  if (!_prbCharts.length)      { _prbCharts      = _DEFAULT_PRB_CHARTS.map(c => ({ ...c }));      needsSave = true; }
   if (!charts || needsSave) _saveReportConfig(); // persist to config.json
 }
 
@@ -100,8 +169,11 @@ function _saveReportConfig() {
   fetch('/api/report-config', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ project: _reportProject, reportCharts: _reportCharts, incidentMonths: _incidentMonths, incidentTarget: _incidentTarget, incidentGroupBy: _incidentGroupBy, heatmapMax: _heatmapMax, heatmapTopN: _heatmapTopN, locationMonths: _locationMonths, agingState: _agingState, agingCharts: _agingCharts, agingBuckets: _agingBuckets, deliveryStates: _deliveryStates }),
-  }).catch(() => {});
+    body:    JSON.stringify({ project: _reportProject, reportCharts: _reportCharts, incidentMonths: _incidentMonths, incidentTarget: _incidentTarget, incidentGroupBy: _incidentGroupBy, heatmapMax: _heatmapMax, heatmapTopN: _heatmapTopN, locationMonths: _locationMonths, agingState: _agingState, agingCharts: _agingCharts, agingBuckets: _agingBuckets, deliveryStates: _deliveryStates, indicatorCards: _indicatorCards, indicatorCardsPerRow: _indicatorCardsPerRow, incidentCharts: _incidentCharts, prbCharts: _prbCharts, slaTargets: _slaTargets }),
+  })
+  .then(r => r.json())
+  .then(d => { if (!d.ok) console.error('[report] save failed:', d); })
+  .catch(e => console.error('[report] save error:', e));
 }
 
 function _esc(s) {
@@ -305,6 +377,46 @@ function _renderTypeDonut(byType, metricLabel) {
     `</div>`;
 }
 
+// Shared donut renderer — same visual style as _renderTypeDonut (Azure).
+// items: [{ type: string, count: number, color?: string }]
+function _donutChart(items, centerLabel) {
+  const total = items.reduce((s, i) => s + i.count, 0);
+  if (!total) return `<div class="report-empty-hint">Sem dados</div>`;
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+  const r = 62, cx = 80, cy = 78;
+  const circ = 2 * Math.PI * r;
+  let segs = '', accumulated = 0;
+  items.forEach((item, i) => {
+    const arc    = (item.count / total) * circ;
+    const offset = circ - accumulated;
+    const pct    = Math.round(item.count / total * 100);
+    const color  = item.color || COLORS[i % COLORS.length];
+    segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+      stroke="${color}" stroke-width="26"
+      stroke-dasharray="${arc.toFixed(2)} ${(circ - arc).toFixed(2)}"
+      stroke-dashoffset="${offset.toFixed(2)}"
+      transform="rotate(-90 ${cx} ${cy})"
+      style="cursor:default;transition:opacity .15s"
+      onmouseenter="this.style.opacity='.7'" onmouseleave="this.style.opacity='1'">
+      <title>${_esc(item.type)}: ${item.count} (${pct}%)</title>
+    </circle>`;
+    accumulated += arc;
+  });
+  segs += `<text x="${cx}" y="${cy - 5}" text-anchor="middle" font-size="18" font-weight="800" fill="var(--text-1)">${total}</text>`;
+  segs += `<text x="${cx}" y="${cy + 13}" text-anchor="middle" font-size="10" fill="var(--text-faint)">${_esc(centerLabel)}</text>`;
+  const legendItems = items.map((item, i) => {
+    const pct   = Math.round(item.count / total * 100);
+    const color = item.color || COLORS[i % COLORS.length];
+    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint)">` +
+      `<span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0"></span>` +
+      `${_esc(item.type)}: <strong style="color:var(--text-1)">${item.count} (${pct}%)</strong></span>`;
+  }).join('');
+  return `<div style="display:flex;flex-direction:column;align-items:center;height:100%">` +
+    `<svg viewBox="0 0 160 158" style="width:100%;max-width:200px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">${segs}</svg>` +
+    `<div style="margin-top:auto;display:flex;justify-content:center;flex-wrap:wrap;gap:6px 16px;padding:10px 0 2px">${legendItems}</div>` +
+    `</div>`;
+}
+
 function _renderTypeBar(byType, barColor, metricLabel, size) {
   const emptyHint = metricLabel === 'Story Points' ? 'Sem Story Points no período' : 'Sem User Stories no período';
   if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
@@ -407,6 +519,21 @@ function _renderTypeBarVertical(byType, barColor, metricLabel, size) {
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
     ${grid}${axes}${bars}${xlabels}
   </svg>`;
+}
+
+function _renderIncPriorityDonut(inc) {
+  const p1     = inc?.p1    || 0;
+  const p2     = inc?.p2    || 0;
+  const p3     = inc?.p3    || 0;
+  const outros = Math.max(0, (inc?.total || 0) - p1 - p2 - p3);
+  const items  = [
+    { type: 'P1 — Critico', count: p1,     color: '#ef4444' },
+    { type: 'P2 — Alto',    count: p2,     color: '#f97316' },
+    { type: 'P3 — Medio',   count: p3,     color: '#eab308' },
+    ...(outros > 0 ? [{ type: 'Outros', count: outros, color: '#6b7280' }] : []),
+  ].filter(item => item.count > 0);
+  if (!items.length) return '<div class="report-empty-hint">Sem incidentes no periodo</div>';
+  return _donutChart(items, 'Incidentes');
 }
 
 function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
@@ -694,7 +821,7 @@ function _renderChartCell(chart, delivery, idx, sprints, incidents) {
 
   const header = `<div class="report-field-picker-header">
     <div class="report-donut-title-row">
-      <span class="report-drag-handle" title="Arrastar para reordenar">⠿</span>
+      <span class="report-drag-handle" title="Arrastar para reordenar"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" style="opacity:0.45;vertical-align:middle"><circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="12" r="1.5"/><circle cx="7" cy="12" r="1.5"/></svg></span>
       <div class="report-subsection-title">${title}</div>
     </div>
     <div class="report-field-chart-actions" draggable="false">
@@ -715,7 +842,171 @@ function _renderChartCell(chart, delivery, idx, sprints, incidents) {
   </div>`;
 }
 
+// ── Incident chart cell (draggable) ───────────────────────────────────────────
+
+function _renderIncidentChartCell(chart, idx, inc) {
+  const size      = chart.size || 'lg';
+  const canRemove = _incidentCharts.length > 1;
+  const useAlt     = _incidentGroupBy === 'resolution_code';
+  const barData    = useAlt ? (inc.byGroupAlt || [])        : (inc.bySystem || []);
+  const heatData   = useAlt ? (inc.byGroupAltMonthly || []) : (inc.bySystemMonthly || []);
+  const groupLabel = useAlt ? 'Resolution Code' : 'IC Afetado';
+
+  let title, subtitle, content;
+  switch (chart.type) {
+    case 'inc-volume':
+      title     = 'Abertos e Fechados por Mês';
+      subtitle  = `Histórico de volume${_incidentTarget > 0 ? ` — target: ${_incidentTarget}` : ''} · ${_incidentMonths} meses`;
+      content   = _renderIncidentsVolumeChart(inc.monthly, _incidentMonths, _incidentTarget, _reportMonth);
+      break;
+    case 'inc-bars':
+      title     = `${groupLabel} — Top 9 por Volume`;
+      subtitle  = 'Volume de incidentes por severidade';
+      content   = _renderIncidentSystemBars(barData, _reportMonth, useAlt ? 'resolution_code' : 'cmdb_ci');
+      break;
+    case 'inc-heatmap':
+      title     = `Heatmap: ${groupLabel} × Mês`;
+      subtitle  = `Frequência de incidentes${_heatmapTopN > 0 ? ` — top ${_heatmapTopN}` : ' — todos os sistemas'}${_heatmapMax > 0 ? ` — escala fixa: máx ${_heatmapMax}` : ''}`;
+      content   = _renderIncidentHeatmap(heatData, inc.monthly, groupLabel, useAlt ? 'resolution_code' : 'cmdb_ci');
+      break;
+    case 'inc-location':
+      title     = 'Incidentes por Localização';
+      subtitle  = `Abertos por localização · ${_locationMonths} ${_locationMonths === 1 ? 'mês' : 'meses'}`;
+      content   = _renderIncidentLocationChart(inc.byLocationMonthly, inc.monthly, _locationMonths);
+      break;
+    case 'inc-priority-trend':
+      title     = 'Tendência por Prioridade';
+      subtitle  = `Volume mensal de P1/P2/P3 · ${_incidentMonths} meses`;
+      content   = _renderIncPriorityTrend(inc.monthly);
+      break;
+    case 'inc-sla-bars':
+      title     = 'Conformidade SLA por Prioridade';
+      subtitle  = 'Percentual dentro do SLA por nível de prioridade';
+      content   = _renderIncSlaBars(inc.slaByPriority);
+      break;
+    case 'inc-priority-donut':
+      title     = 'Distribuicao por Prioridade';
+      subtitle  = 'Volume de incidentes P1 / P2 / P3';
+      content   = _renderIncPriorityDonut(inc);
+      break;
+    case 'inc-groupby': {
+      const _flat = arr => (arr || []).map(d => ({ type: d.name, count: d.total }));
+      const _incGroupbyFields = {
+        'cmdb_ci.name':          { label: 'IC Afetado',            data: () => _flat(inc.bySystem) },
+        'u_additional_res_code': { label: 'Resolution Code',       data: () => _flat(inc.byGroupAlt) },
+        'assignment_group':      { label: 'Grupo de Atendimento',  data: () => _flat(inc.byAssignmentGroup) },
+        'assigned_to':           { label: 'Responsavel',           data: () => _flat(inc.byAssignedTo) },
+        'priority':              { label: 'Prioridade',            data: () => { const p = inc.byPriority || {}; return [{ type: 'P1', count: p.p1||0 }, { type: 'P2', count: p.p2||0 }, { type: 'P3', count: p.p3||0 }].filter(x => x.count > 0); } },
+        'impact':                { label: 'Impacto',               data: () => _flat(inc.byImpact) },
+        'urgency':               { label: 'Urgencia',              data: () => _flat(inc.byUrgency) },
+        'state':                 { label: 'Estado',                data: () => _flat(inc.byState) },
+        'category':              { label: 'Categoria',             data: () => _flat(inc.byCategory) },
+        'subcategory':           { label: 'Subcategoria',          data: () => _flat(inc.bySubcategory) },
+        'location.name':         { label: 'Localizacao',           data: () => _flat(inc.byLocationMonthly) },
+        'close_code':            { label: 'Codigo de Fechamento',  data: () => _flat(inc.byCloseCode) },
+        'contact_type':          { label: 'Canal de Abertura',     data: () => _flat(inc.byContactType) },
+      };
+      const _gf  = _incGroupbyFields[chart.ref] || _incGroupbyFields['cmdb_ci.name'];
+      const _gd  = _gf.data();
+      title   = `Incidentes por ${_gf.label}`;
+      subtitle = '';
+      content = chart.chartStyle === 'bar'          ? _renderTypeBar(        _gd, chart.barColor, 'Incidentes', size)
+              : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical( _gd, chart.barColor, 'Incidentes', size)
+              : _renderTypeDonut(_gd, 'Incidentes');
+      break;
+    }
+    default: return '';
+  }
+
+  return `<div class="report-section report-donut-cell report-donut-cell-${size}"
+    draggable="true"
+    ondragstart="reportIncChartDragStart(event,${idx})"
+    ondragover="reportIncChartDragOver(event)"
+    ondragleave="reportIncChartDragLeave(event)"
+    ondrop="reportIncChartDrop(event,${idx})"
+    ondragend="reportIncChartDragEnd(event)">
+    <div class="report-field-picker-header">
+      <div class="report-donut-title-row">
+        <span class="report-drag-handle" title="Arrastar para reordenar"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" style="opacity:0.45;vertical-align:middle"><circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="12" r="1.5"/><circle cx="7" cy="12" r="1.5"/></svg></span>
+        <div class="report-subsection-title">${title}</div>
+      </div>
+      <div class="report-field-chart-actions" draggable="false">
+        <button class="report-field-picker-btn" title="Configurar gráfico" onclick="reportOpenIncChartPicker(${idx})" draggable="false">&#9881;</button>
+        ${canRemove ? `<button class="report-field-remove-btn" title="Remover gráfico" onclick="reportRemoveIncChart(${idx})" draggable="false">×</button>` : ''}
+      </div>
+    </div>
+    <div class="report-prb-chart-sub">${subtitle}</div>
+    ${content}
+  </div>`;
+}
+
+// ── PRB chart cell (draggable) ─────────────────────────────────────────────────
+
+function _renderPrbChartCell(chart, idx, prbs) {
+  const size      = chart.size || 'lg';
+  const canRemove = _prbCharts.length > 1;
+  let title, subtitle, content;
+  switch (chart.type) {
+    case 'prb-evolution': title = 'Evolução de PRBs — Abertos · Resolvidos · Backlog'; subtitle = ''; content = _renderPrbEvolutionChart(prbs.monthly); break;
+    case 'prb-donut':     title = 'PRBs por status'; subtitle = 'Distribuição atual'; content = _renderPrbStatusDonut(prbs.list); break;
+    case 'prb-aging':     title = 'Aging do Backlog'; subtitle = 'Distribuição por tempo em aberto e status'; content = _renderPrbAgingChart(prbs.list); break;
+    case 'prb-oldest':    title = 'Top 10 PRBs mais antigos'; subtitle = 'Ordenado por tempo em aberto'; content = _renderPrbOldestList(prbs.list); break;
+    case 'prb-category':  title = 'Distribuição por Categoria'; subtitle = 'Root cause por categoria'; content = _renderPrbCategoryChart(prbs.list); break;
+    case 'prb-groupby': {
+      const _prbGroupbyFields = {
+        category: 'Categoria',
+        state:    'Estado',
+        priority: 'Prioridade',
+      };
+      const _pgKey   = chart.ref || 'category';
+      const _pgLabel = _prbGroupbyFields[_pgKey] || _pgKey;
+      const _pgData  = _computePrbGroupby(prbs.list, _pgKey);
+      title   = `PRBs por ${_pgLabel}`;
+      subtitle = '';
+      content = chart.chartStyle === 'bar'          ? _renderTypeBar(        _pgData, chart.barColor, 'PRBs', size)
+              : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical( _pgData, chart.barColor, 'PRBs', size)
+              : _renderTypeDonut(_pgData, 'PRBs');
+      break;
+    }
+    default: return '';
+  }
+
+  return `<div class="report-section report-donut-cell report-donut-cell-${size}"
+    draggable="true"
+    ondragstart="reportPrbChartDragStart(event,${idx})"
+    ondragover="reportPrbChartDragOver(event)"
+    ondragleave="reportPrbChartDragLeave(event)"
+    ondrop="reportPrbChartDrop(event,${idx})"
+    ondragend="reportPrbChartDragEnd(event)">
+    <div class="report-field-picker-header">
+      <div class="report-donut-title-row">
+        <span class="report-drag-handle" title="Arrastar para reordenar"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" style="opacity:0.45;vertical-align:middle"><circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="12" r="1.5"/><circle cx="7" cy="12" r="1.5"/></svg></span>
+        <div class="report-subsection-title">${title}</div>
+      </div>
+      <div class="report-field-chart-actions" draggable="false">
+        <button class="report-field-picker-btn" title="Configurar gráfico" onclick="reportOpenPrbChartPicker(${idx})" draggable="false">&#9881;</button>
+        ${canRemove ? `<button class="report-field-remove-btn" title="Remover gráfico" onclick="reportRemovePrbChart(${idx})" draggable="false">×</button>` : ''}
+      </div>
+    </div>
+    ${subtitle ? `<div class="report-prb-chart-sub">${subtitle}</div>` : ''}
+    ${content}
+  </div>`;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function _computePrbGroupby(list, field) {
+  const counts = {};
+  (list || []).forEach(item => {
+    let v = item[field];
+    if (typeof v === 'boolean') v = v ? 'Sim' : 'Nao';
+    const k = (v !== null && v !== undefined && v !== '') ? String(v) : '(sem valor)';
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count);
+}
 
 function _computeAgingBuckets(items, thresholds) {
   const [t1, t2, t3, t4] = thresholds;
@@ -887,7 +1178,7 @@ function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality
     ? `<div class="report-prb-chart-sub" style="margin-top:2px">Contando como entregue: <strong>${_deliveryStates.join(', ')}</strong></div>`
     : '';
 
-  return `<div class="report-section">
+  return `<div class="report-section" data-section="sprint">
     <div class="report-section-header-row">
       <div class="report-section-title">AMS Sprint Delivery</div>
       <button class="report-field-picker-btn" onclick="reportOpenDeliveryStatesPicker()" title="Configurar estados de entrega">⚙</button>
@@ -971,97 +1262,23 @@ function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality
 
 function _renderIncidents(inc) {
   if (!inc) return '';
-  const riskCls    = _incidentTarget > 0 ? (inc.total > _incidentTarget ? 'red' : inc.total > _incidentTarget * 0.8 ? 'yellow' : 'green') : '';
-  const closedCls  = (inc.closedThisMonth || 0) > 0 ? 'green' : '';
-  const backlogCls = (inc.openBacklog || 0) > 20 ? 'red' : (inc.openBacklog || 0) > 10 ? 'yellow' : 'green';
-  const _curMonth   = new Date().toISOString().slice(0, 7);
-  const backlogLabel = _reportMonth === _curMonth ? 'Backlog atual' : 'Backlog no Encerramento';
-  const avgCls     = (inc.avgResolutionDays || 0) > 5 ? 'red' : (inc.avgResolutionDays || 0) > 2 ? 'yellow' : 'green';
 
-  const monthly    = inc.monthly || [];
-  const prevMonth  = monthly.length >= 2 ? monthly[monthly.length - 2] : null;
-
-  const useAlt      = _incidentGroupBy === 'resolution_code';
-  const barData     = useAlt ? (inc.byGroupAlt || [])        : (inc.bySystem || []);
-  const heatmapData = useAlt ? (inc.byGroupAltMonthly || []) : (inc.bySystemMonthly || []);
-  const groupLabel  = useAlt ? 'Resolution Code' : 'IC Afetado';
-
-  const p1Cls = inc.byPriority.p1 > 0 ? 'red' : 'green';
-  const p2Cls = inc.byPriority.p2 > 3 ? 'yellow' : '';
-
-  return `<div class="report-section">
+  return `<div class="report-section" data-section="incidents">
     <div class="report-section-header-row">
       <div class="report-section-title">Incidents</div>
-      <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar SLA" onclick="reportOpenSlaPicker()" draggable="false">&#9881;</button></div>
-    </div>
-    <div class="report-prb-cards">
-      <div class="report-prb-card">
-        <div class="report-prb-card-val ${riskCls}">${inc.total} ${_deltaHtml(inc.total, prevMonth?.opened, true)}</div>
-        <div class="report-prb-card-label">Abertos no mês</div>
-        <div class="report-prb-card-sub">Target: ${_incidentTarget}</div>
-      </div>
-      <div class="report-prb-card">
-        <div class="report-prb-card-val ${closedCls}">${inc.closedThisMonth ?? 0} ${_deltaHtml(inc.closedThisMonth ?? 0, prevMonth?.closed, false)}</div>
-        <div class="report-prb-card-label">Encerrados no mês</div>
-        <div class="report-prb-card-sub">Resolvidos no período</div>
-      </div>
-      <div class="report-prb-card report-prb-card--clickable" onclick="reportOpenIncidentsModal()" title="Ver lista de incidentes">
-        <div class="report-prb-card-val ${backlogCls}">${inc.openBacklog ?? 0}</div>
-        <div class="report-prb-card-label">${backlogLabel}</div>
-        <div class="report-prb-card-sub">Clique para ver lista</div>
-      </div>
-      <div class="report-prb-card">
-        <div class="report-prb-card-val ${avgCls}">${inc.avgResolutionDays ?? 0}d</div>
-        <div class="report-prb-card-label">Tempo médio resolução</div>
-        <div class="report-prb-card-sub">Dias médios no mês</div>
+      <div class="report-field-chart-actions">
+        <button class="report-field-picker-btn" title="Configurar indicadores" onclick="reportOpenIndicatorConfig('incidents')" draggable="false">&#9881;</button>
+        <button class="report-field-picker-btn" title="Configurar SLA" onclick="reportOpenSlaPicker()" draggable="false">SLA</button>
       </div>
     </div>
-    <div class="report-prb-cards" style="margin-top:8px">
-      <div class="report-prb-card">
-        <div class="report-prb-card-val ${p1Cls}">${inc.byPriority.p1}</div>
-        <div class="report-prb-card-label">P1 — Crítico</div>
-        ${_slaEnabled ? _slaBadge(inc.slaByPriority?.p1) : '<div class="report-prb-card-sub">Prioridade máxima</div>'}
-      </div>
-      <div class="report-prb-card">
-        <div class="report-prb-card-val ${p2Cls}">${inc.byPriority.p2}</div>
-        <div class="report-prb-card-label">P2 — Alto</div>
-        ${_slaEnabled ? _slaBadge(inc.slaByPriority?.p2) : '<div class="report-prb-card-sub">Alta prioridade</div>'}
-      </div>
-      <div class="report-prb-card">
-        <div class="report-prb-card-val">${inc.byPriority.p3}</div>
-        <div class="report-prb-card-label">P3 — Médio</div>
-        ${_slaEnabled ? _slaBadge(inc.slaByPriority?.p3) : '<div class="report-prb-card-sub">Média prioridade</div>'}
-      </div>
-      <div class="report-prb-card">
-        <div class="report-prb-card-val">${_incidentTarget > 0 ? `${Math.round(inc.total / _incidentTarget * 100)}%` : '—'}</div>
-        <div class="report-prb-card-label">vs Target</div>
-        <div class="report-prb-card-sub">${_incidentTarget > 0 ? (inc.total > _incidentTarget ? 'Acima do target' : 'Dentro do target') : 'Sem target definido'}</div>
+    ${_indConfigSection === 'incidents' ? _renderIndicatorConfigPanel('incidents') : ''}
+    ${_renderIndicatorCards('incidents', inc, null)}
+    <div class="report-donuts-grid">
+      ${_incidentCharts.map((chart, idx) => _renderIncidentChartCell(chart, idx, inc)).join('')}
+      <div class="report-add-chart-section" style="flex-basis:100%">
+        <button class="report-add-chart-btn" onclick="reportAddIncChart()">+ Adicionar gráfico</button>
       </div>
     </div>
-    <div class="report-field-picker-header" style="margin-top:12px">
-      <div class="report-donut-title-row"><div class="report-subsection-title">Abertos e Fechados por Mês</div></div>
-      <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar gráfico" onclick="reportOpenIncidentVolumePicker()" draggable="false">⚙</button></div>
-    </div>
-    <div class="report-prb-chart-sub">Histórico de volume de incidentes${_incidentTarget > 0 ? ` — target: ${_incidentTarget}` : ''} · ${_incidentMonths} meses</div>
-    ${_renderIncidentsVolumeChart(inc.monthly, _incidentMonths, _incidentTarget, _reportMonth)}
-    <div class="report-field-picker-header" style="margin-top:16px">
-      <div class="report-donut-title-row"><div class="report-subsection-title">${groupLabel} — Top 9 por Volume</div></div>
-      <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar agrupamento" onclick="reportOpenIncidentGroupByPicker()" draggable="false">⚙</button></div>
-    </div>
-    <div class="report-prb-chart-sub">Volume de incidentes por severidade</div>
-    ${_renderIncidentSystemBars(barData, _reportMonth, useAlt ? 'resolution_code' : 'cmdb_ci')}
-    <div class="report-field-picker-header" style="margin-top:16px">
-      <div class="report-donut-title-row"><div class="report-subsection-title">Heatmap: ${groupLabel} × Mês</div></div>
-      <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar heatmap" onclick="reportOpenHeatmapPicker()" draggable="false">⚙</button></div>
-    </div>
-    <div class="report-prb-chart-sub">Frequência de incidentes${_heatmapTopN > 0 ? ` — top ${_heatmapTopN}` : ' — todos os sistemas'}${_heatmapMax > 0 ? ` — escala fixa: máx ${_heatmapMax}` : ' — escala automática'}</div>
-    ${_renderIncidentHeatmap(heatmapData, inc.monthly, groupLabel, useAlt ? 'resolution_code' : 'cmdb_ci')}
-    <div class="report-field-picker-header" style="margin-top:16px">
-      <div class="report-donut-title-row"><div class="report-subsection-title">Incidentes por Localização</div></div>
-      <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="Configurar meses" onclick="reportOpenLocationPicker()" draggable="false">⚙</button></div>
-    </div>
-    <div class="report-prb-chart-sub">Incidentes abertos por localização · ${_locationMonths} ${_locationMonths === 1 ? 'mês' : 'meses'}</div>
-    ${_renderIncidentLocationChart(inc.byLocationMonthly, inc.monthly, _locationMonths)}
   </div>`;
 }
 
@@ -1167,46 +1384,168 @@ function _renderIncidentLocationChart(byLocationMonthly, monthly, months) {
   <div style="margin-top:6px;display:flex;justify-content:center;flex-wrap:wrap;gap:4px 12px;padding:0 4px">${legendItems}</div>`;
 }
 
+// ── Indicator card helpers ─────────────────────────────────────────────────────
+
+function _getResolvedCards(section) {
+  const catalog  = _INDICATOR_CATALOG.filter(c => c.section === section);
+  const saved    = _indicatorCards[section] || [];
+  const savedMap = Object.fromEntries(saved.map(c => [c.id, c]));
+  return catalog
+    .map((def, idx) => {
+      const s = savedMap[def.id];
+      return { ...def, visible: s ? s.visible : def.defaultVisible, order: s?.order ?? idx };
+    })
+    .sort((a, b) => a.order - b.order);
+}
+
+function _renderCardValue(id, inc, prbs) {
+  const curMonth = new Date().toISOString().slice(0, 7);
+  const monthly  = inc?.monthly || [];
+  const prev     = monthly.length >= 2 ? monthly[monthly.length - 2] : null;
+
+  switch (id) {
+    case 'inc_total': {
+      const riskCls = _incidentTarget !== null
+        ? ((inc?.total ?? 0) > _incidentTarget * 1.2 ? 'red' : (inc?.total ?? 0) > _incidentTarget ? 'yellow' : '')
+        : '';
+      const sub = _incidentTarget !== null ? `Target: ${_incidentTarget}` : 'Sem target definido';
+      return { val: `${inc?.total ?? 0} ${_deltaHtml(inc?.total ?? 0, prev?.opened, true)}`, label: 'Abertos no mês', sub, cls: riskCls };
+    }
+    case 'inc_closed': {
+      const closedCls = (inc?.closedThisMonth ?? 0) >= (inc?.total ?? 0) * 0.9 && (inc?.total ?? 0) > 0 ? 'green' : '';
+      return { val: `${inc?.closedThisMonth ?? 0} ${_deltaHtml(inc?.closedThisMonth ?? 0, prev?.closed, false)}`, label: 'Encerrados no mês', sub: 'Resolvidos no período', cls: closedCls };
+    }
+    case 'inc_backlog': {
+      const backlogCls = (inc?.openBacklog ?? 0) > 30 ? 'red' : (inc?.openBacklog ?? 0) > 15 ? 'yellow' : 'green';
+      return { val: String(inc?.openBacklog ?? 0), label: _reportMonth === curMonth ? 'Backlog atual' : 'Backlog no Encerramento', sub: 'Clique para ver lista', cls: backlogCls, clickable: true, onclick: 'reportOpenIncidentsModal()' };
+    }
+    case 'inc_mttr': {
+      const avgCls = (inc?.avgResolutionDays ?? 0) > 5 ? 'red' : (inc?.avgResolutionDays ?? 0) > 2 ? 'yellow' : 'green';
+      return { val: `${inc?.avgResolutionDays ?? 0}d`, label: 'Tempo médio resolução', sub: 'Dias médios no mês', cls: avgCls };
+    }
+    case 'inc_p1': {
+      const cls = (inc?.byPriority?.p1 ?? 0) > 0 ? 'red' : 'green';
+      const subHtml = _slaEnabled ? _slaBadge(inc?.slaByPriority?.p1) : '<div class="report-prb-card-sub">Prioridade máxima</div>';
+      return { val: String(inc?.byPriority?.p1 ?? 0), label: 'P1 — Crítico', subHtml, cls };
+    }
+    case 'inc_p2': {
+      const cls = (inc?.byPriority?.p2 ?? 0) > 3 ? 'yellow' : '';
+      const subHtml = _slaEnabled ? _slaBadge(inc?.slaByPriority?.p2) : '<div class="report-prb-card-sub">Alta prioridade</div>';
+      return { val: String(inc?.byPriority?.p2 ?? 0), label: 'P2 — Alto', subHtml, cls };
+    }
+    case 'inc_p3': {
+      const subHtml = _slaEnabled ? _slaBadge(inc?.slaByPriority?.p3) : '<div class="report-prb-card-sub">Média prioridade</div>';
+      return { val: String(inc?.byPriority?.p3 ?? 0), label: 'P3 — Médio', subHtml, cls: '' };
+    }
+    case 'inc_target': {
+      if (_incidentTarget === null) {
+        return { val: '<span style="font-size:20px;line-height:1;opacity:.55">&#9881;</span>', label: 'vs Target', sub: 'Clique para configurar', cls: '', clickable: true, onclick: 'reportOpenTargetModal()' };
+      }
+      const pct = _incidentTarget > 0 ? Math.round((inc?.total ?? 0) / _incidentTarget * 100) : null;
+      return { val: pct !== null ? `${pct}%` : '—', label: 'vs Target', sub: pct !== null ? (pct > 100 ? 'Acima do target' : 'Dentro do target') : 'Sem target definido', cls: pct !== null && pct > 100 ? 'red' : '' };
+    }
+    case 'inc_mttr_p1': {
+      const v = inc?.mttrByPriority?.p1 ?? null;
+      return { val: v !== null ? `${v}h` : '—', label: 'MTTR P1 (horas)', sub: 'Meta: < 2h', cls: v === null ? '' : v > 4 ? 'red' : v > 2 ? 'yellow' : 'green' };
+    }
+    case 'inc_mttr_p2': {
+      const v = inc?.mttrByPriority?.p2 ?? null;
+      return { val: v !== null ? `${v}h` : '—', label: 'MTTR P2 (horas)', sub: 'Meta: < 8h', cls: v === null ? '' : v > 12 ? 'red' : v > 8 ? 'yellow' : 'green' };
+    }
+    case 'inc_reopen': {
+      const v = inc?.reopenRate ?? null;
+      return { val: v !== null ? `${v}%` : '—', label: 'Taxa de reabertura', sub: 'Meta: < 5%', cls: v === null ? '' : v > 8 ? 'red' : v > 4 ? 'yellow' : 'green' };
+    }
+    case 'prb_opened': {
+      const cls = (prbs?.openedThisMonth || 0) > 5 ? 'red' : (prbs?.openedThisMonth || 0) > 0 ? 'yellow' : 'green';
+      return { val: String(prbs?.openedThisMonth ?? 0), label: 'Abertos no mês', sub: 'Novos no período', cls };
+    }
+    case 'prb_resolved':
+      return { val: String(prbs?.resolvedThisMonth ?? 0), label: 'Resolvidos no mês', sub: 'No período', cls: (prbs?.resolvedThisMonth || 0) > 0 ? 'green' : '' };
+    case 'prb_backlog': {
+      const cls = (prbs?.open ?? 0) > 10 ? 'red' : (prbs?.open ?? 0) > 3 ? 'yellow' : 'green';
+      return { val: String(prbs?.open ?? 0), label: _reportMonth === curMonth ? 'Backlog atual' : 'Backlog no Encerramento', sub: 'Total em aberto', cls };
+    }
+    case 'prb_mttr': {
+      const cls = (prbs?.avgResolutionDays || 0) > 30 ? 'red' : (prbs?.avgResolutionDays || 0) > 14 ? 'yellow' : 'green';
+      return { val: `${prbs?.avgResolutionDays ?? 0}d`, label: 'Tempo médio resolução', sub: 'Dias médios no mês', cls };
+    }
+    case 'prb_ke': {
+      const v = prbs?.knownErrorCount ?? null;
+      return { val: v !== null ? String(v) : '—', label: 'Known Errors', sub: `${prbs?.knownErrorPct ?? '—'}% do backlog`, cls: v === null ? '' : v > 5 ? 'yellow' : 'green' };
+    }
+    case 'prb_wa': {
+      const v = prbs?.withWorkaroundPct ?? null;
+      return { val: v !== null ? `${v}%` : '—', label: 'Com workaround', sub: `${prbs?.withWorkaroundCount ?? '—'} PRBs`, cls: v === null ? '' : v < 50 ? 'red' : v < 80 ? 'yellow' : 'green' };
+    }
+    case 'prb_rca': {
+      const v = prbs?.withRcaPct ?? null;
+      return { val: v !== null ? `${v}%` : '—', label: 'RCA completo', sub: `${prbs?.withRcaCount ?? '—'} de ${prbs?.open ?? '—'}`, cls: v === null ? '' : v < 60 ? 'red' : v < 80 ? 'yellow' : 'green' };
+    }
+    default: return null;
+  }
+}
+
+function _renderIndicatorCards(section, inc, prbs) {
+  const cards   = _getResolvedCards(section);
+  const visible = cards.filter(c => c.visible);
+  if (!visible.length) return '';
+  const perRow  = _indicatorCardsPerRow[section] || 4;
+  const html    = visible.map(c => {
+    const d = _renderCardValue(c.id, inc, prbs);
+    if (!d) return '';
+    const inner = `<div class="report-prb-card-val ${d.cls || ''}">${d.val}</div>
+      <div class="report-prb-card-label">${_esc(d.label)}</div>
+      ${d.subHtml || `<div class="report-prb-card-sub">${_esc(d.sub || '')}</div>`}`;
+    return d.clickable
+      ? `<div class="report-prb-card report-prb-card--clickable" onclick="${d.onclick}" title="Ver lista">${inner}</div>`
+      : `<div class="report-prb-card">${inner}</div>`;
+  }).join('');
+  return `<div class="report-prb-cards" style="grid-template-columns:repeat(${perRow},1fr)">${html}</div>`;
+}
+
+function _renderIndicatorConfigPanel(section) {
+  const cards  = _getResolvedCards(section);
+  const perRow = _indicatorCardsPerRow[section] || 4;
+  const label  = section === 'incidents' ? 'Incidents' : 'PRBs';
+  const items  = cards.map(c => `
+    <div class="report-ind-cfg-item"
+      draggable="true"
+      ondragstart="reportIndDragStart(event,'${section}','${_esc(c.id)}')"
+      ondragover="reportIndDragOver(event)"
+      ondragleave="reportIndDragLeave(event)"
+      ondrop="reportIndDrop(event,'${section}','${_esc(c.id)}')"
+      ondragend="reportIndDragEnd()">
+      <span class="report-drag-handle" aria-hidden="true"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" style="opacity:0.45;vertical-align:middle"><circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="12" r="1.5"/><circle cx="7" cy="12" r="1.5"/></svg></span>
+      <label class="report-ind-cfg-label">
+        <input type="checkbox" ${c.visible ? 'checked' : ''} onchange="reportToggleIndicator('${section}','${_esc(c.id)}')">
+        <span class="report-ind-cfg-name">${_esc(c.label)}</span>
+      </label>
+      <span class="report-ind-cfg-desc">${_esc(c.desc)}</span>
+    </div>`).join('');
+  const perRowBtns = [2, 3, 4, 6, 8].map(n =>
+    `<button class="report-ind-cfg-perrow-btn${perRow === n ? ' active' : ''}" onclick="reportSetCardsPerRow('${section}',${n})">${n}</button>`
+  ).join('');
+  return `<div class="report-ind-cfg-panel">
+    <div class="report-ind-cfg-header">
+      <span class="report-ind-cfg-title">Indicadores — ${_esc(label)}</span>
+      <div class="report-ind-cfg-perrow"><span>Por linha:</span>${perRowBtns}</div>
+      <button class="report-ind-cfg-close" onclick="reportCloseIndicatorConfig()">&#10005;</button>
+    </div>
+    <div class="report-ind-cfg-list">${items}</div>
+  </div>`;
+}
+
 function _renderPrbStatusDonut(list) {
   const counts = {};
   (list || []).forEach(p => { const k = String(p.state); counts[k] = (counts[k] || 0) + 1; });
   const total = Object.values(counts).reduce((s, v) => s + v, 0);
-  if (total === 0) return '<div class="report-empty-row">No PRBs</div>';
-
-  const W = 280, cx = 140, cy = 105, R = 82, ri = 46;
-  let startAngle = -Math.PI / 2;
-  const slices = [];
-  const legendItems = [];
-  Object.entries(counts).forEach(([state, count]) => {
+  if (total === 0) return '<div class="report-empty-hint">Sem PRBs para o período</div>';
+  const items = Object.entries(counts).map(([state, count]) => {
     const cfg = _PRB_STATES[state] || { label: state, color: '#6b7280' };
-    const angle = (count / total) * 2 * Math.PI;
-    const endAngle = startAngle + angle;
-    const large = angle > Math.PI ? 1 : 0;
-    const x1 = cx + R  * Math.cos(startAngle); const y1 = cy + R  * Math.sin(startAngle);
-    const x2 = cx + R  * Math.cos(endAngle);   const y2 = cy + R  * Math.sin(endAngle);
-    const xi1= cx + ri * Math.cos(startAngle); const yi1= cy + ri * Math.sin(startAngle);
-    const xi2= cx + ri * Math.cos(endAngle);   const yi2= cy + ri * Math.sin(endAngle);
-    slices.push(`<path d="M${xi1} ${yi1} L${x1} ${y1} A${R} ${R} 0 ${large} 1 ${x2} ${y2} L${xi2} ${yi2} A${ri} ${ri} 0 ${large} 0 ${xi1} ${yi1}Z" fill="${cfg.color}" stroke="var(--bg)" stroke-width="1.5"/>`);
-    if (angle > 0.3) {
-      const rm = (R + ri) / 2;
-      const mid = startAngle + angle / 2;
-      const tx = (cx + rm * Math.cos(mid)).toFixed(1);
-      const ty = (cy + rm * Math.sin(mid)).toFixed(1);
-      slices.push(`<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="#fff">${count}</text>`);
-    }
-    legendItems.push({ label: cfg.label, color: cfg.color, count });
-    startAngle = endAngle;
+    return { type: cfg.label, count, color: cfg.color };
   });
-
-  const H_svg = cy + R + 8;
-  const svgHtml = `<svg viewBox="0 0 ${W} ${H_svg}" style="width:100%;display:block">
-    ${slices.join('')}
-    <text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle" font-size="22" font-weight="700" fill="var(--text)">${total}</text>
-    <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="10" fill="var(--text-faint)">total</text>
-  </svg>`;
-  return svgHtml + _legendHtml(legendItems.map(item =>
-    ({ type: 'rect', color: item.color, label: `${item.label}: ${item.count}` })
-  ));
+  return _donutChart(items, 'PRBs');
 }
 
 
@@ -1386,69 +1725,119 @@ function _renderPrbOldestList(list) {
   </table>`;
 }
 
+function _renderIncPriorityTrend(monthly) {
+  const data = (monthly || []).slice(-_incidentMonths);
+  if (!data.length) return '<div class="report-empty-hint">Sem dados para o período</div>';
+
+  const W = 600, padT = 24, padB = 30, padL = 32, padR = 16;
+  const cH = 150;
+  const H  = padT + cH + padB;
+  const cW = W - padL - padR;
+  const n  = data.length;
+
+  const maxV = Math.max(...data.flatMap(m => [m.p1 || 0, m.p2 || 0, m.p3 || 0]), 1);
+  const xOf  = i => padL + (n === 1 ? cW / 2 : i / (n - 1) * cW);
+  const yOf  = v => padT + cH - (v / maxV) * cH;
+
+  const LINES = [
+    { key: 'p1', color: '#ef4444', label: 'P1 — Crítico' },
+    { key: 'p2', color: '#f97316', label: 'P2 — Alto' },
+    { key: 'p3', color: '#eab308', label: 'P3 — Médio' },
+  ];
+
+  const grid = Array.from({ length: 4 }, (_, i) => {
+    const v = Math.round(maxV * i / 3);
+    const y = yOf(v);
+    return `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="var(--bg-border)" stroke-width="0.4" stroke-dasharray="3,3"/>` +
+      `<text x="${padL - 4}" y="${y + 4}" text-anchor="end" font-size="7.5" fill="var(--text-faint)">${v}</text>`;
+  }).join('');
+
+  const series = LINES.map(({ key, color }) => {
+    const pts  = data.map((m, i) => `${xOf(i)},${yOf(m[key] || 0)}`).join(' ');
+    const dots = data.map((m, i) =>
+      `<circle cx="${xOf(i)}" cy="${yOf(m[key] || 0)}" r="3" fill="${color}"><title>${_fmtMonth(m.label)}: ${m[key] || 0}</title></circle>`
+    ).join('');
+    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8"/>` + dots;
+  }).join('');
+
+  const xlabels = data.map((m, i) =>
+    `<text x="${xOf(i)}" y="${H - 4}" text-anchor="middle" font-size="8" fill="var(--text-muted)">${_fmtMonth(m.label)}</text>`
+  ).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
+    ${grid}
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + cH}" stroke="var(--bg-border)" stroke-width="0.5"/>
+    <line x1="${padL}" y1="${padT + cH}" x2="${W - padR}" y2="${padT + cH}" stroke="var(--bg-border)" stroke-width="0.5"/>
+    ${series}${xlabels}
+  </svg>` + _legendHtml(LINES.map(l => ({ type: 'line', color: l.color, label: l.label })));
+}
+
+function _renderIncSlaBars(slaByPriority) {
+  if (!slaByPriority) return '<div class="report-empty-hint">Sem dados de SLA para o período</div>';
+  const PRIOS = [
+    { key: 'p1', label: 'P1 — Crítico', color: '#ef4444', target: _slaTargets.p1 ?? 95 },
+    { key: 'p2', label: 'P2 — Alto',    color: '#f97316', target: _slaTargets.p2 ?? 90 },
+    { key: 'p3', label: 'P3 — Médio',   color: '#eab308', target: _slaTargets.p3 ?? 85 },
+  ];
+  const rows = PRIOS.map(p => {
+    const d = slaByPriority[p.key];
+    if (!d || d.pct === null) {
+      return `<div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;color:var(--text-muted)">${_esc(p.label)}</span>
+        <span style="font-size:11px;color:var(--text-faint)">Sem dados</span>
+      </div>`;
+    }
+    const pct  = d.pct;
+    const good = pct >= p.target;
+    const warn = pct >= p.target - 10;
+    const barColor = good ? '#10b981' : warn ? '#f59e0b' : '#ef4444';
+    const txtColor = good ? '#10b981' : warn ? '#f59e0b' : '#ef4444';
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:12px;color:var(--text-muted)">${_esc(p.label)}</span>
+        <span style="font-size:13px;font-weight:700;color:${txtColor}">${pct}%</span>
+      </div>
+      <div style="height:8px;background:var(--bg-el);border-radius:4px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${barColor};border-radius:4px"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text-faint);margin-top:2px">${d.withinSla} de ${d.total} dentro do SLA — Meta: ${p.target}%</div>
+    </div>`;
+  });
+  return `<div style="padding:4px 0">${rows.join('')}</div>`;
+}
+
+function _renderPrbCategoryChart(list) {
+  if (!list || !list.length) return '<div class="report-empty-hint">Sem PRBs para o período</div>';
+  const counts = {};
+  list.forEach(p => {
+    const cat = (p.category && String(p.category).trim()) || 'Não categorizado';
+    counts[cat] = (counts[cat] || 0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 7);
+  if (!sorted.length) return '<div class="report-empty-hint">Sem dados de categoria</div>';
+  const COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+  const items = sorted.map(([type, count], i) => ({ type, count, color: COLORS[i % COLORS.length] }));
+  return _donutChart(items, 'PRBs');
+}
+
 function _renderPRBs(prbs, incidents) {
   if (!prbs) return '';
 
-  const openedCls = (prbs.openedThisMonth || 0) > 5 ? 'red' : (prbs.openedThisMonth || 0) > 0 ? 'yellow' : 'green';
-  const resCls    = (prbs.resolvedThisMonth || 0) > 0 ? 'green' : '';
-  const accCls       = prbs.open > 10 ? 'red' : prbs.open > 3 ? 'yellow' : 'green';
-  const avgResCls    = (prbs.avgResolutionDays || 0) > 30 ? 'red' : (prbs.avgResolutionDays || 0) > 14 ? 'yellow' : 'green';
-  const _curMonthPrb = new Date().toISOString().slice(0, 7);
-  const prbBacklogLabel = _reportMonth === _curMonthPrb ? 'Backlog atual' : 'Backlog no Encerramento';
-
-  const hasPrbMonthly = prbs.monthly && prbs.monthly.length > 0;
-
-  let donutChart = '', agingChart = '';
-  if (prbs.list && prbs.list.length > 0) {
-    donutChart = _renderPrbStatusDonut(prbs.list);
-    agingChart = _renderPrbAgingChart(prbs.list);
-  }
-
-  return `<div class="report-section">
-    <div class="report-section-title">PRBs — Problems</div>
-    <div class="report-prb-cards">
-      <div class="report-prb-card">
-        <div class="report-prb-card-val ${openedCls}">${prbs.openedThisMonth ?? 0}</div>
-        <div class="report-prb-card-label">Abertos no mês</div>
-        <div class="report-prb-card-sub">Novos no período</div>
-      </div>
-      <div class="report-prb-card">
-        <div class="report-prb-card-val ${resCls}">${prbs.resolvedThisMonth ?? 0}</div>
-        <div class="report-prb-card-label">Resolvidos no mês</div>
-        <div class="report-prb-card-sub">No período</div>
-      </div>
-      <div class="report-prb-card">
-        <div class="report-prb-card-val ${accCls}">${prbs.open}</div>
-        <div class="report-prb-card-label">${prbBacklogLabel}</div>
-        <div class="report-prb-card-sub">Total em aberto</div>
-      </div>
-      <div class="report-prb-card">
-        <div class="report-prb-card-val ${avgResCls}">${prbs.avgResolutionDays ?? 0}d</div>
-        <div class="report-prb-card-label">Tempo médio resolução</div>
-        <div class="report-prb-card-sub">Dias médios no mês</div>
+  return `<div class="report-section" data-section="prbs">
+    <div class="report-section-header-row">
+      <div class="report-section-title">PRBs — Problems</div>
+      <div class="report-field-chart-actions">
+        <button class="report-field-picker-btn" title="Configurar indicadores" onclick="reportOpenIndicatorConfig('prbs')" draggable="false">&#9881;</button>
       </div>
     </div>
-    ${hasPrbMonthly ? `
-    <div class="report-subsection-title" style="margin-top:12px">Evolução de PRBs — Abertos · Resolvidos · Backlog</div>
-    ${_renderPrbEvolutionChart(prbs.monthly)}
-    ` : ''}
-    ${prbs.list && prbs.list.length > 0 ? `
-    <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
-      <div style="flex:0 0 280px">
-        <div class="report-subsection-title">PRBs por status</div>
-        <div class="report-prb-chart-sub">Distribuição atual</div>
-        ${donutChart}
-      </div>
-      <div style="flex:1;min-width:300px">
-        <div class="report-subsection-title">Aging do Backlog</div>
-        <div class="report-prb-chart-sub">Distribuição por tempo em aberto e status</div>
-        ${agingChart}
+    ${_indConfigSection === 'prbs' ? _renderIndicatorConfigPanel('prbs') : ''}
+    ${_renderIndicatorCards('prbs', null, prbs)}
+    <div class="report-donuts-grid">
+      ${_prbCharts.map((chart, idx) => _renderPrbChartCell(chart, idx, prbs)).join('')}
+      <div class="report-add-chart-section" style="flex-basis:100%">
+        <button class="report-add-chart-btn" onclick="reportAddPrbChart()">+ Adicionar gráfico</button>
       </div>
     </div>
-    <div class="report-subsection-title" style="margin-top:12px">Top 10 PRBs mais antigos</div>
-    <div class="report-prb-chart-sub">Ordenado por tempo em aberto</div>
-    ${_renderPrbOldestList(prbs.list)}
-    ` : ''}
   </div>`;
 }
 
@@ -1479,8 +1868,18 @@ function _buildHTML(payload) {
       Exportar HTML</button>
   </div>`;
 
+  const _af = _activeSectionFilter;
+  const filterBar = `<div class="report-filter-bar">
+    ${hasAzure ? `<button class="report-filter-btn${_af === 'sprint' ? ' report-filter-btn--active' : ''}" data-filter="sprint" onclick="reportSetSectionFilter('sprint')">Azure</button>` : ''}
+    <button class="report-filter-btn${_af === 'incidents' ? ' report-filter-btn--active' : ''}" data-filter="incidents" onclick="reportSetSectionFilter('incidents')">Incidentes</button>
+    <button class="report-filter-btn${_af === 'prbs' ? ' report-filter-btn--active' : ''}" data-filter="prbs" onclick="reportSetSectionFilter('prbs')">Problems</button>
+    <button class="report-filter-btn${_af === 'all' ? ' report-filter-btn--active' : ''}" data-filter="all" onclick="reportSetSectionFilter('all')">Todos</button>
+  </div>`;
+
+  const sectionFilterAttr = _activeSectionFilter !== 'all' ? ` data-section-filter="${_activeSectionFilter}"` : '';
+
   return `
-    <div class="report-content">
+    <div class="report-content"${sectionFilterAttr}>
       <div class="report-header-card">
         <div class="report-header-title">${_esc(metadata.project)}</div>
         <div class="report-header-period">${_esc(metadata.period)}</div>
@@ -1491,6 +1890,7 @@ function _buildHTML(payload) {
       </div>
       ${snWarning}
       ${notesBar}
+      ${filterBar}
       ${hasAzure ? _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality) : ''}
       ${incidents ? _renderIncidents(incidents) : ''}
       ${prbs      ? _renderPRBs(prbs, incidents) : ''}
@@ -1537,6 +1937,18 @@ export function reportSaveNotes(value) {
   else localStorage.removeItem(key);
 }
 
+export function reportSetSectionFilter(filter) {
+  _activeSectionFilter = filter;
+  const wrap = document.getElementById('report-modal-body') || document.getElementById('report-content');
+  if (!wrap) return;
+  const content = wrap.querySelector('.report-content') || wrap;
+  if (filter === 'all') content.removeAttribute('data-section-filter');
+  else content.dataset.sectionFilter = filter;
+  wrap.querySelectorAll('.report-filter-btn').forEach(b => {
+    b.classList.toggle('report-filter-btn--active', b.dataset.filter === filter);
+  });
+}
+
 export function openReportSnConfig() {
   window.openSnConfig?.(_reportProject);
 }
@@ -1559,6 +1971,68 @@ export function reportChangeMonth(month) {
 
 export function reportRefresh() {
   _load(true);
+}
+
+// ── Indicator config panel ─────────────────────────────────────────────────────
+
+export function reportOpenIndicatorConfig(section) {
+  _indConfigSection = section;
+  _rerender();
+}
+
+export function reportCloseIndicatorConfig() {
+  _indConfigSection = null;
+  _rerender();
+}
+
+export function reportToggleIndicator(section, id) {
+  const cards = _getResolvedCards(section);
+  _indicatorCards[section] = cards.map(c => ({ id: c.id, visible: c.id === id ? !c.visible : c.visible, order: c.order }));
+  _saveReportConfig();
+  _rerender();
+}
+
+export function reportSetCardsPerRow(section, n) {
+  _indicatorCardsPerRow = { ..._indicatorCardsPerRow, [section]: n };
+  _saveReportConfig();
+  _rerender();
+}
+
+export function reportIndDragStart(event, section, id) {
+  _indDragSrcId      = id;
+  _indDragSrcSection = section;
+  event.dataTransfer.effectAllowed = 'move';
+}
+
+export function reportIndDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  event.currentTarget.classList.add('report-ind-cfg-dragover');
+}
+
+export function reportIndDragLeave(event) {
+  event.currentTarget.classList.remove('report-ind-cfg-dragover');
+}
+
+export function reportIndDrop(event, section, targetId) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('report-ind-cfg-dragover');
+  if (_indDragSrcId === targetId || _indDragSrcSection !== section) return;
+  const cards  = _getResolvedCards(section);
+  const srcIdx = cards.findIndex(c => c.id === _indDragSrcId);
+  const tgtIdx = cards.findIndex(c => c.id === targetId);
+  if (srcIdx < 0 || tgtIdx < 0) return;
+  const reordered = [...cards];
+  const [moved]   = reordered.splice(srcIdx, 1);
+  reordered.splice(tgtIdx, 0, moved);
+  _indicatorCards[section] = reordered.map((c, i) => ({ id: c.id, visible: c.visible, order: i }));
+  _saveReportConfig();
+  _rerender();
+}
+
+export function reportIndDragEnd() {
+  _indDragSrcId      = null;
+  _indDragSrcSection = null;
 }
 
 // ── Copilot integration ────────────────────────────────────────────────────────
@@ -1870,6 +2344,7 @@ export function reportResizeChart(idx, size) {
 }
 
 export function reportDragStart(e, idx) {
+  if (e.target.closest('.report-field-chart-actions, button, a, select, input')) { e.preventDefault(); return; }
   _dragSrcIdx = idx;
   e.dataTransfer.effectAllowed = 'move';
   setTimeout(() => e.currentTarget?.classList.add('report-dragging'), 0);
@@ -1902,10 +2377,536 @@ export function reportDragEnd(e) {
   _dragSrcIdx = -1;
 }
 
+// ── Incident chart drag / remove / add ────────────────────────────────────────
+
+export function reportRemoveIncChart(idx) {
+  _incidentCharts.splice(idx, 1);
+  _saveReportConfig();
+  _rerender();
+}
+
+export function reportIncChartDragStart(e, idx) {
+  if (e.target.closest('.report-field-chart-actions, button, a, select, input')) { e.preventDefault(); return; }
+  _incChartDragIdx = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => e.currentTarget?.classList.add('report-dragging'), 0);
+}
+
+export function reportIncChartDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('report-drag-over');
+}
+
+export function reportIncChartDragLeave(e) {
+  e.currentTarget.classList.remove('report-drag-over');
+}
+
+export function reportIncChartDrop(e, targetIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('report-drag-over');
+  if (_incChartDragIdx < 0 || _incChartDragIdx === targetIdx) { _incChartDragIdx = -1; return; }
+  const moved = _incidentCharts.splice(_incChartDragIdx, 1)[0];
+  _incidentCharts.splice(targetIdx, 0, moved);
+  _incChartDragIdx = -1;
+  _saveReportConfig();
+  _rerender();
+}
+
+export function reportIncChartDragEnd(e) {
+  e.currentTarget?.classList.remove('report-dragging');
+  document.querySelectorAll('.report-drag-over').forEach(el => el.classList.remove('report-drag-over'));
+  _incChartDragIdx = -1;
+}
+
+export function reportAddIncChart() {
+  reportOpenIncChartPicker(-1);
+}
+
+// ── PRB chart drag / remove / add ─────────────────────────────────────────────
+
+export function reportRemovePrbChart(idx) {
+  _prbCharts.splice(idx, 1);
+  _saveReportConfig();
+  _rerender();
+}
+
+export function reportPrbChartDragStart(e, idx) {
+  if (e.target.closest('.report-field-chart-actions, button, a, select, input')) { e.preventDefault(); return; }
+  _prbChartDragIdx = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => e.currentTarget?.classList.add('report-dragging'), 0);
+}
+
+export function reportPrbChartDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('report-drag-over');
+}
+
+export function reportPrbChartDragLeave(e) {
+  e.currentTarget.classList.remove('report-drag-over');
+}
+
+export function reportPrbChartDrop(e, targetIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('report-drag-over');
+  if (_prbChartDragIdx < 0 || _prbChartDragIdx === targetIdx) { _prbChartDragIdx = -1; return; }
+  const moved = _prbCharts.splice(_prbChartDragIdx, 1)[0];
+  _prbCharts.splice(targetIdx, 0, moved);
+  _prbChartDragIdx = -1;
+  _saveReportConfig();
+  _rerender();
+}
+
+export function reportPrbChartDragEnd(e) {
+  e.currentTarget?.classList.remove('report-dragging');
+  document.querySelectorAll('.report-drag-over').forEach(el => el.classList.remove('report-drag-over'));
+  _prbChartDragIdx = -1;
+}
+
+export function reportAddPrbChart() {
+  reportOpenPrbChartPicker(-1);
+}
+
+// ── Groupby field definitions ─────────────────────────────────────────────────
+
+const _INC_GROUPBY_FIELDS = [
+  { key: 'cmdb_ci.name',          label: 'IC Afetado (CI)' },
+  { key: 'u_additional_res_code', label: 'Resolution Code' },
+  { key: 'assignment_group',      label: 'Grupo de Atendimento' },
+  { key: 'assigned_to',           label: 'Responsavel' },
+  { key: 'priority',              label: 'Prioridade' },
+  { key: 'impact',                label: 'Impacto' },
+  { key: 'urgency',               label: 'Urgencia' },
+  { key: 'state',                 label: 'Estado' },
+  { key: 'category',              label: 'Categoria' },
+  { key: 'subcategory',           label: 'Subcategoria' },
+  { key: 'location.name',         label: 'Localizacao' },
+  { key: 'close_code',            label: 'Codigo de Fechamento' },
+  { key: 'contact_type',          label: 'Canal de Abertura' },
+];
+
+const _PRB_GROUPBY_FIELDS = [
+  { key: 'priority',         label: 'Prioridade' },
+  { key: 'impact',           label: 'Impacto' },
+  { key: 'urgency',          label: 'Urgencia' },
+  { key: 'category',         label: 'Categoria' },
+  { key: 'state',            label: 'Estado' },
+  { key: 'assignment_group', label: 'Grupo de Atendimento' },
+  { key: 'assigned_to',      label: 'Responsavel' },
+  { key: 'known_error',      label: 'Known Error' },
+  { key: 'rca_complete',     label: 'RCA Completo' },
+];
+
+function _acHtml(inputId, hiddenId, fields, currentKey) {
+  const cur  = fields.find(f => f.key === currentKey);
+  const opts = fields.map(f =>
+    `<div class="report-ac-opt" data-key="${_esc(f.key)}" data-label="${_esc(f.label)}">${_esc(f.label)}<span class="report-ac-key">${_esc(f.key)}</span></div>`
+  ).join('');
+  return `<div class="report-ac-wrap">
+    <input type="text" id="${inputId}" class="report-field-sel report-ac-input" value="${_esc(cur?.label || '')}" placeholder="Buscar campo..." autocomplete="off">
+    <input type="hidden" id="${hiddenId}" value="${_esc(currentKey || '')}">
+    <div class="report-ac-dropdown" id="ac-drop-${inputId}">${opts}</div>
+  </div>`;
+}
+
+function _acInit(picker, inputId, hiddenId) {
+  const input = picker.querySelector('#' + inputId);
+  const hidden = picker.querySelector('#' + hiddenId);
+  const drop  = picker.querySelector('#ac-drop-' + inputId);
+  if (!input || !hidden || !drop) return;
+  const show = () => { drop.style.display = 'block'; };
+  const hide = () => { drop.style.display = 'none'; };
+  const filter = () => {
+    const q = input.value.toLowerCase();
+    drop.querySelectorAll('.report-ac-opt').forEach(o => {
+      o.style.display = (o.dataset.label.toLowerCase().includes(q) || o.dataset.key.toLowerCase().includes(q)) ? '' : 'none';
+    });
+    show();
+  };
+  input.addEventListener('focus', show);
+  input.addEventListener('input', filter);
+  input.addEventListener('blur', () => setTimeout(hide, 160));
+  drop.addEventListener('mousedown', e => {
+    const o = e.target.closest('.report-ac-opt');
+    if (!o) return;
+    input.value  = o.dataset.label;
+    hidden.value = o.dataset.key;
+    hide();
+    e.preventDefault();
+  });
+  input.addEventListener('keydown', e => {
+    const visible = [...drop.querySelectorAll('.report-ac-opt:not([style*="none"])')];
+    const cur = drop.querySelector('.report-ac-opt.report-ac-hi');
+    let idx = visible.indexOf(cur);
+    if (e.key === 'Escape') { hide(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, visible.length - 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+    else if (e.key === 'Enter' && cur) {
+      input.value  = cur.dataset.label;
+      hidden.value = cur.dataset.key;
+      hide(); e.preventDefault(); return;
+    } else return;
+    visible.forEach(o => o.classList.remove('report-ac-hi'));
+    if (visible[idx]) { visible[idx].classList.add('report-ac-hi'); visible[idx].scrollIntoView({ block: 'nearest' }); }
+    show();
+  });
+}
+
+// ── Incident chart picker (unified ⚙ modal) ────────────────────────────────────
+
+export function reportOpenIncChartPicker(idx) {
+  _incPickerIdx = idx !== undefined ? idx : -1;
+  _closeFieldPicker();
+  const isEdit       = _incPickerIdx >= 0;
+  const currentChart = isEdit ? _incidentCharts[_incPickerIdx] : null;
+  const currentSize  = currentChart?.size || 'lg';
+  const currentType  = currentChart?.type || 'inc-volume';
+
+  const INC_TYPES = [
+    { val: 'inc-volume',          label: 'Volume Mensal (Abertos e Fechados)' },
+    { val: 'inc-bars',            label: 'Top CIs / Resolution Codes' },
+    { val: 'inc-heatmap',         label: 'Heatmap CI × Mês' },
+    { val: 'inc-location',        label: 'Incidentes por Localização' },
+    { val: 'inc-priority-trend',  label: 'Tendência por Prioridade (P1/P2/P3)' },
+    { val: 'inc-sla-bars',        label: 'Conformidade SLA por Prioridade' },
+    { val: 'inc-priority-donut',  label: 'Distribuição por Prioridade (donut)' },
+    { val: 'inc-groupby',         label: 'Agrupamento por campo' },
+  ];
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'report-picker-backdrop';
+  backdrop.className = 'report-field-backdrop';
+  backdrop.onclick = _closeFieldPicker;
+  document.body.appendChild(backdrop);
+
+  const picker = document.createElement('div');
+  picker.id = 'report-field-picker';
+  picker.className = 'report-field-picker';
+
+  const sizeOpts = [
+    { val: 'sm', label: '3 por linha' },
+    { val: 'md', label: '2 por linha' },
+    { val: 'lg', label: 'Largura total' },
+  ].map(o => `<button class="report-size-opt${currentSize === o.val ? ' active' : ''}" data-size="${o.val}">${o.label}</button>`).join('');
+
+  const typeSection = !isEdit
+    ? `<div class="report-field-picker-label">Tipo de gráfico</div>
+       <select id="report-inc-type-sel" class="report-field-sel">
+         ${INC_TYPES.map(t => `<option value="${t.val}">${t.label}</option>`).join('')}
+       </select>`
+    : `<div class="report-field-picker-label">Gráfico</div>
+       <div style="font-size:13px;color:var(--text-muted);padding:2px 0 8px">${_esc(INC_TYPES.find(t => t.val === currentType)?.label || currentType)}</div>`;
+
+  const MONTH_OPTS = [3, 5, 6, 8, 10, 12, 13, 24];
+  const LOC_OPTS   = [1, 3, 6];
+  const showVolume  = isEdit && currentType === 'inc-volume';
+  const showBars    = isEdit && (currentType === 'inc-bars' || currentType === 'inc-heatmap');
+  const showHeat    = isEdit && currentType === 'inc-heatmap';
+  const showLoc     = isEdit && currentType === 'inc-location';
+  const showSla     = isEdit && currentType === 'inc-sla-bars';
+  const showGroupby = isEdit && currentType === 'inc-groupby';
+  const curGbStyle  = currentChart?.chartStyle || 'donut';
+  const curGbColor  = currentChart?.barColor   || '';
+
+  const specificSection = `
+    ${showGroupby ? `
+      <div class="report-field-picker-label">Campo de agrupamento</div>
+      ${_acHtml('report-inc-groupby-input', 'report-inc-groupby-field', _INC_GROUPBY_FIELDS, currentChart?.ref || 'cmdb_ci.name')}
+      <div class="report-field-picker-label">Estilo visual</div>
+      <div class="report-size-group" id="report-inc-groupby-style">
+        ${[{val:'donut',label:'Donut'},{val:'bar',label:'Barras'},{val:'bar-vertical',label:'Barras Verticais'}]
+          .map(o => `<button class="report-size-opt${curGbStyle === o.val ? ' active' : ''}" data-style="${o.val}">${o.label}</button>`).join('')}
+      </div>
+      <div id="report-inc-groupby-color-section"${curGbStyle === 'donut' ? ' style="display:none"' : ''}>
+        <div class="report-field-picker-label">Cor das barras</div>
+        <select id="report-inc-groupby-color-mode" class="report-field-sel">
+          <option value="multi"${!curGbColor ? ' selected' : ''}>Multicolor</option>
+          <option value="single"${curGbColor ? ' selected' : ''}>Cor única</option>
+        </select>
+        <div id="report-inc-groupby-color-picker"${!curGbColor ? ' style="display:none"' : ''}>
+          <input type="color" id="report-inc-groupby-color-input" value="${curGbColor || '#3b82f6'}"
+            style="margin-top:6px;width:100%;height:32px;border:none;padding:0;cursor:pointer;background:none">
+        </div>
+      </div>
+    ` : ''}
+    ${showSla ? `
+      <div class="report-field-picker-label">Metas de conformidade</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:4px">
+        <div>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P1 — Crítico</label>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="number" id="report-sla-p1" min="0" max="100" value="${_slaTargets.p1 ?? 95}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
+            <span style="font-size:12px;color:var(--text-faint)">%</span>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P2 — Alto</label>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="number" id="report-sla-p2" min="0" max="100" value="${_slaTargets.p2 ?? 90}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
+            <span style="font-size:12px;color:var(--text-faint)">%</span>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P3 — Médio</label>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="number" id="report-sla-p3" min="0" max="100" value="${_slaTargets.p3 ?? 85}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
+            <span style="font-size:12px;color:var(--text-faint)">%</span>
+          </div>
+        </div>
+      </div>
+    ` : ''}
+    ${showVolume ? `
+      <div class="report-field-picker-label">Meses de histórico</div>
+      <div class="report-size-group" style="flex-wrap:wrap" id="report-inc-p-months">
+        ${MONTH_OPTS.map(n => `<button class="report-size-opt${n === _incidentMonths ? ' active' : ''}" data-months="${n}">${n} meses</button>`).join('')}
+      </div>
+      <div class="report-field-picker-label" style="margin-top:8px">Target mensal</div>
+      <input type="number" id="report-inc-p-target" class="report-inc-months-input" min="0" max="9999" value="${_incidentTarget}">
+    ` : ''}
+    ${showBars ? `
+      <div class="report-field-picker-label">Agrupamento</div>
+      <select id="report-inc-p-groupby" class="report-field-sel">
+        <option value="cmdb_ci"${_incidentGroupBy === 'cmdb_ci' ? ' selected' : ''}>IC Afetado (CMDB CI)</option>
+        <option value="resolution_code"${_incidentGroupBy === 'resolution_code' ? ' selected' : ''}>Resolution Code</option>
+      </select>
+    ` : ''}
+    ${showHeat ? `
+      <div class="report-field-picker-label" style="margin-top:8px">Escala máxima do heatmap</div>
+      <input type="number" id="report-inc-p-heatmax" class="report-inc-months-input" min="0" max="999" value="${_heatmapMax}" placeholder="0 = automático">
+    ` : ''}
+    ${showLoc ? `
+      <div class="report-field-picker-label">Meses de histórico</div>
+      <div class="report-size-group" id="report-inc-p-locmonths">
+        ${LOC_OPTS.map(n => `<button class="report-size-opt${n === _locationMonths ? ' active' : ''}" data-locmonths="${n}">${n} ${n === 1 ? 'mês' : 'meses'}</button>`).join('')}
+      </div>
+    ` : ''}`;
+
+  picker.innerHTML = `
+    <div class="report-field-picker-title">${isEdit ? 'Configurar gráfico' : 'Novo gráfico'}</div>
+    ${typeSection}
+    ${specificSection}
+    <div class="report-field-picker-label">Tamanho</div>
+    <div class="report-size-group" id="report-inc-size-group">${sizeOpts}</div>
+    <div class="report-field-picker-actions">
+      <button class="report-picker-btn-cancel" id="report-inc-p-cancel">Cancelar</button>
+      <button class="report-picker-btn-apply"  id="report-inc-p-apply">${isEdit ? 'Aplicar' : 'Adicionar'}</button>
+    </div>`;
+  document.body.appendChild(picker);
+
+  document.getElementById('report-inc-p-cancel').onclick = _closeFieldPicker;
+  document.getElementById('report-inc-p-apply').onclick  = _applyIncChartPicker;
+  if (showGroupby) _acInit(picker, 'report-inc-groupby-input', 'report-inc-groupby-field');
+
+  picker.addEventListener('click', e => {
+    const opt = e.target.closest('.report-size-opt');
+    if (!opt) return;
+    const group = opt.closest('.report-size-group');
+    group?.querySelectorAll('.report-size-opt').forEach(b => b.classList.remove('active'));
+    opt.classList.add('active');
+    if (group?.id === 'report-inc-groupby-style') {
+      const colorSection = document.getElementById('report-inc-groupby-color-section');
+      if (colorSection) colorSection.style.display = opt.dataset.style === 'donut' ? 'none' : '';
+    }
+  });
+
+  if (showGroupby) {
+    document.getElementById('report-inc-groupby-color-mode')?.addEventListener('change', e => {
+      const cp = document.getElementById('report-inc-groupby-color-picker');
+      if (cp) cp.style.display = e.target.value === 'single' ? '' : 'none';
+    });
+  }
+}
+
+function _applyIncChartPicker() {
+  const picker = document.getElementById('report-field-picker');
+  if (!picker) return;
+  const isEdit = _incPickerIdx >= 0;
+  const size   = picker.querySelector('#report-inc-size-group .report-size-opt.active')?.dataset.size || 'lg';
+  const type   = isEdit ? _incidentCharts[_incPickerIdx].type : (document.getElementById('report-inc-type-sel')?.value || 'inc-volume');
+
+  const newMonths    = parseInt(picker.querySelector('#report-inc-p-months .report-size-opt.active')?.dataset.months);
+  const newTarget    = parseInt(document.getElementById('report-inc-p-target')?.value);
+  const newGroupBy   = document.getElementById('report-inc-p-groupby')?.value;
+  const newHeatMax   = parseInt(document.getElementById('report-inc-p-heatmax')?.value);
+  const newLocMonths = parseInt(picker.querySelector('#report-inc-p-locmonths .report-size-opt.active')?.dataset.locmonths);
+  const clamp01      = v => Math.min(100, Math.max(0, parseInt(v) || 0));
+  const newSlaP1     = document.getElementById('report-sla-p1') ? clamp01(document.getElementById('report-sla-p1').value) : null;
+  const newSlaP2     = document.getElementById('report-sla-p2') ? clamp01(document.getElementById('report-sla-p2').value) : null;
+  const newSlaP3     = document.getElementById('report-sla-p3') ? clamp01(document.getElementById('report-sla-p3').value) : null;
+
+  let needReload = false;
+  if (!isNaN(newMonths)    && newMonths    !== _incidentMonths)  { _incidentMonths  = Math.min(24, Math.max(1, newMonths)); needReload = true; }
+  if (!isNaN(newTarget))                                          { _incidentTarget  = Math.max(0, newTarget); }
+  if (newGroupBy            && newGroupBy  !== _incidentGroupBy)  { _incidentGroupBy = newGroupBy; needReload = true; }
+  if (!isNaN(newHeatMax))                                         { _heatmapMax      = Math.max(0, newHeatMax); }
+  if (!isNaN(newLocMonths) && newLocMonths !== _locationMonths)   { _locationMonths  = newLocMonths; needReload = true; }
+  if (newSlaP1 !== null || newSlaP2 !== null || newSlaP3 !== null) {
+    _slaTargets = { p1: newSlaP1 ?? _slaTargets.p1, p2: newSlaP2 ?? _slaTargets.p2, p3: newSlaP3 ?? _slaTargets.p3 };
+  }
+
+  const isGroupby      = type === 'inc-groupby';
+  const gbRef          = document.getElementById('report-inc-groupby-field')?.value;
+  const gbStyle        = picker.querySelector('#report-inc-groupby-style .report-size-opt.active')?.dataset.style;
+  const gbColorMode    = document.getElementById('report-inc-groupby-color-mode')?.value;
+  const gbColor        = gbColorMode === 'single' ? (document.getElementById('report-inc-groupby-color-input')?.value || '') : '';
+
+  if (isEdit) {
+    const update = { ..._incidentCharts[_incPickerIdx], size };
+    if (isGroupby) {
+      if (gbRef)   update.ref        = gbRef;
+      if (gbStyle) update.chartStyle = gbStyle;
+      update.barColor = gbColor;
+    }
+    _incidentCharts[_incPickerIdx] = update;
+  } else {
+    _incidentCharts.push(isGroupby ? { type, size, ref: 'cmdb_ci', chartStyle: 'donut', barColor: '' } : { type, size });
+  }
+
+  _saveReportConfig();
+  _closeFieldPicker();
+  if (needReload) _load(); else _rerender();
+}
+
+// ── PRB chart picker (unified ⚙ modal) ────────────────────────────────────────
+
+export function reportOpenPrbChartPicker(idx) {
+  _prbPickerIdx = idx !== undefined ? idx : -1;
+  _closeFieldPicker();
+  const isEdit       = _prbPickerIdx >= 0;
+  const currentChart = isEdit ? _prbCharts[_prbPickerIdx] : null;
+  const currentSize  = currentChart?.size || 'lg';
+  const currentType  = currentChart?.type || 'prb-evolution';
+
+  const PRB_TYPES = [
+    { val: 'prb-evolution', label: 'Evolução de PRBs (Abertos · Resolvidos · Backlog)' },
+    { val: 'prb-donut',     label: 'PRBs por Status (donut)' },
+    { val: 'prb-aging',     label: 'Aging do Backlog' },
+    { val: 'prb-oldest',    label: 'Top 10 PRBs mais antigos' },
+    { val: 'prb-groupby',   label: 'Agrupamento por campo' },
+  ];
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'report-picker-backdrop';
+  backdrop.className = 'report-field-backdrop';
+  backdrop.onclick = _closeFieldPicker;
+  document.body.appendChild(backdrop);
+
+  const picker = document.createElement('div');
+  picker.id = 'report-field-picker';
+  picker.className = 'report-field-picker';
+
+  const sizeOpts = [
+    { val: 'sm', label: '3 por linha' },
+    { val: 'md', label: '2 por linha' },
+    { val: 'lg', label: 'Largura total' },
+  ].map(o => `<button class="report-size-opt${currentSize === o.val ? ' active' : ''}" data-size="${o.val}">${o.label}</button>`).join('');
+
+  const typeSection = !isEdit
+    ? `<div class="report-field-picker-label">Tipo de gráfico</div>
+       <select id="report-prb-type-sel" class="report-field-sel">
+         ${PRB_TYPES.map(t => `<option value="${t.val}">${t.label}</option>`).join('')}
+       </select>`
+    : `<div class="report-field-picker-label">Gráfico</div>
+       <div style="font-size:13px;color:var(--text-muted);padding:2px 0 8px">${_esc(PRB_TYPES.find(t => t.val === currentType)?.label || currentType)}</div>`;
+
+  const showPrbGroupby = isEdit && currentType === 'prb-groupby';
+  const curPgStyle     = currentChart?.chartStyle || 'donut';
+  const curPgColor     = currentChart?.barColor   || '';
+
+  const prbGroupbySection = showPrbGroupby ? `
+    <div class="report-field-picker-label">Campo de agrupamento</div>
+    ${_acHtml('report-prb-groupby-input', 'report-prb-groupby-field', _PRB_GROUPBY_FIELDS, currentChart?.ref || 'category')}
+    <div class="report-field-picker-label">Estilo visual</div>
+    <div class="report-size-group" id="report-prb-groupby-style">
+      ${[{val:'donut',label:'Donut'},{val:'bar',label:'Barras'},{val:'bar-vertical',label:'Barras Verticais'}]
+        .map(o => `<button class="report-size-opt${curPgStyle === o.val ? ' active' : ''}" data-style="${o.val}">${o.label}</button>`).join('')}
+    </div>
+    <div id="report-prb-groupby-color-section"${curPgStyle === 'donut' ? ' style="display:none"' : ''}>
+      <div class="report-field-picker-label">Cor das barras</div>
+      <select id="report-prb-groupby-color-mode" class="report-field-sel">
+        <option value="multi"${!curPgColor ? ' selected' : ''}>Multicolor</option>
+        <option value="single"${curPgColor ? ' selected' : ''}>Cor única</option>
+      </select>
+      <div id="report-prb-groupby-color-picker"${!curPgColor ? ' style="display:none"' : ''}>
+        <input type="color" id="report-prb-groupby-color-input" value="${curPgColor || '#10b981'}"
+          style="margin-top:6px;width:100%;height:32px;border:none;padding:0;cursor:pointer;background:none">
+      </div>
+    </div>` : '';
+
+  picker.innerHTML = `
+    <div class="report-field-picker-title">${isEdit ? 'Configurar gráfico' : 'Novo gráfico'}</div>
+    ${typeSection}
+    ${prbGroupbySection}
+    <div class="report-field-picker-label">Tamanho</div>
+    <div class="report-size-group" id="report-prb-size-group">${sizeOpts}</div>
+    <div class="report-field-picker-actions">
+      <button class="report-picker-btn-cancel" id="report-prb-p-cancel">Cancelar</button>
+      <button class="report-picker-btn-apply"  id="report-prb-p-apply">${isEdit ? 'Aplicar' : 'Adicionar'}</button>
+    </div>`;
+  document.body.appendChild(picker);
+
+  document.getElementById('report-prb-p-cancel').onclick = _closeFieldPicker;
+  document.getElementById('report-prb-p-apply').onclick  = _applyPrbChartPicker;
+  if (showPrbGroupby) _acInit(picker, 'report-prb-groupby-input', 'report-prb-groupby-field');
+
+  picker.addEventListener('click', e => {
+    const opt = e.target.closest('.report-size-opt');
+    if (!opt) return;
+    const group = opt.closest('.report-size-group');
+    group?.querySelectorAll('.report-size-opt').forEach(b => b.classList.remove('active'));
+    opt.classList.add('active');
+    if (group?.id === 'report-prb-groupby-style') {
+      const colorSection = document.getElementById('report-prb-groupby-color-section');
+      if (colorSection) colorSection.style.display = opt.dataset.style === 'donut' ? 'none' : '';
+    }
+  });
+
+  if (showPrbGroupby) {
+    document.getElementById('report-prb-groupby-color-mode')?.addEventListener('change', e => {
+      const cp = document.getElementById('report-prb-groupby-color-picker');
+      if (cp) cp.style.display = e.target.value === 'single' ? '' : 'none';
+    });
+  }
+}
+
+function _applyPrbChartPicker() {
+  const picker = document.getElementById('report-field-picker');
+  if (!picker) return;
+  const isEdit = _prbPickerIdx >= 0;
+  const size   = picker.querySelector('#report-prb-size-group .report-size-opt.active')?.dataset.size || 'lg';
+  const type   = isEdit ? _prbCharts[_prbPickerIdx].type : (document.getElementById('report-prb-type-sel')?.value || 'prb-evolution');
+
+  const isPrbGroupby   = type === 'prb-groupby';
+  const pgRef          = document.getElementById('report-prb-groupby-field')?.value;
+  const pgStyle        = picker.querySelector('#report-prb-groupby-style .report-size-opt.active')?.dataset.style;
+  const pgColorMode    = document.getElementById('report-prb-groupby-color-mode')?.value;
+  const pgColor        = pgColorMode === 'single' ? (document.getElementById('report-prb-groupby-color-input')?.value || '') : '';
+
+  if (isEdit) {
+    const update = { ..._prbCharts[_prbPickerIdx], size };
+    if (isPrbGroupby) {
+      if (pgRef)   update.ref        = pgRef;
+      if (pgStyle) update.chartStyle = pgStyle;
+      update.barColor = pgColor;
+    }
+    _prbCharts[_prbPickerIdx] = update;
+  } else {
+    _prbCharts.push(isPrbGroupby ? { type, size, ref: 'category', chartStyle: 'donut', barColor: '' } : { type, size });
+  }
+
+  _saveReportConfig();
+  _closeFieldPicker();
+  _rerender();
+}
+
 function _rerender() {
   if (!_lastPayload) { _load(true); return; }
   const body = document.getElementById('report-modal-body');
-  if (body) body.innerHTML = _buildHTML(_lastPayload);
+  if (body) {
+    body.innerHTML = _buildHTML(_lastPayload);
+  }
 }
 
 function _closeFieldPicker() {
@@ -2256,9 +3257,33 @@ export function reportOpenSlaPicker() {
       Usa <strong style="color:var(--text-1)">business_elapsed_percentage</strong> da tabela <code>task_sla</code> do ServiceNow.<br>
       Incidente violado = maior % entre seus SLAs &gt; 100%.
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
       <input type="checkbox" id="report-sla-enabled-chk" style="width:15px;height:15px;accent-color:var(--c-blue);cursor:pointer" ${_slaEnabled ? 'checked' : ''}>
       <label for="report-sla-enabled-chk" style="font-size:13px;color:var(--text-1);cursor:pointer;user-select:none">Exibir % dentro do SLA por prioridade</label>
+    </div>
+    <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Metas de conformidade</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:4px">
+      <div>
+        <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P1 — Crítico</label>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="number" id="report-sla-p1" min="0" max="100" value="${_slaTargets.p1 ?? 95}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
+          <span style="font-size:12px;color:var(--text-faint)">%</span>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P2 — Alto</label>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="number" id="report-sla-p2" min="0" max="100" value="${_slaTargets.p2 ?? 90}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
+          <span style="font-size:12px;color:var(--text-faint)">%</span>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P3 — Médio</label>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="number" id="report-sla-p3" min="0" max="100" value="${_slaTargets.p3 ?? 85}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
+          <span style="font-size:12px;color:var(--text-faint)">%</span>
+        </div>
+      </div>
     </div>
     <div class="report-field-picker-actions">
       <button class="report-picker-btn-cancel" id="report-sla-cancel">Cancelar</button>
@@ -2272,13 +3297,19 @@ export function reportOpenSlaPicker() {
 
 async function _applySlaPicker() {
   const enabled = document.getElementById('report-sla-enabled-chk')?.checked ?? false;
+  const clamp   = v => Math.min(100, Math.max(0, parseInt(v) || 0));
+  const p1 = clamp(document.getElementById('report-sla-p1')?.value);
+  const p2 = clamp(document.getElementById('report-sla-p2')?.value);
+  const p3 = clamp(document.getElementById('report-sla-p3')?.value);
   _closeFieldPicker();
-  _slaEnabled = enabled;
+  _slaEnabled  = enabled;
+  _slaTargets  = { p1, p2, p3 };
   await fetch('/api/sn-config', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ project: _reportProject, slaEnabled: enabled }),
   }).catch(() => {});
+  _saveReportConfig();
   _rerender();
 }
 
@@ -2519,6 +3550,44 @@ export function toggleReportIncMax() {
   if (btn) btn.textContent = isMax ? '⤡' : '⤢';
 }
 
+export function reportOpenTargetModal() {
+  document.getElementById('inc-target-modal')?.remove();
+  const el = document.createElement('div');
+  el.id = 'inc-target-modal';
+  el.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)';
+  el.innerHTML = `
+    <div style="background:var(--bg-card);border:1px solid var(--bg-border);border-radius:12px;padding:24px 24px 20px;width:300px;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+      <div style="font-size:14px;font-weight:600;color:var(--text-1)">Target mensal de incidentes</div>
+      <div style="font-size:12px;color:var(--text-2);line-height:1.5">Número máximo esperado de incidentes por mês. Usado para calcular o percentual vs target e alertas de volume.</div>
+      <input id="inc-target-input" type="number" min="1" max="9999" placeholder="Ex: 30"
+        style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--bg-border);border-radius:6px;background:var(--bg-2);color:var(--text-1);font-size:14px;outline:none"
+        value="${_incidentTarget ?? ''}">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:2px">
+        <button onclick="document.getElementById('inc-target-modal').remove()"
+          style="padding:6px 16px;border-radius:6px;border:1px solid var(--bg-border);background:transparent;color:var(--text-2);cursor:pointer;font-size:13px">
+          Cancelar
+        </button>
+        <button onclick="reportSaveTargetModal()"
+          style="padding:6px 16px;border-radius:6px;border:none;background:var(--c-blue);color:#fff;cursor:pointer;font-size:13px;font-weight:600">
+          Salvar
+        </button>
+      </div>
+    </div>`;
+  el.addEventListener('click', e => { if (e.target === el) el.remove(); });
+  document.body.appendChild(el);
+  setTimeout(() => document.getElementById('inc-target-input')?.focus(), 0);
+}
+
+export function reportSaveTargetModal() {
+  const val = parseInt(document.getElementById('inc-target-input')?.value);
+  if (!isNaN(val) && val > 0) {
+    _incidentTarget = val;
+    _saveReportConfig();
+    _rerender();
+  }
+  document.getElementById('inc-target-modal')?.remove();
+}
+
 export async function exportReportHtml() {
   const body = document.getElementById('report-modal-body');
   if (!body || !body.innerHTML.trim()) return;
@@ -2535,8 +3604,9 @@ export async function exportReportHtml() {
   const clone = body.cloneNode(true);
   // strip interactive controls not meaningful in a static export
   clone.querySelectorAll('.report-chart-edit-btn, .report-field-picker, .report-picker-overlay').forEach(el => el.remove());
-  clone.querySelectorAll('button').forEach(el => el.style.display = 'none');
-  clone.querySelectorAll('[onclick]').forEach(el => el.removeAttribute('onclick'));
+  clone.querySelectorAll('button').forEach(el => { if (!el.closest('.report-filter-bar')) el.style.display = 'none'; });
+  clone.querySelectorAll('[onclick]').forEach(el => { if (!el.closest('.report-filter-bar')) el.removeAttribute('onclick'); });
+  clone.querySelectorAll('.report-filter-btn[onclick]').forEach(el => el.removeAttribute('onclick'));
   clone.querySelectorAll('textarea').forEach(el => {
     const p = document.createElement('p');
     p.className = 'report-notes-text';
@@ -2567,6 +3637,20 @@ ${css}
 <div class="report-modal-body" style="padding:24px 28px">
 ${clone.innerHTML}
 </div>
+<script>
+(function(){
+  var body=document.querySelector('.report-modal-body');
+  document.querySelectorAll('.report-filter-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var filter=btn.getAttribute('data-filter');
+      document.querySelectorAll('.report-filter-btn').forEach(function(b){b.classList.remove('report-filter-btn--active');});
+      btn.classList.add('report-filter-btn--active');
+      if(filter==='all') body.removeAttribute('data-section-filter');
+      else body.setAttribute('data-section-filter',filter);
+    });
+  });
+})();
+<\/script>
 </body>
 </html>`;
 
@@ -2587,6 +3671,7 @@ export function openIncidentsForGroup(groupName) {
 }
 
 async function _load(refresh = false) {
+  _activeSectionFilter = 'all';
   const body       = document.getElementById('report-modal-body');
   const refreshBtn = document.getElementById('report-refresh-btn');
   body.innerHTML = '<div class="report-loading">Loading...</div>';

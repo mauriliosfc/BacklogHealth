@@ -16,6 +16,7 @@ export function openDeliveryPlan() {
   document.getElementById('content')?.style.setProperty('display', 'none');
   document.querySelector('.cards-toolbar')?.style.setProperty('display', 'none');
   document.getElementById('tc-view').style.display = 'none';
+  document.getElementById('sn-view')?.style.setProperty('display', 'none');
   document.getElementById('dp-view').style.display = 'flex';
   _setSidebarActive('sidebar-link-dp');
   _renderContent();

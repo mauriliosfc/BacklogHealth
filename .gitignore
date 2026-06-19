@@ -2,6 +2,7 @@
 config.json
 xconfig.json
 snconfig.json
+.env.test
 
 # Dependências
 node_modules/
@@ -19,3 +20,7 @@ cache/
 
 # Cobertura de testes (gerado pelo Jest)
 coverage/
+
+# Artefatos do Playwright (screenshots, vídeos, traces)
+test-results/
+playwright-report/

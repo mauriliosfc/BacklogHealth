@@ -17,7 +17,13 @@
     "build": "pkg . --targets node18-win-x64 --output dist/app/server.exe --compress GZip",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:journey": "playwright test tests/e2e/journey.spec.js --headed",
+    "test:journey:ui": "playwright test tests/e2e/journey.spec.js --ui"
   },
   "build": {
     "appId": "com.backloghealth.app",
@@ -98,6 +104,7 @@
     ]
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
     "jest": "^30.4.2"
