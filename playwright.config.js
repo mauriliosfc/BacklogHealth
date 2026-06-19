@@ -22,7 +22,8 @@ module.exports = defineConfig({
   retries: 0,
   use: {
     baseURL: 'http://localhost:3030',
-    headless: true,
+    headless: !process.env.PWHEADED,
+    launchOptions: { slowMo: process.env.PWSLOWMO ? +process.env.PWSLOWMO : 0 },
     screenshot: 'only-on-failure',
     video: 'off',
   },

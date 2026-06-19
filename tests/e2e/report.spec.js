@@ -1,125 +1,396 @@
 // @ts-check
+/**
+ * Monthly Review — testes e2e ponta a ponta
+ *
+ * Parte da abertura do modal no dashboard principal e cobre:
+ *   - abertura e fechamento do modal
+ *   - carregamento de dados (mês, título, corpo sem erros JS)
+ *   - filtros de seção (Azure / Incidentes / Problems / Todos)
+ *   - persistência do filtro ativo após re-render
+ *   - maximizar / restaurar
+ *   - troca de mês
+ *   - reabertura após fechar
+ *   - drag & drop de células de gráfico
+ *   - botão de config (⚙) não dispara drag
+ *
+ * Não faz onboarding — assume config.json ou variáveis TEST_AZ_PAT/TEST_SN_INSTANCE
+ * já configurados antes da execução (via .env.test).
+ */
 const { test, expect } = require('@playwright/test');
+const fs   = require('fs');
+const path = require('path');
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
 
-/** Abre o modal Monthly Review do primeiro card que tiver o botão */
-async function openReport(page) {
+function _hasConfig() {
+  try {
+    if (!fs.existsSync(CONFIG_PATH)) return false;
+    const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    return !!(cfg.org || cfg.servicenow?.instance);
+  } catch (_) { return false; }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/**
+ * Navega para o dashboard e abre o Monthly Review do primeiro card disponível.
+ * Retorna false se nenhum botão "Monthly Review" existir.
+ */
+async function goToReportModal(page) {
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  const btn = page.locator('.ca:has-text("Monthly Review")').first();
-  const found = await btn.isVisible();
-  if (!found) return false;
+  const btn = page.locator('button.ca[onclick="openReport(this)"]').first();
+  if (!(await btn.isVisible().catch(() => false))) return false;
 
   await btn.click();
-  await expect(page.locator('#report-modal')).toBeVisible({ timeout: 5_000 });
-  // aguarda o conteúdo carregar (indicador de "Carregando" desaparecer)
+  await expect(page.locator('#report-modal')).toBeVisible({ timeout: 10_000 });
+
+  // Aguarda o spinner (.report-loading) sumir e o body ter conteúdo real
   await page.waitForFunction(
-    () => !document.getElementById('report-modal-body')?.textContent?.includes('Carregando'),
-    { timeout: 20_000 }
+    () => {
+      const body = document.getElementById('report-modal-body');
+      return !!body && !body.querySelector('.report-loading') && body.textContent?.trim() !== '';
+    },
+    { timeout: 30_000 }
   );
   return true;
 }
 
-// ── abertura do modal ─────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// 1. Abertura e estrutura básica
+// ══════════════════════════════════════════════════════════════════════════════
 
-test.describe('Monthly Review — modal', () => {
-  test('abre sem erros de JavaScript', async ({ page }) => {
-    const errors = [];
-    page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
-    page.on('pageerror', err => errors.push(err.message));
+test.describe('Monthly Review — abertura e estrutura', () => {
+  test.skip(!_hasConfig(), 'config.json ausente ou vazio — configure Azure/SN antes de rodar');
 
-    const opened = await openReport(page);
-    test.skip(!opened, 'Nenhum projeto configurado — pulando testes do Monthly Review');
+  test('1.1 abre modal a partir do botão no card do dashboard', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto com botão Monthly Review disponível');
 
-    expect(errors).toHaveLength(0);
-  });
-
-  test('seletor de mês está presente', async ({ page }) => {
-    const opened = await openReport(page);
-    test.skip(!opened, 'Nenhum projeto configurado');
-
+    await expect(page.locator('#report-modal')).toBeVisible();
+    await expect(page.locator('#report-modal-title')).not.toBeEmpty();
     await expect(page.locator('#report-month-sel')).toBeVisible();
+    await expect(page.locator('#report-modal-body')).not.toBeEmpty();
   });
 
-  test('fecha ao clicar no botão ✕', async ({ page }) => {
-    const opened = await openReport(page);
-    test.skip(!opened, 'Nenhum projeto configurado');
+  test('1.2 abre sem erros de JavaScript no console', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', err => errors.push(err.message));
+    page.on('console', msg => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
 
-    await page.locator('#report-modal .modal-close').click();
-    await expect(page.locator('#report-modal')).toBeHidden();
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    // Aguarda eventos pendentes
+    await page.waitForTimeout(300);
+
+    // Filtra erros de rede (404 de assets) — só erros JS importam
+    const jsErrors = errors.filter(e => !e.includes('Failed to load resource'));
+    expect(jsErrors).toHaveLength(0);
+  });
+
+  test('1.3 seletor de mês tem ao menos uma opção', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    const optCount = await page.locator('#report-month-sel').evaluate(s => /** @type {HTMLSelectElement} */ (s).options.length);
+    expect(optCount).toBeGreaterThan(0);
+  });
+
+  test('1.4 título do modal reflete o nome do projeto', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const btn = page.locator('button.ca[onclick="openReport(this)"]').first();
+    test.skip(!(await btn.isVisible().catch(() => false)), 'Nenhum botão disponível');
+
+    // Captura o nome do projeto a partir do card ancestral
+    const projName = await btn.evaluate(el => el.closest('[data-project]')?.getAttribute('data-project') ?? '');
+
+    await btn.click();
+    await expect(page.locator('#report-modal')).toBeVisible({ timeout: 10_000 });
+
+    if (projName) {
+      await expect(page.locator('#report-modal-title')).toHaveText(projName);
+    } else {
+      await expect(page.locator('#report-modal-title')).not.toBeEmpty();
+    }
   });
 });
 
-// ── filtro de seção ───────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// 2. Fechamento do modal
+// ══════════════════════════════════════════════════════════════════════════════
 
-test.describe('Monthly Review — filtro de seção', () => {
-  test.beforeEach(async ({ page }) => {
-    const opened = await openReport(page);
-    test.skip(!opened, 'Nenhum projeto configurado');
+test.describe('Monthly Review — fechamento', () => {
+  test.skip(!_hasConfig(), 'config.json ausente ou vazio');
+
+  test('2.1 fecha pelo botão ✕', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    await page.locator('#report-modal button.modal-close').click();
+    await expect(page.locator('#report-modal')).toBeHidden();
   });
 
-  test('barra de filtros está visível quando SN está configurado', async ({ page }) => {
+  test('2.2 fecha clicando no overlay fora da caixa', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    // Modal abre maximizado — box preenche a tela, sem overlay exposto.
+    // De-maximiza para ter área de overlay visível fora da caixa.
+    await page.locator('#report-modal-max').click();
+    await expect(page.locator('#report-modal')).not.toHaveClass(/maximized/);
+
+    // Clica no canto do overlay (fora da modal-box)
+    await page.locator('#report-modal').click({ position: { x: 4, y: 4 }, force: true });
+    await expect(page.locator('#report-modal')).toBeHidden();
+  });
+
+  test('2.3 reabre corretamente após fechar', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    // Fecha
+    await page.locator('#report-modal button.modal-close').click();
+    await expect(page.locator('#report-modal')).toBeHidden();
+
+    // Reabre
+    await page.locator('button.ca[onclick="openReport(this)"]').first().click();
+    await expect(page.locator('#report-modal')).toBeVisible({ timeout: 10_000 });
+    await page.waitForFunction(
+      () => !document.getElementById('report-modal-body')?.textContent?.includes('Carregando'),
+      { timeout: 30_000 }
+    );
+    await expect(page.locator('#report-modal-body')).not.toBeEmpty();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3. Maximizar / restaurar
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.describe('Monthly Review — maximizar', () => {
+  test.skip(!_hasConfig(), 'config.json ausente ou vazio');
+
+  test('3.1 modal abre maximizado por padrão', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    await expect(page.locator('#report-modal')).toHaveClass(/maximized/);
+  });
+
+  test('3.2 botão ⤢ alterna entre maximizado e normal', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    const modal  = page.locator('#report-modal');
+    const maxBtn = page.locator('#report-modal-max');
+
+    await expect(modal).toHaveClass(/maximized/);
+
+    await maxBtn.click();
+    await expect(modal).not.toHaveClass(/maximized/);
+
+    await maxBtn.click();
+    await expect(modal).toHaveClass(/maximized/);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4. Seletor de mês
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.describe('Monthly Review — seletor de mês', () => {
+  test.skip(!_hasConfig(), 'config.json ausente ou vazio');
+
+  test('4.1 trocar mês recarrega o conteúdo', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    const sel = page.locator('#report-month-sel');
+    const optCount = await sel.evaluate(s => /** @type {HTMLSelectElement} */ (s).options.length);
+    test.skip(optCount < 2, 'Apenas um mês disponível — sem troca possível');
+
+    const secondValue = await sel.evaluate(s => /** @type {HTMLSelectElement} */ (s).options[1].value);
+    await sel.selectOption(secondValue);
+
+    // Aguarda recarregamento
+    await page.waitForFunction(
+      () => !document.getElementById('report-modal-body')?.textContent?.includes('Carregando'),
+      { timeout: 30_000 }
+    );
+
+    // Mês correto selecionado
+    await expect(sel).toHaveValue(secondValue);
+    await expect(page.locator('#report-modal-body')).not.toBeEmpty();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 5. Filtros de seção
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.describe('Monthly Review — filtros de seção', () => {
+  test.skip(!_hasConfig(), 'config.json ausente ou vazio');
+
+  test('5.1 barra de filtros presente quando há dados SN', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
     const filterBar = page.locator('.report-filter-bar');
-    const hasSn     = await filterBar.isVisible();
-    // sem SN: sem barra → passa trivialmente; com SN: deve ter botões
+    const hasSn = await filterBar.isVisible().catch(() => false);
     if (hasSn) {
       await expect(page.locator('.report-filter-btn[data-filter="all"]')).toBeVisible();
+      await expect(page.locator('.report-filter-btn[data-filter="incidents"]')).toBeVisible();
+      await expect(page.locator('.report-filter-btn[data-filter="prbs"]')).toBeVisible();
     }
+    // sem SN: barra ausente é válido — teste passa trivialmente
   });
 
-  test('filtro "Incidentes" oculta seção sprint', async ({ page }) => {
+  test('5.2 "Todos" está ativo por padrão e sem data-section-filter', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
     const filterBar = page.locator('.report-filter-bar');
-    test.skip(!(await filterBar.isVisible()), 'SN não configurado para este projeto');
+    test.skip(!(await filterBar.isVisible().catch(() => false)), 'SN não configurado');
+
+    await expect(page.locator('.report-filter-btn[data-filter="all"]')).toHaveClass(/report-filter-btn--active/);
+    const content = page.locator('#report-modal-body .report-content');
+    await expect(content).not.toHaveAttribute('data-section-filter');
+  });
+
+  test('5.3 filtro "Incidentes" ativa botão e oculta sprint/prbs', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    const filterBar = page.locator('.report-filter-bar');
+    test.skip(!(await filterBar.isVisible().catch(() => false)), 'SN não configurado');
 
     await page.locator('.report-filter-btn[data-filter="incidents"]').click();
     await expect(page.locator('.report-filter-btn[data-filter="incidents"]')).toHaveClass(/report-filter-btn--active/);
 
-    const sprintSections = page.locator('.report-content [data-section="sprint"]');
-    if (await sprintSections.count() > 0) {
-      await expect(sprintSections.first()).toBeHidden();
+    const content = page.locator('#report-modal-body .report-content');
+    await expect(content).toHaveAttribute('data-section-filter', 'incidents');
+
+    if (await content.locator('[data-section="sprint"]').count() > 0) {
+      await expect(content.locator('[data-section="sprint"]').first()).toBeHidden();
+    }
+    if (await content.locator('[data-section="prbs"]').count() > 0) {
+      await expect(content.locator('[data-section="prbs"]').first()).toBeHidden();
+    }
+    if (await content.locator('[data-section="incidents"]').count() > 0) {
+      await expect(content.locator('[data-section="incidents"]').first()).toBeVisible();
     }
   });
 
-  test('filtro "Todos" restaura todas as seções', async ({ page }) => {
+  test('5.4 filtro "Problems" ativa botão e oculta sprint/incidents', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
     const filterBar = page.locator('.report-filter-bar');
-    test.skip(!(await filterBar.isVisible()), 'SN não configurado para este projeto');
+    test.skip(!(await filterBar.isVisible().catch(() => false)), 'SN não configurado');
 
-    await page.locator('.report-filter-btn[data-filter="incidents"]').click();
-    await page.locator('.report-filter-btn[data-filter="all"]').click();
-    await expect(page.locator('.report-filter-btn[data-filter="all"]')).toHaveClass(/report-filter-btn--active/);
+    await page.locator('.report-filter-btn[data-filter="prbs"]').click();
+    await expect(page.locator('.report-filter-btn[data-filter="prbs"]')).toHaveClass(/report-filter-btn--active/);
 
-    // nenhuma seção deve estar forçadamente oculta
-    const content = page.locator('.report-content');
-    const filterAttr = await content.getAttribute('data-section-filter');
-    expect(filterAttr).toBeNull();
+    const content = page.locator('#report-modal-body .report-content');
+    await expect(content).toHaveAttribute('data-section-filter', 'prbs');
+
+    if (await content.locator('[data-section="sprint"]').count() > 0) {
+      await expect(content.locator('[data-section="sprint"]').first()).toBeHidden();
+    }
+    if (await content.locator('[data-section="incidents"]').count() > 0) {
+      await expect(content.locator('[data-section="incidents"]').first()).toBeHidden();
+    }
+    if (await content.locator('[data-section="prbs"]').count() > 0) {
+      await expect(content.locator('[data-section="prbs"]').first()).toBeVisible();
+    }
   });
 
-  test('filtro persiste ao mudar e voltar ao "Todos"', async ({ page }) => {
-    const filterBar = page.locator('.report-filter-bar');
-    test.skip(!(await filterBar.isVisible()), 'SN não configurado para este projeto');
+  test('5.5 filtro "Azure" ativa botão e oculta incidents/prbs', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
 
-    const filters = ['incidents', 'prbs', 'sprint', 'all'];
+    const filterBar = page.locator('.report-filter-bar');
+    test.skip(!(await filterBar.isVisible().catch(() => false)), 'SN não configurado');
+
+    const btnAz = page.locator('.report-filter-btn[data-filter="sprint"]');
+    test.skip(!(await btnAz.isVisible().catch(() => false)), 'Botão Azure ausente (projeto sem AZ)');
+
+    await btnAz.click();
+    await expect(btnAz).toHaveClass(/report-filter-btn--active/);
+
+    const content = page.locator('#report-modal-body .report-content');
+    await expect(content).toHaveAttribute('data-section-filter', 'sprint');
+
+    if (await content.locator('[data-section="incidents"]').count() > 0) {
+      await expect(content.locator('[data-section="incidents"]').first()).toBeHidden();
+    }
+    if (await content.locator('[data-section="prbs"]').count() > 0) {
+      await expect(content.locator('[data-section="prbs"]').first()).toBeHidden();
+    }
+    if (await content.locator('[data-section="sprint"]').count() > 0) {
+      await expect(content.locator('[data-section="sprint"]').first()).toBeVisible();
+    }
+  });
+
+  test('5.6 filtro "Todos" remove data-section-filter e restaura todas as seções', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    const filterBar = page.locator('.report-filter-bar');
+    test.skip(!(await filterBar.isVisible().catch(() => false)), 'SN não configurado');
+
+    // Ativa filtro intermediário
+    await page.locator('.report-filter-btn[data-filter="incidents"]').click();
+    const content = page.locator('#report-modal-body .report-content');
+    await expect(content).toHaveAttribute('data-section-filter', 'incidents');
+
+    // Volta para Todos
+    await page.locator('.report-filter-btn[data-filter="all"]').click();
+    await expect(page.locator('.report-filter-btn[data-filter="all"]')).toHaveClass(/report-filter-btn--active/);
+    await expect(content).not.toHaveAttribute('data-section-filter');
+  });
+
+  test('5.7 ciclo completo de filtros — todos os botões ficam ativos na sequência', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    const filterBar = page.locator('.report-filter-bar');
+    test.skip(!(await filterBar.isVisible().catch(() => false)), 'SN não configurado');
+
+    const filters = ['incidents', 'prbs', 'all'];
     for (const f of filters) {
       const btn = page.locator(`.report-filter-btn[data-filter="${f}"]`);
       if (await btn.isVisible()) {
         await btn.click();
         await expect(btn).toHaveClass(/report-filter-btn--active/);
+        // Somente o botão clicado deve estar ativo
+        const otherActive = page.locator(`.report-filter-btn:not([data-filter="${f}"]).report-filter-btn--active`);
+        await expect(otherActive).toHaveCount(0);
       }
     }
   });
 });
 
-// ── drag & drop ───────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// 6. Drag & drop de células de gráfico
+// ══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Monthly Review — drag & drop', () => {
-  test.beforeEach(async ({ page }) => {
-    const opened = await openReport(page);
-    test.skip(!opened, 'Nenhum projeto configurado');
-  });
+  test.skip(!_hasConfig(), 'config.json ausente ou vazio');
 
-  test('arrasta célula de gráfico Azure para outra posição', async ({ page }) => {
+  test('6.1 arrasta célula para outra posição sem erros de JS', async ({ page }) => {
+    const jsErrors = [];
+    page.on('pageerror', err => jsErrors.push(err.message));
+
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
     const cells = page.locator('.report-donuts-grid .report-donut-cell[draggable="true"]');
     const count  = await cells.count();
     test.skip(count < 2, 'Menos de 2 gráficos — sem o que arrastar');
@@ -127,48 +398,44 @@ test.describe('Monthly Review — drag & drop', () => {
     const src = cells.nth(0);
     const dst = cells.nth(1);
 
-    // captura título do primeiro gráfico antes do drag
-    const titleBefore = await src.locator('.report-subsection-title').textContent();
-
     const srcBox = await src.boundingBox();
     const dstBox = await dst.boundingBox();
 
-    // simula drag do centro do src ao centro do dst
     await page.mouse.move(srcBox.x + srcBox.width / 2, srcBox.y + srcBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(dstBox.x + dstBox.width / 2, dstBox.y + dstBox.height / 2, { steps: 10 });
+    await page.mouse.move(dstBox.x + dstBox.width / 2, dstBox.y + dstBox.height / 2, { steps: 12 });
     await page.mouse.up();
 
-    // aguarda re-render
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
 
-    // verifica que não houve erro de JS durante o drag
-    // (se houve, a célula teria sumido ou o grid estaria quebrado)
+    // Grid ainda exibe células após o drag
     await expect(page.locator('.report-donuts-grid .report-donut-cell[draggable="true"]').first()).toBeVisible();
+    expect(jsErrors).toHaveLength(0);
   });
 
-  test('drag não dispara a partir de botão de config (⚙)', async ({ page }) => {
+  test('6.2 botão de config (⚙) não inicia drag na célula', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
     const cells = page.locator('.report-donuts-grid .report-donut-cell[draggable="true"]');
     test.skip(await cells.count() === 0, 'Nenhum gráfico disponível');
 
     const configBtn = cells.first().locator('.report-field-picker-btn').first();
-    test.skip(!(await configBtn.isVisible()), 'Botão ⚙ não encontrado');
+    test.skip(!(await configBtn.isVisible().catch(() => false)), 'Botão ⚙ não encontrado');
 
-    // monitora eventos de drag: o botão NÃO deve iniciar um drag
     const dragStarted = await page.evaluate(async () => {
       const btn = document.querySelector('.report-donut-cell .report-field-picker-btn');
       if (!btn) return null;
       return new Promise(resolve => {
         let started = false;
-        const cell = btn.closest('[draggable]');
+        const cell = btn.closest('[draggable="true"]');
         cell.addEventListener('dragstart', e => { started = !e.defaultPrevented; }, { once: true });
         btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
         btn.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true }));
-        setTimeout(() => resolve(started), 100);
+        setTimeout(() => resolve(started), 120);
       });
     });
 
-    // dragStarted pode ser false (correto: drag bloqueado) ou null (botão não achado)
     if (dragStarted !== null) {
       expect(dragStarted).toBe(false);
     }
