@@ -290,4 +290,45 @@ async function fetchAndBuildCards() {
   }
 }
 
-module.exports = { fetchSNGroups, fetchSNResolved, buildIncidentCardsHTML, fetchAndBuildCards, _calcMttr, _fmtMttr };
+async function buildSnViewHtml() {
+  const { kpi, cardsHtml } = await fetchAndBuildCards();
+  return `<div class="sn-content">
+    <div class="sn-kpi-bar">
+      <div class="sn-kpi-stat">
+        <div class="sn-kpi-lbl">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Open Incidents
+        </div>
+        <div class="sn-kpi-val sn-kpi-val--red">${kpi.totalOpen}</div>
+        <div class="sn-kpi-sub">${kpi.totalP1} P1 &middot; ${kpi.totalP2} P2 &middot; ${kpi.totalP3} P3</div>
+      </div>
+      <div class="sn-kpi-stat">
+        <div class="sn-kpi-lbl">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          Active Groups
+        </div>
+        <div class="sn-kpi-val">${kpi.activeGroups}</div>
+        <div class="sn-kpi-sub">with open incidents</div>
+      </div>
+      <div class="sn-kpi-stat">
+        <div class="sn-kpi-lbl">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Resolved this month
+        </div>
+        <div class="sn-kpi-val">${kpi.resolvedThisMonth}</div>
+        <div class="sn-kpi-sub">this month</div>
+      </div>
+      <div class="sn-kpi-stat">
+        <div class="sn-kpi-lbl">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          MTTR
+        </div>
+        <div class="sn-kpi-val">${kpi.mttr}</div>
+        <div class="sn-kpi-sub">Mean Time to Resolve</div>
+      </div>
+    </div>
+    ${cardsHtml}
+  </div>`;
+}
+
+module.exports = { fetchSNGroups, fetchSNResolved, buildIncidentCardsHTML, fetchAndBuildCards, buildSnViewHtml, _calcMttr, _fmtMttr };

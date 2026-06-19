@@ -115,6 +115,7 @@
     <!-- Top bar -->
     <div class="topbar">
       <div class="topbar-right">
+        {{SOURCE_TOGGLE}}
         <div class="lang-switcher">
           <button class="btn-lang" data-lang="pt" onclick="setLocale('pt')" title="Português">PT</button>
           <button class="btn-lang" data-lang="en" onclick="setLocale('en')" title="English">EN</button>
@@ -160,6 +161,9 @@
       </div>
       <div class="dp-view-body" id="delivery-body"></div>
     </div>
+
+    <!-- SN view (shown when source toggle = SN) -->
+    <div id="sn-view" style="display:none"></div>
 
     <!-- Cards grid -->
     <div id="content" class="cards-grid {{EMPTY_CLASS}}">

@@ -18,8 +18,9 @@ let _slaEnabled      = false;
 let _slaThresholds   = { p1: 4, p2: 8, p3: 72 };
 let _slaTargets      = { p1: 95, p2: 90, p3: 85 };
 let _pickerIdx       = -1; // -1 = add new, >=0 = edit existing chart
-let _lastPayload     = null;
-let _dragSrcIdx      = -1;
+let _lastPayload       = null;
+let _dragSrcIdx        = -1;
+let _activeSectionFilter = 'all';
 let _indicatorCards       = {};   // { incidents: [{id,visible,order}], prbs: [...] }
 let _indicatorCardsPerRow = {};   // { incidents: 4, prbs: 4 }
 let _indConfigSection     = null; // section with open config panel ('incidents'|'prbs'|null)
@@ -376,6 +377,46 @@ function _renderTypeDonut(byType, metricLabel) {
     `</div>`;
 }
 
+// Shared donut renderer — same visual style as _renderTypeDonut (Azure).
+// items: [{ type: string, count: number, color?: string }]
+function _donutChart(items, centerLabel) {
+  const total = items.reduce((s, i) => s + i.count, 0);
+  if (!total) return `<div class="report-empty-hint">Sem dados</div>`;
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+  const r = 62, cx = 80, cy = 78;
+  const circ = 2 * Math.PI * r;
+  let segs = '', accumulated = 0;
+  items.forEach((item, i) => {
+    const arc    = (item.count / total) * circ;
+    const offset = circ - accumulated;
+    const pct    = Math.round(item.count / total * 100);
+    const color  = item.color || COLORS[i % COLORS.length];
+    segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+      stroke="${color}" stroke-width="26"
+      stroke-dasharray="${arc.toFixed(2)} ${(circ - arc).toFixed(2)}"
+      stroke-dashoffset="${offset.toFixed(2)}"
+      transform="rotate(-90 ${cx} ${cy})"
+      style="cursor:default;transition:opacity .15s"
+      onmouseenter="this.style.opacity='.7'" onmouseleave="this.style.opacity='1'">
+      <title>${_esc(item.type)}: ${item.count} (${pct}%)</title>
+    </circle>`;
+    accumulated += arc;
+  });
+  segs += `<text x="${cx}" y="${cy - 5}" text-anchor="middle" font-size="18" font-weight="800" fill="var(--text-1)">${total}</text>`;
+  segs += `<text x="${cx}" y="${cy + 13}" text-anchor="middle" font-size="10" fill="var(--text-faint)">${_esc(centerLabel)}</text>`;
+  const legendItems = items.map((item, i) => {
+    const pct   = Math.round(item.count / total * 100);
+    const color = item.color || COLORS[i % COLORS.length];
+    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint)">` +
+      `<span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0"></span>` +
+      `${_esc(item.type)}: <strong style="color:var(--text-1)">${item.count} (${pct}%)</strong></span>`;
+  }).join('');
+  return `<div style="display:flex;flex-direction:column;align-items:center;height:100%">` +
+    `<svg viewBox="0 0 160 158" style="width:100%;max-width:200px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">${segs}</svg>` +
+    `<div style="margin-top:auto;display:flex;justify-content:center;flex-wrap:wrap;gap:6px 16px;padding:10px 0 2px">${legendItems}</div>` +
+    `</div>`;
+}
+
 function _renderTypeBar(byType, barColor, metricLabel, size) {
   const emptyHint = metricLabel === 'Story Points' ? 'Sem Story Points no período' : 'Sem User Stories no período';
   if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
@@ -478,6 +519,21 @@ function _renderTypeBarVertical(byType, barColor, metricLabel, size) {
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
     ${grid}${axes}${bars}${xlabels}
   </svg>`;
+}
+
+function _renderIncPriorityDonut(inc) {
+  const p1     = inc?.p1    || 0;
+  const p2     = inc?.p2    || 0;
+  const p3     = inc?.p3    || 0;
+  const outros = Math.max(0, (inc?.total || 0) - p1 - p2 - p3);
+  const items  = [
+    { type: 'P1 — Critico', count: p1,     color: '#ef4444' },
+    { type: 'P2 — Alto',    count: p2,     color: '#f97316' },
+    { type: 'P3 — Medio',   count: p3,     color: '#eab308' },
+    ...(outros > 0 ? [{ type: 'Outros', count: outros, color: '#6b7280' }] : []),
+  ].filter(item => item.count > 0);
+  if (!items.length) return '<div class="report-empty-hint">Sem incidentes no periodo</div>';
+  return _donutChart(items, 'Incidentes');
 }
 
 function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
@@ -828,6 +884,11 @@ function _renderIncidentChartCell(chart, idx, inc) {
       subtitle  = 'Percentual dentro do SLA por nível de prioridade';
       content   = _renderIncSlaBars(inc.slaByPriority);
       break;
+    case 'inc-priority-donut':
+      title     = 'Distribuicao por Prioridade';
+      subtitle  = 'Volume de incidentes P1 / P2 / P3';
+      content   = _renderIncPriorityDonut(inc);
+      break;
     default: return '';
   }
 
@@ -1062,7 +1123,7 @@ function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality
     ? `<div class="report-prb-chart-sub" style="margin-top:2px">Contando como entregue: <strong>${_deliveryStates.join(', ')}</strong></div>`
     : '';
 
-  return `<div class="report-section">
+  return `<div class="report-section" data-section="sprint">
     <div class="report-section-header-row">
       <div class="report-section-title">AMS Sprint Delivery</div>
       <button class="report-field-picker-btn" onclick="reportOpenDeliveryStatesPicker()" title="Configurar estados de entrega">⚙</button>
@@ -1147,7 +1208,7 @@ function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality
 function _renderIncidents(inc) {
   if (!inc) return '';
 
-  return `<div class="report-section">
+  return `<div class="report-section" data-section="incidents">
     <div class="report-section-header-row">
       <div class="report-section-title">Incidents</div>
       <div class="report-field-chart-actions">
@@ -1418,42 +1479,12 @@ function _renderPrbStatusDonut(list) {
   const counts = {};
   (list || []).forEach(p => { const k = String(p.state); counts[k] = (counts[k] || 0) + 1; });
   const total = Object.values(counts).reduce((s, v) => s + v, 0);
-  if (total === 0) return '<div class="report-empty-row">No PRBs</div>';
-
-  const W = 280, cx = 140, cy = 105, R = 82, ri = 46;
-  let startAngle = -Math.PI / 2;
-  const slices = [];
-  const legendItems = [];
-  Object.entries(counts).forEach(([state, count]) => {
+  if (total === 0) return '<div class="report-empty-hint">Sem PRBs para o período</div>';
+  const items = Object.entries(counts).map(([state, count]) => {
     const cfg = _PRB_STATES[state] || { label: state, color: '#6b7280' };
-    const angle = (count / total) * 2 * Math.PI;
-    const endAngle = startAngle + angle;
-    const large = angle > Math.PI ? 1 : 0;
-    const x1 = cx + R  * Math.cos(startAngle); const y1 = cy + R  * Math.sin(startAngle);
-    const x2 = cx + R  * Math.cos(endAngle);   const y2 = cy + R  * Math.sin(endAngle);
-    const xi1= cx + ri * Math.cos(startAngle); const yi1= cy + ri * Math.sin(startAngle);
-    const xi2= cx + ri * Math.cos(endAngle);   const yi2= cy + ri * Math.sin(endAngle);
-    slices.push(`<path d="M${xi1} ${yi1} L${x1} ${y1} A${R} ${R} 0 ${large} 1 ${x2} ${y2} L${xi2} ${yi2} A${ri} ${ri} 0 ${large} 0 ${xi1} ${yi1}Z" fill="${cfg.color}" stroke="var(--bg)" stroke-width="1.5"/>`);
-    if (angle > 0.3) {
-      const rm = (R + ri) / 2;
-      const mid = startAngle + angle / 2;
-      const tx = (cx + rm * Math.cos(mid)).toFixed(1);
-      const ty = (cy + rm * Math.sin(mid)).toFixed(1);
-      slices.push(`<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="#fff">${count}</text>`);
-    }
-    legendItems.push({ label: cfg.label, color: cfg.color, count });
-    startAngle = endAngle;
+    return { type: cfg.label, count, color: cfg.color };
   });
-
-  const H_svg = cy + R + 8;
-  const svgHtml = `<svg viewBox="0 0 ${W} ${H_svg}" style="width:100%;display:block">
-    ${slices.join('')}
-    <text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle" font-size="22" font-weight="700" fill="var(--text)">${total}</text>
-    <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="10" fill="var(--text-faint)">total</text>
-  </svg>`;
-  return svgHtml + _legendHtml(legendItems.map(item =>
-    ({ type: 'rect', color: item.color, label: `${item.label}: ${item.count}` })
-  ));
+  return _donutChart(items, 'PRBs');
 }
 
 
@@ -1721,31 +1752,17 @@ function _renderPrbCategoryChart(list) {
     const cat = (p.category && String(p.category).trim()) || 'Não categorizado';
     counts[cat] = (counts[cat] || 0) + 1;
   });
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 7);
   if (!sorted.length) return '<div class="report-empty-hint">Sem dados de categoria</div>';
-  const total  = sorted.reduce((s, [, v]) => s + v, 0);
-  const maxV   = sorted[0][1];
-  const COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316'];
-  const rows = sorted.map(([cat, count], i) => {
-    const pct  = Math.round(count / total * 100);
-    const barW = Math.round(count / maxV * 100);
-    return `<div style="margin-bottom:7px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-        <span style="font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%">${_esc(cat)}</span>
-        <span style="font-size:12px;font-weight:600;color:var(--text-muted)">${count} <span style="font-size:10px;color:var(--text-faint)">(${pct}%)</span></span>
-      </div>
-      <div style="height:6px;background:var(--bg-el);border-radius:3px;overflow:hidden">
-        <div style="width:${barW}%;height:100%;background:${COLORS[i % COLORS.length]};border-radius:3px"></div>
-      </div>
-    </div>`;
-  });
-  return `<div style="padding:4px 0">${rows.join('')}</div>`;
+  const COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+  const items = sorted.map(([type, count], i) => ({ type, count, color: COLORS[i % COLORS.length] }));
+  return _donutChart(items, 'PRBs');
 }
 
 function _renderPRBs(prbs, incidents) {
   if (!prbs) return '';
 
-  return `<div class="report-section">
+  return `<div class="report-section" data-section="prbs">
     <div class="report-section-header-row">
       <div class="report-section-title">PRBs — Problems</div>
       <div class="report-field-chart-actions">
@@ -1790,8 +1807,18 @@ function _buildHTML(payload) {
       Exportar HTML</button>
   </div>`;
 
+  const _af = _activeSectionFilter;
+  const filterBar = `<div class="report-filter-bar">
+    ${hasAzure ? `<button class="report-filter-btn${_af === 'sprint' ? ' report-filter-btn--active' : ''}" data-filter="sprint" onclick="reportSetSectionFilter('sprint')">Azure</button>` : ''}
+    <button class="report-filter-btn${_af === 'incidents' ? ' report-filter-btn--active' : ''}" data-filter="incidents" onclick="reportSetSectionFilter('incidents')">Incidentes</button>
+    <button class="report-filter-btn${_af === 'prbs' ? ' report-filter-btn--active' : ''}" data-filter="prbs" onclick="reportSetSectionFilter('prbs')">Problems</button>
+    <button class="report-filter-btn${_af === 'all' ? ' report-filter-btn--active' : ''}" data-filter="all" onclick="reportSetSectionFilter('all')">Todos</button>
+  </div>`;
+
+  const sectionFilterAttr = _activeSectionFilter !== 'all' ? ` data-section-filter="${_activeSectionFilter}"` : '';
+
   return `
-    <div class="report-content">
+    <div class="report-content"${sectionFilterAttr}>
       <div class="report-header-card">
         <div class="report-header-title">${_esc(metadata.project)}</div>
         <div class="report-header-period">${_esc(metadata.period)}</div>
@@ -1802,6 +1829,7 @@ function _buildHTML(payload) {
       </div>
       ${snWarning}
       ${notesBar}
+      ${filterBar}
       ${hasAzure ? _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality) : ''}
       ${incidents ? _renderIncidents(incidents) : ''}
       ${prbs      ? _renderPRBs(prbs, incidents) : ''}
@@ -1846,6 +1874,18 @@ export function reportSaveNotes(value) {
   const key = `reportNotes::${_reportProject}::${_reportMonth}`;
   if (value && value.trim()) localStorage.setItem(key, value);
   else localStorage.removeItem(key);
+}
+
+export function reportSetSectionFilter(filter) {
+  _activeSectionFilter = filter;
+  const wrap = document.getElementById('report-modal-body') || document.getElementById('report-content');
+  if (!wrap) return;
+  const content = wrap.querySelector('.report-content') || wrap;
+  if (filter === 'all') content.removeAttribute('data-section-filter');
+  else content.dataset.sectionFilter = filter;
+  wrap.querySelectorAll('.report-filter-btn').forEach(b => {
+    b.classList.toggle('report-filter-btn--active', b.dataset.filter === filter);
+  });
 }
 
 export function openReportSnConfig() {
@@ -2243,7 +2283,7 @@ export function reportResizeChart(idx, size) {
 }
 
 export function reportDragStart(e, idx) {
-  if (!e.target.closest('.report-drag-handle')) { e.preventDefault(); return; }
+  if (e.target.closest('.report-field-chart-actions, button, a, select, input')) { e.preventDefault(); return; }
   _dragSrcIdx = idx;
   e.dataTransfer.effectAllowed = 'move';
   setTimeout(() => e.currentTarget?.classList.add('report-dragging'), 0);
@@ -2285,7 +2325,7 @@ export function reportRemoveIncChart(idx) {
 }
 
 export function reportIncChartDragStart(e, idx) {
-  if (!e.target.closest('.report-drag-handle')) { e.preventDefault(); return; }
+  if (e.target.closest('.report-field-chart-actions, button, a, select, input')) { e.preventDefault(); return; }
   _incChartDragIdx = idx;
   e.dataTransfer.effectAllowed = 'move';
   setTimeout(() => e.currentTarget?.classList.add('report-dragging'), 0);
@@ -2331,7 +2371,7 @@ export function reportRemovePrbChart(idx) {
 }
 
 export function reportPrbChartDragStart(e, idx) {
-  if (!e.target.closest('.report-drag-handle')) { e.preventDefault(); return; }
+  if (e.target.closest('.report-field-chart-actions, button, a, select, input')) { e.preventDefault(); return; }
   _prbChartDragIdx = idx;
   e.dataTransfer.effectAllowed = 'move';
   setTimeout(() => e.currentTarget?.classList.add('report-dragging'), 0);
@@ -2379,12 +2419,13 @@ export function reportOpenIncChartPicker(idx) {
   const currentType  = currentChart?.type || 'inc-volume';
 
   const INC_TYPES = [
-    { val: 'inc-volume',         label: 'Volume Mensal (Abertos e Fechados)' },
-    { val: 'inc-bars',           label: 'Top CIs / Resolution Codes' },
-    { val: 'inc-heatmap',        label: 'Heatmap CI × Mês' },
-    { val: 'inc-location',       label: 'Incidentes por Localização' },
-    { val: 'inc-priority-trend', label: 'Tendência por Prioridade (P1/P2/P3)' },
-    { val: 'inc-sla-bars',       label: 'Conformidade SLA por Prioridade' },
+    { val: 'inc-volume',          label: 'Volume Mensal (Abertos e Fechados)' },
+    { val: 'inc-bars',            label: 'Top CIs / Resolution Codes' },
+    { val: 'inc-heatmap',         label: 'Heatmap CI × Mês' },
+    { val: 'inc-location',        label: 'Incidentes por Localização' },
+    { val: 'inc-priority-trend',  label: 'Tendência por Prioridade (P1/P2/P3)' },
+    { val: 'inc-sla-bars',        label: 'Conformidade SLA por Prioridade' },
+    { val: 'inc-priority-donut',  label: 'Distribuição por Prioridade (donut)' },
   ];
 
   const backdrop = document.createElement('div');
@@ -2620,7 +2661,9 @@ function _applyPrbChartPicker() {
 function _rerender() {
   if (!_lastPayload) { _load(true); return; }
   const body = document.getElementById('report-modal-body');
-  if (body) body.innerHTML = _buildHTML(_lastPayload);
+  if (body) {
+    body.innerHTML = _buildHTML(_lastPayload);
+  }
 }
 
 function _closeFieldPicker() {
@@ -3280,8 +3323,9 @@ export async function exportReportHtml() {
   const clone = body.cloneNode(true);
   // strip interactive controls not meaningful in a static export
   clone.querySelectorAll('.report-chart-edit-btn, .report-field-picker, .report-picker-overlay').forEach(el => el.remove());
-  clone.querySelectorAll('button').forEach(el => el.style.display = 'none');
-  clone.querySelectorAll('[onclick]').forEach(el => el.removeAttribute('onclick'));
+  clone.querySelectorAll('button').forEach(el => { if (!el.closest('.report-filter-bar')) el.style.display = 'none'; });
+  clone.querySelectorAll('[onclick]').forEach(el => { if (!el.closest('.report-filter-bar')) el.removeAttribute('onclick'); });
+  clone.querySelectorAll('.report-filter-btn[onclick]').forEach(el => el.removeAttribute('onclick'));
   clone.querySelectorAll('textarea').forEach(el => {
     const p = document.createElement('p');
     p.className = 'report-notes-text';
@@ -3312,6 +3356,20 @@ ${css}
 <div class="report-modal-body" style="padding:24px 28px">
 ${clone.innerHTML}
 </div>
+<script>
+(function(){
+  var body=document.querySelector('.report-modal-body');
+  document.querySelectorAll('.report-filter-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var filter=btn.getAttribute('data-filter');
+      document.querySelectorAll('.report-filter-btn').forEach(function(b){b.classList.remove('report-filter-btn--active');});
+      btn.classList.add('report-filter-btn--active');
+      if(filter==='all') body.removeAttribute('data-section-filter');
+      else body.setAttribute('data-section-filter',filter);
+    });
+  });
+})();
+<\/script>
 </body>
 </html>`;
 
@@ -3332,6 +3390,7 @@ export function openIncidentsForGroup(groupName) {
 }
 
 async function _load(refresh = false) {
+  _activeSectionFilter = 'all';
   const body       = document.getElementById('report-modal-body');
   const refreshBtn = document.getElementById('report-refresh-btn');
   body.innerHTML = '<div class="report-loading">Loading...</div>';

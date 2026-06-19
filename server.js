@@ -320,6 +320,15 @@ async function main() {
       return json(res, () => snH.fetchGroups(JSON.parse(body || '{}')));
     }
 
+    // ── GET /api/sn-view ───────────────────────────────────────────────────
+    if (req.method === 'GET' && url === '/api/sn-view') {
+      return json(res, async () => {
+        const snDash = require('./handlers/sn-dashboard');
+        const html   = await snDash.buildSnViewHtml();
+        return { html };
+      });
+    }
+
     // ── GET / — dashboard ──────────────────────────────────────────────────
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(state.html);

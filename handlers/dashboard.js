@@ -96,6 +96,11 @@ function buildSummaryBar(results) {
   </div>`;
 }
 
+const SOURCE_TOGGLE_HTML = `<div class="source-switcher">
+  <button class="btn-source active" data-source="az" onclick="toggleSource('az')" title="Projetos Azure">AZ</button>
+  <button class="btn-source" data-source="sn" onclick="toggleSource('sn')" title="Projetos ServiceNow">SN</button>
+</div>`;
+
 function renderDashboard(results) {
   const cfg     = getCfg();
   const isEmpty = !cfg.projects || cfg.projects.length === 0;
@@ -103,14 +108,15 @@ function renderDashboard(results) {
   const baseUrl = cfg.baseUrl || `https://dev.azure.com/${cfg.org}`;
   const orgSafe = escapeHtml(cfg.org);
   return renderTemplate(templates.dashboard, {
-    ORG:         orgSafe,
-    SUBTITLE:    isEmpty
+    ORG:           orgSafe,
+    SUBTITLE:      isEmpty
       ? (orgSafe || 'Azure DevOps')
       : `${count} project${count !== 1 ? 's' : ''} · ${orgSafe || 'Azure DevOps'}`,
-    LAST_UPDATE: new Date().toLocaleString('pt-BR'),
-    CARDS:       isEmpty ? EMPTY_STATE_HTML : buildCardHTML(results, baseUrl),
-    EMPTY_CLASS: isEmpty ? 'cards-grid--empty' : '',
-    SUMMARY_BAR: isEmpty ? '' : buildSummaryBar(results),
+    LAST_UPDATE:   new Date().toLocaleString('pt-BR'),
+    CARDS:         isEmpty ? EMPTY_STATE_HTML : buildCardHTML(results, baseUrl),
+    EMPTY_CLASS:   isEmpty ? 'cards-grid--empty' : '',
+    SUMMARY_BAR:   isEmpty ? '' : buildSummaryBar(results),
+    SOURCE_TOGGLE: getAppMode() === 'full' ? SOURCE_TOGGLE_HTML : '',
   });
 }
 
