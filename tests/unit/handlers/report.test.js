@@ -65,7 +65,7 @@ describe('getReportConfig', () => {
 
     expect(result.reportCharts).toBeNull();
     expect(result.incidentMonths).toBe(5);
-    expect(result.incidentTarget).toBe(24);
+    expect(result.incidentTarget).toBeNull();
     expect(result.incidentGroupBy).toBe('cmdb_ci');
     expect(result.heatmapMax).toBe(0);
     expect(result.heatmapTopN).toBe(9);

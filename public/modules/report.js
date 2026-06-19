@@ -7,7 +7,7 @@ let _reportCharts    = []; // [{type:'sprint'|'volatility'|'donut'|'incidents', 
 let _agingState      = 'In Review'; // estado monitorado nos gráficos de aging (compartilhado)
 let _agingCharts     = [{ size: 'md' }, { size: 'md' }]; // tamanho por gráfico de aging
 let _incidentMonths  = 5;        // months to show in the incidents section
-let _incidentTarget  = 24;       // target mensal de incidentes
+let _incidentTarget  = null;     // target mensal de incidentes (null = não configurado)
 let _incidentGroupBy = 'cmdb_ci'; // 'cmdb_ci' | 'resolution_code'
 let _heatmapMax      = 0;        // 0 = escala automática (relativa ao max dos dados)
 let _heatmapTopN     = 9;        // 0 = mostrar todos; N = top N + "Outros"
@@ -889,6 +889,32 @@ function _renderIncidentChartCell(chart, idx, inc) {
       subtitle  = 'Volume de incidentes P1 / P2 / P3';
       content   = _renderIncPriorityDonut(inc);
       break;
+    case 'inc-groupby': {
+      const _flat = arr => (arr || []).map(d => ({ type: d.name, count: d.total }));
+      const _incGroupbyFields = {
+        'cmdb_ci.name':          { label: 'IC Afetado',            data: () => _flat(inc.bySystem) },
+        'u_additional_res_code': { label: 'Resolution Code',       data: () => _flat(inc.byGroupAlt) },
+        'assignment_group':      { label: 'Grupo de Atendimento',  data: () => _flat(inc.byAssignmentGroup) },
+        'assigned_to':           { label: 'Responsavel',           data: () => _flat(inc.byAssignedTo) },
+        'priority':              { label: 'Prioridade',            data: () => { const p = inc.byPriority || {}; return [{ type: 'P1', count: p.p1||0 }, { type: 'P2', count: p.p2||0 }, { type: 'P3', count: p.p3||0 }].filter(x => x.count > 0); } },
+        'impact':                { label: 'Impacto',               data: () => _flat(inc.byImpact) },
+        'urgency':               { label: 'Urgencia',              data: () => _flat(inc.byUrgency) },
+        'state':                 { label: 'Estado',                data: () => _flat(inc.byState) },
+        'category':              { label: 'Categoria',             data: () => _flat(inc.byCategory) },
+        'subcategory':           { label: 'Subcategoria',          data: () => _flat(inc.bySubcategory) },
+        'location.name':         { label: 'Localizacao',           data: () => _flat(inc.byLocationMonthly) },
+        'close_code':            { label: 'Codigo de Fechamento',  data: () => _flat(inc.byCloseCode) },
+        'contact_type':          { label: 'Canal de Abertura',     data: () => _flat(inc.byContactType) },
+      };
+      const _gf  = _incGroupbyFields[chart.ref] || _incGroupbyFields['cmdb_ci.name'];
+      const _gd  = _gf.data();
+      title   = `Incidentes por ${_gf.label}`;
+      subtitle = '';
+      content = chart.chartStyle === 'bar'          ? _renderTypeBar(        _gd, chart.barColor, 'Incidentes', size)
+              : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical( _gd, chart.barColor, 'Incidentes', size)
+              : _renderTypeDonut(_gd, 'Incidentes');
+      break;
+    }
     default: return '';
   }
 
@@ -926,6 +952,22 @@ function _renderPrbChartCell(chart, idx, prbs) {
     case 'prb-aging':     title = 'Aging do Backlog'; subtitle = 'Distribuição por tempo em aberto e status'; content = _renderPrbAgingChart(prbs.list); break;
     case 'prb-oldest':    title = 'Top 10 PRBs mais antigos'; subtitle = 'Ordenado por tempo em aberto'; content = _renderPrbOldestList(prbs.list); break;
     case 'prb-category':  title = 'Distribuição por Categoria'; subtitle = 'Root cause por categoria'; content = _renderPrbCategoryChart(prbs.list); break;
+    case 'prb-groupby': {
+      const _prbGroupbyFields = {
+        category: 'Categoria',
+        state:    'Estado',
+        priority: 'Prioridade',
+      };
+      const _pgKey   = chart.ref || 'category';
+      const _pgLabel = _prbGroupbyFields[_pgKey] || _pgKey;
+      const _pgData  = _computePrbGroupby(prbs.list, _pgKey);
+      title   = `PRBs por ${_pgLabel}`;
+      subtitle = '';
+      content = chart.chartStyle === 'bar'          ? _renderTypeBar(        _pgData, chart.barColor, 'PRBs', size)
+              : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical( _pgData, chart.barColor, 'PRBs', size)
+              : _renderTypeDonut(_pgData, 'PRBs');
+      break;
+    }
     default: return '';
   }
 
@@ -952,6 +994,19 @@ function _renderPrbChartCell(chart, idx, prbs) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function _computePrbGroupby(list, field) {
+  const counts = {};
+  (list || []).forEach(item => {
+    let v = item[field];
+    if (typeof v === 'boolean') v = v ? 'Sim' : 'Nao';
+    const k = (v !== null && v !== undefined && v !== '') ? String(v) : '(sem valor)';
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count);
+}
 
 function _computeAgingBuckets(items, thresholds) {
   const [t1, t2, t3, t4] = thresholds;
@@ -1350,8 +1405,11 @@ function _renderCardValue(id, inc, prbs) {
 
   switch (id) {
     case 'inc_total': {
-      const riskCls = (inc?.total ?? 0) > _incidentTarget * 1.2 ? 'red' : (inc?.total ?? 0) > _incidentTarget ? 'yellow' : '';
-      return { val: `${inc?.total ?? 0} ${_deltaHtml(inc?.total ?? 0, prev?.opened, true)}`, label: 'Abertos no mês', sub: `Target: ${_incidentTarget}`, cls: riskCls };
+      const riskCls = _incidentTarget !== null
+        ? ((inc?.total ?? 0) > _incidentTarget * 1.2 ? 'red' : (inc?.total ?? 0) > _incidentTarget ? 'yellow' : '')
+        : '';
+      const sub = _incidentTarget !== null ? `Target: ${_incidentTarget}` : 'Sem target definido';
+      return { val: `${inc?.total ?? 0} ${_deltaHtml(inc?.total ?? 0, prev?.opened, true)}`, label: 'Abertos no mês', sub, cls: riskCls };
     }
     case 'inc_closed': {
       const closedCls = (inc?.closedThisMonth ?? 0) >= (inc?.total ?? 0) * 0.9 && (inc?.total ?? 0) > 0 ? 'green' : '';
@@ -1380,6 +1438,9 @@ function _renderCardValue(id, inc, prbs) {
       return { val: String(inc?.byPriority?.p3 ?? 0), label: 'P3 — Médio', subHtml, cls: '' };
     }
     case 'inc_target': {
+      if (_incidentTarget === null) {
+        return { val: '<span style="font-size:20px;line-height:1;opacity:.55">&#9881;</span>', label: 'vs Target', sub: 'Clique para configurar', cls: '', clickable: true, onclick: 'reportOpenTargetModal()' };
+      }
       const pct = _incidentTarget > 0 ? Math.round((inc?.total ?? 0) / _incidentTarget * 100) : null;
       return { val: pct !== null ? `${pct}%` : '—', label: 'vs Target', sub: pct !== null ? (pct > 100 ? 'Acima do target' : 'Dentro do target') : 'Sem target definido', cls: pct !== null && pct > 100 ? 'red' : '' };
     }
@@ -2408,6 +2469,91 @@ export function reportAddPrbChart() {
   reportOpenPrbChartPicker(-1);
 }
 
+// ── Groupby field definitions ─────────────────────────────────────────────────
+
+const _INC_GROUPBY_FIELDS = [
+  { key: 'cmdb_ci.name',          label: 'IC Afetado (CI)' },
+  { key: 'u_additional_res_code', label: 'Resolution Code' },
+  { key: 'assignment_group',      label: 'Grupo de Atendimento' },
+  { key: 'assigned_to',           label: 'Responsavel' },
+  { key: 'priority',              label: 'Prioridade' },
+  { key: 'impact',                label: 'Impacto' },
+  { key: 'urgency',               label: 'Urgencia' },
+  { key: 'state',                 label: 'Estado' },
+  { key: 'category',              label: 'Categoria' },
+  { key: 'subcategory',           label: 'Subcategoria' },
+  { key: 'location.name',         label: 'Localizacao' },
+  { key: 'close_code',            label: 'Codigo de Fechamento' },
+  { key: 'contact_type',          label: 'Canal de Abertura' },
+];
+
+const _PRB_GROUPBY_FIELDS = [
+  { key: 'priority',         label: 'Prioridade' },
+  { key: 'impact',           label: 'Impacto' },
+  { key: 'urgency',          label: 'Urgencia' },
+  { key: 'category',         label: 'Categoria' },
+  { key: 'state',            label: 'Estado' },
+  { key: 'assignment_group', label: 'Grupo de Atendimento' },
+  { key: 'assigned_to',      label: 'Responsavel' },
+  { key: 'known_error',      label: 'Known Error' },
+  { key: 'rca_complete',     label: 'RCA Completo' },
+];
+
+function _acHtml(inputId, hiddenId, fields, currentKey) {
+  const cur  = fields.find(f => f.key === currentKey);
+  const opts = fields.map(f =>
+    `<div class="report-ac-opt" data-key="${_esc(f.key)}" data-label="${_esc(f.label)}">${_esc(f.label)}<span class="report-ac-key">${_esc(f.key)}</span></div>`
+  ).join('');
+  return `<div class="report-ac-wrap">
+    <input type="text" id="${inputId}" class="report-field-sel report-ac-input" value="${_esc(cur?.label || '')}" placeholder="Buscar campo..." autocomplete="off">
+    <input type="hidden" id="${hiddenId}" value="${_esc(currentKey || '')}">
+    <div class="report-ac-dropdown" id="ac-drop-${inputId}">${opts}</div>
+  </div>`;
+}
+
+function _acInit(picker, inputId, hiddenId) {
+  const input = picker.querySelector('#' + inputId);
+  const hidden = picker.querySelector('#' + hiddenId);
+  const drop  = picker.querySelector('#ac-drop-' + inputId);
+  if (!input || !hidden || !drop) return;
+  const show = () => { drop.style.display = 'block'; };
+  const hide = () => { drop.style.display = 'none'; };
+  const filter = () => {
+    const q = input.value.toLowerCase();
+    drop.querySelectorAll('.report-ac-opt').forEach(o => {
+      o.style.display = (o.dataset.label.toLowerCase().includes(q) || o.dataset.key.toLowerCase().includes(q)) ? '' : 'none';
+    });
+    show();
+  };
+  input.addEventListener('focus', show);
+  input.addEventListener('input', filter);
+  input.addEventListener('blur', () => setTimeout(hide, 160));
+  drop.addEventListener('mousedown', e => {
+    const o = e.target.closest('.report-ac-opt');
+    if (!o) return;
+    input.value  = o.dataset.label;
+    hidden.value = o.dataset.key;
+    hide();
+    e.preventDefault();
+  });
+  input.addEventListener('keydown', e => {
+    const visible = [...drop.querySelectorAll('.report-ac-opt:not([style*="none"])')];
+    const cur = drop.querySelector('.report-ac-opt.report-ac-hi');
+    let idx = visible.indexOf(cur);
+    if (e.key === 'Escape') { hide(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, visible.length - 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+    else if (e.key === 'Enter' && cur) {
+      input.value  = cur.dataset.label;
+      hidden.value = cur.dataset.key;
+      hide(); e.preventDefault(); return;
+    } else return;
+    visible.forEach(o => o.classList.remove('report-ac-hi'));
+    if (visible[idx]) { visible[idx].classList.add('report-ac-hi'); visible[idx].scrollIntoView({ block: 'nearest' }); }
+    show();
+  });
+}
+
 // ── Incident chart picker (unified ⚙ modal) ────────────────────────────────────
 
 export function reportOpenIncChartPicker(idx) {
@@ -2426,6 +2572,7 @@ export function reportOpenIncChartPicker(idx) {
     { val: 'inc-priority-trend',  label: 'Tendência por Prioridade (P1/P2/P3)' },
     { val: 'inc-sla-bars',        label: 'Conformidade SLA por Prioridade' },
     { val: 'inc-priority-donut',  label: 'Distribuição por Prioridade (donut)' },
+    { val: 'inc-groupby',         label: 'Agrupamento por campo' },
   ];
 
   const backdrop = document.createElement('div');
@@ -2454,13 +2601,36 @@ export function reportOpenIncChartPicker(idx) {
 
   const MONTH_OPTS = [3, 5, 6, 8, 10, 12, 13, 24];
   const LOC_OPTS   = [1, 3, 6];
-  const showVolume = isEdit && currentType === 'inc-volume';
-  const showBars   = isEdit && (currentType === 'inc-bars' || currentType === 'inc-heatmap');
-  const showHeat   = isEdit && currentType === 'inc-heatmap';
-  const showLoc    = isEdit && currentType === 'inc-location';
-  const showSla    = isEdit && currentType === 'inc-sla-bars';
+  const showVolume  = isEdit && currentType === 'inc-volume';
+  const showBars    = isEdit && (currentType === 'inc-bars' || currentType === 'inc-heatmap');
+  const showHeat    = isEdit && currentType === 'inc-heatmap';
+  const showLoc     = isEdit && currentType === 'inc-location';
+  const showSla     = isEdit && currentType === 'inc-sla-bars';
+  const showGroupby = isEdit && currentType === 'inc-groupby';
+  const curGbStyle  = currentChart?.chartStyle || 'donut';
+  const curGbColor  = currentChart?.barColor   || '';
 
   const specificSection = `
+    ${showGroupby ? `
+      <div class="report-field-picker-label">Campo de agrupamento</div>
+      ${_acHtml('report-inc-groupby-input', 'report-inc-groupby-field', _INC_GROUPBY_FIELDS, currentChart?.ref || 'cmdb_ci.name')}
+      <div class="report-field-picker-label">Estilo visual</div>
+      <div class="report-size-group" id="report-inc-groupby-style">
+        ${[{val:'donut',label:'Donut'},{val:'bar',label:'Barras'},{val:'bar-vertical',label:'Barras Verticais'}]
+          .map(o => `<button class="report-size-opt${curGbStyle === o.val ? ' active' : ''}" data-style="${o.val}">${o.label}</button>`).join('')}
+      </div>
+      <div id="report-inc-groupby-color-section"${curGbStyle === 'donut' ? ' style="display:none"' : ''}>
+        <div class="report-field-picker-label">Cor das barras</div>
+        <select id="report-inc-groupby-color-mode" class="report-field-sel">
+          <option value="multi"${!curGbColor ? ' selected' : ''}>Multicolor</option>
+          <option value="single"${curGbColor ? ' selected' : ''}>Cor única</option>
+        </select>
+        <div id="report-inc-groupby-color-picker"${!curGbColor ? ' style="display:none"' : ''}>
+          <input type="color" id="report-inc-groupby-color-input" value="${curGbColor || '#3b82f6'}"
+            style="margin-top:6px;width:100%;height:32px;border:none;padding:0;cursor:pointer;background:none">
+        </div>
+      </div>
+    ` : ''}
     ${showSla ? `
       <div class="report-field-picker-label">Metas de conformidade</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:4px">
@@ -2516,9 +2686,9 @@ export function reportOpenIncChartPicker(idx) {
   picker.innerHTML = `
     <div class="report-field-picker-title">${isEdit ? 'Configurar gráfico' : 'Novo gráfico'}</div>
     ${typeSection}
+    ${specificSection}
     <div class="report-field-picker-label">Tamanho</div>
     <div class="report-size-group" id="report-inc-size-group">${sizeOpts}</div>
-    ${specificSection}
     <div class="report-field-picker-actions">
       <button class="report-picker-btn-cancel" id="report-inc-p-cancel">Cancelar</button>
       <button class="report-picker-btn-apply"  id="report-inc-p-apply">${isEdit ? 'Aplicar' : 'Adicionar'}</button>
@@ -2527,6 +2697,7 @@ export function reportOpenIncChartPicker(idx) {
 
   document.getElementById('report-inc-p-cancel').onclick = _closeFieldPicker;
   document.getElementById('report-inc-p-apply').onclick  = _applyIncChartPicker;
+  if (showGroupby) _acInit(picker, 'report-inc-groupby-input', 'report-inc-groupby-field');
 
   picker.addEventListener('click', e => {
     const opt = e.target.closest('.report-size-opt');
@@ -2534,7 +2705,18 @@ export function reportOpenIncChartPicker(idx) {
     const group = opt.closest('.report-size-group');
     group?.querySelectorAll('.report-size-opt').forEach(b => b.classList.remove('active'));
     opt.classList.add('active');
+    if (group?.id === 'report-inc-groupby-style') {
+      const colorSection = document.getElementById('report-inc-groupby-color-section');
+      if (colorSection) colorSection.style.display = opt.dataset.style === 'donut' ? 'none' : '';
+    }
   });
+
+  if (showGroupby) {
+    document.getElementById('report-inc-groupby-color-mode')?.addEventListener('change', e => {
+      const cp = document.getElementById('report-inc-groupby-color-picker');
+      if (cp) cp.style.display = e.target.value === 'single' ? '' : 'none';
+    });
+  }
 }
 
 function _applyIncChartPicker() {
@@ -2564,10 +2746,22 @@ function _applyIncChartPicker() {
     _slaTargets = { p1: newSlaP1 ?? _slaTargets.p1, p2: newSlaP2 ?? _slaTargets.p2, p3: newSlaP3 ?? _slaTargets.p3 };
   }
 
+  const isGroupby      = type === 'inc-groupby';
+  const gbRef          = document.getElementById('report-inc-groupby-field')?.value;
+  const gbStyle        = picker.querySelector('#report-inc-groupby-style .report-size-opt.active')?.dataset.style;
+  const gbColorMode    = document.getElementById('report-inc-groupby-color-mode')?.value;
+  const gbColor        = gbColorMode === 'single' ? (document.getElementById('report-inc-groupby-color-input')?.value || '') : '';
+
   if (isEdit) {
-    _incidentCharts[_incPickerIdx] = { ..._incidentCharts[_incPickerIdx], size };
+    const update = { ..._incidentCharts[_incPickerIdx], size };
+    if (isGroupby) {
+      if (gbRef)   update.ref        = gbRef;
+      if (gbStyle) update.chartStyle = gbStyle;
+      update.barColor = gbColor;
+    }
+    _incidentCharts[_incPickerIdx] = update;
   } else {
-    _incidentCharts.push({ type, size });
+    _incidentCharts.push(isGroupby ? { type, size, ref: 'cmdb_ci', chartStyle: 'donut', barColor: '' } : { type, size });
   }
 
   _saveReportConfig();
@@ -2590,7 +2784,7 @@ export function reportOpenPrbChartPicker(idx) {
     { val: 'prb-donut',     label: 'PRBs por Status (donut)' },
     { val: 'prb-aging',     label: 'Aging do Backlog' },
     { val: 'prb-oldest',    label: 'Top 10 PRBs mais antigos' },
-    { val: 'prb-category',  label: 'Distribuição por Categoria' },
+    { val: 'prb-groupby',   label: 'Agrupamento por campo' },
   ];
 
   const backdrop = document.createElement('div');
@@ -2617,9 +2811,34 @@ export function reportOpenPrbChartPicker(idx) {
     : `<div class="report-field-picker-label">Gráfico</div>
        <div style="font-size:13px;color:var(--text-muted);padding:2px 0 8px">${_esc(PRB_TYPES.find(t => t.val === currentType)?.label || currentType)}</div>`;
 
+  const showPrbGroupby = isEdit && currentType === 'prb-groupby';
+  const curPgStyle     = currentChart?.chartStyle || 'donut';
+  const curPgColor     = currentChart?.barColor   || '';
+
+  const prbGroupbySection = showPrbGroupby ? `
+    <div class="report-field-picker-label">Campo de agrupamento</div>
+    ${_acHtml('report-prb-groupby-input', 'report-prb-groupby-field', _PRB_GROUPBY_FIELDS, currentChart?.ref || 'category')}
+    <div class="report-field-picker-label">Estilo visual</div>
+    <div class="report-size-group" id="report-prb-groupby-style">
+      ${[{val:'donut',label:'Donut'},{val:'bar',label:'Barras'},{val:'bar-vertical',label:'Barras Verticais'}]
+        .map(o => `<button class="report-size-opt${curPgStyle === o.val ? ' active' : ''}" data-style="${o.val}">${o.label}</button>`).join('')}
+    </div>
+    <div id="report-prb-groupby-color-section"${curPgStyle === 'donut' ? ' style="display:none"' : ''}>
+      <div class="report-field-picker-label">Cor das barras</div>
+      <select id="report-prb-groupby-color-mode" class="report-field-sel">
+        <option value="multi"${!curPgColor ? ' selected' : ''}>Multicolor</option>
+        <option value="single"${curPgColor ? ' selected' : ''}>Cor única</option>
+      </select>
+      <div id="report-prb-groupby-color-picker"${!curPgColor ? ' style="display:none"' : ''}>
+        <input type="color" id="report-prb-groupby-color-input" value="${curPgColor || '#10b981'}"
+          style="margin-top:6px;width:100%;height:32px;border:none;padding:0;cursor:pointer;background:none">
+      </div>
+    </div>` : '';
+
   picker.innerHTML = `
     <div class="report-field-picker-title">${isEdit ? 'Configurar gráfico' : 'Novo gráfico'}</div>
     ${typeSection}
+    ${prbGroupbySection}
     <div class="report-field-picker-label">Tamanho</div>
     <div class="report-size-group" id="report-prb-size-group">${sizeOpts}</div>
     <div class="report-field-picker-actions">
@@ -2630,6 +2849,7 @@ export function reportOpenPrbChartPicker(idx) {
 
   document.getElementById('report-prb-p-cancel').onclick = _closeFieldPicker;
   document.getElementById('report-prb-p-apply').onclick  = _applyPrbChartPicker;
+  if (showPrbGroupby) _acInit(picker, 'report-prb-groupby-input', 'report-prb-groupby-field');
 
   picker.addEventListener('click', e => {
     const opt = e.target.closest('.report-size-opt');
@@ -2637,7 +2857,18 @@ export function reportOpenPrbChartPicker(idx) {
     const group = opt.closest('.report-size-group');
     group?.querySelectorAll('.report-size-opt').forEach(b => b.classList.remove('active'));
     opt.classList.add('active');
+    if (group?.id === 'report-prb-groupby-style') {
+      const colorSection = document.getElementById('report-prb-groupby-color-section');
+      if (colorSection) colorSection.style.display = opt.dataset.style === 'donut' ? 'none' : '';
+    }
   });
+
+  if (showPrbGroupby) {
+    document.getElementById('report-prb-groupby-color-mode')?.addEventListener('change', e => {
+      const cp = document.getElementById('report-prb-groupby-color-picker');
+      if (cp) cp.style.display = e.target.value === 'single' ? '' : 'none';
+    });
+  }
 }
 
 function _applyPrbChartPicker() {
@@ -2645,12 +2876,24 @@ function _applyPrbChartPicker() {
   if (!picker) return;
   const isEdit = _prbPickerIdx >= 0;
   const size   = picker.querySelector('#report-prb-size-group .report-size-opt.active')?.dataset.size || 'lg';
+  const type   = isEdit ? _prbCharts[_prbPickerIdx].type : (document.getElementById('report-prb-type-sel')?.value || 'prb-evolution');
+
+  const isPrbGroupby   = type === 'prb-groupby';
+  const pgRef          = document.getElementById('report-prb-groupby-field')?.value;
+  const pgStyle        = picker.querySelector('#report-prb-groupby-style .report-size-opt.active')?.dataset.style;
+  const pgColorMode    = document.getElementById('report-prb-groupby-color-mode')?.value;
+  const pgColor        = pgColorMode === 'single' ? (document.getElementById('report-prb-groupby-color-input')?.value || '') : '';
 
   if (isEdit) {
-    _prbCharts[_prbPickerIdx] = { ..._prbCharts[_prbPickerIdx], size };
+    const update = { ..._prbCharts[_prbPickerIdx], size };
+    if (isPrbGroupby) {
+      if (pgRef)   update.ref        = pgRef;
+      if (pgStyle) update.chartStyle = pgStyle;
+      update.barColor = pgColor;
+    }
+    _prbCharts[_prbPickerIdx] = update;
   } else {
-    const type = document.getElementById('report-prb-type-sel')?.value || 'prb-evolution';
-    _prbCharts.push({ type, size });
+    _prbCharts.push(isPrbGroupby ? { type, size, ref: 'category', chartStyle: 'donut', barColor: '' } : { type, size });
   }
 
   _saveReportConfig();
@@ -3305,6 +3548,44 @@ export function toggleReportIncMax() {
   const isMax = panel.classList.toggle('maximized');
   const btn = document.getElementById('report-inc-max-btn');
   if (btn) btn.textContent = isMax ? '⤡' : '⤢';
+}
+
+export function reportOpenTargetModal() {
+  document.getElementById('inc-target-modal')?.remove();
+  const el = document.createElement('div');
+  el.id = 'inc-target-modal';
+  el.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)';
+  el.innerHTML = `
+    <div style="background:var(--bg-card);border:1px solid var(--bg-border);border-radius:12px;padding:24px 24px 20px;width:300px;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+      <div style="font-size:14px;font-weight:600;color:var(--text-1)">Target mensal de incidentes</div>
+      <div style="font-size:12px;color:var(--text-2);line-height:1.5">Número máximo esperado de incidentes por mês. Usado para calcular o percentual vs target e alertas de volume.</div>
+      <input id="inc-target-input" type="number" min="1" max="9999" placeholder="Ex: 30"
+        style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--bg-border);border-radius:6px;background:var(--bg-2);color:var(--text-1);font-size:14px;outline:none"
+        value="${_incidentTarget ?? ''}">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:2px">
+        <button onclick="document.getElementById('inc-target-modal').remove()"
+          style="padding:6px 16px;border-radius:6px;border:1px solid var(--bg-border);background:transparent;color:var(--text-2);cursor:pointer;font-size:13px">
+          Cancelar
+        </button>
+        <button onclick="reportSaveTargetModal()"
+          style="padding:6px 16px;border-radius:6px;border:none;background:var(--c-blue);color:#fff;cursor:pointer;font-size:13px;font-weight:600">
+          Salvar
+        </button>
+      </div>
+    </div>`;
+  el.addEventListener('click', e => { if (e.target === el) el.remove(); });
+  document.body.appendChild(el);
+  setTimeout(() => document.getElementById('inc-target-input')?.focus(), 0);
+}
+
+export function reportSaveTargetModal() {
+  const val = parseInt(document.getElementById('inc-target-input')?.value);
+  if (!isNaN(val) && val > 0) {
+    _incidentTarget = val;
+    _saveReportConfig();
+    _rerender();
+  }
+  document.getElementById('inc-target-modal')?.remove();
 }
 
 export async function exportReportHtml() {

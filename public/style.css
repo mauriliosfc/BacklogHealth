@@ -1442,6 +1442,13 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .report-inc-months-input:focus { border-color: var(--c-blue-bd); }
 #report-months-section { margin-bottom: 4px; }
 .report-field-picker-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; }
+/* ── Groupby autocomplete ─────────────────────────────────────────────────────── */
+.report-ac-wrap { position: relative; }
+.report-ac-input { padding-right: 28px; }
+.report-ac-dropdown { display: none; position: absolute; top: calc(100% + 3px); left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--bg-border); border-radius: 8px; max-height: 196px; overflow-y: auto; z-index: 200; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.report-ac-opt { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; cursor: pointer; font-size: 13px; color: var(--text-1); gap: 8px; }
+.report-ac-opt:hover, .report-ac-opt.report-ac-hi { background: var(--bg-el); }
+.report-ac-key { font-size: 10px; color: var(--text-faint); font-family: monospace; white-space: nowrap; flex-shrink: 0; }
 .report-picker-btn-cancel { background: var(--bg-el); border: 1px solid var(--bg-border); color: var(--text-2); padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .report-picker-btn-apply  { background: var(--c-blue); border: 1px solid transparent; color: #fff; padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .report-picker-btn-apply:disabled { opacity: .5; cursor: not-allowed; }

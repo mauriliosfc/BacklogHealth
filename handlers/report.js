@@ -10,7 +10,7 @@ function getReportConfig({ project }) {
     reportCharts:         pcfg?.reportCharts         || null,
     groupFields:          pcfg?.reportGroupFields    || null,
     incidentMonths:       pcfg?.incidentMonths       || 5,
-    incidentTarget:       pcfg?.incidentTarget       ?? 24,
+    incidentTarget:       pcfg?.incidentTarget       ?? null,
     incidentGroupBy:      pcfg?.incidentGroupBy      || 'cmdb_ci',
     heatmapMax:           pcfg?.heatmapMax           ?? 0,
     heatmapTopN:          pcfg?.heatmapTopN          ?? 9,
@@ -38,7 +38,7 @@ function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarge
   }
   if (Array.isArray(reportCharts))  { pcfg.reportCharts = reportCharts; delete pcfg.reportGroupFields; }
   if (incidentMonths  !== undefined) { const m = parseInt(incidentMonths); pcfg.incidentMonths = Math.min(24, Math.max(1, Number.isNaN(m) ? 5 : m)); }
-  if (incidentTarget  !== undefined) pcfg.incidentTarget  = Math.max(0, parseInt(incidentTarget) || 0);
+  if (incidentTarget  !== undefined) pcfg.incidentTarget  = incidentTarget === null ? null : Math.max(0, parseInt(incidentTarget) || 0);
   if (incidentGroupBy !== undefined) pcfg.incidentGroupBy = incidentGroupBy;
   if (heatmapMax      !== undefined) pcfg.heatmapMax      = Math.max(0, parseInt(heatmapMax) || 0);
   if (heatmapTopN     !== undefined) pcfg.heatmapTopN     = Math.max(0, parseInt(heatmapTopN) || 0);

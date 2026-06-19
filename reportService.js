@@ -400,10 +400,10 @@ async function fetchSnReport(displayName, period) {
   console.log(`[SN] incQuery: ${incQuery}`);
 
   const [incRes, incClosedRes, incBacklogRes, prbRes, prbResolvedRes, prbOpenedThisMonthRes, taskSlaRes, incReopenedRes] = await Promise.all([
-    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,priority,cmdb_ci.name,u_additional_res_code,location.name,state&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN incidents error]', e.message); return { result: [] }; }),
+    snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,priority,impact,urgency,cmdb_ci.name,u_additional_res_code,location.name,state,assigned_to,assignment_group,category,subcategory,close_code,contact_type&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN incidents error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at,closed_at,priority&sysparm_limit=1000`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incBacklogQuery)}&sysparm_fields=sys_id,opened_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
-    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,category,state,opened_at,known_error,workaround_instructions,rca_complete&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
+    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,impact,urgency,category,state,assignment_group.name,assigned_to.name,opened_at,known_error,workaround_instructions,rca_complete&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at&sysparm_limit=200`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedThisMonthQuery)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/task_sla?sysparm_query=${encodeURIComponent(taskSlaQuery)}&sysparm_fields=task,task.priority,business_elapsed_percentage&sysparm_limit=2000`).catch(() => ({ result: [] })),
@@ -606,6 +606,22 @@ async function fetchSnReport(displayName, period) {
     .map(([name, counts]) => ({ name, monthly: counts, total: counts.reduce((s, c) => s + c, 0) }))
     .sort((a, b) => b.total - a.total);
 
+  // Generic flat groupby — reuses the same `incidents` array
+  const _snGroupby = (field, val = v => _snVal(v) || 'N/A') => {
+    const m = {};
+    incidents.forEach(i => { const k = val(i[field]); m[k] = (m[k] || 0) + 1; });
+    return Object.entries(m).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+  };
+  const byState           = _snGroupby('state');
+  const byAssignedTo      = _snGroupby('assigned_to');
+  const byAssignmentGroup = _snGroupby('assignment_group');
+  const byCategory        = _snGroupby('category');
+  const bySubcategory     = _snGroupby('subcategory');
+  const byImpact          = _snGroupby('impact');
+  const byUrgency         = _snGroupby('urgency');
+  const byCloseCode       = _snGroupby('close_code');
+  const byContactType     = _snGroupby('contact_type');
+
   const now = Date.now();
   const prbList = prbs.map(p => {
     const agingDays = p.opened_at ? Math.floor((now - new Date(p.opened_at).getTime()) / 86400000) : 0;
@@ -613,9 +629,13 @@ async function fetchSnReport(displayName, period) {
       id:                      p.number,
       title:                   p.short_description,
       priority:                p.priority,
+      impact:                  p.impact                    || '',
+      urgency:                 p.urgency                   || '',
       category:                p.category,
       agingDays,
       state:                   p.state,
+      assignment_group:        p['assignment_group.name']  || '',
+      assigned_to:             p['assigned_to.name']       || '',
       known_error:             _snRaw(p.known_error) === 'true' || p.known_error === true,
       workaround_instructions: _snVal(p.workaround_instructions) || '',
       rca_complete:            _snRaw(p.rca_complete) === 'true' || p.rca_complete === true,
@@ -653,6 +673,15 @@ async function fetchSnReport(displayName, period) {
       byGroupAlt,
       byGroupAltMonthly,
       byLocationMonthly,
+      byState,
+      byAssignedTo,
+      byAssignmentGroup,
+      byCategory,
+      bySubcategory,
+      byImpact,
+      byUrgency,
+      byCloseCode,
+      byContactType,
       monthly,
       // ITIL
       mttrByPriority,
