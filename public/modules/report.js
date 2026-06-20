@@ -1,5 +1,6 @@
 // ── Monthly Review — modal ES module ─────────────────────────────────────────
 import { openCopilotWithContext } from './copilot.js';
+import { t } from './i18n.js';
 
 let _reportProject   = null;
 let _reportMonth     = null;
