@@ -440,4 +440,84 @@ test.describe('Monthly Review — drag & drop', () => {
       expect(dragStarted).toBe(false);
     }
   });
+
+  test('6.3 drag via API de eventos HTML5 reordena os gráficos', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    const cells = page.locator('.report-donuts-grid .report-donut-cell[draggable="true"]');
+    const count = await cells.count();
+    test.skip(count < 2, 'Menos de 2 gráficos — sem o que reordenar');
+
+    // Captura títulos antes do drag
+    const titlesBefore = await cells.evaluateAll(els =>
+      els.map(el => el.querySelector('.report-subsection-title')?.textContent?.trim() ?? '')
+    );
+
+    // Simula drag completo via eventos HTML5 entre célula 0 e célula 1
+    const reordered = await page.evaluate(() => {
+      const grid  = document.querySelector('.report-donuts-grid');
+      const all   = [...grid.querySelectorAll('.report-donut-cell[draggable="true"]')];
+      if (all.length < 2) return false;
+
+      const src = all[0];
+      const dst = all[1];
+
+      const dt = { effectAllowed: '', dropEffect: '', data: {} };
+      const mkDT = () => ({
+        effectAllowed: '',
+        dropEffect: '',
+        setData: (k, v) => { dt.data[k] = v; },
+        getData: k => dt.data[k] ?? '',
+      });
+
+      src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
+      dst.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
+      dst.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
+      src.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
+      return true;
+    });
+
+    test.skip(!reordered, 'Simulação de drag não suportada neste browser');
+
+    // Aguarda re-render
+    await page.waitForTimeout(500);
+
+    const titlesAfter = await page.locator('.report-donuts-grid .report-donut-cell[draggable="true"]').evaluateAll(els =>
+      els.map(el => el.querySelector('.report-subsection-title')?.textContent?.trim() ?? '')
+    );
+
+    // Depois do drag, a ordem deve ter mudado (primeiro título diferente do original)
+    // OU o grid manteve a mesma contagem (re-render correto)
+    expect(titlesAfter.length).toBe(count);
+    // A troca 0→1 inverte os dois primeiros elementos
+    if (titlesBefore[0] && titlesBefore[1]) {
+      expect(titlesAfter[0]).toBe(titlesBefore[1]);
+      expect(titlesAfter[1]).toBe(titlesBefore[0]);
+    }
+  });
+
+  test('6.4 após drag, factory não vaza estado entre sistemas', async ({ page }) => {
+    const jsErrors = [];
+    page.on('pageerror', err => jsErrors.push(err.message));
+
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    // Inicia drag em main chart e abandona (dragend sem drop)
+    await page.evaluate(() => {
+      const cell = document.querySelector('.report-donuts-grid .report-donut-cell[draggable="true"]');
+      if (!cell) return;
+      const mkDT = () => ({ effectAllowed: '', dropEffect: '', setData: () => {}, getData: () => '' });
+      cell.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
+      cell.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
+    });
+
+    await page.waitForTimeout(200);
+
+    // Nenhuma classe de drag deve permanecer no DOM após dragend
+    const lingering = await page.locator('.report-drag-over').count();
+    expect(lingering).toBe(0);
+    expect(jsErrors).toHaveLength(0);
+  });
 });

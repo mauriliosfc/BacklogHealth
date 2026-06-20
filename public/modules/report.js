@@ -20,7 +20,6 @@ let _slaThresholds   = { p1: 4, p2: 8, p3: 72 };
 let _slaTargets      = { p1: 95, p2: 90, p3: 85 };
 let _pickerIdx       = -1; // -1 = add new, >=0 = edit existing chart
 let _lastPayload       = null;
-let _dragSrcIdx        = -1;
 let _activeSectionFilter = 'all';
 let _indicatorCards       = {};   // { incidents: [{id,visible,order}], prbs: [...] }
 let _indicatorCardsPerRow = {};   // { incidents: 4, prbs: 4 }
@@ -31,8 +30,67 @@ let _incidentCharts  = [];  // [{type:'inc-volume'|'inc-bars'|'inc-heatmap'|'inc
 let _prbCharts       = [];  // [{type:'prb-evolution'|'prb-donut'|'prb-aging'|'prb-oldest'|'prb-category', size:'sm'|'md'|'lg'}]
 let _incPickerIdx    = -1;  // -1 = add new, >=0 = edit existing incident chart
 let _prbPickerIdx    = -1;  // -1 = add new, >=0 = edit existing PRB chart
-let _incChartDragIdx = -1;
-let _prbChartDragIdx = -1;
+
+// ── Drag & drop factory ───────────────────────────────────────────────────────
+// Returns 5 event handlers (start/over/leave/drop/end) for a sortable list.
+// Each call creates an independent drag state, enabling multiple drag systems
+// to coexist without shared mutable variables at module level.
+function _makeDraggable({ guardSelector, getList, setList, afterDrop }) {
+  let _srcIdx = -1;
+  return {
+    start(e, idx) {
+      if (guardSelector && e.target.closest(guardSelector)) { e.preventDefault(); return; }
+      _srcIdx = idx;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => e.currentTarget?.classList.add('report-dragging'), 0);
+    },
+    over(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.classList.add('report-drag-over');
+    },
+    leave(e) { e.currentTarget.classList.remove('report-drag-over'); },
+    drop(e, targetIdx) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('report-drag-over');
+      if (_srcIdx < 0 || _srcIdx === targetIdx) { _srcIdx = -1; return; }
+      const list  = getList();
+      const moved = list.splice(_srcIdx, 1)[0];
+      list.splice(targetIdx, 0, moved);
+      setList(list);
+      _srcIdx = -1;
+      afterDrop();
+    },
+    end(e) {
+      e?.currentTarget?.classList.remove('report-dragging');
+      document.querySelectorAll('.report-drag-over').forEach(el => el.classList.remove('report-drag-over'));
+      _srcIdx = -1;
+    },
+  };
+}
+
+const _DRAG_GUARD = '.report-field-chart-actions, button, a, select, input';
+
+const _chartDrag = _makeDraggable({
+  guardSelector: _DRAG_GUARD,
+  getList:   () => _reportCharts,
+  setList:   list => { _reportCharts = list; },
+  afterDrop: () => { _saveReportConfig(); _rerender(); },
+});
+
+const _incChartDrag = _makeDraggable({
+  guardSelector: _DRAG_GUARD,
+  getList:   () => _incidentCharts,
+  setList:   list => { _incidentCharts = list; },
+  afterDrop: () => { _saveReportConfig(); _rerender(); },
+});
+
+const _prbChartDrag = _makeDraggable({
+  guardSelector: _DRAG_GUARD,
+  getList:   () => _prbCharts,
+  setList:   list => { _prbCharts = list; },
+  afterDrop: () => { _saveReportConfig(); _rerender(); },
+});
 
 const _DEFAULT_CHARTS = [
   { type: 'sprint',     size: 'lg' },
@@ -2344,39 +2402,11 @@ export function reportResizeChart(idx, size) {
   _rerender();
 }
 
-export function reportDragStart(e, idx) {
-  if (e.target.closest('.report-field-chart-actions, button, a, select, input')) { e.preventDefault(); return; }
-  _dragSrcIdx = idx;
-  e.dataTransfer.effectAllowed = 'move';
-  setTimeout(() => e.currentTarget?.classList.add('report-dragging'), 0);
-}
-
-export function reportDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  e.currentTarget.classList.add('report-drag-over');
-}
-
-export function reportDragLeave(e) {
-  e.currentTarget.classList.remove('report-drag-over');
-}
-
-export function reportDrop(e, targetIdx) {
-  e.preventDefault();
-  e.currentTarget.classList.remove('report-drag-over');
-  if (_dragSrcIdx < 0 || _dragSrcIdx === targetIdx) { _dragSrcIdx = -1; return; }
-  const moved = _reportCharts.splice(_dragSrcIdx, 1)[0];
-  _reportCharts.splice(targetIdx, 0, moved);
-  _dragSrcIdx = -1;
-  _saveReportConfig();
-  _rerender();
-}
-
-export function reportDragEnd(e) {
-  e.currentTarget?.classList.remove('report-dragging');
-  document.querySelectorAll('.report-drag-over').forEach(el => el.classList.remove('report-drag-over'));
-  _dragSrcIdx = -1;
-}
+export function reportDragStart(e, idx)    { _chartDrag.start(e, idx); }
+export function reportDragOver(e)          { _chartDrag.over(e); }
+export function reportDragLeave(e)         { _chartDrag.leave(e); }
+export function reportDrop(e, targetIdx)   { _chartDrag.drop(e, targetIdx); }
+export function reportDragEnd(e)           { _chartDrag.end(e); }
 
 // ── Incident chart drag / remove / add ────────────────────────────────────────
 
@@ -2386,39 +2416,11 @@ export function reportRemoveIncChart(idx) {
   _rerender();
 }
 
-export function reportIncChartDragStart(e, idx) {
-  if (e.target.closest('.report-field-chart-actions, button, a, select, input')) { e.preventDefault(); return; }
-  _incChartDragIdx = idx;
-  e.dataTransfer.effectAllowed = 'move';
-  setTimeout(() => e.currentTarget?.classList.add('report-dragging'), 0);
-}
-
-export function reportIncChartDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  e.currentTarget.classList.add('report-drag-over');
-}
-
-export function reportIncChartDragLeave(e) {
-  e.currentTarget.classList.remove('report-drag-over');
-}
-
-export function reportIncChartDrop(e, targetIdx) {
-  e.preventDefault();
-  e.currentTarget.classList.remove('report-drag-over');
-  if (_incChartDragIdx < 0 || _incChartDragIdx === targetIdx) { _incChartDragIdx = -1; return; }
-  const moved = _incidentCharts.splice(_incChartDragIdx, 1)[0];
-  _incidentCharts.splice(targetIdx, 0, moved);
-  _incChartDragIdx = -1;
-  _saveReportConfig();
-  _rerender();
-}
-
-export function reportIncChartDragEnd(e) {
-  e.currentTarget?.classList.remove('report-dragging');
-  document.querySelectorAll('.report-drag-over').forEach(el => el.classList.remove('report-drag-over'));
-  _incChartDragIdx = -1;
-}
+export function reportIncChartDragStart(e, idx)  { _incChartDrag.start(e, idx); }
+export function reportIncChartDragOver(e)        { _incChartDrag.over(e); }
+export function reportIncChartDragLeave(e)       { _incChartDrag.leave(e); }
+export function reportIncChartDrop(e, targetIdx) { _incChartDrag.drop(e, targetIdx); }
+export function reportIncChartDragEnd(e)         { _incChartDrag.end(e); }
 
 export function reportAddIncChart() {
   reportOpenIncChartPicker(-1);
@@ -2432,39 +2434,11 @@ export function reportRemovePrbChart(idx) {
   _rerender();
 }
 
-export function reportPrbChartDragStart(e, idx) {
-  if (e.target.closest('.report-field-chart-actions, button, a, select, input')) { e.preventDefault(); return; }
-  _prbChartDragIdx = idx;
-  e.dataTransfer.effectAllowed = 'move';
-  setTimeout(() => e.currentTarget?.classList.add('report-dragging'), 0);
-}
-
-export function reportPrbChartDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  e.currentTarget.classList.add('report-drag-over');
-}
-
-export function reportPrbChartDragLeave(e) {
-  e.currentTarget.classList.remove('report-drag-over');
-}
-
-export function reportPrbChartDrop(e, targetIdx) {
-  e.preventDefault();
-  e.currentTarget.classList.remove('report-drag-over');
-  if (_prbChartDragIdx < 0 || _prbChartDragIdx === targetIdx) { _prbChartDragIdx = -1; return; }
-  const moved = _prbCharts.splice(_prbChartDragIdx, 1)[0];
-  _prbCharts.splice(targetIdx, 0, moved);
-  _prbChartDragIdx = -1;
-  _saveReportConfig();
-  _rerender();
-}
-
-export function reportPrbChartDragEnd(e) {
-  e.currentTarget?.classList.remove('report-dragging');
-  document.querySelectorAll('.report-drag-over').forEach(el => el.classList.remove('report-drag-over'));
-  _prbChartDragIdx = -1;
-}
+export function reportPrbChartDragStart(e, idx)  { _prbChartDrag.start(e, idx); }
+export function reportPrbChartDragOver(e)        { _prbChartDrag.over(e); }
+export function reportPrbChartDragLeave(e)       { _prbChartDrag.leave(e); }
+export function reportPrbChartDrop(e, targetIdx) { _prbChartDrag.drop(e, targetIdx); }
+export function reportPrbChartDragEnd(e)         { _prbChartDrag.end(e); }
 
 export function reportAddPrbChart() {
   reportOpenPrbChartPicker(-1);
