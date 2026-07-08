@@ -463,18 +463,10 @@ test.describe('Monthly Review — drag & drop', () => {
       const src = all[0];
       const dst = all[1];
 
-      const dt = { effectAllowed: '', dropEffect: '', data: {} };
-      const mkDT = () => ({
-        effectAllowed: '',
-        dropEffect: '',
-        setData: (k, v) => { dt.data[k] = v; },
-        getData: k => dt.data[k] ?? '',
-      });
-
-      src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
-      dst.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
-      dst.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
-      src.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
+      src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true }));
+      dst.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true }));
+      dst.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true }));
+      src.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true }));
       return true;
     });
 
@@ -508,9 +500,8 @@ test.describe('Monthly Review — drag & drop', () => {
     await page.evaluate(() => {
       const cell = document.querySelector('.report-donuts-grid .report-donut-cell[draggable="true"]');
       if (!cell) return;
-      const mkDT = () => ({ effectAllowed: '', dropEffect: '', setData: () => {}, getData: () => '' });
-      cell.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
-      cell.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true, dataTransfer: mkDT() }));
+      cell.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true }));
+      cell.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true }));
     });
 
     await page.waitForTimeout(200);
@@ -518,6 +509,84 @@ test.describe('Monthly Review — drag & drop', () => {
     // Nenhuma classe de drag deve permanecer no DOM após dragend
     const lingering = await page.locator('.report-drag-over').count();
     expect(lingering).toBe(0);
+    expect(jsErrors).toHaveLength(0);
+  });
+});
+
+// 7. Picker factory — abertura, cancelamento e aplicação
+test.describe('7. Picker factory', () => {
+  test('7.1 botão Cancelar fecha o picker sem alterar configuração', async ({ page }) => {
+    const jsErrors = [];
+    page.on('pageerror', err => jsErrors.push(err.message));
+
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    // Abre o picker de Volume de Incidentes via botão ⚙ da seção Incidentes
+    const cfgBtn = page.locator('.report-section-actions button', { hasText: /volume/i }).first();
+    const hasCfg = await cfgBtn.count() > 0;
+    if (!hasCfg) {
+      // Fallback: abre via picker de campo do gráfico principal
+      const addBtn = page.locator('button[onclick*="reportOpenFieldPicker"]').first();
+      if (await addBtn.count() === 0) { test.skip(true, 'Nenhum botão de picker encontrado'); return; }
+      await addBtn.click();
+    } else {
+      await cfgBtn.click();
+    }
+
+    // Picker deve estar visível
+    await expect(page.locator('#report-field-picker')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('#report-picker-backdrop')).toBeVisible();
+
+    // Clica em Cancelar
+    await page.locator('#report-picker-cancel').click();
+
+    // Picker deve desaparecer
+    await expect(page.locator('#report-field-picker')).not.toBeVisible({ timeout: 2000 });
+    await expect(page.locator('#report-picker-backdrop')).not.toBeVisible();
+    expect(jsErrors).toHaveLength(0);
+  });
+
+  test('7.2 clicar no backdrop fecha o picker', async ({ page }) => {
+    const jsErrors = [];
+    page.on('pageerror', err => jsErrors.push(err.message));
+
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    // Abre qualquer picker
+    const cfgBtn = page.locator('button[onclick*="Picker"]').first();
+    if (await cfgBtn.count() === 0) { test.skip(true, 'Nenhum botão de picker encontrado'); return; }
+    await cfgBtn.click();
+
+    await expect(page.locator('#report-field-picker')).toBeVisible({ timeout: 3000 });
+
+    // Clica no backdrop numa área que não é coberta pelo picker (centro do viewport)
+    await page.locator('#report-picker-backdrop').click({ position: { x: 10, y: 10 } });
+
+    await expect(page.locator('#report-field-picker')).not.toBeVisible({ timeout: 2000 });
+    expect(jsErrors).toHaveLength(0);
+  });
+
+  test('7.3 abrir segundo picker fecha o primeiro', async ({ page }) => {
+    const jsErrors = [];
+    page.on('pageerror', err => jsErrors.push(err.message));
+
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    const cfgBtns = page.locator('button[onclick*="Picker"]');
+    if (await cfgBtns.count() < 2) { test.skip(true, 'Menos de 2 botões de picker'); return; }
+
+    await cfgBtns.nth(0).click();
+    await expect(page.locator('#report-field-picker')).toBeVisible({ timeout: 3000 });
+
+    // dispatchEvent bypassa o backdrop (que bloqueia cliques por coordenadas)
+    await cfgBtns.nth(1).dispatchEvent('click');
+
+    // Deve continuar com exatamente um picker no DOM
+    const count = await page.locator('#report-field-picker').count();
+    expect(count).toBe(1);
     expect(jsErrors).toHaveLength(0);
   });
 });

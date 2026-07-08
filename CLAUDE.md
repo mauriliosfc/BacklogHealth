@@ -54,7 +54,10 @@ dash_azure_gestao_pessoal/
 │       ├── burndown.js    ← openBurndown, openBurndownFromDaily
 │       ├── teamCapacity.js← openTeamCapacity, showDashboardView
 │       ├── copilot.js     ← openCopilot, sendCopilotMessage, _loadRichContext
-│       ├── report.js      ← openReport, renderReport, reportChangeMonth, reportRefresh
+│       ├── report-state.js← S — objeto de estado compartilhado (34 linhas)
+│       ├── report-charts.js← renderizadores de gráficos puros (1117 linhas, importa S)
+│       ├── report-pickers.js← pickers, modal de incidentes, exportHtml (1243 linhas, callback injection)
+│       ├── report.js      ← orquestrador: drag, config, renderers, openReport (~1220 linhas)
 │       ├── snConfig.js    ← modal de configuração SN acessível pelo Report Modal
 │       ├── itemsModal.js  ← openItemsModal({ title, items, showPts, defaultFilters })
 │       ├── alias.js       ← getAlias, setAlias, applyAliases
