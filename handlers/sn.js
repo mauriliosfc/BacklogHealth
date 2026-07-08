@@ -50,7 +50,7 @@ async function testSn({ instance, user, pass } = {}) {
   }
 }
 
-// Returns the distinct assignment group names found in active incidents.
+// Returns all active assignment groups from the sys_user_group table.
 // Accepts raw credentials so it can be called before config is saved (onboarding).
 async function fetchGroups({ instance, user, pass } = {}) {
   if (!instance || !user || !pass)
@@ -59,22 +59,15 @@ async function fetchGroups({ instance, user, pass } = {}) {
     const snCfg = { instance: instance.trim(), user: user.trim(), pass };
     const qs = [
       'sysparm_query=active=true',
-      'sysparm_display_value=true',
-      'sysparm_fields=assignment_group',
-      'sysparm_limit=1000',
+      'sysparm_fields=name,sys_id',
+      'sysparm_limit=2000',
     ].join('&');
-    const data = await snGet(snCfg, `table/incident?${qs}`);
-    const seen = new Map();
-    (data.result || []).forEach(r => {
-      const v = r.assignment_group;
-      if (!v) return;
-      const sys_id = typeof v === 'object' ? (v.value || '') : '';
-      const name   = typeof v === 'object' ? (v.display_value || v.value || '') : (v || '');
-      if (!name) return;
-      const key = sys_id || name;
-      if (!seen.has(key)) seen.set(key, { name, sys_id });
-    });
-    const groups = [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+    const data = await snGet(snCfg, `table/sys_user_group?${qs}`);
+    const groups = [...new Map(
+      (data.result || [])
+        .filter(r => r.name)
+        .map(r => [r.name, { name: r.name, sys_id: r.sys_id || '' }])
+    ).values()].sort((a, b) => a.name.localeCompare(b.name));
     return { groups };
   } catch (e) {
     return { error: e.message, groups: [] };

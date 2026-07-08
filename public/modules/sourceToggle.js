@@ -36,4 +36,5 @@ export function toggleSource(src) {
   document.querySelectorAll('.btn-source').forEach(b =>
     b.classList.toggle('active', b.dataset.source === src)
   );
+  localStorage.setItem('dashSource', src);
 }

@@ -440,4 +440,153 @@ test.describe('Monthly Review — drag & drop', () => {
       expect(dragStarted).toBe(false);
     }
   });
+
+  test('6.3 drag via API de eventos HTML5 reordena os gráficos', async ({ page }) => {
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    const cells = page.locator('.report-donuts-grid .report-donut-cell[draggable="true"]');
+    const count = await cells.count();
+    test.skip(count < 2, 'Menos de 2 gráficos — sem o que reordenar');
+
+    // Captura títulos antes do drag
+    const titlesBefore = await cells.evaluateAll(els =>
+      els.map(el => el.querySelector('.report-subsection-title')?.textContent?.trim() ?? '')
+    );
+
+    // Simula drag completo via eventos HTML5 entre célula 0 e célula 1
+    const reordered = await page.evaluate(() => {
+      const grid  = document.querySelector('.report-donuts-grid');
+      const all   = [...grid.querySelectorAll('.report-donut-cell[draggable="true"]')];
+      if (all.length < 2) return false;
+
+      const src = all[0];
+      const dst = all[1];
+
+      src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true }));
+      dst.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true }));
+      dst.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true }));
+      src.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true }));
+      return true;
+    });
+
+    test.skip(!reordered, 'Simulação de drag não suportada neste browser');
+
+    // Aguarda re-render
+    await page.waitForTimeout(500);
+
+    const titlesAfter = await page.locator('.report-donuts-grid .report-donut-cell[draggable="true"]').evaluateAll(els =>
+      els.map(el => el.querySelector('.report-subsection-title')?.textContent?.trim() ?? '')
+    );
+
+    // Depois do drag, a ordem deve ter mudado (primeiro título diferente do original)
+    // OU o grid manteve a mesma contagem (re-render correto)
+    expect(titlesAfter.length).toBe(count);
+    // A troca 0→1 inverte os dois primeiros elementos
+    if (titlesBefore[0] && titlesBefore[1]) {
+      expect(titlesAfter[0]).toBe(titlesBefore[1]);
+      expect(titlesAfter[1]).toBe(titlesBefore[0]);
+    }
+  });
+
+  test('6.4 após drag, factory não vaza estado entre sistemas', async ({ page }) => {
+    const jsErrors = [];
+    page.on('pageerror', err => jsErrors.push(err.message));
+
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    // Inicia drag em main chart e abandona (dragend sem drop)
+    await page.evaluate(() => {
+      const cell = document.querySelector('.report-donuts-grid .report-donut-cell[draggable="true"]');
+      if (!cell) return;
+      cell.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true }));
+      cell.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true }));
+    });
+
+    await page.waitForTimeout(200);
+
+    // Nenhuma classe de drag deve permanecer no DOM após dragend
+    const lingering = await page.locator('.report-drag-over').count();
+    expect(lingering).toBe(0);
+    expect(jsErrors).toHaveLength(0);
+  });
+});
+
+// 7. Picker factory — abertura, cancelamento e aplicação
+test.describe('7. Picker factory', () => {
+  test('7.1 botão Cancelar fecha o picker sem alterar configuração', async ({ page }) => {
+    const jsErrors = [];
+    page.on('pageerror', err => jsErrors.push(err.message));
+
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    // Abre o picker de Volume de Incidentes via botão ⚙ da seção Incidentes
+    const cfgBtn = page.locator('.report-section-actions button', { hasText: /volume/i }).first();
+    const hasCfg = await cfgBtn.count() > 0;
+    if (!hasCfg) {
+      // Fallback: abre via picker de campo do gráfico principal
+      const addBtn = page.locator('button[onclick*="reportOpenFieldPicker"]').first();
+      if (await addBtn.count() === 0) { test.skip(true, 'Nenhum botão de picker encontrado'); return; }
+      await addBtn.click();
+    } else {
+      await cfgBtn.click();
+    }
+
+    // Picker deve estar visível
+    await expect(page.locator('#report-field-picker')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('#report-picker-backdrop')).toBeVisible();
+
+    // Clica em Cancelar
+    await page.locator('#report-picker-cancel').click();
+
+    // Picker deve desaparecer
+    await expect(page.locator('#report-field-picker')).not.toBeVisible({ timeout: 2000 });
+    await expect(page.locator('#report-picker-backdrop')).not.toBeVisible();
+    expect(jsErrors).toHaveLength(0);
+  });
+
+  test('7.2 clicar no backdrop fecha o picker', async ({ page }) => {
+    const jsErrors = [];
+    page.on('pageerror', err => jsErrors.push(err.message));
+
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    // Abre qualquer picker
+    const cfgBtn = page.locator('button[onclick*="Picker"]').first();
+    if (await cfgBtn.count() === 0) { test.skip(true, 'Nenhum botão de picker encontrado'); return; }
+    await cfgBtn.click();
+
+    await expect(page.locator('#report-field-picker')).toBeVisible({ timeout: 3000 });
+
+    // Clica no backdrop numa área que não é coberta pelo picker (centro do viewport)
+    await page.locator('#report-picker-backdrop').click({ position: { x: 10, y: 10 } });
+
+    await expect(page.locator('#report-field-picker')).not.toBeVisible({ timeout: 2000 });
+    expect(jsErrors).toHaveLength(0);
+  });
+
+  test('7.3 abrir segundo picker fecha o primeiro', async ({ page }) => {
+    const jsErrors = [];
+    page.on('pageerror', err => jsErrors.push(err.message));
+
+    const ok = await goToReportModal(page);
+    test.skip(!ok, 'Nenhum projeto disponível');
+
+    const cfgBtns = page.locator('button[onclick*="Picker"]');
+    if (await cfgBtns.count() < 2) { test.skip(true, 'Menos de 2 botões de picker'); return; }
+
+    await cfgBtns.nth(0).click();
+    await expect(page.locator('#report-field-picker')).toBeVisible({ timeout: 3000 });
+
+    // dispatchEvent bypassa o backdrop (que bloqueia cliques por coordenadas)
+    await cfgBtns.nth(1).dispatchEvent('click');
+
+    // Deve continuar com exatamente um picker no DOM
+    const count = await page.locator('#report-field-picker').count();
+    expect(count).toBe(1);
+    expect(jsErrors).toHaveLength(0);
+  });
 });

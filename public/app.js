@@ -375,6 +375,7 @@ if (localStorage.getItem('activeView') === 'tc') {
   localStorage.removeItem('activeView');
   openTeamCapacity();
 }
+if (localStorage.getItem('dashSource') === 'sn') toggleSource('sn');
 
 // Highlight active language button
 const activeLang = getLocale();

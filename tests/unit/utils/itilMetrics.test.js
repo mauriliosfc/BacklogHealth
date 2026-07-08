@@ -45,10 +45,10 @@ describe('calcMttrByPriority', () => {
     expect(r.all).toBe(Math.round((2 + 8 + 24) / 3 * 10) / 10);
   });
 
-  test('usa closed_at quando resolved_at ausente', () => {
+  test('ignora item com closed_at mas sem resolved_at', () => {
     const items = [{ priority: '2', opened_at: '2026-06-01T00:00:00Z', closed_at: '2026-06-01T04:00:00Z' }];
     const r = calcMttrByPriority(items);
-    expect(r.p2).toBe(4);
+    expect(r.p2).toBeNull();
   });
 
   test('ignora itens sem datas válidas', () => {

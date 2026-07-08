@@ -24,10 +24,12 @@ function getReportConfig({ project }) {
     incidentCharts:        pcfg?.incidentCharts        || null,
     prbCharts:             pcfg?.prbCharts             || null,
     slaTargets:            pcfg?.slaTargets            || null,
+    prbMonths:             pcfg?.prbMonths             ?? 5,
+    prbAgingBuckets:       pcfg?.prbAgingBuckets       || null,
   };
 }
 
-function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarget, incidentGroupBy, heatmapMax, heatmapTopN, locationMonths, agingState, agingCharts, agingBuckets, deliveryStates, indicatorCards, indicatorCardsPerRow, incidentCharts, prbCharts, slaTargets } = {}) {
+function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarget, incidentGroupBy, heatmapMax, heatmapTopN, locationMonths, agingState, agingCharts, agingBuckets, deliveryStates, indicatorCards, indicatorCardsPerRow, incidentCharts, prbCharts, slaTargets, prbMonths, prbAgingBuckets } = {}) {
   const cfg  = getCfg();
   let pcfg = (cfg.projects || []).find(p => getDisplayName(p) === project);
   if (!pcfg) {
@@ -51,6 +53,8 @@ function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarge
   if (indicatorCardsPerRow !== undefined) pcfg.indicatorCardsPerRow = indicatorCardsPerRow;
   if (Array.isArray(incidentCharts)) pcfg.incidentCharts = incidentCharts;
   if (Array.isArray(prbCharts))      pcfg.prbCharts      = prbCharts;
+  if (prbMonths !== undefined)       { const pm = parseInt(prbMonths); pcfg.prbMonths = Math.min(24, Math.max(1, Number.isNaN(pm) ? 5 : pm)); }
+  if (Array.isArray(prbAgingBuckets) && prbAgingBuckets.length === 4) pcfg.prbAgingBuckets = prbAgingBuckets.map(v => Math.max(1, parseInt(v) || 1));
   if (slaTargets !== undefined && typeof slaTargets === 'object') {
     const t = {};
     if (slaTargets.p1 !== undefined) t.p1 = Math.min(100, Math.max(0, parseInt(slaTargets.p1) || 0));

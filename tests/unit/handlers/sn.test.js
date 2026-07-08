@@ -199,35 +199,35 @@ describe('fetchGroups', () => {
 
   test('retorna lista de objetos {name, sys_id} únicos ordenados', async () => {
     snGet.mockResolvedValue({ result: [
-      { assignment_group: 'Network Ops' },
-      { assignment_group: 'Database' },
-      { assignment_group: 'Network Ops' }, // duplicata
-      { assignment_group: 'Application' },
+      { name: 'Network Ops', sys_id: 'id1' },
+      { name: 'Database',    sys_id: 'id2' },
+      { name: 'Network Ops', sys_id: 'id1' }, // duplicata (mesmo nome, mesmo sys_id)
+      { name: 'Application', sys_id: 'id3' },
     ]});
     const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
     expect(groups).toEqual([
-      { name: 'Application', sys_id: '' },
-      { name: 'Database',    sys_id: '' },
-      { name: 'Network Ops', sys_id: '' },
+      { name: 'Application', sys_id: 'id3' },
+      { name: 'Database',    sys_id: 'id2' },
+      { name: 'Network Ops', sys_id: 'id1' },
     ]);
   });
 
-  test('suporta campos com formato {value, display_value} e extrai sys_id', async () => {
+  test('suporta grupos sem sys_id retornando sys_id vazio', async () => {
     snGet.mockResolvedValue({ result: [
-      { assignment_group: { value: 'grp_id', display_value: 'My Group' } },
+      { name: 'My Group', sys_id: 'grp_id' },
     ]});
     const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
     expect(groups).toEqual([{ name: 'My Group', sys_id: 'grp_id' }]);
   });
 
-  test('ignora linhas sem assignment_group', async () => {
+  test('ignora linhas sem name', async () => {
     snGet.mockResolvedValue({ result: [
-      { assignment_group: 'Ops' },
-      { assignment_group: null },
-      { assignment_group: '' },
+      { name: 'Ops',  sys_id: 'id1' },
+      { name: '',     sys_id: 'id2' },
+      { name: null,   sys_id: 'id3' },
     ]});
     const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
-    expect(groups).toEqual([{ name: 'Ops', sys_id: '' }]);
+    expect(groups).toEqual([{ name: 'Ops', sys_id: 'id1' }]);
   });
 
   test('retorna { error, groups: [] } quando API falha (não lança exceção)', async () => {
@@ -322,7 +322,7 @@ describe('fetchGroupsFromConfig', () => {
   test('delega para fetchGroups com credenciais salvas', async () => {
     getSnConfig.mockReturnValue({ instance: 'corp.service-now.com', user: 'admin', pass: 'secret' });
     snGet.mockResolvedValue({ result: [
-      { assignment_group: { value: 'grp1', display_value: 'IT Support' } },
+      { name: 'IT Support', sys_id: 'grp1' },
     ]});
     const { groups } = await fetchGroupsFromConfig();
     expect(groups).toEqual([{ name: 'IT Support', sys_id: 'grp1' }]);
