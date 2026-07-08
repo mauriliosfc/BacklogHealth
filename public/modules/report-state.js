@@ -14,6 +14,8 @@ export const S = {
   heatmapTopN:        9,
   locationMonths:     6,
   agingBuckets:       [7, 14, 30, 60],
+  prbMonths:          5,
+  prbAgingBuckets:    [30, 60, 90, 180],
   deliveryStates:     ['Closed', 'Done', 'Resolved'],
   slaEnabled:         false,
   slaThresholds:      { p1: 4, p2: 8, p3: 72 },

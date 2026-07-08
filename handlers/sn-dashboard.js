@@ -227,10 +227,8 @@ async function fetchSNResolved(snCfg, groupNames) {
   const now   = new Date();
   const y     = now.getFullYear();
   const m     = now.getMonth();
-  const start = `${y}-${String(m + 1).padStart(2, '0')}-01`;
-  const nextY = m === 11 ? y + 1 : y;
-  const nextM = String(m === 11 ? 1 : m + 2).padStart(2, '0');
-  const end   = `${nextY}-${nextM}-01`;
+  const start = new Date(y, m, 1).toISOString().slice(0, 19) + 'Z';
+  const end   = new Date(y, m + 1, 1).toISOString().slice(0, 19) + 'Z';
 
   const fields = 'sys_id,opened_at,resolved_at';
   const qs     = `sysparm_fields=${fields}&sysparm_display_value=all&sysparm_limit=1000`;

@@ -1,5 +1,6 @@
 // ── Monthly Review — chart renderers ─────────────────────────────────────────
 import { S } from './report-state.js';
+import { t } from './i18n.js';
 
 const _PRB_STATES = {
   '101': { label: 'New',                 color: '#0d9488' },
@@ -79,7 +80,7 @@ function _fmtMonth(label) {
 }
 
 export function _renderSprintChart(sprints) {
-  if (!sprints.length) return '<div class="report-empty-hint">Sem dados de sprint para o período</div>';
+  if (!sprints.length) return `<div class="report-empty-hint">${t('rpt_chart_no_sprint')}</div>`;
   const W = 600, H = 184;
   const pad = { t: 20, r: 16, b: 20, l: 36 };
   const cW = W - pad.l - pad.r;
@@ -122,14 +123,14 @@ export function _renderSprintChart(sprints) {
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
       ${axes}${rects}${labels}${line}
     </svg>` + _legendHtml([
-    { type: 'rect', color: 'var(--c-blue)',  label: 'Planejado (SP)' },
-    { type: 'rect', color: 'var(--c-green)', label: 'Entregue (SP)' },
-    { type: 'line', color: '#f59e0b', label: '% Entrega', dashed: true },
+    { type: 'rect', color: 'var(--c-blue)',  get label() { return t('rpt_sp_planned'); } },
+    { type: 'rect', color: 'var(--c-green)', get label() { return t('rpt_sp_delivered'); } },
+    { type: 'line', color: '#f59e0b', get label() { return t('rpt_delivery_rate'); }, dashed: true },
   ]);
 }
 
 export function _renderVolatilityChart(sprints) {
-  if (!sprints.length) return '<div class="report-empty-hint">Sem dados de sprint para o período</div>';
+  if (!sprints.length) return `<div class="report-empty-hint">${t('rpt_chart_no_sprint')}</div>`;
   const W = 560, H = 164;
   const pad = { t: 20, r: 16, b: 20, l: 36 };
   const cW  = W - pad.l - pad.r;
@@ -170,13 +171,13 @@ export function _renderVolatilityChart(sprints) {
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
       ${axes}${bars}${labels}
     </svg>` + _legendHtml([
-    { type: 'rect', color: '#f59e0b', label: 'Adicionadas após início da sprint' },
-    { type: 'rect', color: '#ef4444', label: 'Removidas da sprint' },
+    { type: 'rect', color: '#f59e0b', get label() { return t('rpt_volatility_added'); } },
+    { type: 'rect', color: '#ef4444', get label() { return t('rpt_volatility_removed'); } },
   ]);
 }
 
 export function _renderTypeDonut(byType, metricLabel) {
-  const emptyHint = metricLabel === 'Story Points' ? 'Sem Story Points no período' : 'Sem User Stories no período';
+  const emptyHint = metricLabel === 'Story Points' ? t('rpt_chart_no_sp') : t('rpt_chart_no_us');
   if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
   if (!total) return `<div class="report-empty-hint">${emptyHint}</div>`;
@@ -221,7 +222,7 @@ export function _renderTypeDonut(byType, metricLabel) {
 // items: [{ type: string, count: number, color?: string }]
 export function _donutChart(items, centerLabel) {
   const total = items.reduce((s, i) => s + i.count, 0);
-  if (!total) return `<div class="report-empty-hint">Sem dados</div>`;
+  if (!total) return `<div class="report-empty-hint">${t('rpt_chart_no_data')}</div>`;
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
   const r = 62, cx = 80, cy = 78;
   const circ = 2 * Math.PI * r;
@@ -258,7 +259,7 @@ export function _donutChart(items, centerLabel) {
 }
 
 export function _renderTypeBar(byType, barColor, metricLabel, size) {
-  const emptyHint = metricLabel === 'Story Points' ? 'Sem Story Points no período' : 'Sem User Stories no período';
+  const emptyHint = metricLabel === 'Story Points' ? t('rpt_chart_no_sp') : t('rpt_chart_no_us');
   if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
   if (!total) return `<div class="report-empty-hint">${emptyHint}</div>`;
@@ -310,7 +311,7 @@ export function _renderTypeBar(byType, barColor, metricLabel, size) {
 }
 
 export function _renderTypeBarVertical(byType, barColor, metricLabel, size) {
-  const emptyHint = metricLabel === 'Story Points' ? 'Sem Story Points no período' : 'Sem User Stories no período';
+  const emptyHint = metricLabel === 'Story Points' ? t('rpt_chart_no_sp') : t('rpt_chart_no_us');
   if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
   if (!total) return `<div class="report-empty-hint">${emptyHint}</div>`;
@@ -367,18 +368,18 @@ export function _renderIncPriorityDonut(inc) {
   const p3     = inc?.p3    || 0;
   const outros = Math.max(0, (inc?.total || 0) - p1 - p2 - p3);
   const items  = [
-    { type: 'P1 — Critico', count: p1,     color: '#ef4444' },
-    { type: 'P2 — Alto',    count: p2,     color: '#f97316' },
-    { type: 'P3 — Medio',   count: p3,     color: '#eab308' },
-    ...(outros > 0 ? [{ type: 'Outros', count: outros, color: '#6b7280' }] : []),
+    { get type() { return t('rpt_priority_p1'); }, count: p1,     color: '#ef4444' },
+    { get type() { return t('rpt_priority_p2'); }, count: p2,     color: '#f97316' },
+    { get type() { return t('rpt_priority_p3'); }, count: p3,     color: '#eab308' },
+    ...(outros > 0 ? [{ get type() { return t('rpt_others'); }, count: outros, color: '#6b7280' }] : []),
   ].filter(item => item.count > 0);
-  if (!items.length) return '<div class="report-empty-hint">Sem incidentes no periodo</div>';
+  if (!items.length) return `<div class="report-empty-hint">${t('rpt_chart_no_incidents')}</div>`;
   return _donutChart(items, 'Incidentes');
 }
 
 export function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
   const data = (monthly || []).slice(-months);
-  if (!data.length) return '<div class="report-empty-hint">Sem dados de incidentes para o período</div>';
+  if (!data.length) return `<div class="report-empty-hint">${t('rpt_chart_no_inc_data')}</div>`;
 
   const W = 600, H = 214;
   const pad = { t: 20, r: 20, b: 20, l: 44 };
@@ -463,10 +464,10 @@ export function _renderIncidentsVolumeChart(monthly, months, target, selectedMon
     <line x1="${pad.l}" y1="${pad.t + cH}" x2="${W - pad.r}" y2="${pad.t + cH}" stroke="var(--bg-border)" stroke-width="1"/>`;
 
   const legendItems = [
-    { type: 'rect', color: '#93c5fd', label: 'Abertos' },
-    { type: 'rect', color: '#34d399', label: 'Fechados' },
-    { type: 'rect', color: '#fde68a', label: 'Cancelados' },
-    { type: 'line', color: '#f97316', label: 'Backlog', dashed: true, dot: true },
+    { type: 'rect', color: '#93c5fd', get label() { return t('rpt_legend_opened'); } },
+    { type: 'rect', color: '#34d399', get label() { return t('rpt_legend_closed'); } },
+    { type: 'rect', color: '#fde68a', get label() { return t('rpt_legend_cancelled'); } },
+    { type: 'line', color: '#f97316', get label() { return t('rpt_legend_backlog'); }, dashed: true, dot: true },
     ...(target > 0 ? [{ type: 'line', color: '#ef4444', label: `Target (${target})`, dashed: true }] : []),
   ];
 
@@ -479,7 +480,7 @@ export function _renderIncidentsVolumeChart(monthly, months, target, selectedMon
 
 export function _renderIncidentSystemBars(bySystem, reportMonth, groupby) {
   const all = bySystem || [];
-  if (!all.length) return '<div class="report-empty-hint">Sem dados de IC para o período</div>';
+  if (!all.length) return `<div class="report-empty-hint">${t('rpt_chart_no_ic')}</div>`;
   let items;
   const cutoff = S.heatmapTopN > 0 ? S.heatmapTopN : Infinity;
   if (all.length <= cutoff) {
@@ -562,11 +563,11 @@ export function _renderIncidentSystemBars(bySystem, reportMonth, groupby) {
   ]);
 }
 
-export function _renderIncidentHeatmap(bySystemMonthly, monthly, colLabel, groupby) {
+export function _renderIncidentHeatmap(bySystemMonthly, monthly, colLabel, groupby, months) {
   const allMonths = monthly || [];
-  const months = allMonths.slice(-S.incidentMonths);
+  const sliced = allMonths.slice(-(months || S.incidentMonths));
   const allSystems = bySystemMonthly || [];
-  if (!allSystems.length || !months.length) return '<div class="report-empty-hint">Sem dados para o período</div>';
+  if (!allSystems.length || !sliced.length) return `<div class="report-empty-hint">${t('rpt_chart_no_heatmap')}</div>`;
   let items;
   const cutoffH = S.heatmapTopN > 0 ? S.heatmapTopN : Infinity;
   if (allSystems.length <= cutoffH) {
@@ -581,8 +582,8 @@ export function _renderIncidentHeatmap(bySystemMonthly, monthly, colLabel, group
   }
 
   const histLen   = (items[0]?.monthly || []).length;
-  const monthStart = Math.max(0, histLen - months.length);
-  const autoMax   = Math.max(...items.flatMap(s => months.map((_, i) => s.monthly[monthStart + i] || 0)), 1);
+  const monthStart = Math.max(0, histLen - sliced.length);
+  const autoMax   = Math.max(...items.flatMap(s => sliced.map((_, i) => s.monthly[monthStart + i] || 0)), 1);
   const maxCount  = S.heatmapMax > 0 ? S.heatmapMax : autoMax;
 
   const heatBg = cnt => {
@@ -594,7 +595,7 @@ export function _renderIncidentHeatmap(bySystemMonthly, monthly, colLabel, group
     return 'rgba(239,68,68,0.65)';
   };
 
-  const monthLabels = months.map(m => _fmtMonth(m.label));
+  const monthLabels = sliced.map(m => _fmtMonth(m.label));
 
   const th = 'padding:4px 8px;font-size:9px;font-weight:600;color:var(--text-faint);text-align:center;border-bottom:1px solid var(--bg-border)';
   const td = 'padding:4px 6px;font-size:10px;text-align:center;border:1px solid var(--bg-border)';
@@ -602,7 +603,7 @@ export function _renderIncidentHeatmap(bySystemMonthly, monthly, colLabel, group
 
   const headerCells = monthLabels.map(l => `<th style="${th}">${_esc(l)}</th>`).join('');
   const rows = items.map(s => {
-    const cells = months.map((m, i) => {
+    const cells = sliced.map((m, i) => {
       const cnt = s.monthly[monthStart + i] || 0;
       const fv = s.rawValue || s.name;
       const clickable = cnt > 0 && s.name !== 'Outros' && groupby
@@ -640,13 +641,13 @@ function _computeAgingBuckets(items, thresholds) {
 }
 
 export function _renderUsAgingBuckets(usAging) {
-  if (!usAging) return '<div class="report-empty-hint">Sem dados — clique em ⚙ para configurar o estado</div>';
-  if (!usAging.total) return '<div class="report-empty-hint">Sem US no estado configurado</div>';
+  if (!usAging) return `<div class="report-empty-hint">${t('rpt_aging_no_data')}</div>`;
+  if (!usAging.total) return `<div class="report-empty-hint">${t('rpt_aging_no_us_state')}</div>`;
   // Use list for configurable thresholds; fall back to pre-computed buckets in old cache entries
   const buckets = usAging.list?.length
     ? _computeAgingBuckets(usAging.list, S.agingBuckets)
     : (usAging.buckets || []);
-  if (!buckets.length || !buckets.some(b => b.count > 0)) return '<div class="report-empty-hint">Sem US no estado configurado</div>';
+  if (!buckets.length || !buckets.some(b => b.count > 0)) return `<div class="report-empty-hint">${t('rpt_aging_no_us_state')}</div>`;
 
   const COLORS  = ['#0d9488', '#3b82f6', '#f59e0b', '#f97316', '#ef4444'];
   const maxCount = Math.max(...buckets.map(b => b.count), 1);
@@ -691,9 +692,9 @@ export function _renderUsAgingBuckets(usAging) {
 }
 
 export function _renderUsTop10(usAging) {
-  if (!usAging) return '<div class="report-empty-hint">Sem dados — clique em ⚙ para configurar o estado</div>';
+  if (!usAging) return `<div class="report-empty-hint">${t('rpt_aging_no_data')}</div>`;
   const list = (usAging.list || usAging.top10 || []).slice(0, 10);
-  if (!list.length) return '<div class="report-empty-hint">Nenhuma US encontrada</div>';
+  if (!list.length) return `<div class="report-empty-hint">${t('rpt_aging_no_us_found')}</div>`;
 
   const maxDays = Math.max(...list.map(u => u.agingDays || 0), 1);
 
@@ -735,7 +736,7 @@ export function _renderIncidentLocationChart(byLocationMonthly, monthly, months)
   const allMonths = monthly || [];
   const slicedM   = allMonths.slice(-months);
   if (!slicedM.length || !byLocationMonthly || !byLocationMonthly.length) {
-    return '<div class="report-empty-hint">Sem dados de localização para o período</div>';
+    return `<div class="report-empty-hint">${t('rpt_chart_no_location')}</div>`;
   }
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
@@ -845,8 +846,10 @@ export function _renderPrbStatusDonut(list) {
   return _donutChart(items, 'PRBs');
 }
 
-export function _renderPrbEvolutionChart(monthly) {
-  if (!monthly || monthly.length === 0) return '<div class="report-empty-row">No data</div>';
+export function _renderPrbEvolutionChart(monthly, months) {
+  const data = months ? (monthly || []).slice(-months) : (monthly || []);
+  if (!data.length) return '<div class="report-empty-row">No data</div>';
+  monthly = data;
   const W = 600, H = 184;
   const pad = { t: 30, r: 56, b: 20, l: 44 };
   const chartW = W - pad.l - pad.r;
@@ -899,23 +902,24 @@ export function _renderPrbEvolutionChart(monthly) {
     <polyline points="${accPts.map(p => p.join(',')).join(' ')}" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,3"/>
     ${accDots}
   </svg>` + _legendHtml([
-    { type: 'rect', color: '#6366f1', label: 'Abertos' },
-    { type: 'rect', color: '#a5b4fc', label: 'Resolvidos' },
-    { type: 'line', color: '#ef4444', label: 'Backlog', dashed: true, dot: true },
+    { type: 'rect', color: '#6366f1', get label() { return t('rpt_legend_opened'); } },
+    { type: 'rect', color: '#a5b4fc', get label() { return t('rpt_legend_resolved'); } },
+    { type: 'line', color: '#ef4444', get label() { return t('rpt_legend_backlog'); }, dashed: true, dot: true },
   ]);
 }
 
-export function _renderPrbAgingChart(list) {
+export function _renderPrbAgingChart(list, buckets) {
   if (!list || list.length === 0) return '<div class="report-empty-row">No PRBs</div>';
 
   const STATE_ORDER = ['101','102','103','104','106','107'];
 
+  const [t1, t2, t3, t4] = (Array.isArray(buckets) && buckets.length === 4) ? buckets : [30, 60, 90, 180];
   const BUCKETS = [
-    { label: '≤30d',    test: d => d <= 30 },
-    { label: '31–60d',  test: d => d > 30  && d <= 60 },
-    { label: '61–90d',  test: d => d > 60  && d <= 90 },
-    { label: '91–180d', test: d => d > 90  && d <= 180 },
-    { label: '>180d',   test: d => d > 180 },
+    { label: `≤${t1}d`,           test: d => d <= t1 },
+    { label: `${t1+1}–${t2}d`,    test: d => d > t1 && d <= t2 },
+    { label: `${t2+1}–${t3}d`,    test: d => d > t2 && d <= t3 },
+    { label: `${t3+1}–${t4}d`,    test: d => d > t3 && d <= t4 },
+    { label: `>${t4}d`,            test: d => d > t4 },
   ];
 
   const counts = BUCKETS.map(() => ({}));
@@ -1021,9 +1025,9 @@ export function _renderPrbOldestList(list) {
   </table>`;
 }
 
-export function _renderIncPriorityTrend(monthly) {
-  const data = (monthly || []).slice(-S.incidentMonths);
-  if (!data.length) return '<div class="report-empty-hint">Sem dados para o período</div>';
+export function _renderIncPriorityTrend(monthly, months) {
+  const data = (monthly || []).slice(-(months || S.incidentMonths));
+  if (!data.length) return `<div class="report-empty-hint">${t('rpt_chart_no_heatmap')}</div>`;
 
   const W = 600, padT = 24, padB = 30, padL = 32, padR = 16;
   const cH = 150;
@@ -1036,9 +1040,9 @@ export function _renderIncPriorityTrend(monthly) {
   const yOf  = v => padT + cH - (v / maxV) * cH;
 
   const LINES = [
-    { key: 'p1', color: '#ef4444', label: 'P1 — Crítico' },
-    { key: 'p2', color: '#f97316', label: 'P2 — Alto' },
-    { key: 'p3', color: '#eab308', label: 'P3 — Médio' },
+    { key: 'p1', color: '#ef4444', get label() { return t('rpt_priority_p1'); } },
+    { key: 'p2', color: '#f97316', get label() { return t('rpt_priority_p2'); } },
+    { key: 'p3', color: '#eab308', get label() { return t('rpt_priority_p3'); } },
   ];
 
   const grid = Array.from({ length: 4 }, (_, i) => {
@@ -1069,18 +1073,18 @@ export function _renderIncPriorityTrend(monthly) {
 }
 
 export function _renderIncSlaBars(slaByPriority) {
-  if (!slaByPriority) return '<div class="report-empty-hint">Sem dados de SLA para o período</div>';
+  if (!slaByPriority) return `<div class="report-empty-hint">${t('rpt_sla_no_data')}</div>`;
   const PRIOS = [
-    { key: 'p1', label: 'P1 — Crítico', color: '#ef4444', target: S.slaTargets.p1 ?? 95 },
-    { key: 'p2', label: 'P2 — Alto',    color: '#f97316', target: S.slaTargets.p2 ?? 90 },
-    { key: 'p3', label: 'P3 — Médio',   color: '#eab308', target: S.slaTargets.p3 ?? 85 },
+    { key: 'p1', get label() { return t('rpt_priority_p1'); }, color: '#ef4444', target: S.slaTargets.p1 ?? 95 },
+    { key: 'p2', get label() { return t('rpt_priority_p2'); }, color: '#f97316', target: S.slaTargets.p2 ?? 90 },
+    { key: 'p3', get label() { return t('rpt_priority_p3'); }, color: '#eab308', target: S.slaTargets.p3 ?? 85 },
   ];
   const rows = PRIOS.map(p => {
     const d = slaByPriority[p.key];
     if (!d || d.pct === null) {
       return `<div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:12px;color:var(--text-muted)">${_esc(p.label)}</span>
-        <span style="font-size:11px;color:var(--text-faint)">Sem dados</span>
+        <span style="font-size:11px;color:var(--text-faint)">${t('rpt_chart_no_data')}</span>
       </div>`;
     }
     const pct  = d.pct;

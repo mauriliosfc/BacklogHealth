@@ -370,11 +370,13 @@ async function fetchSnReport(displayName, period) {
   // If user provided a display name, use dot-notation: assignment_group.name=
   const grpFilter = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
 
-  const start = period.start + 'T00:00:00Z';
-  const end   = period.end   + 'T23:59:59Z';
+  const [sy, sm, sd] = period.start.split('-').map(Number);
+  const [ey, em, ed] = period.end.split('-').map(Number);
+  const start = new Date(sy, sm - 1, sd, 0, 0, 0).toISOString().slice(0, 19) + 'Z';
+  const end   = new Date(ey, em - 1, ed, 23, 59, 59).toISOString().slice(0, 19) + 'Z';
 
   const incQuery              = `${grpFilter}^opened_at>=${start}^opened_at<=${end}`;
-  const incClosedQuery        = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}^NQ${grpFilter}^closed_at>=${start}^closed_at<=${end}^resolved_atISEMPTY`;
+  const incClosedQuery        = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}`;
   // Mês atual → backlog ativo agora (active=true exclui cancelados e encerrados).
   // Mês passado → ponto-no-tempo (3 partes via ^NQ):
   //   1. Abertos ainda hoje e não cancelados (resolved_atISEMPTY^state!=8)
@@ -425,7 +427,7 @@ async function fetchSnReport(displayName, period) {
   if (incClosedInPeriod.length > 0) {
     let validCount = 0;
     const total = incClosedInPeriod.reduce((s, i) => {
-      const closedAt = i.resolved_at || i.closed_at;
+      const closedAt = i.resolved_at;
       if (i.opened_at && closedAt) {
         validCount++;
         return s + Math.max(0, (new Date(closedAt) - new Date(i.opened_at)) / 86400000);
@@ -491,7 +493,7 @@ async function fetchSnReport(displayName, period) {
         const hs = new Date(hy, hm - 1, 1).toISOString().slice(0, 19) + 'Z';
         const he = new Date(hy, hm, 0, 23, 59, 59).toISOString().slice(0, 19) + 'Z';
         const incOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
-        const incClosedQ    = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}^NQ${grpFilter}^closed_at>=${hs}^closed_at<=${he}^resolved_atISEMPTY^state!=8`;
+        const incClosedQ    = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
         const incCancelledQ = `${grpFilter}^state=8^closed_at>=${hs}^closed_at<=${he}`;
         const prbOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
         const prbResolvedQ  = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
@@ -785,7 +787,7 @@ async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', fi
   if (mode === 'opened') {
     query = `${grpFilter}^opened_at>=${start}^opened_at<=${end}${fieldFrag}`;
   } else if (mode === 'closed') {
-    query = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}${fieldFrag}^NQ${grpFilter}^closed_at>=${start}^closed_at<=${end}^resolved_atISEMPTY^state!=8${fieldFrag}`;
+    query = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}${fieldFrag}`;
   } else if (mode === 'cancelled') {
     query = `${grpFilter}^state=8^closed_at>=${start}^closed_at<=${end}${fieldFrag}`;
   } else {

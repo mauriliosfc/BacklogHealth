@@ -262,6 +262,9 @@ npm run test:coverage   # exibe cobertura por arquivo
 | 165 | Modais com `top: 36px; left: var(--sidebar-w)` no Electron | Botões nativos do Windows são renderizados acima de qualquer CSS z-index — modal começa abaixo da barra; sidebar-collapsed usa `left: var(--sidebar-w-col)` |
 | 166 | Padrão de view: cada `open*` esconde todos os siblings | `openDeliveryPlan` esconde `#tc-view`; `openTeamCapacity` esconde `#dp-view`; `showDashboardView` esconde ambos — manter consistente ao adicionar novas views |
 | 167 | `electron/updater.js` com native `https` | Sem `electron-updater` (exige code signing); GitHub API retorna nomes de asset com pontos (`Backlog.Health.Setup.x.x.x.exe`) — filtro `/setup/i.test(a.name)` continua funcionando |
+| 168 | Queries SN: datas com `new Date(y, m-1, d, h, min, sec).toISOString()` | `"YYYY-MM-DDT00:00:00Z"` é UTC — no BRT (UTC-3) corresponde às 21h do dia anterior; divergência causava contagens diferentes das exibidas no SN e nas extrações Excel |
+| 169 | Encerramento de incidente = apenas `resolved_at`; `closed_at` ignorado em todos os cálculos | Double-count ao usar `OR closed_at`; `closed_at` sem `resolved_at` não representa trabalho concluído — regra aplicada nos 5 locais onde isso é calculado (`incClosedQuery`, `incClosedQ` do histórico, `incAvgResolutionDays`, `fetchSnIncidentBacklog` mode='closed', `calcMttrByPriority`) |
+| 170 | Meses por gráfico em `chart.months` (não global) em `incidentCharts`/`prbCharts` | Global compartilhado altera todos os gráficos ao mudar um; `chart.months` no objeto com fallback para `S.incidentMonths`/`S.prbMonths`; servidor recebe `Math.max(...todos)` — toda nova chart que suportar configuração de meses deve seguir esse padrão |
 
 ---
 

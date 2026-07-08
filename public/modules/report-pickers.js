@@ -2,6 +2,7 @@
 // Callbacks injetados por report.js em initPickerCallbacks() para evitar dep circular.
 import { S } from './report-state.js';
 import { _esc } from './report-charts.js';
+import { t } from './i18n.js';
 
 let _onSave     = null;
 let _onRerender = null;
@@ -16,31 +17,31 @@ export function initPickerCallbacks({ saveConfig, rerender, load }) {
 // ── Autocomplete helpers ──────────────────────────────────────────────────────
 
 const _INC_GROUPBY_FIELDS = [
-  { key: 'cmdb_ci.name',          label: 'IC Afetado (CI)' },
-  { key: 'u_additional_res_code', label: 'Resolution Code' },
-  { key: 'assignment_group',      label: 'Grupo de Atendimento' },
-  { key: 'assigned_to',           label: 'Responsavel' },
-  { key: 'priority',              label: 'Prioridade' },
-  { key: 'impact',                label: 'Impacto' },
-  { key: 'urgency',               label: 'Urgencia' },
-  { key: 'state',                 label: 'Estado' },
-  { key: 'category',              label: 'Categoria' },
-  { key: 'subcategory',           label: 'Subcategoria' },
-  { key: 'location.name',         label: 'Localizacao' },
-  { key: 'close_code',            label: 'Codigo de Fechamento' },
-  { key: 'contact_type',          label: 'Canal de Abertura' },
+  { key: 'cmdb_ci.name',          get label() { return t('rpt_groupby_ic'); } },
+  { key: 'u_additional_res_code', get label() { return t('rpt_groupby_res_code'); } },
+  { key: 'assignment_group',      get label() { return t('rpt_groupby_group'); } },
+  { key: 'assigned_to',           get label() { return t('rpt_groupby_assignee'); } },
+  { key: 'priority',              get label() { return t('rpt_groupby_priority'); } },
+  { key: 'impact',                get label() { return t('rpt_groupby_impact'); } },
+  { key: 'urgency',               get label() { return t('rpt_groupby_urgency'); } },
+  { key: 'state',                 get label() { return t('rpt_groupby_state'); } },
+  { key: 'category',              get label() { return t('rpt_groupby_category'); } },
+  { key: 'subcategory',           get label() { return t('rpt_groupby_subcategory'); } },
+  { key: 'location.name',         get label() { return t('rpt_groupby_location'); } },
+  { key: 'close_code',            get label() { return t('rpt_groupby_close_code'); } },
+  { key: 'contact_type',          get label() { return t('rpt_groupby_contact_type'); } },
 ];
 
 const _PRB_GROUPBY_FIELDS = [
-  { key: 'priority',         label: 'Prioridade' },
-  { key: 'impact',           label: 'Impacto' },
-  { key: 'urgency',          label: 'Urgencia' },
-  { key: 'category',         label: 'Categoria' },
-  { key: 'state',            label: 'Estado' },
-  { key: 'assignment_group', label: 'Grupo de Atendimento' },
-  { key: 'assigned_to',      label: 'Responsavel' },
-  { key: 'known_error',      label: 'Known Error' },
-  { key: 'rca_complete',     label: 'RCA Completo' },
+  { key: 'priority',         get label() { return t('rpt_groupby_priority'); } },
+  { key: 'impact',           get label() { return t('rpt_groupby_impact'); } },
+  { key: 'urgency',          get label() { return t('rpt_groupby_urgency'); } },
+  { key: 'category',         get label() { return t('rpt_groupby_category'); } },
+  { key: 'state',            get label() { return t('rpt_groupby_state'); } },
+  { key: 'assignment_group', get label() { return t('rpt_groupby_group'); } },
+  { key: 'assigned_to',      get label() { return t('rpt_groupby_assignee'); } },
+  { key: 'known_error',      get label() { return t('rpt_groupby_known_error'); } },
+  { key: 'rca_complete',     get label() { return t('rpt_groupby_rca'); } },
 ];
 
 function _acHtml(inputId, hiddenId, fields, currentKey) {
@@ -49,7 +50,7 @@ function _acHtml(inputId, hiddenId, fields, currentKey) {
     `<div class="report-ac-opt" data-key="${_esc(f.key)}" data-label="${_esc(f.label)}">${_esc(f.label)}<span class="report-ac-key">${_esc(f.key)}</span></div>`
   ).join('');
   return `<div class="report-ac-wrap">
-    <input type="text" id="${inputId}" class="report-field-sel report-ac-input" value="${_esc(cur?.label || '')}" placeholder="Buscar campo..." autocomplete="off">
+    <input type="text" id="${inputId}" class="report-field-sel report-ac-input" value="${_esc(cur?.label || '')}" placeholder="${t('rpt_search_field')}" autocomplete="off">
     <input type="hidden" id="${hiddenId}" value="${_esc(currentKey || '')}">
     <div class="report-ac-dropdown" id="ac-drop-${inputId}">${opts}</div>
   </div>`;
@@ -121,7 +122,7 @@ function _openPicker({ title, bodyHtml, applyLabel = 'Aplicar', onApply }) {
     <div class="report-field-picker-title">${title}</div>
     ${bodyHtml}
     <div class="report-field-picker-actions">
-      <button class="report-picker-btn-cancel" id="report-picker-cancel">Cancelar</button>
+      <button class="report-picker-btn-cancel" id="report-picker-cancel">${t('rpt_btn_cancel')}</button>
       <button class="report-picker-btn-apply"  id="report-picker-apply">${applyLabel}</button>
     </div>`;
   document.body.appendChild(picker);
@@ -151,61 +152,61 @@ export function reportOpenFieldPicker(idx) {
   const isBarStyle      = isDonut && (currentStyle === 'bar' || currentStyle === 'bar-vertical');
 
   const sizeOpts = [
-    { val: 'sm', label: '3 por linha' },
-    { val: 'md', label: '2 por linha' },
-    { val: 'lg', label: 'Largura total' },
+    { val: 'sm', get label() { return t('rpt_size_3col'); } },
+    { val: 'md', get label() { return t('rpt_size_2col'); } },
+    { val: 'lg', get label() { return t('rpt_size_full'); } },
   ].map(o => `<button class="report-size-opt${currentSize === o.val ? ' active' : ''}" data-size="${o.val}">${o.label}</button>`).join('');
 
   const typeSection = !isEdit ? `
-    <div class="report-field-picker-label">Tipo de gráfico</div>
+    <div class="report-field-picker-label">${t('rpt_label_chart_type')}</div>
     <select id="report-chart-type-sel" class="report-field-sel">
-      <option value="donut">Agrupamento por campo</option>
-      <option value="incidents">Volume de Incidentes</option>
-      <option value="sprint">SP Planejados vs Entregues</option>
-      <option value="volatility">Volatilidade do Backlog</option>
+      <option value="donut">${t('rpt_inc_type_groupby')}</option>
+      <option value="incidents">${t('rpt_type_incidents')}</option>
+      <option value="sprint">${t('rpt_sp_planned_delivered')}</option>
+      <option value="volatility">${t('rpt_volatility_backlog')}</option>
     </select>` : '';
 
   const fieldSection = `
     <div id="report-field-label"${!isDonut ? ' style="display:none"' : ''}>
-      <div class="report-field-picker-label">Campo de agrupamento</div>
+      <div class="report-field-picker-label">${t('rpt_label_groupby_field')}</div>
     </div>
     <div id="report-field-picker-body" class="report-field-picker-body"${!isDonut ? ' style="display:none"' : ''}>
-      ${isDonut ? '<div class="report-field-picker-loading">Carregando campos...</div>' : ''}
+      ${isDonut ? `<div class="report-field-picker-loading">${t('rpt_loading_fields')}</div>` : ''}
     </div>`;
 
   const styleOpts = [
-    { val: 'donut',        label: 'Donut' },
-    { val: 'bar',          label: 'Barras' },
-    { val: 'bar-vertical', label: 'Barras Verticais' },
+    { val: 'donut',        get label() { return t('rpt_style_donut'); } },
+    { val: 'bar',          get label() { return t('rpt_style_bars'); } },
+    { val: 'bar-vertical', get label() { return t('rpt_style_bars_v'); } },
   ].map(o => `<button class="report-size-opt${currentStyle === o.val ? ' active' : ''}" data-style="${o.val}">${o.label}</button>`).join('');
   const styleSection = `
     <div id="report-style-label"${!isDonut ? ' style="display:none"' : ''}>
-      <div class="report-field-picker-label">Estilo visual</div>
+      <div class="report-field-picker-label">${t('rpt_label_visual_style')}</div>
     </div>
     <div class="report-size-group" id="report-style-group"${!isDonut ? ' style="display:none"' : ''}>${styleOpts}</div>`;
 
   const monthsSection = `
     <div id="report-months-section"${!isIncidents ? ' style="display:none"' : ''}>
-      <div class="report-field-picker-label">Meses de hist&oacute;rico</div>
+      <div class="report-field-picker-label">${t('rpt_label_history_months')}</div>
       <input type="number" id="report-inc-months" class="report-inc-months-input" min="1" max="12" value="${currentMonths}">
     </div>`;
 
   const metricOpts = [
-    { val: 'count', label: 'Qtd. Histórias' },
-    { val: 'pts',   label: 'Story Points' },
+    { val: 'count', get label() { return t('rpt_metric_count'); } },
+    { val: 'pts',   get label() { return t('rpt_metric_pts'); } },
   ].map(o => `<button class="report-size-opt${currentCountBy === o.val ? ' active' : ''}" data-countby="${o.val}">${o.label}</button>`).join('');
   const metricSection = `
     <div id="report-metric-label"${!isDonut ? ' style="display:none"' : ''}>
-      <div class="report-field-picker-label">Métrica</div>
+      <div class="report-field-picker-label">${t('rpt_label_metric')}</div>
     </div>
     <div class="report-size-group" id="report-metric-group"${!isDonut ? ' style="display:none"' : ''}>${metricOpts}</div>`;
 
   const barColorSection = `
     <div id="report-bar-color-section"${!isBarStyle ? ' style="display:none"' : ''}>
-      <div class="report-field-picker-label">Cor das barras</div>
+      <div class="report-field-picker-label">${t('rpt_label_bar_color')}</div>
       <select id="report-bar-color-mode" class="report-field-sel">
-        <option value="multi"${!currentBarColor ? ' selected' : ''}>Multicolor</option>
-        <option value="single"${currentBarColor ? ' selected' : ''}>Cor única</option>
+        <option value="multi"${!currentBarColor ? ' selected' : ''}>${t('rpt_color_multi')}</option>
+        <option value="single"${currentBarColor ? ' selected' : ''}>${t('rpt_color_single')}</option>
       </select>
       <div id="report-bar-color-picker"${!currentBarColor ? ' style="display:none"' : ''}>
         <input type="color" id="report-bar-color-input" value="${currentBarColor || '#8b5cf6'}"
@@ -214,8 +215,8 @@ export function reportOpenFieldPicker(idx) {
     </div>`;
 
   const picker = _openPicker({
-    title:       isEdit ? 'Configurar gráfico' : 'Novo gráfico',
-    applyLabel:  isEdit ? 'Aplicar' : 'Adicionar',
+    title:       isEdit ? t('rpt_title_configure_chart') : t('rpt_title_new_chart'),
+    applyLabel:  isEdit ? t('rpt_btn_apply') : t('rpt_btn_add'),
     bodyHtml: `
       ${typeSection}
       ${fieldSection}
@@ -223,7 +224,7 @@ export function reportOpenFieldPicker(idx) {
       ${styleSection}
       ${barColorSection}
       ${monthsSection}
-      <div class="report-field-picker-label">Tamanho</div>
+      <div class="report-field-picker-label">${t('rpt_label_size')}</div>
       <div class="report-size-group" id="report-size-group-el">${sizeOpts}</div>`,
     onApply: _applyChartPicker,
   });
@@ -258,7 +259,7 @@ export function reportOpenFieldPicker(idx) {
       })
       .catch(() => {
         const body = document.getElementById('report-field-picker-body');
-        if (body) body.innerHTML = '<div class="report-field-picker-error">Erro ao carregar campos</div>';
+        if (body) body.innerHTML = `<div class="report-field-picker-error">${t('rpt_error_fields')}</div>`;
       });
   }
 
@@ -369,33 +370,34 @@ export function reportOpenIncChartPicker(idx) {
   const currentType  = currentChart?.type || 'inc-volume';
 
   const INC_TYPES = [
-    { val: 'inc-volume',          label: 'Volume Mensal (Abertos e Fechados)' },
-    { val: 'inc-bars',            label: 'Top CIs / Resolution Codes' },
-    { val: 'inc-heatmap',         label: 'Heatmap CI × Mês' },
-    { val: 'inc-location',        label: 'Incidentes por Localização' },
-    { val: 'inc-priority-trend',  label: 'Tendência por Prioridade (P1/P2/P3)' },
-    { val: 'inc-sla-bars',        label: 'Conformidade SLA por Prioridade' },
-    { val: 'inc-priority-donut',  label: 'Distribuição por Prioridade (donut)' },
-    { val: 'inc-groupby',         label: 'Agrupamento por campo' },
+    { val: 'inc-volume',          get label() { return t('rpt_inc_type_volume'); } },
+    { val: 'inc-bars',            get label() { return t('rpt_inc_type_bars'); } },
+    { val: 'inc-heatmap',         get label() { return t('rpt_inc_type_heatmap'); } },
+    { val: 'inc-location',        get label() { return t('rpt_inc_type_location'); } },
+    { val: 'inc-priority-trend',  get label() { return t('rpt_inc_type_priority_trend'); } },
+    { val: 'inc-sla-bars',        get label() { return t('rpt_inc_type_sla_bars'); } },
+    { val: 'inc-priority-donut',  get label() { return t('rpt_inc_type_priority_donut'); } },
+    { val: 'inc-groupby',         get label() { return t('rpt_inc_type_groupby'); } },
   ];
 
   const sizeOpts = [
-    { val: 'sm', label: '3 por linha' },
-    { val: 'md', label: '2 por linha' },
-    { val: 'lg', label: 'Largura total' },
+    { val: 'sm', get label() { return t('rpt_size_3col'); } },
+    { val: 'md', get label() { return t('rpt_size_2col'); } },
+    { val: 'lg', get label() { return t('rpt_size_full'); } },
   ].map(o => `<button class="report-size-opt${currentSize === o.val ? ' active' : ''}" data-size="${o.val}">${o.label}</button>`).join('');
 
   const typeSection = !isEdit
-    ? `<div class="report-field-picker-label">Tipo de gráfico</div>
+    ? `<div class="report-field-picker-label">${t('rpt_label_chart_type')}</div>
        <select id="report-inc-type-sel" class="report-field-sel">
          ${INC_TYPES.map(t => `<option value="${t.val}">${t.label}</option>`).join('')}
        </select>`
-    : `<div class="report-field-picker-label">Gráfico</div>
+    : `<div class="report-field-picker-label">${t('rpt_label_chart')}</div>
        <div style="font-size:13px;color:var(--text-muted);padding:2px 0 8px">${_esc(INC_TYPES.find(t => t.val === currentType)?.label || currentType)}</div>`;
 
   const MONTH_OPTS = [3, 5, 6, 8, 10, 12, 13, 24];
   const LOC_OPTS   = [1, 3, 6];
-  const showVolume  = isEdit && currentType === 'inc-volume';
+  const showVolume  = isEdit && (currentType === 'inc-volume' || currentType === 'inc-priority-trend' || currentType === 'inc-heatmap');
+  const showTarget  = isEdit && currentType === 'inc-volume';
   const showBars    = isEdit && (currentType === 'inc-bars' || currentType === 'inc-heatmap');
   const showHeat    = isEdit && currentType === 'inc-heatmap';
   const showLoc     = isEdit && currentType === 'inc-location';
@@ -406,18 +408,18 @@ export function reportOpenIncChartPicker(idx) {
 
   const specificSection = `
     ${showGroupby ? `
-      <div class="report-field-picker-label">Campo de agrupamento</div>
+      <div class="report-field-picker-label">${t('rpt_label_groupby_field')}</div>
       ${_acHtml('report-inc-groupby-input', 'report-inc-groupby-field', _INC_GROUPBY_FIELDS, currentChart?.ref || 'cmdb_ci.name')}
-      <div class="report-field-picker-label">Estilo visual</div>
+      <div class="report-field-picker-label">${t('rpt_label_visual_style')}</div>
       <div class="report-size-group" id="report-inc-groupby-style">
-        ${[{val:'donut',label:'Donut'},{val:'bar',label:'Barras'},{val:'bar-vertical',label:'Barras Verticais'}]
+        ${[{val:'donut',get label(){return t('rpt_style_donut');}},{val:'bar',get label(){return t('rpt_style_bars');}},{val:'bar-vertical',get label(){return t('rpt_style_bars_v');}}]
           .map(o => `<button class="report-size-opt${curGbStyle === o.val ? ' active' : ''}" data-style="${o.val}">${o.label}</button>`).join('')}
       </div>
       <div id="report-inc-groupby-color-section"${curGbStyle === 'donut' ? ' style="display:none"' : ''}>
-        <div class="report-field-picker-label">Cor das barras</div>
+        <div class="report-field-picker-label">${t('rpt_label_bar_color')}</div>
         <select id="report-inc-groupby-color-mode" class="report-field-sel">
-          <option value="multi"${!curGbColor ? ' selected' : ''}>Multicolor</option>
-          <option value="single"${curGbColor ? ' selected' : ''}>Cor única</option>
+          <option value="multi"${!curGbColor ? ' selected' : ''}>${t('rpt_color_multi')}</option>
+          <option value="single"${curGbColor ? ' selected' : ''}>${t('rpt_color_single')}</option>
         </select>
         <div id="report-inc-groupby-color-picker"${!curGbColor ? ' style="display:none"' : ''}>
           <input type="color" id="report-inc-groupby-color-input" value="${curGbColor || '#3b82f6'}"
@@ -426,24 +428,24 @@ export function reportOpenIncChartPicker(idx) {
       </div>
     ` : ''}
     ${showSla ? `
-      <div class="report-field-picker-label">Metas de conformidade</div>
+      <div class="report-field-picker-label">${t('rpt_label_sla_targets')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:4px">
         <div>
-          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P1 — Crítico</label>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p1')}</label>
           <div style="display:flex;align-items:center;gap:4px">
             <input type="number" id="report-sla-p1" min="0" max="100" value="${S.slaTargets.p1 ?? 95}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
             <span style="font-size:12px;color:var(--text-faint)">%</span>
           </div>
         </div>
         <div>
-          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P2 — Alto</label>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p2')}</label>
           <div style="display:flex;align-items:center;gap:4px">
             <input type="number" id="report-sla-p2" min="0" max="100" value="${S.slaTargets.p2 ?? 90}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
             <span style="font-size:12px;color:var(--text-faint)">%</span>
           </div>
         </div>
         <div>
-          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P3 — Médio</label>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p3')}</label>
           <div style="display:flex;align-items:center;gap:4px">
             <input type="number" id="report-sla-p3" min="0" max="100" value="${S.slaTargets.p3 ?? 85}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
             <span style="font-size:12px;color:var(--text-faint)">%</span>
@@ -452,38 +454,40 @@ export function reportOpenIncChartPicker(idx) {
       </div>
     ` : ''}
     ${showVolume ? `
-      <div class="report-field-picker-label">Meses de histórico</div>
+      <div class="report-field-picker-label">${t('rpt_label_history_months')}</div>
       <div class="report-size-group" style="flex-wrap:wrap" id="report-inc-p-months">
-        ${MONTH_OPTS.map(n => `<button class="report-size-opt${n === S.incidentMonths ? ' active' : ''}" data-months="${n}">${n} meses</button>`).join('')}
+        ${MONTH_OPTS.map(n => `<button class="report-size-opt${n === (currentChart?.months || S.incidentMonths) ? ' active' : ''}" data-months="${n}">${n} ${t('rpt_months')}</button>`).join('')}
       </div>
-      <div class="report-field-picker-label" style="margin-top:8px">Target mensal</div>
-      <input type="number" id="report-inc-p-target" class="report-inc-months-input" min="0" max="9999" value="${S.incidentTarget}">
+      ${showTarget ? `
+        <div class="report-field-picker-label" style="margin-top:8px">${t('rpt_label_monthly_target')}</div>
+        <input type="number" id="report-inc-p-target" class="report-inc-months-input" min="0" max="9999" value="${S.incidentTarget}">
+      ` : ''}
     ` : ''}
     ${showBars ? `
-      <div class="report-field-picker-label">Agrupamento</div>
+      <div class="report-field-picker-label">${t('rpt_label_grouping')}</div>
       <select id="report-inc-p-groupby" class="report-field-sel">
         <option value="cmdb_ci"${S.incidentGroupBy === 'cmdb_ci' ? ' selected' : ''}>IC Afetado (CMDB CI)</option>
         <option value="resolution_code"${S.incidentGroupBy === 'resolution_code' ? ' selected' : ''}>Resolution Code</option>
       </select>
     ` : ''}
     ${showHeat ? `
-      <div class="report-field-picker-label" style="margin-top:8px">Escala máxima do heatmap</div>
+      <div class="report-field-picker-label" style="margin-top:8px">${t('rpt_label_heatmap_max')}</div>
       <input type="number" id="report-inc-p-heatmax" class="report-inc-months-input" min="0" max="999" value="${S.heatmapMax}" placeholder="0 = automático">
     ` : ''}
     ${showLoc ? `
-      <div class="report-field-picker-label">Meses de histórico</div>
+      <div class="report-field-picker-label">${t('rpt_label_months_disp')}</div>
       <div class="report-size-group" id="report-inc-p-locmonths">
-        ${LOC_OPTS.map(n => `<button class="report-size-opt${n === S.locationMonths ? ' active' : ''}" data-locmonths="${n}">${n} ${n === 1 ? 'mês' : 'meses'}</button>`).join('')}
+        ${LOC_OPTS.map(n => `<button class="report-size-opt${n === S.locationMonths ? ' active' : ''}" data-locmonths="${n}">${n} ${n === 1 ? t('rpt_month') : t('rpt_months')}</button>`).join('')}
       </div>
     ` : ''}`;
 
   const picker = _openPicker({
-    title:      isEdit ? 'Configurar gráfico' : 'Novo gráfico',
-    applyLabel: isEdit ? 'Aplicar' : 'Adicionar',
+    title:      isEdit ? t('rpt_title_configure_chart') : t('rpt_title_new_chart'),
+    applyLabel: isEdit ? t('rpt_btn_apply') : t('rpt_btn_add'),
     bodyHtml: `
       ${typeSection}
       ${specificSection}
-      <div class="report-field-picker-label">Tamanho</div>
+      <div class="report-field-picker-label">${t('rpt_label_size')}</div>
       <div class="report-size-group" id="report-inc-size-group">${sizeOpts}</div>`,
     onApply: _applyIncChartPicker,
   });
@@ -527,8 +531,13 @@ function _applyIncChartPicker() {
   const newSlaP2     = document.getElementById('report-sla-p2') ? clamp01(document.getElementById('report-sla-p2').value) : null;
   const newSlaP3     = document.getElementById('report-sla-p3') ? clamp01(document.getElementById('report-sla-p3').value) : null;
 
+  const clampedMonths = !isNaN(newMonths) ? Math.min(24, Math.max(1, newMonths)) : null;
+
   let needReload = false;
-  if (!isNaN(newMonths)    && newMonths    !== S.incidentMonths)  { S.incidentMonths  = Math.min(24, Math.max(1, newMonths)); needReload = true; }
+  if (clampedMonths !== null) {
+    const curMonths = isEdit ? (S.incidentCharts[S.incPickerIdx]?.months || S.incidentMonths) : S.incidentMonths;
+    if (clampedMonths !== curMonths) needReload = true;
+  }
   if (!isNaN(newTarget))                                          { S.incidentTarget  = Math.max(0, newTarget); }
   if (newGroupBy            && newGroupBy  !== S.incidentGroupBy)  { S.incidentGroupBy = newGroupBy; needReload = true; }
   if (!isNaN(newHeatMax))                                         { S.heatmapMax      = Math.max(0, newHeatMax); }
@@ -545,6 +554,7 @@ function _applyIncChartPicker() {
 
   if (isEdit) {
     const update = { ...S.incidentCharts[S.incPickerIdx], size };
+    if (clampedMonths !== null) update.months = clampedMonths;
     if (isGroupby) {
       if (gbRef)   update.ref        = gbRef;
       if (gbStyle) update.chartStyle = gbStyle;
@@ -552,7 +562,9 @@ function _applyIncChartPicker() {
     }
     S.incidentCharts[S.incPickerIdx] = update;
   } else {
-    S.incidentCharts.push(isGroupby ? { type, size, ref: 'cmdb_ci', chartStyle: 'donut', barColor: '' } : { type, size });
+    const newChart = isGroupby ? { type, size, ref: 'cmdb_ci', chartStyle: 'donut', barColor: '' } : { type, size };
+    if (clampedMonths !== null) newChart.months = clampedMonths;
+    S.incidentCharts.push(newChart);
   }
 
   _onSave();
@@ -570,44 +582,67 @@ export function reportOpenPrbChartPicker(idx) {
   const currentType  = currentChart?.type || 'prb-evolution';
 
   const PRB_TYPES = [
-    { val: 'prb-evolution', label: 'Evolução de PRBs (Abertos · Resolvidos · Backlog)' },
-    { val: 'prb-donut',     label: 'PRBs por Status (donut)' },
-    { val: 'prb-aging',     label: 'Aging do Backlog' },
-    { val: 'prb-oldest',    label: 'Top 10 PRBs mais antigos' },
-    { val: 'prb-groupby',   label: 'Agrupamento por campo' },
+    { val: 'prb-evolution', get label() { return t('rpt_prb_type_evolution'); } },
+    { val: 'prb-donut',     get label() { return t('rpt_prb_type_donut'); } },
+    { val: 'prb-aging',     get label() { return t('rpt_prb_type_aging'); } },
+    { val: 'prb-oldest',    get label() { return t('rpt_prb_type_oldest'); } },
+    { val: 'prb-groupby',   get label() { return t('rpt_prb_type_groupby'); } },
   ];
 
   const sizeOpts = [
-    { val: 'sm', label: '3 por linha' },
-    { val: 'md', label: '2 por linha' },
-    { val: 'lg', label: 'Largura total' },
+    { val: 'sm', get label() { return t('rpt_size_3col'); } },
+    { val: 'md', get label() { return t('rpt_size_2col'); } },
+    { val: 'lg', get label() { return t('rpt_size_full'); } },
   ].map(o => `<button class="report-size-opt${currentSize === o.val ? ' active' : ''}" data-size="${o.val}">${o.label}</button>`).join('');
 
   const typeSection = !isEdit
-    ? `<div class="report-field-picker-label">Tipo de gráfico</div>
+    ? `<div class="report-field-picker-label">${t('rpt_label_chart_type')}</div>
        <select id="report-prb-type-sel" class="report-field-sel">
          ${PRB_TYPES.map(t => `<option value="${t.val}">${t.label}</option>`).join('')}
        </select>`
-    : `<div class="report-field-picker-label">Gráfico</div>
+    : `<div class="report-field-picker-label">${t('rpt_label_chart')}</div>
        <div style="font-size:13px;color:var(--text-muted);padding:2px 0 8px">${_esc(PRB_TYPES.find(t => t.val === currentType)?.label || currentType)}</div>`;
 
-  const showPrbGroupby = isEdit && currentType === 'prb-groupby';
-  const curPgStyle     = currentChart?.chartStyle || 'donut';
-  const curPgColor     = currentChart?.barColor   || '';
+  const showPrbGroupby   = isEdit && currentType === 'prb-groupby';
+  const showPrbEvolution = isEdit && currentType === 'prb-evolution';
+  const showPrbAging     = isEdit && currentType === 'prb-aging';
+  const curPgStyle       = currentChart?.chartStyle || 'donut';
+  const curPgColor       = currentChart?.barColor   || '';
+
+  const MONTH_OPTS = [3, 5, 6, 8, 10, 12, 13, 24];
+
+  const prbEvolutionSection = showPrbEvolution ? `
+    <div class="report-field-picker-label">${t('rpt_label_history_months')}</div>
+    <div class="report-size-group" style="flex-wrap:wrap" id="report-prb-evo-months">
+      ${MONTH_OPTS.map(n => `<button class="report-size-opt${n === (currentChart?.months || S.prbMonths) ? ' active' : ''}" data-months="${n}">${n} ${t('rpt_months')}</button>`).join('')}
+    </div>` : '';
+
+  const prbAgingSection = showPrbAging ? `
+    <div class="report-field-picker-label">${t('rpt_label_aging_buckets')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 1</label><br>
+        <input type="number" id="report-prb-aging-rb0" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.prbAgingBuckets[0]}"></div>
+      <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 2</label><br>
+        <input type="number" id="report-prb-aging-rb1" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.prbAgingBuckets[1]}"></div>
+      <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 3</label><br>
+        <input type="number" id="report-prb-aging-rb2" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.prbAgingBuckets[2]}"></div>
+      <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 4</label><br>
+        <input type="number" id="report-prb-aging-rb3" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.prbAgingBuckets[3]}"></div>
+    </div>` : '';
 
   const prbGroupbySection = showPrbGroupby ? `
-    <div class="report-field-picker-label">Campo de agrupamento</div>
+    <div class="report-field-picker-label">${t('rpt_label_groupby_field')}</div>
     ${_acHtml('report-prb-groupby-input', 'report-prb-groupby-field', _PRB_GROUPBY_FIELDS, currentChart?.ref || 'category')}
-    <div class="report-field-picker-label">Estilo visual</div>
+    <div class="report-field-picker-label">${t('rpt_label_visual_style')}</div>
     <div class="report-size-group" id="report-prb-groupby-style">
-      ${[{val:'donut',label:'Donut'},{val:'bar',label:'Barras'},{val:'bar-vertical',label:'Barras Verticais'}]
+      ${[{val:'donut',get label(){return t('rpt_style_donut');}},{val:'bar',get label(){return t('rpt_style_bars');}},{val:'bar-vertical',get label(){return t('rpt_style_bars_v');}}]
         .map(o => `<button class="report-size-opt${curPgStyle === o.val ? ' active' : ''}" data-style="${o.val}">${o.label}</button>`).join('')}
     </div>
     <div id="report-prb-groupby-color-section"${curPgStyle === 'donut' ? ' style="display:none"' : ''}>
-      <div class="report-field-picker-label">Cor das barras</div>
+      <div class="report-field-picker-label">${t('rpt_label_bar_color')}</div>
       <select id="report-prb-groupby-color-mode" class="report-field-sel">
-        <option value="multi"${!curPgColor ? ' selected' : ''}>Multicolor</option>
-        <option value="single"${curPgColor ? ' selected' : ''}>Cor única</option>
+        <option value="multi"${!curPgColor ? ' selected' : ''}>${t('rpt_color_multi')}</option>
+        <option value="single"${curPgColor ? ' selected' : ''}>${t('rpt_color_single')}</option>
       </select>
       <div id="report-prb-groupby-color-picker"${!curPgColor ? ' style="display:none"' : ''}>
         <input type="color" id="report-prb-groupby-color-input" value="${curPgColor || '#10b981'}"
@@ -616,12 +651,14 @@ export function reportOpenPrbChartPicker(idx) {
     </div>` : '';
 
   const picker = _openPicker({
-    title:      isEdit ? 'Configurar gráfico' : 'Novo gráfico',
-    applyLabel: isEdit ? 'Aplicar' : 'Adicionar',
+    title:      isEdit ? t('rpt_title_configure_chart') : t('rpt_title_new_chart'),
+    applyLabel: isEdit ? t('rpt_btn_apply') : t('rpt_btn_add'),
     bodyHtml: `
       ${typeSection}
+      ${prbEvolutionSection}
+      ${prbAgingSection}
       ${prbGroupbySection}
-      <div class="report-field-picker-label">Tamanho</div>
+      <div class="report-field-picker-label">${t('rpt_label_size')}</div>
       <div class="report-size-group" id="report-prb-size-group">${sizeOpts}</div>`,
     onApply: _applyPrbChartPicker,
   });
@@ -655,14 +692,38 @@ function _applyPrbChartPicker() {
   const size   = picker.querySelector('#report-prb-size-group .report-size-opt.active')?.dataset.size || 'lg';
   const type   = isEdit ? S.prbCharts[S.prbPickerIdx].type : (document.getElementById('report-prb-type-sel')?.value || 'prb-evolution');
 
+  const isPrbEvolution = type === 'prb-evolution';
+  const isPrbAging     = type === 'prb-aging';
   const isPrbGroupby   = type === 'prb-groupby';
   const pgRef          = document.getElementById('report-prb-groupby-field')?.value;
   const pgStyle        = picker.querySelector('#report-prb-groupby-style .report-size-opt.active')?.dataset.style;
   const pgColorMode    = document.getElementById('report-prb-groupby-color-mode')?.value;
   const pgColor        = pgColorMode === 'single' ? (document.getElementById('report-prb-groupby-color-input')?.value || '') : '';
 
+  // prb-evolution: read months per chart
+  let needReload   = false;
+  let prbNewMonths = null;
+  if (isPrbEvolution) {
+    const raw = parseInt(picker.querySelector('#report-prb-evo-months .report-size-opt.active')?.dataset.months);
+    if (!isNaN(raw)) {
+      prbNewMonths = Math.min(24, Math.max(1, raw));
+      const curMonths = isEdit ? (S.prbCharts[S.prbPickerIdx]?.months || S.prbMonths) : S.prbMonths;
+      if (prbNewMonths !== curMonths) needReload = true;
+    }
+  }
+
+  // prb-aging: read buckets
+  if (isPrbAging) {
+    const rb0 = Math.max(1,        parseInt(document.getElementById('report-prb-aging-rb0')?.value) || S.prbAgingBuckets[0]);
+    const rb1 = Math.max(rb0 + 1,  parseInt(document.getElementById('report-prb-aging-rb1')?.value) || S.prbAgingBuckets[1]);
+    const rb2 = Math.max(rb1 + 1,  parseInt(document.getElementById('report-prb-aging-rb2')?.value) || S.prbAgingBuckets[2]);
+    const rb3 = Math.max(rb2 + 1,  parseInt(document.getElementById('report-prb-aging-rb3')?.value) || S.prbAgingBuckets[3]);
+    S.prbAgingBuckets = [rb0, rb1, rb2, rb3];
+  }
+
   if (isEdit) {
     const update = { ...S.prbCharts[S.prbPickerIdx], size };
+    if (prbNewMonths !== null) update.months = prbNewMonths;
     if (isPrbGroupby) {
       if (pgRef)   update.ref        = pgRef;
       if (pgStyle) update.chartStyle = pgStyle;
@@ -670,27 +731,29 @@ function _applyPrbChartPicker() {
     }
     S.prbCharts[S.prbPickerIdx] = update;
   } else {
-    S.prbCharts.push(isPrbGroupby ? { type, size, ref: 'category', chartStyle: 'donut', barColor: '' } : { type, size });
+    const newChart = isPrbGroupby ? { type, size, ref: 'category', chartStyle: 'donut', barColor: '' } : { type, size };
+    if (prbNewMonths !== null) newChart.months = prbNewMonths;
+    S.prbCharts.push(newChart);
   }
 
   _onSave();
   _closeFieldPicker();
-  _onRerender();
+  if (needReload) _onLoad(); else _onRerender();
 }
 
 // ── Standalone pickers (volume, groupby, heatmap, location, aging, delivery, SLA) ──
 
 export function reportOpenIncidentVolumePicker() {
   const monthBtns = [3, 5, 6, 8, 10, 12, 13, 24].map(n =>
-    `<button class="report-size-opt${n === S.incidentMonths ? ' active' : ''}" data-months="${n}">${n} meses</button>`
+    `<button class="report-size-opt${n === S.incidentMonths ? ' active' : ''}" data-months="${n}">${n} ${t('rpt_months')}</button>`
   ).join('');
 
   const picker = _openPicker({
-    title: 'Configurar — Histórico de Incidentes',
+    title: t('rpt_title_cfg_inc_hist'),
     bodyHtml: `
-      <div class="report-field-picker-label">Meses de histórico</div>
+      <div class="report-field-picker-label">${t('rpt_label_history_months')}</div>
       <div class="report-size-group" id="report-inc-vol-months-group" style="flex-wrap:wrap">${monthBtns}</div>
-      <div class="report-field-picker-label" style="margin-top:10px">Target mensal</div>
+      <div class="report-field-picker-label" style="margin-top:10px">${t('rpt_label_monthly_target')}</div>
       <input type="number" id="report-inc-vol-target" class="report-inc-months-input" min="0" max="9999" value="${S.incidentTarget}">`,
     onApply: _applyIncidentVolumePicker,
   });
@@ -721,9 +784,9 @@ export function reportOpenIncidentGroupByPicker() {
   ].map(o => `<option value="${o.val}"${S.incidentGroupBy === o.val ? ' selected' : ''}>${o.label}</option>`).join('');
 
   _openPicker({
-    title: 'Configurar — Agrupamento de Incidentes',
+    title: t('rpt_title_cfg_groupby'),
     bodyHtml: `
-      <div class="report-field-picker-label">Agrupar por</div>
+      <div class="report-field-picker-label">${t('rpt_label_group_by')}</div>
       <select id="report-inc-groupby-sel" class="report-inc-months-sel" style="width:100%">${selectOpts}</select>`,
     onApply: _applyIncidentGroupByPicker,
   });
@@ -739,16 +802,16 @@ function _applyIncidentGroupByPicker() {
 
 export function reportOpenHeatmapPicker() {
   _openPicker({
-    title: 'Configurar — Heatmap de Incidentes',
+    title: t('rpt_title_cfg_heatmap'),
     bodyHtml: `
       <div class="report-field-picker-label">
-        Sistemas exibidos
-        <span style="font-weight:400;opacity:.7;display:block;font-size:11px;margin-top:2px">0 = mostrar todos; N = top N + "Outros"</span>
+        ${t('rpt_label_systems_disp')}
+        <span style="font-weight:400;opacity:.7;display:block;font-size:11px;margin-top:2px">${t('rpt_heatmap_systems_hint')}</span>
       </div>
       <input type="number" id="report-heatmap-topn-input" class="report-inc-months-input" min="0" max="999" value="${S.heatmapTopN}" placeholder="9">
       <div class="report-field-picker-label" style="margin-top:12px">
-        Máximo da escala de cor
-        <span style="font-weight:400;opacity:.7;display:block;font-size:11px;margin-top:2px">0 = automático (relativo ao maior valor dos dados visíveis)</span>
+        ${t('rpt_label_heatmap_max')}
+        <span style="font-weight:400;opacity:.7;display:block;font-size:11px;margin-top:2px">${t('rpt_heatmap_hint')}</span>
       </div>
       <input type="number" id="report-heatmap-max-input" class="report-inc-months-input" min="0" max="999" value="${S.heatmapMax}" placeholder="0">`,
     onApply: _applyHeatmapPicker,
@@ -765,13 +828,13 @@ function _applyHeatmapPicker() {
 
 export function reportOpenLocationPicker() {
   const monthOpts = [1, 3, 6].map(v =>
-    `<button class="report-size-opt${S.locationMonths === v ? ' active' : ''}" data-locmonths="${v}">${v} ${v === 1 ? 'mês' : 'meses'}</button>`
+    `<button class="report-size-opt${S.locationMonths === v ? ' active' : ''}" data-locmonths="${v}">${v} ${v === 1 ? t('rpt_month') : t('rpt_months')}</button>`
   ).join('');
 
   const picker = _openPicker({
-    title: 'Configurar — Incidentes por Localização',
+    title: t('rpt_title_cfg_location'),
     bodyHtml: `
-      <div class="report-field-picker-label">Meses exibidos</div>
+      <div class="report-field-picker-label">${t('rpt_label_months_disp')}</div>
       <div class="report-size-group" id="report-loc-months-group">${monthOpts}</div>`,
     onApply: () => {
       const active = document.querySelector('#report-loc-months-group .report-size-opt.active');
@@ -795,30 +858,30 @@ export async function reportOpenAgingPicker(idx) {
 
   const currentSize = S.agingCharts[S.agingPickerIdx]?.size || 'md';
   const sizeOpts = [
-    { val: 'sm', label: '3 por linha' },
-    { val: 'md', label: '2 por linha' },
-    { val: 'lg', label: 'Largura total' },
+    { val: 'sm', get label() { return t('rpt_size_3col'); } },
+    { val: 'md', get label() { return t('rpt_size_2col'); } },
+    { val: 'lg', get label() { return t('rpt_size_full'); } },
   ].map(o => `<button class="report-size-opt${currentSize === o.val ? ' active' : ''}" data-size="${o.val}">${o.label}</button>`).join('');
 
   const picker = _openPicker({
-    title: 'Configurar gráfico — Aging',
+    title: t('rpt_title_cfg_aging'),
     bodyHtml: `
-      <div class="report-field-picker-label">Estado monitorado</div>
+      <div class="report-field-picker-label">${t('rpt_label_monitored_state')}</div>
       <select id="report-aging-state-sel" class="report-field-sel">
         <option value="${_esc(S.agingState)}">${_esc(S.agingState)}</option>
       </select>
-      <div class="report-field-picker-label">Faixas de aging (dias)</div>
+      <div class="report-field-picker-label">${t('rpt_label_aging_buckets')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <div><label style="font-size:11px;color:var(--text-faint)">Limite 1</label><br>
+        <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 1</label><br>
           <input type="number" id="report-aging-rb0" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.agingBuckets[0]}"></div>
-        <div><label style="font-size:11px;color:var(--text-faint)">Limite 2</label><br>
+        <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 2</label><br>
           <input type="number" id="report-aging-rb1" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.agingBuckets[1]}"></div>
-        <div><label style="font-size:11px;color:var(--text-faint)">Limite 3</label><br>
+        <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 3</label><br>
           <input type="number" id="report-aging-rb2" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.agingBuckets[2]}"></div>
-        <div><label style="font-size:11px;color:var(--text-faint)">Limite 4</label><br>
+        <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 4</label><br>
           <input type="number" id="report-aging-rb3" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.agingBuckets[3]}"></div>
       </div>
-      <div class="report-field-picker-label">Tamanho</div>
+      <div class="report-field-picker-label">${t('rpt_label_size')}</div>
       <div class="report-size-group" id="report-aging-size-group">${sizeOpts}</div>`,
     onApply: _applyAgingPicker,
   });
@@ -867,10 +930,10 @@ function _applyAgingPicker() {
 
 export async function reportOpenDeliveryStatesPicker() {
   _openPicker({
-    title: 'Estados de Entrega',
+    title: t('rpt_title_delivery_states'),
     bodyHtml: `
-      <div class="report-field-picker-desc" style="font-size:12px;color:var(--text-faint);margin-top:-6px">US nesses estados contam como entregues na sprint</div>
-      <div id="report-delivery-states-body"><div class="report-field-picker-loading">Carregando estados...</div></div>`,
+      <div class="report-field-picker-desc" style="font-size:12px;color:var(--text-faint);margin-top:-6px">${t('rpt_delivery_states_desc')}</div>
+      <div id="report-delivery-states-body"><div class="report-field-picker-loading">${t('rpt_loading_states')}</div></div>`,
     onApply: _applyDeliveryStatesPicker,
   });
 
@@ -890,7 +953,7 @@ export async function reportOpenDeliveryStatesPicker() {
       }).join('') + `</div>`;
   } catch (_) {
     const body = document.getElementById('report-delivery-states-body');
-    if (body) body.innerHTML = '<div class="report-field-picker-error">Erro ao carregar estados</div>';
+    if (body) body.innerHTML = `<div class="report-field-picker-error">${t('rpt_error_states')}</div>`;
   }
 }
 
@@ -906,34 +969,34 @@ function _applyDeliveryStatesPicker() {
 
 export function reportOpenSlaPicker() {
   _openPicker({
-    title: 'Configurar SLA — Incidents',
+    title: t('rpt_title_cfg_sla'),
     bodyHtml: `
       <div style="font-size:12px;color:var(--text-faint);margin-bottom:14px;line-height:1.6">
-        Usa <strong style="color:var(--text-1)">business_elapsed_percentage</strong> da tabela <code>task_sla</code> do ServiceNow.<br>
-        Incidente violado = maior % entre seus SLAs &gt; 100%.
+        ${t('rpt_sla_desc_1')} <strong style="color:var(--text-1)">business_elapsed_percentage</strong> ${t('rpt_sla_desc_2')} <code>task_sla</code> ${t('rpt_sla_desc_3')}<br>
+        ${t('rpt_sla_violated')}
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
         <input type="checkbox" id="report-sla-enabled-chk" style="width:15px;height:15px;accent-color:var(--c-blue);cursor:pointer" ${S.slaEnabled ? 'checked' : ''}>
-        <label for="report-sla-enabled-chk" style="font-size:13px;color:var(--text-1);cursor:pointer;user-select:none">Exibir % dentro do SLA por prioridade</label>
+        <label for="report-sla-enabled-chk" style="font-size:13px;color:var(--text-1);cursor:pointer;user-select:none">${t('rpt_label_show_sla')}</label>
       </div>
-      <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Metas de conformidade</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">${t('rpt_label_sla_targets')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:4px">
         <div>
-          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P1 — Crítico</label>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p1')}</label>
           <div style="display:flex;align-items:center;gap:4px">
             <input type="number" id="report-sla-p1" min="0" max="100" value="${S.slaTargets.p1 ?? 95}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
             <span style="font-size:12px;color:var(--text-faint)">%</span>
           </div>
         </div>
         <div>
-          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P2 — Alto</label>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p2')}</label>
           <div style="display:flex;align-items:center;gap:4px">
             <input type="number" id="report-sla-p2" min="0" max="100" value="${S.slaTargets.p2 ?? 90}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
             <span style="font-size:12px;color:var(--text-faint)">%</span>
           </div>
         </div>
         <div>
-          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">P3 — Médio</label>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p3')}</label>
           <div style="display:flex;align-items:center;gap:4px">
             <input type="number" id="report-sla-p3" min="0" max="100" value="${S.slaTargets.p3 ?? 85}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
             <span style="font-size:12px;color:var(--text-faint)">%</span>
@@ -1020,15 +1083,15 @@ function _buildIncidentsTable(items) {
   const filterRow = `<tr class="inc-filter-row">${Array.from({ length: 9 }, (_, ci) => {
     if (selectVals[ci]) {
       const opts = selectVals[ci].map(v => `<option value="${_esc(v)}">${_esc(v)}</option>`).join('');
-      return `<th><select data-col="${ci}"><option value="">Todos</option>${opts}</select></th>`;
+      return `<th><select data-col="${ci}"><option value="">${t('rpt_filter_all')}</option>${opts}</select></th>`;
     }
-    return `<th><input type="text" data-col="${ci}" placeholder="⌕" title="Filtrar"></th>`;
+    return `<th><input type="text" data-col="${ci}" placeholder="⌕" title="${t('rpt_search_field')}"></th>`;
   }).join('')}</tr>`;
   return `<table class="report-inc-table">
     <thead>
       <tr>
-        <th>Número</th><th>Descrição</th><th>Prior.</th><th>Estado</th><th>Aberto em</th>
-        <th>Assigned to</th><th>Res. Code</th><th>IC Afetado</th><th>Imp. Plants</th>
+        <th>${t('rpt_inc_modal_number')}</th><th>${t('rpt_inc_modal_desc')}</th><th>${t('rpt_inc_modal_priority')}</th><th>${t('rpt_inc_modal_state')}</th><th>${t('rpt_inc_modal_opened')}</th>
+        <th>${t('rpt_inc_col_assignedto')}</th><th>${t('rpt_inc_modal_res_code')}</th><th>${t('rpt_inc_modal_ci')}</th><th>${t('rpt_inc_col_plants')}</th>
       </tr>
       ${filterRow}
     </thead>
@@ -1073,13 +1136,13 @@ async function _showIncidentsModal(title, fetchParams) {
     <div class="report-inc-modal-header">
       <div class="report-inc-modal-title">${_esc(title)}</div>
       <div class="report-inc-modal-actions">
-        <button class="report-inc-export-btn" id="report-inc-export-btn" onclick="reportExportIncidentsCSV()" title="Exportar para Excel (CSV)">&#x2193; Exportar</button>
+        <button class="report-inc-export-btn" id="report-inc-export-btn" onclick="reportExportIncidentsCSV()" title="${t('rpt_inc_export_tooltip')}">&#x2193; ${t('rpt_inc_export_btn')}</button>
         <button class="modal-maximize" id="report-inc-max-btn" onclick="toggleReportIncMax()" title="Maximizar">&#x2922;</button>
         <button class="report-inc-modal-close" onclick="reportCloseIncidentsModal()">&#x2715;</button>
       </div>
     </div>
     <div class="report-inc-modal-body">
-      <div class="report-loading" style="padding:32px 20px">Carregando...</div>
+      <div class="report-loading" style="padding:32px 20px">${t('rpt_loading')}</div>
     </div>`;
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
@@ -1089,15 +1152,15 @@ async function _showIncidentsModal(title, fetchParams) {
     const { incidents, error } = await r.json();
     const body = panel.querySelector('.report-inc-modal-body');
     if (error) {
-      body.innerHTML = `<div class="report-inc-modal-empty">Erro: ${error}</div>`;
+      body.innerHTML = `<div class="report-inc-modal-empty">${t('rpt_inc_modal_error')} ${error}</div>`;
     } else if (!incidents || incidents.length === 0) {
-      body.innerHTML = '<div class="report-inc-modal-empty">Nenhum incidente encontrado.</div>';
+      body.innerHTML = `<div class="report-inc-modal-empty">${t('rpt_no_incidents_found')}</div>`;
     } else {
-      body.innerHTML = `<div class="report-inc-modal-count">${incidents.length} incidente${incidents.length !== 1 ? 's' : ''}</div>${_buildIncidentsTable(incidents)}`;
+      body.innerHTML = `<div class="report-inc-modal-count">${incidents.length} ${incidents.length !== 1 ? t('rpt_inc_count_p') : t('rpt_inc_count_s')}</div>${_buildIncidentsTable(incidents)}`;
       _initIncidentTableFilters(body.querySelector('.report-inc-table'));
     }
   } catch {
-    panel.querySelector('.report-inc-modal-body').innerHTML = '<div class="report-inc-modal-empty">Erro ao buscar incidentes.</div>';
+    panel.querySelector('.report-inc-modal-body').innerHTML = `<div class="report-inc-modal-empty">${t('rpt_error_incidents')}</div>`;
   }
 }
 
@@ -1112,7 +1175,7 @@ export function reportOpenIncidentFilter(el) {
 
 export async function reportOpenIncidentsModal() {
   const params = new URLSearchParams({ project: S.reportProject, month: S.reportMonth || '', mode: 'backlog', filterField: '', filterValue: '' });
-  _showIncidentsModal('Backlog de Incidentes', params.toString());
+  _showIncidentsModal(t('rpt_inc_modal_backlog'), params.toString());
 }
 
 export function toggleReportIncMax() {
@@ -1130,19 +1193,19 @@ export function reportOpenTargetModal() {
   el.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)';
   el.innerHTML = `
     <div style="background:var(--bg-card);border:1px solid var(--bg-border);border-radius:12px;padding:24px 24px 20px;width:300px;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.3)">
-      <div style="font-size:14px;font-weight:600;color:var(--text-1)">Target mensal de incidentes</div>
-      <div style="font-size:12px;color:var(--text-2);line-height:1.5">Número máximo esperado de incidentes por mês. Usado para calcular o percentual vs target e alertas de volume.</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text-1)">${t('rpt_title_target_monthly')}</div>
+      <div style="font-size:12px;color:var(--text-2);line-height:1.5">${t('rpt_hint_target_monthly')}</div>
       <input id="inc-target-input" type="number" min="1" max="9999" placeholder="Ex: 30"
         style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--bg-border);border-radius:6px;background:var(--bg-2);color:var(--text-1);font-size:14px;outline:none"
         value="${S.incidentTarget ?? ''}">
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:2px">
         <button onclick="document.getElementById('inc-target-modal').remove()"
           style="padding:6px 16px;border-radius:6px;border:1px solid var(--bg-border);background:transparent;color:var(--text-2);cursor:pointer;font-size:13px">
-          Cancelar
+          ${t('rpt_btn_cancel')}
         </button>
         <button onclick="reportSaveTargetModal()"
           style="padding:6px 16px;border-radius:6px;border:none;background:var(--c-blue);color:#fff;cursor:pointer;font-size:13px;font-weight:600">
-          Salvar
+          ${t('rpt_btn_save')}
         </button>
       </div>
     </div>`;

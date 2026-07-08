@@ -32,7 +32,7 @@ function calcMttrByPriority(incClosedInPeriod) {
   const buckets = { p1: [], p2: [], p3: [], all: [] };
 
   (incClosedInPeriod || []).forEach(i => {
-    const closedAt = i.resolved_at || i.closed_at;
+    const closedAt = i.resolved_at;
     const hours    = _diffHours(i.opened_at, closedAt);
     if (hours === null) return;
     buckets.all.push(hours);
