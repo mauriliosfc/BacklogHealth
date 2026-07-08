@@ -6,12 +6,12 @@ Dashboard Node.js local para monitoramento e análise de saúde dos backlogs de 
 
 ## Download
 
-**Versão atual: v1.1.6**
+**Versão atual: v1.1.8**
 
 | | Arquivo | Indicado para |
 |---|---|---|
-| **Instalador** | [Backlog Health Setup 1.1.6.exe](https://github.com/mauriliosfc/BacklogHealth/releases/download/v1.1.6/Backlog.Health.Setup.1.1.6.exe) | Uso diário — cria atalho no Desktop e Menu Iniciar |
-| **Portátil** | [Backlog Health 1.1.6.exe](https://github.com/mauriliosfc/BacklogHealth/releases/download/v1.1.6/Backlog.Health.1.1.6.exe) | Sem instalar — execute direto |
+| **Instalador** | [Backlog Health Setup 1.1.8.exe](https://github.com/mauriliosfc/BacklogHealth/releases/download/v1.1.8/Backlog.Health.Setup.1.1.8.exe) | Uso diário — cria atalho no Desktop e Menu Iniciar |
+| **Portátil** | [Backlog Health 1.1.8.exe](https://github.com/mauriliosfc/BacklogHealth/releases/download/v1.1.8/Backlog.Health.1.1.8.exe) | Sem instalar — execute direto |
 
 > Requer Windows 10 ou superior. Não precisa instalar Node.js.
 
