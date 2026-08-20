@@ -34,6 +34,7 @@ import {
   reportOpenTargetModal,
   reportSaveTargetModal,
   exportReportHtml,
+  exportVolumeIncidentsXLSX,
   openIncidentsForGroup,
 } from './report-pickers.js';
 import { t } from './i18n.js';
@@ -56,6 +57,7 @@ export {
   reportOpenTargetModal,
   reportSaveTargetModal,
   exportReportHtml,
+  exportVolumeIncidentsXLSX,
   openIncidentsForGroup,
 };
 
@@ -208,6 +210,8 @@ async function _loadReportConfig() {
     if (Array.isArray(data.incidentCharts) && data.incidentCharts.length) S.incidentCharts = data.incidentCharts;
     if (Array.isArray(data.prbCharts)      && data.prbCharts.length)      S.prbCharts      = data.prbCharts;
     if (data.slaTargets != null && typeof data.slaTargets === 'object') S.slaTargets = { p1: 95, p2: 90, p3: 85, ...data.slaTargets };
+    if (Array.isArray(data.usAgingColumns)  && data.usAgingColumns.length)  S.usAgingColumns  = data.usAgingColumns;
+    if (Array.isArray(data.prbAgingColumns) && data.prbAgingColumns.length) S.prbAgingColumns = data.prbAgingColumns;
     if (data.reportCharts?.length) {
       charts = data.reportCharts;
     } else if (data.groupFields?.length) {
@@ -249,7 +253,7 @@ function _saveReportConfig() {
   fetch('/api/report-config', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ project: S.reportProject, reportCharts: S.reportCharts, incidentMonths: S.incidentMonths, incidentTarget: S.incidentTarget, incidentGroupBy: S.incidentGroupBy, heatmapMax: S.heatmapMax, heatmapTopN: S.heatmapTopN, locationMonths: S.locationMonths, agingState: S.agingState, agingCharts: S.agingCharts, agingBuckets: S.agingBuckets, deliveryStates: S.deliveryStates, indicatorCards: S.indicatorCards, indicatorCardsPerRow: S.indicatorCardsPerRow, incidentCharts: S.incidentCharts, prbCharts: S.prbCharts, slaTargets: S.slaTargets, prbMonths: S.prbMonths, prbAgingBuckets: S.prbAgingBuckets }),
+    body:    JSON.stringify({ project: S.reportProject, reportCharts: S.reportCharts, incidentMonths: S.incidentMonths, incidentTarget: S.incidentTarget, incidentGroupBy: S.incidentGroupBy, heatmapMax: S.heatmapMax, heatmapTopN: S.heatmapTopN, locationMonths: S.locationMonths, agingState: S.agingState, agingCharts: S.agingCharts, agingBuckets: S.agingBuckets, deliveryStates: S.deliveryStates, indicatorCards: S.indicatorCards, indicatorCardsPerRow: S.indicatorCardsPerRow, incidentCharts: S.incidentCharts, prbCharts: S.prbCharts, slaTargets: S.slaTargets, prbMonths: S.prbMonths, prbAgingBuckets: S.prbAgingBuckets, usAgingColumns: S.usAgingColumns, prbAgingColumns: S.prbAgingColumns }),
   })
   .then(r => r.json())
   .then(d => { if (!d.ok) console.error('[report] save failed:', d); })
@@ -429,7 +433,7 @@ function _renderPrbChartCell(chart, idx, prbs) {
     case 'prb-evolution': { const prbChartMonths = chart.months || S.prbMonths; title = t('rpt_prb_evolution'); subtitle = `${prbChartMonths} ${t('rpt_months')}`; content = _renderPrbEvolutionChart(prbs.monthly, prbChartMonths); break; }
     case 'prb-donut':     title = t('rpt_prb_status_title'); subtitle = t('rpt_prb_status_sub'); content = _renderPrbStatusDonut(prbs.list); break;
     case 'prb-aging':     title = t('rpt_aging_backlog'); subtitle = t('rpt_prb_aging_sub'); content = _renderPrbAgingChart(prbs.list, S.prbAgingBuckets); break;
-    case 'prb-oldest':    title = t('rpt_prb_oldest_title'); subtitle = t('rpt_prb_oldest_sub'); content = _renderPrbOldestList(prbs.list); break;
+    case 'prb-oldest':    title = t('rpt_prb_oldest_title'); subtitle = t('rpt_prb_oldest_sub'); content = _renderPrbOldestList(prbs.list, S.prbAgingColumns); break;
     case 'prb-category':  title = 'Distribuição por Categoria'; subtitle = 'Root cause por categoria'; content = _renderPrbCategoryChart(prbs.list); break;
     case 'prb-groupby': {
       const _prbGroupbyFields = {
@@ -467,7 +471,10 @@ function _renderPrbChartCell(chart, idx, prbs) {
         ${canRemove ? `<button class="report-field-remove-btn" title="${t('rpt_remove_chart')}" onclick="reportRemovePrbChart(${idx})" draggable="false">×</button>` : ''}
       </div>
     </div>
-    ${subtitle ? `<div class="report-prb-chart-sub">${subtitle}</div>` : ''}
+    ${subtitle ? `<div class="report-prb-chart-sub" style="${chart.type === 'prb-oldest' ? 'display:flex;align-items:center;justify-content:space-between' : ''}">
+      <span>${subtitle}</span>
+      ${chart.type === 'prb-oldest' ? `<button class="report-field-picker-btn" title="${t('rpt_agcol_configure')}" onclick="reportOpenPrbChartPicker(${idx})" draggable="false" style="flex-shrink:0">⚙</button>` : ''}
+    </div>` : ''}
     ${content}
   </div>`;
 }
@@ -610,7 +617,10 @@ function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality
         <button class="report-add-chart-btn" onclick="reportAddChart()">+ ${t('rpt_add_chart')}</button>
       </div>
     </div>
-    <div class="report-subsection-title" style="margin-top:20px">US Aging — ${_esc(usAging?.state || S.agingState)}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px">
+      <div class="report-subsection-title">US Aging — ${_esc(usAging?.state || S.agingState)}</div>
+      <button class="report-field-picker-btn" title="${t('rpt_agcol_configure')}" onclick="reportOpenAgingPicker(1)" draggable="false">⚙</button>
+    </div>
     <div class="report-prb-chart-sub">${usAging ? `${usAging.total} US em "${_esc(usAging.state)}" · sem filtro de sprint` : `Aguardando dados para "${_esc(S.agingState)}"`}</div>
     <div class="report-donuts-grid">
       <div class="report-donut-cell report-donut-cell-${S.agingCharts[0]?.size || 'md'}">
@@ -623,9 +633,11 @@ function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality
       <div class="report-donut-cell report-donut-cell-${S.agingCharts[1]?.size || 'md'}">
         <div class="report-field-picker-header">
           <div class="report-donut-title-row"><div class="report-subsection-title">${t('rpt_aging_top10')} "${_esc(usAging?.state || S.agingState)}"</div></div>
-          <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="${t('rpt_configure_chart')}" onclick="reportOpenAgingPicker(1)" draggable="false">⚙</button></div>
+          <div class="report-field-chart-actions">
+            <button class="report-field-picker-btn" title="${t('rpt_configure_chart')}" onclick="reportOpenAgingPicker(1)" draggable="false">⚙</button>
+          </div>
         </div>
-        ${_renderUsTop10(usAging)}
+        ${_renderUsTop10(usAging, S.usAgingColumns)}
       </div>
     </div>
   </div>`;
@@ -851,6 +863,9 @@ function _buildHTML(payload) {
     <button class="report-print-btn" onclick="exportReportHtml()" title="${t('rpt_export_html')}">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3"/><polyline points="10 6 8 8 6 6"/><line x1="8" y1="8" x2="8" y2="2"/></svg>
       ${t('rpt_export_html')}</button>
+    <button id="btn-export-volume-xlsx" class="report-print-btn" onclick="exportVolumeIncidentsXLSX()" title="${t('rpt_export_incidents')}">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3"/><polyline points="10 6 8 8 6 6"/><line x1="8" y1="8" x2="8" y2="2"/></svg>
+      ${t('rpt_export_incidents')}</button>
   </div>`;
 
   const _af = S.activeSectionFilter;

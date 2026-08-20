@@ -33,4 +33,7 @@ export const S = {
   incPickerIdx:       -1,
   prbPickerIdx:       -1,
   agingPickerIdx:     -1,
+  usAgingColumns:     null,   // [{key, label}] — null = defaults
+  prbAgingColumns:    null,   // [{key, label}] — null = defaults
+  agingColPickerType: null,   // 'us' | 'prb' — type currently open in picker
 };

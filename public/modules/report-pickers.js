@@ -574,12 +574,19 @@ function _applyIncChartPicker() {
 
 // ── PRB chart picker ──────────────────────────────────────────────────────────
 
-export function reportOpenPrbChartPicker(idx) {
+export async function reportOpenPrbChartPicker(idx) {
   S.prbPickerIdx = idx !== undefined ? idx : -1;
   const isEdit       = S.prbPickerIdx >= 0;
   const currentChart = isEdit ? S.prbCharts[S.prbPickerIdx] : null;
   const currentSize  = currentChart?.size || 'lg';
   const currentType  = currentChart?.type || 'prb-evolution';
+
+  const showPrbOldest = isEdit && currentType === 'prb-oldest';
+
+  if (showPrbOldest) {
+    const currentCols = S.prbAgingColumns && S.prbAgingColumns.length ? S.prbAgingColumns : _PRB_PREDEFINED;
+    _agColState = currentCols.map(c => ({ key: c.key, label: c.label }));
+  }
 
   const PRB_TYPES = [
     { val: 'prb-evolution', get label() { return t('rpt_prb_type_evolution'); } },
@@ -610,6 +617,13 @@ export function reportOpenPrbChartPicker(idx) {
   const curPgColor       = currentChart?.barColor   || '';
 
   const MONTH_OPTS = [3, 5, 6, 8, 10, 12, 13, 24];
+
+  const colSection = showPrbOldest ? `
+  <div class="report-field-picker-label">${t('rpt_agcol_selected_label')}</div>
+  <div id="rpt-agcol-selected" style="display:flex;flex-wrap:wrap;gap:6px;padding:4px 0;min-height:28px"></div>
+  <div class="report-field-picker-label">${t('rpt_agcol_add_label')}</div>
+  <div id="rpt-agcol-ac-body"><div class="report-field-picker-loading">${t('rpt_loading_states')}</div></div>
+  <div class="report-picker-divider"></div>` : '';
 
   const prbEvolutionSection = showPrbEvolution ? `
     <div class="report-field-picker-label">${t('rpt_label_history_months')}</div>
@@ -651,9 +665,10 @@ export function reportOpenPrbChartPicker(idx) {
     </div>` : '';
 
   const picker = _openPicker({
-    title:      isEdit ? t('rpt_title_configure_chart') : t('rpt_title_new_chart'),
+    title:      isEdit ? (showPrbOldest ? t('rpt_agcol_title_prb') : t('rpt_title_configure_chart')) : t('rpt_title_new_chart'),
     applyLabel: isEdit ? t('rpt_btn_apply') : t('rpt_btn_add'),
     bodyHtml: `
+      ${colSection}
       ${typeSection}
       ${prbEvolutionSection}
       ${prbAgingSection}
@@ -682,6 +697,31 @@ export function reportOpenPrbChartPicker(idx) {
       const cp = document.getElementById('report-prb-groupby-color-picker');
       if (cp) cp.style.display = e.target.value === 'single' ? '' : 'none';
     });
+  }
+
+  if (showPrbOldest) {
+    _renderAgColChips();
+    try {
+      const r    = await fetch('/api/prb-fields');
+      const data = await r.json();
+      const snExtra = (data.fields || []).map(f => ({ key: 'sn:' + f.key, label: f.label || f.key }));
+      const allFields = [..._PRB_PREDEFINED.map(f => ({ key: f.key, label: f.label })), ...snExtra];
+      const body = document.getElementById('rpt-agcol-ac-body');
+      if (body) {
+        const opts = allFields.map(f =>
+          `<div class="report-ac-opt" data-key="${_esc(f.key)}" data-label="${_esc(f.label)}">${_esc(f.label)}<span class="report-ac-key">${_esc(f.key)}</span></div>`
+        ).join('');
+        body.innerHTML = `<div class="report-ac-wrap">
+          <input type="text" id="rpt-agcol-input" class="report-field-sel report-ac-input" placeholder="${t('rpt_search_field')}" autocomplete="off">
+          <input type="hidden" id="rpt-agcol-hidden" value="">
+          <div class="report-ac-dropdown" id="ac-drop-rpt-agcol-input">${opts}</div>
+        </div>`;
+        _agColAcInit('rpt-agcol-input', 'rpt-agcol-hidden');
+      }
+    } catch (_) {
+      const body = document.getElementById('rpt-agcol-ac-body');
+      if (body) body.innerHTML = `<div class="report-field-picker-error">${t('rpt_error_states')}</div>`;
+    }
   }
 }
 
@@ -734,6 +774,10 @@ function _applyPrbChartPicker() {
     const newChart = isPrbGroupby ? { type, size, ref: 'category', chartStyle: 'donut', barColor: '' } : { type, size };
     if (prbNewMonths !== null) newChart.months = prbNewMonths;
     S.prbCharts.push(newChart);
+  }
+
+  if (isEdit && S.prbCharts[S.prbPickerIdx]?.type === 'prb-oldest' && _agColState.length > 0) {
+    S.prbAgingColumns = _agColState.slice();
   }
 
   _onSave();
@@ -855,6 +899,12 @@ export function reportOpenLocationPicker() {
 
 export async function reportOpenAgingPicker(idx) {
   S.agingPickerIdx = idx ?? 0;
+  const isTopTable = S.agingPickerIdx === 1;
+
+  if (isTopTable) {
+    const currentCols = S.usAgingColumns && S.usAgingColumns.length ? S.usAgingColumns : _US_PREDEFINED;
+    _agColState = currentCols.map(c => ({ key: c.key, label: c.label }));
+  }
 
   const currentSize = S.agingCharts[S.agingPickerIdx]?.size || 'md';
   const sizeOpts = [
@@ -863,9 +913,17 @@ export async function reportOpenAgingPicker(idx) {
     { val: 'lg', get label() { return t('rpt_size_full'); } },
   ].map(o => `<button class="report-size-opt${currentSize === o.val ? ' active' : ''}" data-size="${o.val}">${o.label}</button>`).join('');
 
+  const colSection = isTopTable ? `
+  <div class="report-field-picker-label">${t('rpt_agcol_selected_label')}</div>
+  <div id="rpt-agcol-selected" style="display:flex;flex-wrap:wrap;gap:6px;padding:4px 0;min-height:28px"></div>
+  <div class="report-field-picker-label">${t('rpt_agcol_add_label')}</div>
+  <div id="rpt-agcol-ac-body"><div class="report-field-picker-loading">${t('rpt_loading_states')}</div></div>
+  <div class="report-picker-divider"></div>` : '';
+
   const picker = _openPicker({
-    title: t('rpt_title_cfg_aging'),
+    title: isTopTable ? t('rpt_agcol_title_us') : t('rpt_title_cfg_aging'),
     bodyHtml: `
+      ${colSection}
       <div class="report-field-picker-label">${t('rpt_label_monitored_state')}</div>
       <select id="report-aging-state-sel" class="report-field-sel">
         <option value="${_esc(S.agingState)}">${_esc(S.agingState)}</option>
@@ -893,16 +951,45 @@ export async function reportOpenAgingPicker(idx) {
     opt.classList.add('active');
   });
 
+  if (isTopTable) _renderAgColChips();
+
   try {
-    const r    = await fetch('/api/us-states?' + new URLSearchParams({ project: S.reportProject }));
-    const data = await r.json();
-    const sel  = document.getElementById('report-aging-state-sel');
-    if (sel && data.states?.length) {
-      sel.innerHTML = data.states
+    const promises = [fetch('/api/us-states?' + new URLSearchParams({ project: S.reportProject }))];
+    if (isTopTable) promises.push(fetch('/api/report-fields?' + new URLSearchParams({ project: S.reportProject })));
+    const results    = await Promise.all(promises);
+    const statesData = await results[0].json();
+    const sel = document.getElementById('report-aging-state-sel');
+    if (sel && statesData.states?.length) {
+      const stateList = statesData.states.includes(S.agingState)
+        ? statesData.states
+        : [S.agingState, ...statesData.states];
+      sel.innerHTML = stateList
         .map(s => `<option value="${_esc(s)}"${s === S.agingState ? ' selected' : ''}>${_esc(s)}</option>`)
         .join('');
     }
-  } catch (_) {}
+    if (isTopTable && results[1]) {
+      const fieldsData = await results[1].json();
+      const azExtra = (fieldsData.fields || []).map(f => ({ key: 'az:' + f.ref, label: f.label || f.ref }));
+      const allFields = [..._US_PREDEFINED.map(f => ({ key: f.key, label: f.label })), ...azExtra];
+      const body = document.getElementById('rpt-agcol-ac-body');
+      if (body) {
+        const opts = allFields.map(f =>
+          `<div class="report-ac-opt" data-key="${_esc(f.key)}" data-label="${_esc(f.label)}">${_esc(f.label)}<span class="report-ac-key">${_esc(f.key)}</span></div>`
+        ).join('');
+        body.innerHTML = `<div class="report-ac-wrap">
+          <input type="text" id="rpt-agcol-input" class="report-field-sel report-ac-input" placeholder="${t('rpt_search_field')}" autocomplete="off">
+          <input type="hidden" id="rpt-agcol-hidden" value="">
+          <div class="report-ac-dropdown" id="ac-drop-rpt-agcol-input">${opts}</div>
+        </div>`;
+        _agColAcInit('rpt-agcol-input', 'rpt-agcol-hidden');
+      }
+    }
+  } catch (_) {
+    if (isTopTable) {
+      const body = document.getElementById('rpt-agcol-ac-body');
+      if (body) body.innerHTML = `<div class="report-field-picker-error">${t('rpt_error_states')}</div>`;
+    }
+  }
 }
 
 function _applyAgingPicker() {
@@ -915,6 +1002,9 @@ function _applyAgingPicker() {
   const rb2 = Math.max(rb1 + 1, parseInt(document.getElementById('report-aging-rb2')?.value) || S.agingBuckets[2]);
   const rb3 = Math.max(rb2 + 1, parseInt(document.getElementById('report-aging-rb3')?.value) || S.agingBuckets[3]);
   const newBuckets = [rb0, rb1, rb2, rb3];
+
+  if (S.agingPickerIdx === 1 && _agColState.length > 0) S.usAgingColumns = _agColState.slice();
+
   _closeFieldPicker();
 
   const stateChanged   = newState !== S.agingState;
@@ -1069,18 +1159,24 @@ function _buildIncidentsTable(items) {
       <td style="white-space:nowrap">${fmtDate(i.openedAt)}</td>
       <td>${_esc(i.assignedTo) || '—'}</td>
       <td>${_esc(i.resolutionCode) || '—'}</td>
+      <td>${_esc(i.resolution) || '—'}</td>
+      <td>${_esc(i.causalCode) || '—'}</td>
+      <td>${_esc(i.additionalResCode) || '—'}</td>
+      <td>${_esc(i.resolutionNotes) || '—'}</td>
       <td>${_esc(i.affectedIC) || '—'}</td>
       <td>${_esc(i.impactedPlants) || '—'}</td>
     </tr>`).join('');
   const selectVals = {
-    2: [...new Set(items.map(i => priLabel(i.priority)).filter(Boolean))].sort(),
-    3: [...new Set(items.map(i => i.state  || '—'))].sort(),
-    5: [...new Set(items.map(i => i.assignedTo     || '—'))].sort(),
-    6: [...new Set(items.map(i => i.resolutionCode || '—'))].sort(),
-    7: [...new Set(items.map(i => i.affectedIC     || '—'))].sort(),
-    8: [...new Set(items.map(i => i.impactedPlants || '—'))].sort(),
+    2:  [...new Set(items.map(i => priLabel(i.priority)).filter(Boolean))].sort(),
+    3:  [...new Set(items.map(i => i.state             || '—'))].sort(),
+    5:  [...new Set(items.map(i => i.assignedTo        || '—'))].sort(),
+    6:  [...new Set(items.map(i => i.resolutionCode    || '—'))].sort(),
+    8:  [...new Set(items.map(i => i.causalCode        || '—'))].sort(),
+    9:  [...new Set(items.map(i => i.additionalResCode || '—'))].sort(),
+    11: [...new Set(items.map(i => i.affectedIC        || '—'))].sort(),
+    12: [...new Set(items.map(i => i.impactedPlants    || '—'))].sort(),
   };
-  const filterRow = `<tr class="inc-filter-row">${Array.from({ length: 9 }, (_, ci) => {
+  const filterRow = `<tr class="inc-filter-row">${Array.from({ length: 13 }, (_, ci) => {
     if (selectVals[ci]) {
       const opts = selectVals[ci].map(v => `<option value="${_esc(v)}">${_esc(v)}</option>`).join('');
       return `<th><select data-col="${ci}"><option value="">${t('rpt_filter_all')}</option>${opts}</select></th>`;
@@ -1091,7 +1187,7 @@ function _buildIncidentsTable(items) {
     <thead>
       <tr>
         <th>${t('rpt_inc_modal_number')}</th><th>${t('rpt_inc_modal_desc')}</th><th>${t('rpt_inc_modal_priority')}</th><th>${t('rpt_inc_modal_state')}</th><th>${t('rpt_inc_modal_opened')}</th>
-        <th>${t('rpt_inc_col_assignedto')}</th><th>${t('rpt_inc_modal_res_code')}</th><th>${t('rpt_inc_modal_ci')}</th><th>${t('rpt_inc_col_plants')}</th>
+        <th>${t('rpt_inc_col_assignedto')}</th><th>${t('rpt_inc_modal_res_code')}</th><th>${t('rpt_inc_modal_resolution')}</th><th>${t('rpt_inc_modal_causal_code')}</th><th>${t('rpt_inc_modal_add_res_code')}</th><th>${t('rpt_inc_modal_res_notes')}</th><th>${t('rpt_inc_modal_ci')}</th><th>${t('rpt_inc_col_plants')}</th>
       </tr>
       ${filterRow}
     </thead>
@@ -1222,6 +1318,136 @@ export function reportSaveTargetModal() {
     _onRerender();
   }
   document.getElementById('inc-target-modal')?.remove();
+}
+
+// ── Aging column picker ───────────────────────────────────────────────────────
+
+let _agColState = [];   // [{key, label}] — working copy while picker is open
+
+const _US_PREDEFINED = [
+  { key: 'title',    get label() { return t('rpt_agcol_title'); } },
+  { key: 'sprint',   get label() { return t('rpt_agcol_sprint'); } },
+  { key: 'assignee', get label() { return t('rpt_agcol_assignee'); } },
+  { key: 'agingDays', get label() { return t('rpt_agcol_aging'); } },
+];
+
+const _PRB_PREDEFINED = [
+  { key: 'title',            get label() { return t('rpt_agcol_title'); } },
+  { key: 'state',            get label() { return t('rpt_agcol_state'); } },
+  { key: 'priority',         get label() { return t('rpt_agcol_priority'); } },
+  { key: 'impact',           get label() { return t('rpt_agcol_impact'); } },
+  { key: 'urgency',          get label() { return t('rpt_agcol_urgency'); } },
+  { key: 'assigned_to',      get label() { return t('rpt_agcol_assignee'); } },
+  { key: 'assignment_group', get label() { return t('rpt_agcol_group'); } },
+  { key: 'agingDays',        get label() { return t('rpt_agcol_aging'); } },
+];
+
+function _renderAgColChips() {
+  const wrap = document.getElementById('rpt-agcol-selected');
+  if (!wrap) return;
+  if (!_agColState.length) {
+    wrap.innerHTML = `<div style="font-size:12px;color:var(--text-faint);padding:4px 0">${t('rpt_agcol_empty')}</div>`;
+    return;
+  }
+  wrap.innerHTML = _agColState.map((col, idx) =>
+    `<span class="report-agcol-chip">
+      ${_esc(col.label)}
+      <button class="report-agcol-chip-del" data-idx="${idx}">×</button>
+    </span>`
+  ).join('');
+  wrap.querySelectorAll('.report-agcol-chip-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _agColState.splice(parseInt(btn.dataset.idx), 1);
+      _renderAgColChips();
+    });
+  });
+}
+
+function _agColAcInit(inputId, hiddenId) {
+  const picker = document.getElementById('report-field-picker');
+  if (!picker) return;
+  const input  = picker.querySelector('#' + inputId);
+  const hidden = picker.querySelector('#' + hiddenId);
+  const drop   = picker.querySelector('#ac-drop-' + inputId);
+  if (!input || !hidden || !drop) return;
+
+  const _addChip = () => {
+    const key   = hidden.value;
+    const label = input.value;
+    if (!key) return;
+    if (!_agColState.find(c => c.key === key)) _agColState.push({ key, label });
+    input.value = '';
+    hidden.value = '';
+    _renderAgColChips();
+  };
+
+  const show   = () => { drop.style.display = 'block'; };
+  const hide   = () => { drop.style.display = 'none'; };
+  const filter = () => {
+    const q = input.value.toLowerCase();
+    drop.querySelectorAll('.report-ac-opt').forEach(o => {
+      o.style.display = (o.dataset.label.toLowerCase().includes(q) || o.dataset.key.toLowerCase().includes(q)) ? '' : 'none';
+    });
+    show();
+  };
+
+  input.addEventListener('focus', show);
+  input.addEventListener('input', filter);
+  input.addEventListener('blur', () => setTimeout(hide, 160));
+  drop.addEventListener('mousedown', e => {
+    const o = e.target.closest('.report-ac-opt');
+    if (!o) return;
+    input.value  = o.dataset.label;
+    hidden.value = o.dataset.key;
+    hide();
+    e.preventDefault();
+    _addChip();
+  });
+  input.addEventListener('keydown', e => {
+    const visible = [...drop.querySelectorAll('.report-ac-opt:not([style*="display: none"])')];
+    const cur = drop.querySelector('.report-ac-opt.report-ac-hi');
+    let idx = visible.indexOf(cur);
+    if (e.key === 'Escape') { hide(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, visible.length - 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+    else if (e.key === 'Enter') {
+      if (cur) { input.value = cur.dataset.label; hidden.value = cur.dataset.key; hide(); e.preventDefault(); _addChip(); }
+      return;
+    } else return;
+    visible.forEach(o => o.classList.remove('report-ac-hi'));
+    if (visible[idx]) { visible[idx].classList.add('report-ac-hi'); visible[idx].scrollIntoView({ block: 'nearest' }); }
+    show();
+  });
+}
+
+export async function exportVolumeIncidentsXLSX() {
+  const btn          = document.getElementById('btn-export-volume-xlsx');
+  const originalHTML = btn?.innerHTML;
+  if (btn) {
+    btn.disabled  = true;
+    btn.innerHTML = '<span class="report-btn-spinner"></span> Carregando...';
+  }
+  try {
+    const project     = S.reportProject || '';
+    const month       = S.reportMonth   || '';
+    const volumeChart = S.incidentCharts.find(c => c.type === 'inc-volume');
+    const nMonths     = volumeChart?.months || S.incidentMonths || 5;
+    const qs          = new URLSearchParams({ project, month, nMonths }).toString();
+    const r           = await fetch(`/api/sn-volume-incidents-xlsx?${qs}`);
+    if (!r.ok) return;
+    const blob     = await r.blob();
+    const url      = URL.createObjectURL(blob);
+    const a        = document.createElement('a');
+    a.href         = url;
+    a.download     = `incidentes_volume_${project}_${month}.xlsx`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } finally {
+    if (btn) {
+      btn.disabled  = false;
+      btn.innerHTML = originalHTML;
+    }
+  }
 }
 
 export async function exportReportHtml() {

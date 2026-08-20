@@ -36,6 +36,7 @@ function cacheInvalidate(project, month, groupField, snExtra) {
   try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra));         } catch (_) {}
   try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v2')); } catch (_) {}
   try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v3')); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v4')); } catch (_) {}
 }
 
 // Retorna Set com IterationPaths das sprints do time que se sobrepõem ao período
@@ -106,7 +107,7 @@ function getLast6Months(n = 6) {
 
 const _DEFAULT_DONE_STATES = ['Closed', 'Done', 'Resolved'];
 
-async function fetchAzureReport(displayName, period, groupFields = [], agingState = '', deliveryStates = null) {
+async function fetchAzureReport(displayName, period, groupFields = [], agingState = '', deliveryStates = null, usAgingColumns = null) {
   const pcfg = getProjectConfig(displayName);
   const proj  = pcfg?.name || displayName;
 
@@ -115,7 +116,13 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   const cleanGroupFields = (groupFields || []).filter(f => f);
   // Only extend cache key when delivery states differ from default (backward compat)
   const isDefaultDelivery = DONE_STATES.length === _DEFAULT_DONE_STATES.length && DONE_STATES.every(s => _DEFAULT_DONE_STATES.includes(s));
-  const cacheKey = [...cleanGroupFields.slice().sort(), usAgingState, ...(isDefaultDelivery ? [] : [DONE_STATES.slice().sort().join(',')])].join('|');
+  const extraAgingKeys = (usAgingColumns || []).filter(c => c.key.startsWith('az:')).map(c => c.key.slice(3)).sort();
+  const cacheKey = [
+    ...cleanGroupFields.slice().sort(),
+    usAgingState,
+    ...(isDefaultDelivery ? [] : [DONE_STATES.slice().sort().join(',')]),
+    ...(extraAgingKeys.length ? ['agCols:' + extraAgingKeys.join(',')] : []),
+  ].join('|');
   const cached = _readCache('azure', displayName, period.month, cacheKey);
   if (cached) return cached;
 
@@ -172,7 +179,10 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   const extraFields  = cleanGroupFields.filter(r => !baseFields.includes(r));
   const fields       = extraFields.length ? `${baseFields},${extraFields.join(',')}` : baseFields;
   const bugFields    = 'System.Id,System.State,System.IterationPath';
-  const agingFields  = 'System.Id,System.Title,System.State,System.AssignedTo,Microsoft.VSTS.Common.StateChangeDate,System.IterationPath';
+  const agingBaseFields = 'System.Id,System.Title,System.State,System.AssignedTo,Microsoft.VSTS.Common.StateChangeDate,System.IterationPath';
+  const agingFields  = extraAgingKeys.length
+    ? `${agingBaseFields},${extraAgingKeys.filter(f => !agingBaseFields.includes(f)).join(',')}`
+    : agingBaseFields;
 
   const [delivItems, bugOpenItems, bugNewItems, bugFixItems, agingItems] = await Promise.all([
     delivIds.length   ? paginatedItems(proj, delivIds,   fields)      : Promise.resolve([]),
@@ -302,7 +312,12 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
       const bucketIdx  = BUCKETS.findIndex(b => agingDays < b.max);
       if (bucketIdx >= 0) counts[bucketIdx]++;
       const baseUrl = getCfg().baseUrl || '';
-      return { id: i.id, url: `${baseUrl}/_workitems/edit/${i.id}`, title: i.fields['System.Title'] || '', assignee, sprint, agingDays };
+      const extra = {};
+      extraAgingKeys.forEach(f => {
+        const v = i.fields[f];
+        extra[f] = (v && typeof v === 'object') ? (v.displayName || v.display_value || v.value || String(v)) : (v ?? '');
+      });
+      return { id: i.id, url: `${baseUrl}/_workitems/edit/${i.id}`, title: i.fields['System.Title'] || '', assignee, sprint, agingDays, extra };
     }).sort((a, b) => b.agingDays - a.agingDays);
 
     usAging = {
@@ -344,7 +359,7 @@ function _snRaw(v) {
   return String(v) || null;
 }
 
-async function fetchSnReport(displayName, period) {
+async function fetchSnReport(displayName, period, prbAgingColumns = null) {
   const snCfg  = getSnConfig();
   if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
 
@@ -362,7 +377,8 @@ async function fetchSnReport(displayName, period) {
     isSysId = false;
   }
 
-  const snCacheKey = String(period.history.length) + '_v3';
+  const extraPrbKeys = (prbAgingColumns || []).filter(c => c.key.startsWith('sn:')).map(c => c.key.slice(3)).sort();
+  const snCacheKey = String(period.history.length) + '_v4' + (extraPrbKeys.length ? '_prb:' + extraPrbKeys.join(',') : '');
   const cached = _readCache('sn', displayName, period.month, snCacheKey);
   if (cached) return cached;
 
@@ -405,7 +421,7 @@ async function fetchSnReport(displayName, period) {
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,priority,impact,urgency,cmdb_ci.name,u_additional_res_code,location.name,state,assigned_to,assignment_group,category,subcategory,close_code,contact_type&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN incidents error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at,closed_at,priority&sysparm_limit=1000`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incBacklogQuery)}&sysparm_fields=sys_id,opened_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
-    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,impact,urgency,category,state,assignment_group.name,assigned_to.name,opened_at,known_error,workaround_instructions,rca_complete&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
+    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,impact,urgency,category,state,assignment_group.name,assigned_to.name,opened_at,known_error,workaround_instructions,rca_complete${extraPrbKeys.length ? ',' + extraPrbKeys.join(',') : ''}&sysparm_display_value=all&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at&sysparm_limit=200`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedThisMonthQuery)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/task_sla?sysparm_query=${encodeURIComponent(taskSlaQuery)}&sysparm_fields=task,task.priority,business_elapsed_percentage&sysparm_limit=2000`).catch(() => ({ result: [] })),
@@ -626,21 +642,29 @@ async function fetchSnReport(displayName, period) {
 
   const now = Date.now();
   const prbList = prbs.map(p => {
-    const agingDays = p.opened_at ? Math.floor((now - new Date(p.opened_at).getTime()) / 86400000) : 0;
+    // opened_at pode ser {value, display_value} com sysparm_display_value=all
+    const openedAtRaw = _snRaw(p.opened_at) || (typeof p.opened_at === 'string' ? p.opened_at : null);
+    const agingDays   = openedAtRaw ? Math.floor((now - new Date(openedAtRaw).getTime()) / 86400000) : 0;
+    const extra = {};
+    extraPrbKeys.forEach(f => {
+      const v = p[f];
+      extra[f] = v != null ? (_snVal(v) ?? '') : '';
+    });
     return {
-      id:                      p.number,
-      title:                   p.short_description,
-      priority:                p.priority,
-      impact:                  p.impact                    || '',
-      urgency:                 p.urgency                   || '',
-      category:                p.category,
+      id:                      _snRaw(p.number) || String(p.number || ''),
+      title:                   _snVal(p.short_description) || String(p.short_description || ''),
+      priority:                _snRaw(p.priority) || '',
+      impact:                  _snVal(p.impact)   || '',
+      urgency:                 _snVal(p.urgency)  || '',
+      category:                _snVal(p.category) || '',
       agingDays,
-      state:                   p.state,
-      assignment_group:        p['assignment_group.name']  || '',
-      assigned_to:             p['assigned_to.name']       || '',
+      state:                   _snRaw(p.state)    || '',
+      assignment_group:        _snVal(p['assignment_group.name']) || '',
+      assigned_to:             _snVal(p['assigned_to.name'])      || '',
       known_error:             _snRaw(p.known_error) === 'true' || p.known_error === true,
       workaround_instructions: _snVal(p.workaround_instructions) || '',
       rca_complete:            _snRaw(p.rca_complete) === 'true' || p.rca_complete === true,
+      extra,
     };
   });
 
@@ -717,7 +741,7 @@ async function fetchSnReport(displayName, period) {
 
 // ── Main entry ─────────────────────────────────────────────────────────────────
 
-async function buildReport(displayName, month, groupFields = [], agingState = 'In Review', historyMonths = 13, deliveryStates = null) {
+async function buildReport(displayName, month, groupFields = [], agingState = 'In Review', historyMonths = 13, deliveryStates = null, usAgingColumns = null, prbAgingColumns = null) {
   const period = buildPeriod(month, Math.min(24, Math.max(1, historyMonths)));
 
   // Previous month period (for delta comparison)
@@ -729,21 +753,23 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
   const _EMPTY_AZURE = { totalUS: 0, totalDelivered: 0, sprints: [], byTypes: {}, byTypesPts: {}, usAging: {}, bugsOpen: 0, bugsNew: 0, bugsClosed: 0 };
 
   const [azure, sn, prevAzure] = await Promise.all([
-    fetchAzureReport(displayName, period, groupFields, agingState, deliveryStates).catch(() => _EMPTY_AZURE),
-    fetchSnReport(displayName, period),
+    fetchAzureReport(displayName, period, groupFields, agingState, deliveryStates, usAgingColumns).catch(() => _EMPTY_AZURE),
+    fetchSnReport(displayName, period, prbAgingColumns),
     fetchAzureReport(displayName, prevPeriod, [], '', deliveryStates).catch(() => null),
   ]);
 
   return {
-    metadata:     { project: displayName, period: period.label, generatedAt: new Date().toLocaleString('pt-BR'), generatedAtTs: Date.now() },
-    hasSn:        !!sn,
-    hasAzure:     !!(azure.sprints?.length || azure.totalUS > 0),
-    delivery:     { totalUS: azure.totalUS, totalDelivered: azure.totalDelivered, sprints: azure.sprints, byTypes: azure.byTypes, byTypesPts: azure.byTypesPts, usAging: azure.usAging },
-    quality:      { bugsOpen: azure.bugsOpen, bugsNew: azure.bugsNew, bugsClosed: azure.bugsClosed },
-    prevDelivery: prevAzure ? { totalUS: prevAzure.totalUS, totalDelivered: prevAzure.totalDelivered } : null,
-    prevQuality:  prevAzure ? { bugsOpen: prevAzure.bugsOpen, bugsNew: prevAzure.bugsNew } : null,
-    incidents:    sn?.incidents || null,
-    prbs:         sn?.prbs      || null,
+    metadata:        { project: displayName, period: period.label, generatedAt: new Date().toLocaleString('pt-BR'), generatedAtTs: Date.now() },
+    hasSn:           !!sn,
+    hasAzure:        !!(azure.sprints?.length || azure.totalUS > 0),
+    delivery:        { totalUS: azure.totalUS, totalDelivered: azure.totalDelivered, sprints: azure.sprints, byTypes: azure.byTypes, byTypesPts: azure.byTypesPts, usAging: azure.usAging },
+    quality:         { bugsOpen: azure.bugsOpen, bugsNew: azure.bugsNew, bugsClosed: azure.bugsClosed },
+    prevDelivery:    prevAzure ? { totalUS: prevAzure.totalUS, totalDelivered: prevAzure.totalDelivered } : null,
+    prevQuality:     prevAzure ? { bugsOpen: prevAzure.bugsOpen, bugsNew: prevAzure.bugsNew } : null,
+    incidents:       sn?.incidents || null,
+    prbs:            sn?.prbs      || null,
+    usAgingColumns,
+    prbAgingColumns,
   };
 }
 
@@ -801,20 +827,24 @@ async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', fi
   try {
     const res = await snGet(snCfg,
       `table/incident?sysparm_query=${encodeURIComponent(query)}` +
-      `&sysparm_fields=number,short_description,priority,state,opened_at,assigned_to,u_additional_res_code,cmdb_ci.name,location.name,sys_id` +
+      `&sysparm_fields=number,short_description,priority,state,opened_at,assigned_to,close_code,u_resolution,u_causal_code,u_additional_res_code,work_notes,cmdb_ci.name,location.name,sys_id` +
       `&sysparm_display_value=all&sysparm_limit=500`
     );
     return (res.result || []).map(i => ({
-      number:         _snRaw(i.number) || _snVal(i.number) || '',
-      description:    _snVal(i.short_description)         || '',
-      priority:       _snRaw(i.priority)                  || '',
-      state:          _snVal(i.state)                     || '',
-      openedAt:       _snRaw(i.opened_at)                 || String(i.opened_at || ''),
-      assignedTo:     _snVal(i['assigned_to'])            || '—',
-      resolutionCode: _snVal(i['u_additional_res_code'])  || '—',
-      affectedIC:     _snVal(i['cmdb_ci.name'])           || '—',
-      impactedPlants: _snVal(i['location.name'])          || '—',
-      url:            `https://${snCfg.instance}/incident.do?sys_id=${_snRaw(i.sys_id) || i.sys_id}`,
+      number:           _snRaw(i.number) || _snVal(i.number) || '',
+      description:      _snVal(i.short_description)           || '',
+      priority:         _snRaw(i.priority)                    || '',
+      state:            _snVal(i.state)                       || '',
+      openedAt:         _snRaw(i.opened_at)                   || String(i.opened_at || ''),
+      assignedTo:       _snVal(i['assigned_to'])              || '—',
+      resolutionCode:   _snVal(i['close_code'])               || '',
+      resolution:       _snVal(i['u_resolution'])              || '',
+      causalCode:       _snVal(i['u_causal_code'])            || '',
+      additionalResCode:  _snVal(i['u_additional_res_code'])   || '',
+      resolutionNotes:    _snVal(i['work_notes'])             || '',
+      affectedIC:       _snVal(i['cmdb_ci.name'])             || '—',
+      impactedPlants:   _snVal(i['location.name'])            || '—',
+      url:              `https://${snCfg.instance}/incident.do?sys_id=${_snRaw(i.sys_id) || i.sys_id}`,
     }));
   } catch (e) {
     console.error('[SN incident backlog error]', e.message);
@@ -822,4 +852,97 @@ async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', fi
   }
 }
 
-module.exports = { buildReport, buildPeriod, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog };
+// ── Volume incidents CSV export ────────────────────────────────────────────────
+// Fetches all incidents opened OR closed in the month (union, deduplicated by sys_id)
+// with the full set of fields needed for CSV export.
+async function fetchSnVolumeIncidents(displayName, month, nMonths = 1) {
+  const snCfg = getSnConfig();
+  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
+
+  let grpFilter;
+  const snGrp = getProjectSnGroup(displayName);
+  if (snGrp?.assignmentGroup) {
+    const grp     = snGrp.assignmentGroup.trim();
+    const isSysId = /^[0-9a-f]{32}$/i.test(grp);
+    grpFilter     = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
+  } else {
+    const allowed = snCfg.assignmentGroups;
+    if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
+    if (!displayName) return null;
+    grpFilter = `assignment_group.name=${displayName}`;
+  }
+
+  const [y, m] = month.split('-').map(Number);
+  // start = first day of (month - nMonths + 1), JS handles negative month indices automatically
+  const start  = new Date(y, m - nMonths, 1).toISOString().slice(0, 19) + 'Z';
+  const end    = new Date(y, m, 0, 23, 59, 59).toISOString().slice(0, 19) + 'Z';
+
+  const fields = [
+    'sys_id', 'assignment_group', 'number', 'sys_tags', 'opened_at', 'opened_by',
+    'short_description', 'description', 'caller_id', 'u_requested_by',
+    'priority', 'hold_reason', 'state', 'assigned_to', 'business_service',
+    'cmdb_ci', 'sys_updated_on', 'u_resolution', 'close_code', 'u_causal_code',
+    'u_additional_res_code', 'work_notes', 'business_stc', 'business_pause_duration',
+  ].join(',');
+  const base = `table/incident?sysparm_fields=${fields}&sysparm_display_value=all&sysparm_limit=2000`;
+
+  const openedQuery = `${grpFilter}^opened_at>=${start}^opened_at<=${end}`;
+  const closedQuery = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}`;
+
+  try {
+    const [openedRes, closedRes] = await Promise.all([
+      snGet(snCfg, `${base}&sysparm_query=${encodeURIComponent(openedQuery)}`).catch(() => ({ result: [] })),
+      snGet(snCfg, `${base}&sysparm_query=${encodeURIComponent(closedQuery)}`).catch(() => ({ result: [] })),
+    ]);
+
+    const seen = new Set();
+    const all  = [];
+    for (const r of [...(openedRes.result || []), ...(closedRes.result || [])]) {
+      const id = _snRaw(r.sys_id) || _snRaw(r.number) || _snVal(r.number);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      all.push({
+        assignmentGroup:  _snVal(r.assignment_group)    || '',
+        number:           _snRaw(r.number)              || _snVal(r.number) || '',
+        tags:             _snVal(r.sys_tags)             || '',
+        opened:           (() => {
+          const s = String(_snRaw(r.opened_at) || '');
+          if (!s) return '';
+          const d = new Date(s.replace(' ', 'T') + 'Z');
+          if (isNaN(d.getTime())) return 'DATE:' + s.slice(0, 10);
+          const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+          return 'DATE:' + local.toISOString().slice(0, 10);
+        })(),
+        openedBy:         _snVal(r.opened_by)           || '',
+        shortDescription: _snVal(r.short_description)   || '',
+        description:      _snVal(r.description)         || '',
+        caller:           _snVal(r.caller_id)           || '',
+        requestedBy:      _snVal(r.u_requested_by)      || '',
+        priority:         _snVal(r.priority)            || '',
+        onHoldReason:     _snVal(r.hold_reason)         || '',
+        state:            _snVal(r.state)               || '',
+        assignedTo:       _snVal(r.assigned_to)         || '',
+        service:          _snVal(r.business_service)    || '',
+        configItem:          _snVal(r.cmdb_ci)               || '',
+        updated:             _snRaw(r.sys_updated_on)        || '',
+        resolution:          _snVal(r.u_resolution)          || '',
+        resolutionCode:      _snVal(r.close_code)            || '',
+        causalCode:          _snVal(r.u_causal_code)         || '',
+        additionalResCode:   _snVal(r.u_additional_res_code) || '',
+        resolutionNotes:     _snVal(r.work_notes)            || '',
+        resolutionHours:     (() => {
+          const stc   = parseFloat(_snRaw(r.business_stc)              || 0);
+          const pause = parseFloat(_snRaw(r.business_pause_duration)   || 0);
+          if (!stc) return null;
+          return Math.round((stc - pause) / 3600 * 100) / 100;
+        })(),
+      });
+    }
+    return all;
+  } catch (e) {
+    console.error('[SN volume incidents error]', e.message);
+    return null;
+  }
+}
+
+module.exports = { buildReport, buildPeriod, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents };

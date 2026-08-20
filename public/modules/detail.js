@@ -311,7 +311,7 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
           '</div>' +
         '</div>' +
       '</div>' +
-      '<table class="d-table" data-sprints=\'' + allSprintData + '\'><thead><tr>' +
+      '<table class="d-table" data-sprints=\'' + allSprintData + '\' data-project="' + projectName.replace(/"/g, '&quot;') + '"><thead><tr>' +
       '<th>' + t('th_sprint') + '</th>' +
       '<th data-col="period">' + t('th_period') + '</th>' +
       '<th data-col="items">' + itemLabel + '</th>' +

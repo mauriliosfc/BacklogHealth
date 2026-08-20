@@ -237,6 +237,46 @@ describe('saveReportConfig', () => {
     const result = saveReportConfig({ project: 'Alpha', incidentMonths: 3 });
     expect(result).toEqual({ ok: true });
   });
+
+  test('salva usAgingColumns quando é array', () => {
+    const cols = [{ key: 'title', label: 'Título' }, { key: 'agingDays', label: 'Aging' }];
+    saveReportConfig({ project: 'Alpha', usAgingColumns: cols });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].usAgingColumns).toEqual(cols);
+  });
+
+  test('salva prbAgingColumns quando é array', () => {
+    const cols = [{ key: 'title', label: 'Título' }, { key: 'state', label: 'Status' }];
+    saveReportConfig({ project: 'Alpha', prbAgingColumns: cols });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].prbAgingColumns).toEqual(cols);
+  });
+
+  test('não altera usAgingColumns quando parâmetro não é array', () => {
+    saveReportConfig({ project: 'Alpha', usAgingColumns: null });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].usAgingColumns).toBeUndefined();
+  });
+});
+
+// ── getReportConfig colunas ────────────────────────────────────────────────────
+
+describe('getReportConfig — usAgingColumns e prbAgingColumns', () => {
+  test('retorna null quando não configurado', () => {
+    getCfg.mockReturnValue({ projects: [{ name: 'Alpha' }] });
+    const result = getReportConfig({ project: 'Alpha' });
+    expect(result.usAgingColumns).toBeNull();
+    expect(result.prbAgingColumns).toBeNull();
+  });
+
+  test('retorna colunas configuradas no projeto', () => {
+    const usCols  = [{ key: 'title', label: 'Título' }, { key: 'agingDays', label: 'Aging' }];
+    const prbCols = [{ key: 'title', label: 'Título' }, { key: 'state', label: 'Status' }];
+    getCfg.mockReturnValue({ projects: [{ name: 'Alpha', usAgingColumns: usCols, prbAgingColumns: prbCols }] });
+    const result = getReportConfig({ project: 'Alpha' });
+    expect(result.usAgingColumns).toEqual(usCols);
+    expect(result.prbAgingColumns).toEqual(prbCols);
+  });
 });
 
 // ── getReport ─────────────────────────────────────────────────────────────────
@@ -251,7 +291,7 @@ describe('getReport', () => {
   test('chama buildReport com parâmetros corretos', async () => {
     await getReport({ project: 'Alpha', month: '2026-06', groupFields: [], agingState: 'In Review', incidentMonths: null, deliveryStates: null, refresh: false });
 
-    expect(buildReport).toHaveBeenCalledWith('Alpha', '2026-06', [], 'In Review', expect.any(Number), null);
+    expect(buildReport).toHaveBeenCalledWith('Alpha', '2026-06', [], 'In Review', expect.any(Number), null, null, null);
   });
 
   test('retorna { payload, months, month }', async () => {

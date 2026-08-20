@@ -1,22 +1,29 @@
 import { US_TYPES, CLOSED_STATES } from './constants.js';
 import { getDateLocale, t } from './i18n.js';
 
-export function fmtD(s) {
-  if (!s) return '';
-  return new Date(s).toLocaleDateString(getDateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
+function _parseLocalDate(s) {
+  if (!s) return new Date(NaN);
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(s);
 }
 
-export function buildSprintData(items, iterMap) {
+export function fmtD(s) {
+  if (!s) return '';
+  return _parseLocalDate(s).toLocaleDateString(getDateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+export function buildSprintData(items, iterMap, doneStates) {
+  const done = Array.isArray(doneStates) && doneStates.length ? doneStates : CLOSED_STATES;
   const bySprint = {};
   items.forEach(i => {
     const k = i.iteration || 'Sem Sprint';
     if (!bySprint[k]) bySprint[k] = { total: 0, pts: 0, closed: 0, us: 0, usClosed: 0, usUAT: 0 };
     bySprint[k].total++;
     bySprint[k].pts += i.pts || 0;
-    if (CLOSED_STATES.includes(i.state)) bySprint[k].closed++;
+    if (done.includes(i.state)) bySprint[k].closed++;
     if (US_TYPES.includes(i.type)) {
       bySprint[k].us++;
-      if (CLOSED_STATES.includes(i.state)) bySprint[k].usClosed++;
+      if (done.includes(i.state)) bySprint[k].usClosed++;
       if (i.state === 'UAT') bySprint[k].usUAT++;
     }
   });

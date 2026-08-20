@@ -1,4 +1,4 @@
-const { getSnConfig, saveSnConfig, getProjectSnGroup, getCfg } = require('../config');
+const { getSnConfig, saveSnConfig, saveConfig, getProjectSnGroup, getCfg } = require('../config');
 const { snGet } = require('../servicenowClient');
 const { httpError } = require('./utils');
 
@@ -57,14 +57,23 @@ async function fetchGroups({ instance, user, pass } = {}) {
     httpError(400, 'instance, user and pass are required.');
   try {
     const snCfg = { instance: instance.trim(), user: user.trim(), pass };
-    const qs = [
-      'sysparm_query=active=true',
-      'sysparm_fields=name,sys_id',
-      'sysparm_limit=2000',
-    ].join('&');
-    const data = await snGet(snCfg, `table/sys_user_group?${qs}`);
+    const PAGE_SIZE = 2000;
+    const all = [];
+    let offset = 0;
+    while (true) {
+      const qs = [
+        'sysparm_fields=name,sys_id',
+        `sysparm_limit=${PAGE_SIZE}`,
+        `sysparm_offset=${offset}`,
+      ].join('&');
+      const data = await snGet(snCfg, `table/sys_user_group?${qs}`);
+      const page = data.result || [];
+      all.push(...page);
+      if (page.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
     const groups = [...new Map(
-      (data.result || [])
+      all
         .filter(r => r.name)
         .map(r => [r.name, { name: r.name, sys_id: r.sys_id || '' }])
     ).values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -92,4 +101,37 @@ function getAllProjectsSnCfg() {
   };
 }
 
-module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg };
+function removeSnGroup({ group } = {}) {
+  if (!group) return { ok: false };
+  const cfg = getCfg();
+  if (cfg.servicenow?.assignmentGroups) {
+    cfg.servicenow.assignmentGroups = cfg.servicenow.assignmentGroups.filter(g => g !== group);
+  }
+  if (cfg.snGroupConfigs) delete cfg.snGroupConfigs[group];
+  saveConfig(cfg);
+  return { ok: true };
+}
+
+// Returns available columns for the problem table via sys_dictionary.
+// Uses saved credentials — no need to pass them again.
+async function fetchPrbFields() {
+  const sn = getSnConfig();
+  if (!sn?.instance || !sn?.user || !sn?.pass) httpError(400, 'ServiceNow not configured.');
+  try {
+    const qs = [
+      'sysparm_query=name=problem^active=true^internal_type!=collection^internal_type!=glide_list',
+      'sysparm_fields=element,column_label',
+      'sysparm_limit=500',
+    ].join('&');
+    const data = await snGet({ instance: sn.instance, user: sn.user, pass: sn.pass }, `table/sys_dictionary?${qs}`);
+    const fields = (data.result || [])
+      .filter(r => r.element && r.column_label)
+      .map(r => ({ key: r.element, label: r.column_label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return { fields };
+  } catch (e) {
+    return { error: e.message, fields: [] };
+  }
+}
+
+module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg, removeSnGroup, fetchPrbFields };

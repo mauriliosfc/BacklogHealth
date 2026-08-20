@@ -6,7 +6,7 @@ import { setTheme, toggleTheme } from './modules/theme.js';
 import { openDetails, closeDetails, closeDetailsBtn, toggleMaximize, loadDetailData, _detailState, editOrigEst, openDetailStat } from './modules/detail.js';
 import { openDaily, openDailyForProject, closeDaily, toggleDailyMaximize, dailyPrev, dailyNext, handleDailyKey, openDailyForSprint, filterDailyItems, openDailyStat, refreshDaily } from './modules/daily.js';
 import { closeItemsModal, closeItemsModalOverlay, toggleItemsFilter, clearItemsFilter, toggleItemsModalMax, toggleItemsFilterDropdown } from './modules/itemsModal.js';
-import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily, bdTip, bdTipHide } from './modules/burndown.js';
+import { openBurndown, closeBurndown, closeBurndownOverlay, toggleBurndownMaximize, openBurndownFromDaily, bdTip, bdTipHide, openBurndownCfg, saveBurndownCfg, cancelBurndownCfg } from './modules/burndown.js';
 import { initI18n, applyTranslations, setLocale, getLocale } from './modules/i18n.js';
 import { openDeliveryPlan, dpToggleRow, dpSelectAll, dpClearAll, dpShowTooltip, dpMoveTooltip, dpHideTooltip, dpPositionHoje } from './modules/deliveryPlan.js';
 import { openCopilot, closeCopilotConfig, closeCopilotConfigOverlay, testCopilotConnection, saveCopilotConfig, openCopilotChat, closeCopilotChat, closeCopilotChatOverlay, toggleCopilotChatMaximize, toggleCopilotMinimize, toggleCopilotMaximize, clearCopilotChat, confirmClearCopilot, hideCopilotConfirm, copilotFabClick, openCopilotSettings, copilotInputKeydown, sendCopilotMessage, openCopilotWithContext } from './modules/copilot.js';
@@ -15,7 +15,7 @@ import { applyOrder, initDragOrder } from './modules/cardOrder.js';
 import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from './modules/teamCapacity.js';
 import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback, openFeedbackSuccess, closeFeedbackSuccess, closeFeedbackSuccessOverlay } from './modules/feedback.js';
 import { openUAT, closeUAT, closeUATOverlay, toggleUATMax, refreshUAT, uatChangeSprint, uatTogglePlan, uatFilterPlan, uatClearPlanFilter, uatFilterPlanPrio, uatClearPlanPrioFilter } from './modules/uat.js';
-import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportOpenLocationPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot, reportOpenIncidentFilter, reportExportIncidentsCSV, openIncidentsForGroup, toggleReportIncMax, exportReportHtml, reportOpenIndicatorConfig, reportCloseIndicatorConfig, reportToggleIndicator, reportSetCardsPerRow, reportIndDragStart, reportIndDragOver, reportIndDragLeave, reportIndDrop, reportIndDragEnd, reportRemoveIncChart, reportIncChartDragStart, reportIncChartDragOver, reportIncChartDragLeave, reportIncChartDrop, reportIncChartDragEnd, reportAddIncChart, reportOpenIncChartPicker, reportRemovePrbChart, reportPrbChartDragStart, reportPrbChartDragOver, reportPrbChartDragLeave, reportPrbChartDrop, reportPrbChartDragEnd, reportAddPrbChart, reportOpenPrbChartPicker, reportSetSectionFilter, reportOpenTargetModal, reportSaveTargetModal } from './modules/report.js';
+import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportOpenLocationPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot, reportOpenIncidentFilter, reportExportIncidentsCSV, openIncidentsForGroup, toggleReportIncMax, exportReportHtml, exportVolumeIncidentsXLSX, reportOpenIndicatorConfig, reportCloseIndicatorConfig, reportToggleIndicator, reportSetCardsPerRow, reportIndDragStart, reportIndDragOver, reportIndDragLeave, reportIndDrop, reportIndDragEnd, reportRemoveIncChart, reportIncChartDragStart, reportIncChartDragOver, reportIncChartDragLeave, reportIncChartDrop, reportIncChartDragEnd, reportAddIncChart, reportOpenIncChartPicker, reportRemovePrbChart, reportPrbChartDragStart, reportPrbChartDragOver, reportPrbChartDragLeave, reportPrbChartDrop, reportPrbChartDragEnd, reportAddPrbChart, reportOpenPrbChartPicker, reportSetSectionFilter, reportOpenTargetModal, reportSaveTargetModal } from './modules/report.js';
 import { openSnConfig, closeSnConfig, closeSnConfigOverlay, snConfigTest, snConfigSaveGlobal, snConfigSaveProject } from './modules/snConfig.js';
 import { initUpdater, updDownload, updInstall, updDismiss } from './modules/updater.js';
 import { toggleSource } from './modules/sourceToggle.js';
@@ -68,6 +68,9 @@ window.toggleBurndownMaximize = toggleBurndownMaximize;
 window.openBurndownFromDaily  = openBurndownFromDaily;
 window.bdTip                  = bdTip;
 window.bdTipHide              = bdTipHide;
+window.openBurndownCfg        = openBurndownCfg;
+window.saveBurndownCfg        = saveBurndownCfg;
+window.cancelBurndownCfg      = cancelBurndownCfg;
 window.setLocale              = setLocale;
 window.openDeliveryPlan = openDeliveryPlan;
 window.dpToggleRow      = dpToggleRow;
@@ -148,6 +151,7 @@ window.reportExportIncidentsCSV        = reportExportIncidentsCSV;
 window.toggleReportIncMax              = toggleReportIncMax;
 window.reportOpenCopilot               = reportOpenCopilot;
 window.exportReportHtml                = exportReportHtml;
+window.exportVolumeIncidentsXLSX        = exportVolumeIncidentsXLSX;
 window.reportOpenIndicatorConfig       = reportOpenIndicatorConfig;
 window.reportCloseIndicatorConfig      = reportCloseIndicatorConfig;
 window.reportToggleIndicator           = reportToggleIndicator;
@@ -247,6 +251,7 @@ window.cancelRemoveProject = function(e) {
 window.confirmRemoveProject = async function() {
   if (!_removeCard) return;
   const card = _removeCard;
+  const isSN = card.classList.contains('sn-inc-card');
   const project = card.dataset.project;
   const btn = card.querySelector('.btn-remove-project');
   document.getElementById('confirm-remove-modal').classList.remove('open');
@@ -254,13 +259,18 @@ window.confirmRemoveProject = async function() {
   _removeCard = null;
   if (btn) btn.disabled = true;
   try {
-    const r = await fetch('/api/remove-project', {
+    const endpoint = isSN ? '/api/remove-sn-group' : '/api/remove-project';
+    const body = isSN ? { group: project } : { project };
+    const r = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project }),
+      body: JSON.stringify(body),
     });
-    if (r.ok) card.remove();
-    else if (btn) btn.disabled = false;
+    if (r.ok) {
+      card.style.transition = 'opacity .2s';
+      card.style.opacity = '0';
+      setTimeout(() => card.remove(), 200);
+    } else if (btn) btn.disabled = false;
   } catch(e) {
     console.error(e);
     if (btn) btn.disabled = false;
@@ -333,9 +343,11 @@ window.toggleSnView = function() {
 window.hideSNGroup = function(btn) {
   const card = btn.closest('.sn-inc-card');
   if (!card) return;
-  card.style.transition = 'opacity .2s';
-  card.style.opacity = '0';
-  setTimeout(() => card.remove(), 200);
+  _removeCard = card;
+  const group = card.dataset.project;
+  document.getElementById('confirm-remove-name').textContent = group;
+  document.getElementById('confirm-remove-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
 };
 
 window.reapplySnDismissed = function() {

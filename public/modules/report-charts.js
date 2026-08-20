@@ -691,41 +691,65 @@ export function _renderUsAgingBuckets(usAging) {
   return svgHtml + _legendHtml(COLORS.map((color, i) => ({ type: 'rect', color, label: buckets[i]?.label || '' })));
 }
 
-export function _renderUsTop10(usAging) {
+export const US_AGING_DEFAULT_COLS = [
+  { key: 'title',    label: 'Título' },
+  { key: 'sprint',   label: 'Sprint' },
+  { key: 'agingDays', label: 'Aging' },
+];
+
+export function _renderUsTop10(usAging, columns) {
   if (!usAging) return `<div class="report-empty-hint">${t('rpt_aging_no_data')}</div>`;
   const list = (usAging.list || usAging.top10 || []).slice(0, 10);
   if (!list.length) return `<div class="report-empty-hint">${t('rpt_aging_no_us_found')}</div>`;
 
+  const cols    = (Array.isArray(columns) && columns.length) ? columns : US_AGING_DEFAULT_COLS;
   const maxDays = Math.max(...list.map(u => u.agingDays || 0), 1);
 
-  const rows = list.map((u, i) => {
-    const pct       = Math.round((u.agingDays || 0) / maxDays * 100);
-    const barColor  = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : '#0d9488';
-    const daysColor = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : 'var(--text-muted)';
-    return `<tr>
-      <td class="report-td" style="color:var(--text-faint);width:24px;text-align:center">${i + 1}</td>
-      <td class="report-td" style="width:60px">
-        <a href="${u.url || '#'}" target="_blank" style="color:var(--c-blue);text-decoration:none;font-family:monospace;font-size:11px">#${u.id}</a>
-      </td>
-      <td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(u.title)}">${_esc(u.title)}</td>
-      <td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px" title="${_esc(u.sprint)}">${_esc(u.sprint)}</td>
-      <td class="report-td" style="min-width:130px">
+  const _cellUs = (col, u) => {
+    if (col.key === 'agingDays') {
+      const pct      = Math.round((u.agingDays || 0) / maxDays * 100);
+      const barColor  = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : '#0d9488';
+      const daysColor = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : 'var(--text-muted)';
+      return `<td class="report-td" style="min-width:130px">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="flex:1;height:5px;background:var(--bg-el);border-radius:3px;overflow:hidden">
             <div style="width:${pct}%;height:100%;background:${barColor};border-radius:3px"></div>
           </div>
           <span style="font-size:11px;font-weight:700;color:${daysColor};min-width:34px;text-align:right">${u.agingDays}d</span>
         </div>
-      </td>
-    </tr>`;
-  }).join('');
+      </td>`;
+    }
+    if (col.key === 'title') return `<td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(u.title)}">${_esc(u.title)}</td>`;
+    if (col.key === 'sprint') return `<td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px" title="${_esc(u.sprint)}">${_esc(u.sprint)}</td>`;
+    if (col.key === 'assignee') return `<td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px" title="${_esc(u.assignee)}">${_esc(u.assignee || '—')}</td>`;
+    // extra Azure field
+    const fieldRef = col.key.startsWith('az:') ? col.key.slice(3) : col.key;
+    const val = u.extra ? (u.extra[fieldRef] ?? '') : '';
+    return `<td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(val)}">${_esc(val)}</td>`;
+  };
+
+  const rows = list.map((u, i) => `<tr>
+    <td class="report-td" style="color:var(--text-faint);width:24px;text-align:center">${i + 1}</td>
+    <td class="report-td" style="width:60px">
+      <a href="${u.url || '#'}" target="_blank" style="color:var(--c-blue);text-decoration:none;font-family:monospace;font-size:11px">#${u.id}</a>
+    </td>
+    ${cols.map(col => _cellUs(col, u)).join('')}
+  </tr>`).join('');
+
+  const hasFlex = cols.find(c => c.key === 'title');
+  const colgroup = `<col style="width:28px"><col style="width:68px">` +
+    cols.map(c => {
+      if (c.key === 'agingDays') return `<col style="width:150px">`;
+      if (c.key === 'title')     return hasFlex ? `<col>` : `<col style="width:160px">`;
+      return `<col style="width:120px">`;
+    }).join('');
 
   return `<table class="report-table" style="width:100%;table-layout:fixed">
-    <colgroup>
-      <col style="width:28px"><col style="width:68px"><col>
-      <col style="width:120px"><col style="width:150px">
-    </colgroup>
-    <thead><tr><th></th><th>ID</th><th>Título</th><th>Sprint</th><th>Aging</th></tr></thead>
+    <colgroup>${colgroup}</colgroup>
+    <thead><tr>
+      <th></th><th>ID</th>
+      ${cols.map(c => `<th>${_esc(c.label)}</th>`).join('')}
+    </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
@@ -977,49 +1001,76 @@ export function _renderPrbAgingChart(list, buckets) {
   ));
 }
 
-export function _renderPrbOldestList(list) {
+export const PRB_AGING_DEFAULT_COLS = [
+  { key: 'title',    label: 'Título' },
+  { key: 'state',    label: 'Status' },
+  { key: 'priority', label: 'Prior.' },
+  { key: 'agingDays', label: 'Aging' },
+];
+
+export function _renderPrbOldestList(list, columns) {
   if (!list || list.length === 0) return '<div class="report-empty-row">No PRBs</div>';
 
   const P_COLORS = { '1':'#ef4444','2':'#f97316','3':'#eab308','4':'#6b7280' };
-
+  const cols   = (Array.isArray(columns) && columns.length) ? columns : PRB_AGING_DEFAULT_COLS;
   const sorted  = [...list].sort((a, b) => (b.agingDays || 0) - (a.agingDays || 0)).slice(0, 10);
   const maxDays = Math.max(...sorted.map(p => p.agingDays || 0), 1);
 
-  const rows = sorted.map((p, i) => {
-    const st  = String(p.state);
-    const pr  = String(p.priority);
-    const pct = Math.round((p.agingDays || 0) / maxDays * 100);
-    const barColor  = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : '#0d9488';
-    const daysColor = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : 'var(--text-muted)';
-    return `<tr>
-      <td class="report-td" style="color:var(--text-faint);width:24px;text-align:center">${i + 1}</td>
-      <td class="report-td" style="font-family:monospace;font-size:11px;white-space:nowrap">${_esc(p.id || '—')}</td>
-      <td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.title)}">${_esc(p.title || '—')}</td>
-      <td class="report-td"><span style="font-size:11px;font-weight:600;color:${_PRB_STATES[st]?.color || 'var(--text-faint)'}">${_esc(_PRB_STATES[st]?.label || st)}</span></td>
-      <td class="report-td" style="text-align:center"><span style="font-size:11px;font-weight:700;color:${P_COLORS[pr] || 'var(--text-faint)'}">P${_esc(pr)}</span></td>
-      <td class="report-td" style="min-width:130px">
+  const _cellPrb = (col, p) => {
+    if (col.key === 'agingDays') {
+      const pct      = Math.round((p.agingDays || 0) / maxDays * 100);
+      const barColor  = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : '#0d9488';
+      const daysColor = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : 'var(--text-muted)';
+      return `<td class="report-td" style="min-width:130px">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="flex:1;height:5px;background:var(--bg-el);border-radius:3px;overflow:hidden">
             <div style="width:${pct}%;height:100%;background:${barColor};border-radius:3px"></div>
           </div>
           <span style="font-size:11px;font-weight:700;color:${daysColor};min-width:34px;text-align:right">${p.agingDays}d</span>
         </div>
-      </td>
-    </tr>`;
-  }).join('');
+      </td>`;
+    }
+    if (col.key === 'title')    return `<td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.title)}">${_esc(p.title || '—')}</td>`;
+    if (col.key === 'state') {
+      const st = String(p.state);
+      return `<td class="report-td"><span style="font-size:11px;font-weight:600;color:${_PRB_STATES[st]?.color || 'var(--text-faint)'}">${_esc(_PRB_STATES[st]?.label || st)}</span></td>`;
+    }
+    if (col.key === 'priority') {
+      const pr = String(p.priority);
+      return `<td class="report-td" style="text-align:center"><span style="font-size:11px;font-weight:700;color:${P_COLORS[pr] || 'var(--text-faint)'}">P${_esc(pr)}</span></td>`;
+    }
+    if (col.key === 'impact')          return `<td class="report-td">${_esc(p.impact || '—')}</td>`;
+    if (col.key === 'urgency')         return `<td class="report-td">${_esc(p.urgency || '—')}</td>`;
+    if (col.key === 'assigned_to')     return `<td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(p.assigned_to || '—')}</td>`;
+    if (col.key === 'assignment_group') return `<td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(p.assignment_group || '—')}</td>`;
+    // extra SN field
+    const fieldName = col.key.startsWith('sn:') ? col.key.slice(3) : col.key;
+    const val = p.extra ? (p.extra[fieldName] ?? '') : '';
+    return `<td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(val)}">${_esc(val)}</td>`;
+  };
+
+  const rows = sorted.map((p, i) => `<tr>
+    <td class="report-td" style="color:var(--text-faint);width:24px;text-align:center">${i + 1}</td>
+    <td class="report-td" style="font-family:monospace;font-size:11px;white-space:nowrap">${_esc(p.id || '—')}</td>
+    ${cols.map(col => _cellPrb(col, p)).join('')}
+  </tr>`).join('');
+
+  const hasFlex = cols.find(c => c.key === 'title');
+  const colgroup = `<col style="width:28px"><col style="width:100px">` +
+    cols.map(c => {
+      if (c.key === 'agingDays') return `<col style="width:150px">`;
+      if (c.key === 'title')     return hasFlex ? `<col>` : `<col style="width:160px">`;
+      if (c.key === 'state')     return `<col style="width:140px">`;
+      if (c.key === 'priority')  return `<col style="width:52px">`;
+      return `<col style="width:110px">`;
+    }).join('');
 
   return `<table class="report-table" style="width:100%;table-layout:fixed">
-    <colgroup>
-      <col style="width:28px"><col style="width:100px"><col>
-      <col style="width:140px"><col style="width:52px"><col style="width:150px">
-    </colgroup>
+    <colgroup>${colgroup}</colgroup>
     <thead><tr>
       <th class="report-th">#</th>
       <th class="report-th">ID</th>
-      <th class="report-th">Título</th>
-      <th class="report-th">Status</th>
-      <th class="report-th">Prior.</th>
-      <th class="report-th">Aging</th>
+      ${cols.map(c => `<th class="report-th">${_esc(c.label)}</th>`).join('')}
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;

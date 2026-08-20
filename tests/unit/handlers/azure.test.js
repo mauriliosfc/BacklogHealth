@@ -3,8 +3,8 @@ jest.mock('../../../azureClient');
 jest.mock('../../../projectService');
 jest.mock('../../../teamCapacityService');
 
-const { getDetail, getTeamCapacity, getUAT, getReportFields, getUSStates, getContext } = require('../../../handlers/azure');
-const { getCfg, getDisplayName } = require('../../../config');
+const { getDetail, getTeamCapacity, getUAT, getReportFields, getUSStates, getContext, getBurndownConfig, saveBurndownConfig } = require('../../../handlers/azure');
+const { getCfg, getDisplayName, saveConfig } = require('../../../config');
 const { azureGet } = require('../../../azureClient');
 const { fetchProjectDetail, fetchUATPlans } = require('../../../projectService');
 const { fetchTeamCapacity } = require('../../../teamCapacityService');
@@ -293,5 +293,102 @@ describe('getContext', () => {
 
     expect(projects).toHaveLength(2);
     expect(fetchProjectDetail).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── getBurndownConfig ─────────────────────────────────────────────────────────
+
+describe('getBurndownConfig', () => {
+  test('retorna doneStates do projeto quando configurado', () => {
+    getCfg.mockReturnValue({
+      projects: [{ name: 'Alpha', burndownDoneStates: ['Closed', 'Resolved'] }],
+    });
+
+    const { doneStates } = getBurndownConfig({ project: 'Alpha' });
+
+    expect(doneStates).toEqual(['Closed', 'Resolved']);
+  });
+
+  test('retorna ["Closed"] por padrão quando projeto não tem burndownDoneStates', () => {
+    getCfg.mockReturnValue({ projects: [{ name: 'Alpha' }] });
+
+    const { doneStates } = getBurndownConfig({ project: 'Alpha' });
+
+    expect(doneStates).toEqual(['Closed']);
+  });
+
+  test('retorna ["Closed"] quando burndownDoneStates é array vazio', () => {
+    getCfg.mockReturnValue({ projects: [{ name: 'Alpha', burndownDoneStates: [] }] });
+
+    const { doneStates } = getBurndownConfig({ project: 'Alpha' });
+
+    expect(doneStates).toEqual(['Closed']);
+  });
+
+  test('retorna ["Closed"] quando projeto não encontrado', () => {
+    getCfg.mockReturnValue({ projects: [] });
+
+    const { doneStates } = getBurndownConfig({ project: 'Nonexistent' });
+
+    expect(doneStates).toEqual(['Closed']);
+  });
+
+  test('retorna ["Closed"] quando project não fornecido', () => {
+    getCfg.mockReturnValue({ projects: [] });
+
+    const { doneStates } = getBurndownConfig({});
+
+    expect(doneStates).toEqual(['Closed']);
+  });
+});
+
+// ── saveBurndownConfig ────────────────────────────────────────────────────────
+
+describe('saveBurndownConfig', () => {
+  test('salva doneStates no projeto e retorna { ok: true }', () => {
+    const pcfg = { name: 'Alpha' };
+    getCfg.mockReturnValue({ projects: [pcfg] });
+
+    const result = saveBurndownConfig({ project: 'Alpha', doneStates: ['Closed', 'Done'] });
+
+    expect(pcfg.burndownDoneStates).toEqual(['Closed', 'Done']);
+    expect(saveConfig).toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
+  });
+
+  test('lança 400 quando project não fornecido', () => {
+    expect(() => saveBurndownConfig({ doneStates: ['Closed'] }))
+      .toThrow();
+  });
+
+  test('lança 400 quando doneStates não é array', () => {
+    getCfg.mockReturnValue({ projects: [{ name: 'Alpha' }] });
+    expect(() => saveBurndownConfig({ project: 'Alpha', doneStates: 'Closed' }))
+      .toThrow();
+  });
+
+  test('lança 404 quando projeto não encontrado', () => {
+    getCfg.mockReturnValue({ projects: [] });
+    expect(() => saveBurndownConfig({ project: 'Nonexistent', doneStates: ['Closed'] }))
+      .toThrow();
+  });
+
+  test('filtra strings vazias de doneStates', () => {
+    const pcfg = { name: 'Alpha' };
+    getCfg.mockReturnValue({ projects: [pcfg] });
+
+    saveBurndownConfig({ project: 'Alpha', doneStates: ['Closed', '', '  ', 'Done'] });
+
+    expect(pcfg.burndownDoneStates).toEqual(['Closed', 'Done']);
+  });
+
+  test('aceita array vazio (limpa a configuração)', () => {
+    const pcfg = { name: 'Alpha', burndownDoneStates: ['Closed'] };
+    getCfg.mockReturnValue({ projects: [pcfg] });
+
+    saveBurndownConfig({ project: 'Alpha', doneStates: [] });
+
+    expect(pcfg.burndownDoneStates).toEqual([]);
+    expect(saveConfig).toHaveBeenCalled();
   });
 });
