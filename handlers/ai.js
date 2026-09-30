@@ -7,18 +7,20 @@ function getAiConfig() {
   return {
     configured:  !!(ai?.endpoint && ai?.apiKey && ai?.model),
     endpoint:    ai?.endpoint   || '',
-    apiKey:      ai?.apiKey     || '',
+    hasKey:      !!(ai?.apiKey),
     model:       ai?.model      || '',
     apiVersion:  ai?.apiVersion || '',
   };
 }
 
 function saveAiCfg({ endpoint, apiKey, model, apiVersion } = {}) {
-  if (!endpoint || !apiKey || !model)
+  const existing    = getAiCfg();
+  const resolvedKey = (apiKey || '').trim() || existing?.apiKey || '';
+  if (!endpoint || !resolvedKey || !model)
     httpError(400, 'endpoint, apiKey e model são obrigatórios.');
   saveAiConfig({
     endpoint:   endpoint.trim(),
-    apiKey:     apiKey.trim(),
+    apiKey:     resolvedKey,
     model:      model.trim(),
     apiVersion: (apiVersion || '').trim(),
   });

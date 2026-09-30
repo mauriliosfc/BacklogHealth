@@ -8,7 +8,7 @@ const { chatCompletion, testConnection } = require('../../../aiClient');
 // ── getAiConfig ───────────────────────────────────────────────────────────────
 
 describe('getAiConfig', () => {
-  test('retorna campos completos quando configurado', () => {
+  test('retorna hasKey=true e sem apiKey raw quando configurado', () => {
     getAiCfg.mockReturnValue({ endpoint: 'https://ai.example.com', apiKey: 'key123', model: 'gpt-4', apiVersion: '2024-02' });
 
     const result = getAiConfig();
@@ -16,10 +16,11 @@ describe('getAiConfig', () => {
     expect(result).toEqual({
       configured:  true,
       endpoint:    'https://ai.example.com',
-      apiKey:      'key123',
+      hasKey:      true,
       model:       'gpt-4',
       apiVersion:  '2024-02',
     });
+    expect(result).not.toHaveProperty('apiKey');
   });
 
   test('configured=false quando endpoint ausente', () => {
@@ -32,15 +33,16 @@ describe('getAiConfig', () => {
     expect(getAiConfig().configured).toBe(false);
   });
 
-  test('retorna strings vazias para campos ausentes', () => {
+  test('hasKey=false e strings vazias quando AI não configurada', () => {
     getAiCfg.mockReturnValue(null);
 
     const result = getAiConfig();
 
     expect(result.endpoint).toBe('');
-    expect(result.apiKey).toBe('');
+    expect(result.hasKey).toBe(false);
     expect(result.model).toBe('');
     expect(result.apiVersion).toBe('');
+    expect(result).not.toHaveProperty('apiKey');
   });
 });
 
@@ -48,21 +50,25 @@ describe('getAiConfig', () => {
 
 describe('saveAiCfg', () => {
   test('throws 400 quando endpoint ausente', () => {
+    getAiCfg.mockReturnValue(null);
     expect(() => saveAiCfg({ endpoint: '', apiKey: 'k', model: 'm' }))
       .toThrow(expect.objectContaining({ status: 400 }));
   });
 
-  test('throws 400 quando apiKey ausente', () => {
+  test('throws 400 quando apiKey ausente e sem key existente', () => {
+    getAiCfg.mockReturnValue(null);
     expect(() => saveAiCfg({ endpoint: 'e', apiKey: '', model: 'm' }))
       .toThrow(expect.objectContaining({ status: 400 }));
   });
 
   test('throws 400 quando model ausente', () => {
+    getAiCfg.mockReturnValue(null);
     expect(() => saveAiCfg({ endpoint: 'e', apiKey: 'k', model: '' }))
       .toThrow(expect.objectContaining({ status: 400 }));
   });
 
   test('salva config com trim nos campos e retorna { ok: true }', () => {
+    getAiCfg.mockReturnValue(null);
     const result = saveAiCfg({ endpoint: '  https://ai.example.com  ', apiKey: '  key  ', model: '  gpt-4  ', apiVersion: '  2024  ' });
 
     expect(saveAiConfig).toHaveBeenCalledWith({
@@ -74,7 +80,17 @@ describe('saveAiCfg', () => {
     expect(result).toEqual({ ok: true });
   });
 
+  test('mantém key existente quando apiKey não fornecido no update', () => {
+    getAiCfg.mockReturnValue({ apiKey: 'existing-key' });
+    saveAiCfg({ endpoint: 'e', model: 'm' });
+
+    expect(saveAiConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: 'existing-key' })
+    );
+  });
+
   test('apiVersion padrão string vazia quando não fornecido', () => {
+    getAiCfg.mockReturnValue(null);
     saveAiCfg({ endpoint: 'e', apiKey: 'k', model: 'm' });
 
     expect(saveAiConfig).toHaveBeenCalledWith(

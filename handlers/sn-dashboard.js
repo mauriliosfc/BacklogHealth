@@ -205,8 +205,8 @@ function _incCardHTML(g) {
         </div>
         <div class="more-divider"></div>
         <div class="more-item danger" onclick="hideSNGroup(this)">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-          <span>Ocultar</span>
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+          <span>Remover</span>
         </div>
       </div>
     </div>
@@ -227,10 +227,8 @@ async function fetchSNResolved(snCfg, groupNames) {
   const now   = new Date();
   const y     = now.getFullYear();
   const m     = now.getMonth();
-  const start = `${y}-${String(m + 1).padStart(2, '0')}-01`;
-  const nextY = m === 11 ? y + 1 : y;
-  const nextM = String(m === 11 ? 1 : m + 2).padStart(2, '0');
-  const end   = `${nextY}-${nextM}-01`;
+  const start = new Date(y, m, 1).toISOString().slice(0, 19) + 'Z';
+  const end   = new Date(y, m + 1, 1).toISOString().slice(0, 19) + 'Z';
 
   const fields = 'sys_id,opened_at,resolved_at';
   const qs     = `sysparm_fields=${fields}&sysparm_display_value=all&sysparm_limit=1000`;
@@ -290,4 +288,45 @@ async function fetchAndBuildCards() {
   }
 }
 
-module.exports = { fetchSNGroups, fetchSNResolved, buildIncidentCardsHTML, fetchAndBuildCards, _calcMttr, _fmtMttr };
+async function buildSnViewHtml() {
+  const { kpi, cardsHtml } = await fetchAndBuildCards();
+  return `<div class="sn-content">
+    <div class="sn-kpi-bar">
+      <div class="sn-kpi-stat">
+        <div class="sn-kpi-lbl">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Open Incidents
+        </div>
+        <div class="sn-kpi-val sn-kpi-val--red">${kpi.totalOpen}</div>
+        <div class="sn-kpi-sub">${kpi.totalP1} P1 &middot; ${kpi.totalP2} P2 &middot; ${kpi.totalP3} P3</div>
+      </div>
+      <div class="sn-kpi-stat">
+        <div class="sn-kpi-lbl">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          Active Groups
+        </div>
+        <div class="sn-kpi-val">${kpi.activeGroups}</div>
+        <div class="sn-kpi-sub">with open incidents</div>
+      </div>
+      <div class="sn-kpi-stat">
+        <div class="sn-kpi-lbl">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Resolved this month
+        </div>
+        <div class="sn-kpi-val">${kpi.resolvedThisMonth}</div>
+        <div class="sn-kpi-sub">this month</div>
+      </div>
+      <div class="sn-kpi-stat">
+        <div class="sn-kpi-lbl">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          MTTR
+        </div>
+        <div class="sn-kpi-val">${kpi.mttr}</div>
+        <div class="sn-kpi-sub">Mean Time to Resolve</div>
+      </div>
+    </div>
+    ${cardsHtml}
+  </div>`;
+}
+
+module.exports = { fetchSNGroups, fetchSNResolved, buildIncidentCardsHTML, fetchAndBuildCards, buildSnViewHtml, _calcMttr, _fmtMttr };

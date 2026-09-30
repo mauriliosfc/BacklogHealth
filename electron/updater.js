@@ -6,7 +6,7 @@ const https        = require('https');
 const fs           = require('fs');
 const os           = require('os');
 const path         = require('path');
-const { shell }    = require('electron');
+const { spawn }    = require('child_process');
 
 const OWNER = 'mauriliosfc';
 const REPO  = 'BacklogHealth';
@@ -104,8 +104,9 @@ function downloadUpdate(url, onProgress) {
 }
 
 // ── Lançar o installer e fechar o app ────────────────────────────────────────
+// /S = silent mode: reinstala sem wizard, sempre recria atalhos Start Menu e Desktop
 function launchAndQuit(installerPath) {
-  shell.openPath(installerPath);
+  spawn(installerPath, ['/S'], { detached: true, stdio: 'ignore' }).unref();
 }
 
 module.exports = { checkForUpdates, downloadUpdate, launchAndQuit };

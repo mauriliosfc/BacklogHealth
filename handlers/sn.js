@@ -1,4 +1,4 @@
-const { getSnConfig, saveSnConfig, getProjectSnGroup, getCfg } = require('../config');
+const { getSnConfig, saveSnConfig, saveConfig, getProjectSnGroup, getCfg } = require('../config');
 const { snGet } = require('../servicenowClient');
 const { httpError } = require('./utils');
 
@@ -11,6 +11,8 @@ function getSnCfg({ project = '' } = {}) {
     resp.assignmentGroupName = grp?.assignmentGroupName || '';
     resp.slaEnabled          = grp?.slaEnabled          === true;
     resp.slaThresholds       = grp?.slaThresholds       || null;
+  } else {
+    resp.assignmentGroups = Array.isArray(sn?.assignmentGroups) ? sn.assignmentGroups : [];
   }
   return resp;
 }
@@ -48,33 +50,44 @@ async function testSn({ instance, user, pass } = {}) {
   }
 }
 
-// Returns the distinct assignment group names found in active incidents.
+// Returns all active assignment groups from the sys_user_group table.
 // Accepts raw credentials so it can be called before config is saved (onboarding).
 async function fetchGroups({ instance, user, pass } = {}) {
   if (!instance || !user || !pass)
     httpError(400, 'instance, user and pass are required.');
   try {
     const snCfg = { instance: instance.trim(), user: user.trim(), pass };
-    const qs = [
-      'sysparm_query=active=true',
-      'sysparm_display_value=true',
-      'sysparm_fields=assignment_group',
-      'sysparm_limit=1000',
-    ].join('&');
-    const data = await snGet(snCfg, `table/incident?${qs}`);
-    const names = [...new Set(
-      (data.result || [])
-        .map(r => {
-          const v = r.assignment_group;
-          if (!v) return '';
-          return (typeof v === 'object' ? (v.display_value || v.value) : v) || '';
-        })
-        .filter(Boolean)
-    )].sort();
-    return { groups: names };
+    const PAGE_SIZE = 2000;
+    const all = [];
+    let offset = 0;
+    while (true) {
+      const qs = [
+        'sysparm_fields=name,sys_id',
+        `sysparm_limit=${PAGE_SIZE}`,
+        `sysparm_offset=${offset}`,
+      ].join('&');
+      const data = await snGet(snCfg, `table/sys_user_group?${qs}`);
+      const page = data.result || [];
+      all.push(...page);
+      if (page.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
+    const groups = [...new Map(
+      all
+        .filter(r => r.name)
+        .map(r => [r.name, { name: r.name, sys_id: r.sys_id || '' }])
+    ).values()].sort((a, b) => a.name.localeCompare(b.name));
+    return { groups };
   } catch (e) {
     return { error: e.message, groups: [] };
   }
+}
+
+// Fetches groups using credentials already saved in config (no need to pass them again).
+async function fetchGroupsFromConfig() {
+  const sn = getSnConfig();
+  if (!sn?.instance || !sn?.user || !sn?.pass) httpError(400, 'ServiceNow not configured.');
+  return fetchGroups({ instance: sn.instance, user: sn.user, pass: sn.pass });
 }
 
 function getAllProjectsSnCfg() {
@@ -88,4 +101,37 @@ function getAllProjectsSnCfg() {
   };
 }
 
-module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, getAllProjectsSnCfg };
+function removeSnGroup({ group } = {}) {
+  if (!group) return { ok: false };
+  const cfg = getCfg();
+  if (cfg.servicenow?.assignmentGroups) {
+    cfg.servicenow.assignmentGroups = cfg.servicenow.assignmentGroups.filter(g => g !== group);
+  }
+  if (cfg.snGroupConfigs) delete cfg.snGroupConfigs[group];
+  saveConfig(cfg);
+  return { ok: true };
+}
+
+// Returns available columns for the problem table via sys_dictionary.
+// Uses saved credentials — no need to pass them again.
+async function fetchPrbFields() {
+  const sn = getSnConfig();
+  if (!sn?.instance || !sn?.user || !sn?.pass) httpError(400, 'ServiceNow not configured.');
+  try {
+    const qs = [
+      'sysparm_query=name=problem^active=true^internal_type!=collection^internal_type!=glide_list',
+      'sysparm_fields=element,column_label',
+      'sysparm_limit=500',
+    ].join('&');
+    const data = await snGet({ instance: sn.instance, user: sn.user, pass: sn.pass }, `table/sys_dictionary?${qs}`);
+    const fields = (data.result || [])
+      .filter(r => r.element && r.column_label)
+      .map(r => ({ key: r.element, label: r.column_label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return { fields };
+  } catch (e) {
+    return { error: e.message, fields: [] };
+  }
+}
+
+module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg, removeSnGroup, fetchPrbFields };

@@ -74,10 +74,14 @@ async function main() {
     // ── Static files ──────────────────────────────────────────────────────
     const urlPath    = url.split('?')[0];
     const staticPath = nodePath.join(PUBLIC_DIR, urlPath);
-    if (fs.existsSync(staticPath) && fs.statSync(staticPath).isFile()) {
+    const staticSafe = staticPath.startsWith(PUBLIC_DIR + nodePath.sep) || staticPath === PUBLIC_DIR;
+    if (staticSafe && fs.existsSync(staticPath) && fs.statSync(staticPath).isFile()) {
       const ext       = nodePath.extname(staticPath);
       const mimeTypes = { '.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json', '.svg': 'image/svg+xml' };
-      res.writeHead(200, { 'Content-Type': (mimeTypes[ext] || 'text/plain') + '; charset=utf-8' });
+      const noCache   = ext === '.js' || ext === '.css';
+      const headers   = { 'Content-Type': (mimeTypes[ext] || 'text/plain') + '; charset=utf-8' };
+      if (noCache) headers['Cache-Control'] = 'no-store';
+      res.writeHead(200, headers);
       res.end(fs.readFileSync(staticPath));
       return;
     }
@@ -236,6 +240,18 @@ async function main() {
       }
     }
 
+    // ── GET/POST /api/burndown-config ──────────────────────────────────────────
+    if (url.startsWith('/api/burndown-config')) {
+      if (req.method === 'GET') {
+        const qp = new URLSearchParams(url.split('?')[1] || '');
+        return json(res, () => azureH.getBurndownConfig({ project: qp.get('project') || '' }));
+      }
+      if (req.method === 'POST') {
+        const body = await readBody(req);
+        return json(res, () => azureH.saveBurndownConfig(JSON.parse(body || '{}')));
+      }
+    }
+
     // ── GET /api/report-fields ─────────────────────────────────────────────
     if (req.method === 'GET' && url.startsWith('/api/report-fields')) {
       const qp = new URLSearchParams(url.split('?')[1] || '');
@@ -258,7 +274,37 @@ async function main() {
         agingState:     qp.get('agingState') || 'In Review',
         incidentMonths: qp.get('incidentMonths'),
         deliveryStates: qp.get('deliveryStates') ? qp.get('deliveryStates').split(',').filter(s => s) : null,
+        ciFilter:       qp.get('ciFilter') || '',
         refresh:        qp.get('refresh') === '1',
+      }));
+    }
+
+    // ── GET /api/sn-volume-incidents-xlsx ────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/sn-volume-incidents-xlsx')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      const project = qp.get('project') || '';
+      const month   = qp.get('month')   || new Date().toISOString().slice(0, 7);
+      const xlsx    = await reportH.getVolumeIncidentsXlsx({
+        project, month, nMonths: qp.get('nMonths') || '1',
+      });
+      if (!xlsx) { res.writeHead(404); res.end('Not found'); return; }
+      const filename = `incidentes_volume_${project}_${month}.xlsx`.replace(/[^a-zA-Z0-9_.\-]/g, '_');
+      res.writeHead(200, {
+        'Content-Type':        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length':      xlsx.length,
+      });
+      res.end(xlsx);
+      return;
+    }
+
+    // ── GET /api/sn-volume-incidents ──────────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/sn-volume-incidents')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => reportH.getVolumeIncidents({
+        project:  qp.get('project')  || '',
+        month:    qp.get('month')    || new Date().toISOString().slice(0, 7),
+        nMonths:  qp.get('nMonths')  || '1',
       }));
     }
 
@@ -271,6 +317,39 @@ async function main() {
         mode:        qp.get('mode')        || 'backlog',
         filterField: qp.get('filterField') || '',
         filterValue: qp.get('filterValue') || '',
+        ciFilter:    qp.get('ciFilter')     || '',
+        group:       qp.get('group')       || '',
+      }));
+    }
+
+    // ── GET /api/sn-requests ────────────────────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/sn-requests')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      const dayMin = qp.get('dayMin'), dayMax = qp.get('dayMax');
+      return json(res, () => reportH.getRequests({
+        project:     qp.get('project')     || '',
+        month:       qp.get('month')       || new Date().toISOString().slice(0, 7),
+        mode:        qp.get('mode')        || 'backlog',
+        filterField: qp.get('filterField') || '',
+        filterValue: qp.get('filterValue') || '',
+        ciFilter:    qp.get('ciFilter')     || '',
+        dayMin:      dayMin !== null ? parseFloat(dayMin) : undefined,
+        dayMax:      dayMax !== null ? parseFloat(dayMax) : undefined,
+        group:       qp.get('group')       || '',
+      }));
+    }
+
+    // ── GET /api/sn-prbs ─────────────────────────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/sn-prbs')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      const dayMin = qp.get('dayMin'), dayMax = qp.get('dayMax');
+      return json(res, () => reportH.getPrbs({
+        project:     qp.get('project')     || '',
+        filterField: qp.get('filterField') || '',
+        filterValue: qp.get('filterValue') || '',
+        ciFilter:    qp.get('ciFilter')     || '',
+        dayMin:      dayMin !== null ? parseFloat(dayMin) : undefined,
+        dayMax:      dayMax !== null ? parseFloat(dayMax) : undefined,
         group:       qp.get('group')       || '',
       }));
     }
@@ -305,10 +384,36 @@ async function main() {
       return json(res, () => snH.testSn(JSON.parse(body || '{}')));
     }
 
-    // ── POST /api/sn-groups ────────────────────────────────────────────────
+    // ── GET /api/sn-groups (uses saved config credentials) ────────────────
+    if (req.method === 'GET' && url === '/api/sn-groups') {
+      return json(res, () => snH.fetchGroupsFromConfig());
+    }
+
+    // ── GET /api/prb-fields ───────────────────────────────────────────────
+    if (req.method === 'GET' && url === '/api/prb-fields') {
+      return json(res, () => snH.fetchPrbFields());
+    }
+
+    // ── POST /api/sn-groups (raw credentials — onboarding) ────────────────
     if (req.method === 'POST' && url === '/api/sn-groups') {
       const body = await readBody(req);
       return json(res, () => snH.fetchGroups(JSON.parse(body || '{}')));
+    }
+
+    // ── POST /api/remove-sn-group ──────────────────────────────────────────
+    if (req.method === 'POST' && url === '/api/remove-sn-group') {
+      const body = await readBody(req);
+      const { group } = JSON.parse(body || '{}');
+      return json(res, () => snH.removeSnGroup({ group }));
+    }
+
+    // ── GET /api/sn-view ───────────────────────────────────────────────────
+    if (req.method === 'GET' && url === '/api/sn-view') {
+      return json(res, async () => {
+        const snDash = require('./handlers/sn-dashboard');
+        const html   = await snDash.buildSnViewHtml();
+        return { html };
+      });
     }
 
     // ── GET / — dashboard ──────────────────────────────────────────────────
@@ -317,7 +422,8 @@ async function main() {
   });
 
   server.listen(PORT, () => {
-    console.log(`\n🚀 Dashboard rodando em: http://localhost:${PORT}\n`);
+    console.log(`\n Dashboard rodando em: http://localhost:${PORT}`);
+    console.log(` Servindo arquivos de: ${PUBLIC_DIR}\n`);
   });
 }
 

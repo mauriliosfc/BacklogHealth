@@ -2,6 +2,7 @@ const { getCfg, saveConfig, getDisplayName, parseOrgInput } = require('../config
 const { rawAzureGet } = require('../azureClient');
 const { buildAndCache } = require('./dashboard');
 const { httpError } = require('./utils');
+const state = require('./state');
 
 async function listProjects({ org, pat }) {
   if (!org || !pat) httpError(400, 'org e pat são obrigatórios');
@@ -82,6 +83,7 @@ async function removeProject({ project }) {
 async function disconnect() {
   const existing = getCfg();
   saveConfig({ ...existing, org: '', baseUrl: '', pat: '', projects: [] });
+  state.html = '';
   return { ok: true };
 }
 

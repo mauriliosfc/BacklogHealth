@@ -29,12 +29,18 @@ const EMPTY_STATE_HTML = `
   </div>
 </div>`;
 
+const APP_VERSION = (() => { try { return require('../package.json').version; } catch { return ''; } })();
+
 const VIEWS_DIR = nodePath.join(__dirname, '..', 'views');
 const templates = {
   dashboard:   fs.readFileSync(nodePath.join(VIEWS_DIR, 'dashboard.html'),    'utf8'),
   setup:       fs.readFileSync(nodePath.join(VIEWS_DIR, 'setup.html'),        'utf8'),
   snDashboard: fs.readFileSync(nodePath.join(VIEWS_DIR, 'sn-dashboard.html'), 'utf8'),
 };
+
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 function renderTemplate(html, vars) {
   return html.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
@@ -92,20 +98,28 @@ function buildSummaryBar(results) {
   </div>`;
 }
 
+const SOURCE_TOGGLE_HTML = `<div class="source-switcher">
+  <button class="btn-source active" data-source="az" onclick="toggleSource('az')" title="Projetos Azure">AZ</button>
+  <button class="btn-source" data-source="sn" onclick="toggleSource('sn')" title="Projetos ServiceNow">SN</button>
+</div>`;
+
 function renderDashboard(results) {
   const cfg     = getCfg();
   const isEmpty = !cfg.projects || cfg.projects.length === 0;
   const count   = results.filter(r => !r.error).length;
   const baseUrl = cfg.baseUrl || `https://dev.azure.com/${cfg.org}`;
+  const orgSafe = escapeHtml(cfg.org);
   return renderTemplate(templates.dashboard, {
-    ORG:         cfg.org,
-    SUBTITLE:    isEmpty
-      ? (cfg.org || 'Azure DevOps')
-      : `${count} project${count !== 1 ? 's' : ''} · ${cfg.org || 'Azure DevOps'}`,
-    LAST_UPDATE: new Date().toLocaleString('pt-BR'),
-    CARDS:       isEmpty ? EMPTY_STATE_HTML : buildCardHTML(results, baseUrl),
-    EMPTY_CLASS: isEmpty ? 'cards-grid--empty' : '',
-    SUMMARY_BAR: isEmpty ? '' : buildSummaryBar(results),
+    ORG:           orgSafe,
+    SUBTITLE:      isEmpty
+      ? (orgSafe || 'Azure DevOps')
+      : `${count} project${count !== 1 ? 's' : ''} · ${orgSafe || 'Azure DevOps'}`,
+    LAST_UPDATE:   new Date().toLocaleString('pt-BR'),
+    CARDS:         isEmpty ? EMPTY_STATE_HTML : buildCardHTML(results, baseUrl),
+    EMPTY_CLASS:   isEmpty ? 'cards-grid--empty' : '',
+    SUMMARY_BAR:   isEmpty ? '' : buildSummaryBar(results),
+    SOURCE_TOGGLE: getAppMode() === 'full' ? SOURCE_TOGGLE_HTML : '',
+    VERSION:       APP_VERSION,
   });
 }
 
@@ -133,7 +147,7 @@ function renderSetup(prefill = {}) {
     SUBTITLE:               isSettings
       ? 'Update your credentials and monitored projects'
       : 'Configure your Azure DevOps credentials to get started',
-    ORG_VALUE:              orgDisplay.replace(/"/g, '&quot;'),
+    ORG_VALUE:              escapeHtml(orgDisplay),
     PAT_VALUE:              pat,
     SELECTED_PROJECTS_JSON: selectedProjectsJson,
     BACK_LINK:              isSettings

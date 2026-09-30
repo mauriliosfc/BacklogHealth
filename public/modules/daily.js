@@ -31,8 +31,9 @@ export function buildDailySlide(card, forcedSprintKey = null) {
   } else {
     const currentOption = card.querySelector('.option-row.is-current input');
     currentIter = currentOption ? currentOption.value : null;
-    const sprintEl = card.querySelector('.sprint');
-    sprintName = sprintEl ? sprintEl.textContent.trim() : t('daily_no_sprint');
+    sprintName = currentIter
+      ? (currentIter.includes('\\') ? currentIter.split('\\').pop() : currentIter)
+      : t('daily_no_sprint');
     const currentRow = card.querySelector('.option-row.is-current');
     sprintDate = currentRow ? (currentRow.querySelector('.option-date') || {}).textContent || '' : '';
   }
@@ -58,14 +59,17 @@ export function buildDailySlide(card, forcedSprintKey = null) {
 
   const itemLabel = isTaskMode ? t('stat_tasks') : t('stat_us');
 
-  const rows = Array.from(card.querySelectorAll('tbody tr[data-iteration]'))
-    .filter(row => !currentIter || row.dataset.iteration === currentIter)
-    .sort((a, b) => (parseFloat(a.dataset.order) || 999999) - (parseFloat(b.dataset.order) || 999999));
-  const tableRows = rows.map(r => {
-    const id = r.dataset.id || '';
-    const url = r.dataset.url || '';
-    const idCell = '<td class="daily-id-cell">' + (url ? '<a href="' + url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">#' + id + '</a>' : '#' + id) + '</td>';
-    return r.outerHTML.replace(/<td/, idCell + '<td');
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const tableRows = mainItems.map(i => {
+    const idCell = '<td class="daily-id-cell">' +
+      (i.url ? '<a href="' + i.url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">#' + i.id + '</a>' : '#' + i.id) +
+      '</td>';
+    return '<tr>' + idCell +
+      '<td>' + esc(i.title) + '</td>' +
+      '<td>' + esc(i.state) + '</td>' +
+      '<td>' + (i.pts != null ? i.pts : '') + '</td>' +
+      '<td>' + esc(i.assignedTo) + '</td>' +
+      '</tr>';
   }).join('');
 
   const usSection = tableRows

@@ -331,6 +331,37 @@ describe('_fmtMttr', () => {
   });
 });
 
+// ── buildSnViewHtml ───────────────────────────────────────────────────────────
+
+describe('buildSnViewHtml', () => {
+  test('retorna HTML com barra KPI e cards de incidentes', async () => {
+    const html = await snDash.buildSnViewHtml();
+    expect(html).toContain('sn-content');
+    expect(html).toContain('sn-kpi-bar');
+    expect(html).toContain('sn-inc-cards');
+  });
+
+  test('inclui valores corretos de KPI no HTML', async () => {
+    const html = await snDash.buildSnViewHtml();
+    expect(html).toContain('4');
+    expect(html).toContain('sn-kpi-val--red');
+    expect(html).toContain('P1');
+  });
+
+  test('retorna mensagem de erro quando API falha', async () => {
+    snGet.mockRejectedValueOnce(new Error('timeout'));
+    const html = await snDash.buildSnViewHtml();
+    expect(html).toContain('Failed to load incidents');
+    expect(html).toContain('timeout');
+  });
+
+  test('inclui MTTR e resolved no HTML', async () => {
+    const html = await snDash.buildSnViewHtml();
+    expect(html).toContain('MTTR');
+    expect(html).toContain('Resolved this month');
+  });
+});
+
 // ── fetchSNResolved ───────────────────────────────────────────────────────────
 
 describe('fetchSNResolved', () => {

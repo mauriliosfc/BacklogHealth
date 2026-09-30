@@ -2,10 +2,15 @@ const { getCfg, getGithubCfg } = require('../config');
 const { createIssue } = require('../githubClient');
 const { httpError } = require('./utils');
 
+let _builtin = null;
+try { _builtin = require('../utils/feedbackCfg'); } catch (_) {}
+
 async function submitFeedback({ type, title, description } = {}) {
-  const gh = getGithubCfg();
+  const configured = getGithubCfg();
+  const builtin    = (_builtin?.token) ? _builtin : null;
+  const gh         = configured || builtin;
   if (!gh?.token || !gh?.repo)
-    httpError(400, 'GitHub feedback not configured. Ask the administrator to configure it in Settings.');
+    httpError(400, 'GitHub feedback not configured.');
   if (!title?.trim() || !description?.trim())
     httpError(400, 'Title and description are required.');
 
