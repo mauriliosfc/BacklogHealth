@@ -274,6 +274,7 @@ async function main() {
         agingState:     qp.get('agingState') || 'In Review',
         incidentMonths: qp.get('incidentMonths'),
         deliveryStates: qp.get('deliveryStates') ? qp.get('deliveryStates').split(',').filter(s => s) : null,
+        ciFilter:       qp.get('ciFilter') || '',
         refresh:        qp.get('refresh') === '1',
       }));
     }
@@ -316,6 +317,39 @@ async function main() {
         mode:        qp.get('mode')        || 'backlog',
         filterField: qp.get('filterField') || '',
         filterValue: qp.get('filterValue') || '',
+        ciFilter:    qp.get('ciFilter')     || '',
+        group:       qp.get('group')       || '',
+      }));
+    }
+
+    // ── GET /api/sn-requests ────────────────────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/sn-requests')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      const dayMin = qp.get('dayMin'), dayMax = qp.get('dayMax');
+      return json(res, () => reportH.getRequests({
+        project:     qp.get('project')     || '',
+        month:       qp.get('month')       || new Date().toISOString().slice(0, 7),
+        mode:        qp.get('mode')        || 'backlog',
+        filterField: qp.get('filterField') || '',
+        filterValue: qp.get('filterValue') || '',
+        ciFilter:    qp.get('ciFilter')     || '',
+        dayMin:      dayMin !== null ? parseFloat(dayMin) : undefined,
+        dayMax:      dayMax !== null ? parseFloat(dayMax) : undefined,
+        group:       qp.get('group')       || '',
+      }));
+    }
+
+    // ── GET /api/sn-prbs ─────────────────────────────────────────────────────
+    if (req.method === 'GET' && url.startsWith('/api/sn-prbs')) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      const dayMin = qp.get('dayMin'), dayMax = qp.get('dayMax');
+      return json(res, () => reportH.getPrbs({
+        project:     qp.get('project')     || '',
+        filterField: qp.get('filterField') || '',
+        filterValue: qp.get('filterValue') || '',
+        ciFilter:    qp.get('ciFilter')     || '',
+        dayMin:      dayMin !== null ? parseFloat(dayMin) : undefined,
+        dayMax:      dayMax !== null ? parseFloat(dayMax) : undefined,
         group:       qp.get('group')       || '',
       }));
     }

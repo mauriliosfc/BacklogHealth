@@ -1362,11 +1362,17 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .report-filter-btn--active:hover { background: var(--c-blue-bd); border-color: var(--c-blue-bd); }
 /* CSS-driven section visibility — persists across _rerender() because the attribute lives on the container, not the sections */
 [data-section-filter="sprint"] [data-section="incidents"],
-[data-section-filter="sprint"] [data-section="prbs"] { display: none !important; }
+[data-section-filter="sprint"] [data-section="prbs"],
+[data-section-filter="sprint"] [data-section="requests"] { display: none !important; }
 [data-section-filter="incidents"] [data-section="sprint"],
-[data-section-filter="incidents"] [data-section="prbs"] { display: none !important; }
+[data-section-filter="incidents"] [data-section="prbs"],
+[data-section-filter="incidents"] [data-section="requests"] { display: none !important; }
 [data-section-filter="prbs"] [data-section="sprint"],
-[data-section-filter="prbs"] [data-section="incidents"] { display: none !important; }
+[data-section-filter="prbs"] [data-section="incidents"],
+[data-section-filter="prbs"] [data-section="requests"] { display: none !important; }
+[data-section-filter="requests"] [data-section="sprint"],
+[data-section-filter="requests"] [data-section="incidents"],
+[data-section-filter="requests"] [data-section="prbs"] { display: none !important; }
 
 /* Print / PDF export */
 @media print {

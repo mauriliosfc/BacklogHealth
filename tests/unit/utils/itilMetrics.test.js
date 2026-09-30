@@ -2,6 +2,8 @@ const {
   calcMttrByPriority,
   calcReopenRate,
   calcIncidentAgingBuckets,
+  calcRequestLeadTime,
+  calcRequestAgingBuckets,
   calcPrbKpis,
   calcPrbAgingBuckets,
   calcPrbByCategory,
@@ -291,10 +293,84 @@ describe('getIndicatorCatalog', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  test('sections são somente incidents ou prbs', () => {
+  test('sections são somente incidents, prbs ou requests', () => {
     getIndicatorCatalog().forEach(item => {
-      expect(['incidents', 'prbs']).toContain(item.section);
+      expect(['incidents', 'prbs', 'requests']).toContain(item.section);
     });
+  });
+});
+
+// ── calcRequestLeadTime ───────────────────────────────────────────────────────
+
+describe('calcRequestLeadTime', () => {
+  const makeReq = (openedAt, closedAt) => ({ opened_at: openedAt, closed_at: closedAt });
+
+  test('retorna null e count 0 quando lista vazia', () => {
+    const r = calcRequestLeadTime([]);
+    expect(r.avgDays).toBeNull();
+    expect(r.count).toBe(0);
+  });
+
+  test('calcula média em dias corretamente', () => {
+    const items = [
+      makeReq('2026-06-01T00:00:00Z', '2026-06-03T00:00:00Z'), // 2d
+      makeReq('2026-06-01T00:00:00Z', '2026-06-05T00:00:00Z'), // 4d
+    ];
+    const r = calcRequestLeadTime(items);
+    expect(r.avgDays).toBe(3);
+    expect(r.count).toBe(2);
+  });
+
+  test('ignora itens sem closed_at ou opened_at', () => {
+    const items = [
+      makeReq('2026-06-01T00:00:00Z', null),
+      makeReq(null, '2026-06-01T00:00:00Z'),
+      makeReq('2026-06-01T00:00:00Z', '2026-06-02T00:00:00Z'), // 1d — válido
+    ];
+    const r = calcRequestLeadTime(items);
+    expect(r.avgDays).toBe(1);
+    expect(r.count).toBe(1);
+  });
+
+  test('lista nula não lança exceção', () => {
+    expect(() => calcRequestLeadTime(null)).not.toThrow();
+  });
+});
+
+// ── calcRequestAgingBuckets ───────────────────────────────────────────────────
+
+describe('calcRequestAgingBuckets', () => {
+  test('distribui por dias corretamente com thresholds padrão [2, 5, 10]', () => {
+    const list = [
+      { agingDays: 1 },  // < 2
+      { agingDays: 3 },  // 2–5
+      { agingDays: 8 },  // 5–10
+      { agingDays: 15 }, // > 10
+    ];
+    const r = calcRequestAgingBuckets(list);
+    expect(r.buckets[0].count).toBe(1);
+    expect(r.buckets[1].count).toBe(1);
+    expect(r.buckets[2].count).toBe(1);
+    expect(r.buckets[3].count).toBe(1);
+    expect(r.total).toBe(4);
+  });
+
+  test('retorna total zero para lista vazia', () => {
+    const r = calcRequestAgingBuckets([]);
+    expect(r.total).toBe(0);
+    r.buckets.forEach(b => { expect(b.count).toBe(0); expect(b.pct).toBe(0); });
+  });
+
+  test('usa thresholds customizados', () => {
+    const list = [{ agingDays: 1 }, { agingDays: 12 }];
+    const r    = calcRequestAgingBuckets(list, [3, 6, 10]);
+    expect(r.buckets[0].label).toBe('< 3d');
+    expect(r.buckets[0].count).toBe(1);
+    expect(r.buckets[3].count).toBe(1);
+  });
+
+  test('lista nula não lança exceção', () => {
+    expect(() => calcRequestAgingBuckets(null)).not.toThrow();
   });
 });
 

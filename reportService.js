@@ -6,7 +6,7 @@ const { paginatedItems } = require('./utils/paginate');
 const { snGet } = require('./servicenowClient');
 
 const { CACHE_DIR } = require('./utils/paths');
-const { calcMttrByPriority, calcReopenRate, calcIncidentAgingBuckets, calcPrbKpis } = require('./utils/itilMetrics');
+const { calcMttrByPriority, calcReopenRate, calcIncidentAgingBuckets, calcPrbKpis, calcRequestLeadTime, calcRequestAgingBuckets } = require('./utils/itilMetrics');
 
 function _ensureCache() {
   if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -37,6 +37,8 @@ function cacheInvalidate(project, month, groupField, snExtra) {
   try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v2')); } catch (_) {}
   try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v3')); } catch (_) {}
   try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v4')); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v5')); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v6')); } catch (_) {}
 }
 
 // Retorna Set com IterationPaths das sprints do time que se sobrepõem ao período
@@ -346,6 +348,20 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
 
 // ── Service Now data ───────────────────────────────────────────────────────────
 
+// Campos de agrupamento clicáveis (drill-down) — espelha _INC_GROUPBY_FIELDS/_REQ_GROUPBY_FIELDS do frontend.
+// Mantido como whitelist explícita porque filterField chega via query string do cliente.
+const _INC_GROUPBY_WHITELIST = new Set([
+  'cmdb_ci.name', 'u_additional_res_code', 'assignment_group', 'assigned_to', 'priority',
+  'impact', 'urgency', 'state', 'category', 'subcategory', 'location.name', 'close_code', 'contact_type',
+]);
+const _REQ_GROUPBY_WHITELIST = new Set([
+  'request_item.cat_item.name', 'priority', 'assignment_group', 'assigned_to', 'state',
+  'request_item.request.requested_for.name',
+]);
+const _PRB_GROUPBY_WHITELIST = new Set([
+  'category', 'state', 'priority', 'assignment_group', 'assigned_to', 'known_error', 'rca_complete',
+]);
+
 // Normaliza campo SN — display label (u_additional_res_code, cmdb_ci.name, etc.)
 function _snVal(v) {
   if (!v && v !== 0) return null;
@@ -359,7 +375,7 @@ function _snRaw(v) {
   return String(v) || null;
 }
 
-async function fetchSnReport(displayName, period, prbAgingColumns = null) {
+async function fetchSnReport(displayName, period, prbAgingColumns = null, ciFilter = '') {
   const snCfg  = getSnConfig();
   if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
 
@@ -378,21 +394,25 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
   }
 
   const extraPrbKeys = (prbAgingColumns || []).filter(c => c.key.startsWith('sn:')).map(c => c.key.slice(3)).sort();
-  const snCacheKey = String(period.history.length) + '_v4' + (extraPrbKeys.length ? '_prb:' + extraPrbKeys.join(',') : '');
+  const snCacheKey = String(period.history.length) + '_v6' + (extraPrbKeys.length ? '_prb:' + extraPrbKeys.join(',') : '') + (ciFilter ? '_ci:' + ciFilter : '');
   const cached = _readCache('sn', displayName, period.month, snCacheKey);
   if (cached) return cached;
 
   // ServiceNow assignment_group field accepts sys_id (32-char hex) directly.
   // If user provided a display name, use dot-notation: assignment_group.name=
   const grpFilter = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
+  // Filtro opcional por Configuration Item — mesmo campo (cmdb_ci.name) nas três entidades,
+  // validado contra a instância real (incident/problem/sc_task todos populam cmdb_ci diretamente).
+  const ciFrag = ciFilter ? `^cmdb_ci.name=${ciFilter}` : '';
+  const taskCiFrag = ciFilter ? `^task.cmdb_ci.name=${ciFilter}` : '';
 
   const [sy, sm, sd] = period.start.split('-').map(Number);
   const [ey, em, ed] = period.end.split('-').map(Number);
   const start = new Date(sy, sm - 1, sd, 0, 0, 0).toISOString().slice(0, 19) + 'Z';
   const end   = new Date(ey, em - 1, ed, 23, 59, 59).toISOString().slice(0, 19) + 'Z';
 
-  const incQuery              = `${grpFilter}^opened_at>=${start}^opened_at<=${end}`;
-  const incClosedQuery        = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}`;
+  const incQuery              = `${grpFilter}^opened_at>=${start}^opened_at<=${end}${ciFrag}`;
+  const incClosedQuery        = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}${ciFrag}`;
   // Mês atual → backlog ativo agora (active=true exclui cancelados e encerrados).
   // Mês passado → ponto-no-tempo (3 partes via ^NQ):
   //   1. Abertos ainda hoje e não cancelados (resolved_atISEMPTY^state!=8)
@@ -401,31 +421,44 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
   // A regressão do gráfico depende deste valor como âncora correta.
   const curMonth        = new Date().toISOString().slice(0, 7);
   const incBacklogQuery = period.month === curMonth
-    ? `${grpFilter}^active=true^state!=6^state!=7`
-    : `${grpFilter}^opened_at<=${end}^resolved_atISEMPTY^state!=8^NQ${grpFilter}^opened_at<=${end}^state=8^closed_at>${end}^NQ${grpFilter}^opened_at<=${end}^resolved_at>${end}`;
-  const prbQuery              = `${grpFilter}^state!=106^state!=107`;
-  const prbResolvedQuery      = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}`;
-  const prbOpenedThisMonthQuery = `${grpFilter}^opened_at>=${start}^opened_at<=${end}`;
+    ? `${grpFilter}^active=true^state!=6^state!=7${ciFrag}`
+    : `${grpFilter}^opened_at<=${end}^resolved_atISEMPTY^state!=8${ciFrag}^NQ${grpFilter}^opened_at<=${end}^state=8^closed_at>${end}${ciFrag}^NQ${grpFilter}^opened_at<=${end}^resolved_at>${end}${ciFrag}`;
+  const prbQuery              = `${grpFilter}^state!=106^state!=107${ciFrag}`;
+  const prbResolvedQuery      = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}${ciFrag}`;
+  const prbOpenedThisMonthQuery = `${grpFilter}^opened_at>=${start}^opened_at<=${end}${ciFrag}`;
   // reopened_time: incidentes reabertos no período (campo nativo do SN)
-  const incReopenedQuery      = `${grpFilter}^reopened_time>=${start}^reopened_time<=${end}`;
+  const incReopenedQuery      = `${grpFilter}^reopened_time>=${start}^reopened_time<=${end}${ciFrag}`;
   // task_sla: usa business_elapsed_percentage nativo do ServiceNow (calendário útil)
   // Filtra por task.opened_at (mesma âncora usada nos demais gráficos) para garantir
   // que apenas incidentes abertos no período entrem no cálculo.
   const taskSlaGrpFilter = isSysId ? `task.assignment_group=${grp}` : `task.assignment_group.name=${grp}`;
-  const taskSlaQuery     = `${taskSlaGrpFilter}^task.opened_at>=${start}^task.opened_at<=${end}`;
+  const taskSlaQuery     = `${taskSlaGrpFilter}^task.opened_at>=${start}^task.opened_at<=${end}${taskCiFrag}`;
+  // Requests: assignment_group NÃO é populado em sc_req_item nesta instância — o roteamento
+  // por equipe acontece na catalog task (sc_task), com request_item.* via dot-walk até o RITM/pedido pai
+  // (validado com consulta exploratória real — ver decisões #173-176 em docs/decisions.md).
+  // cmdb_ci já vem direto em sc_task (não precisa de dot-walk via request_item — validado).
+  // Sem estado "cancelado" separado — closed_at cobre qualquer encerramento (completo/incompleto/cancelado).
+  const reqQuery        = `${grpFilter}^opened_at>=${start}^opened_at<=${end}${ciFrag}`;
+  const reqClosedQuery  = `${grpFilter}^closed_at>=${start}^closed_at<=${end}${ciFrag}`;
+  const reqBacklogQuery = period.month === curMonth
+    ? `${grpFilter}^active=true${ciFrag}`
+    : `${grpFilter}^opened_at<=${end}^closed_atISEMPTY${ciFrag}^NQ${grpFilter}^opened_at<=${end}^closed_at>${end}${ciFrag}`;
 
   console.log(`[SN] project="${displayName}" group="${grp}" isSysId=${isSysId}`);
   console.log(`[SN] incQuery: ${incQuery}`);
 
-  const [incRes, incClosedRes, incBacklogRes, prbRes, prbResolvedRes, prbOpenedThisMonthRes, taskSlaRes, incReopenedRes] = await Promise.all([
+  const [incRes, incClosedRes, incBacklogRes, prbRes, prbResolvedRes, prbOpenedThisMonthRes, taskSlaRes, incReopenedRes, reqRes, reqClosedRes, reqBacklogRes] = await Promise.all([
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incQuery)}&sysparm_fields=sys_id,priority,impact,urgency,cmdb_ci.name,u_additional_res_code,location.name,state,assigned_to,assignment_group,category,subcategory,close_code,contact_type&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN incidents error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at,closed_at,priority&sysparm_limit=1000`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incBacklogQuery)}&sysparm_fields=sys_id,opened_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
-    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,impact,urgency,category,state,assignment_group.name,assigned_to.name,opened_at,known_error,workaround_instructions,rca_complete${extraPrbKeys.length ? ',' + extraPrbKeys.join(',') : ''}&sysparm_display_value=all&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
+    snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbQuery)}&sysparm_fields=sys_id,number,short_description,priority,impact,urgency,category,state,assignment_group.name,assigned_to.name,opened_at,known_error,workaround_instructions,rca_complete,cmdb_ci.name${extraPrbKeys.length ? ',' + extraPrbKeys.join(',') : ''}&sysparm_display_value=all&sysparm_limit=200`).catch(e => { console.error('[SN problems error]', e.message); return { result: [] }; }),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQuery)}&sysparm_fields=sys_id,opened_at,resolved_at&sysparm_limit=200`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedThisMonthQuery)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/task_sla?sysparm_query=${encodeURIComponent(taskSlaQuery)}&sysparm_fields=task,task.priority,business_elapsed_percentage&sysparm_limit=2000`).catch(() => ({ result: [] })),
     snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incReopenedQuery)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
+    snGet(snCfg, `table/sc_task?sysparm_query=${encodeURIComponent(reqQuery)}&sysparm_fields=sys_id,priority,state,assignment_group,request_item.cat_item.name,opened_at,closed_at,assigned_to,request_item.number,request_item.request.requested_for.name,cmdb_ci.name&sysparm_display_value=all&sysparm_limit=1000`).catch(e => { console.error('[SN requests error]', e.message); return { result: [] }; }),
+    snGet(snCfg, `table/sc_task?sysparm_query=${encodeURIComponent(reqClosedQuery)}&sysparm_fields=sys_id,opened_at,closed_at,priority&sysparm_limit=1000`).catch(() => ({ result: [] })),
+    snGet(snCfg, `table/sc_task?sysparm_query=${encodeURIComponent(reqBacklogQuery)}&sysparm_fields=sys_id,number,request_item.cat_item.name,priority,assigned_to.name,opened_at&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
   ]);
 
   const incidents              = incRes.result || [];
@@ -437,7 +470,12 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
   const prbs                   = prbRes.result || [];
   const prbsResolvedInPeriod   = prbResolvedRes.result || [];
   const prbsOpenedInPeriod     = prbOpenedThisMonthRes.result || [];
-  console.log(`[SN] incidents returned: ${incidents.length}, problems: ${prbs.length}`);
+  const requests                = reqRes.result || [];
+  const reqClosedRaw            = reqClosedRes.result || [];
+  const reqClosedInPeriod       = [...new Map(reqClosedRaw.map(i => [i.sys_id, i])).values()];
+  const reqBacklogItems         = reqBacklogRes.result || [];
+  const reqBacklog              = reqBacklogItems.length;
+  console.log(`[SN] incidents returned: ${incidents.length}, problems: ${prbs.length}, requests: ${requests.length}`);
 
   let incAvgResolutionDays = 0;
   if (incClosedInPeriod.length > 0) {
@@ -490,16 +528,19 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
   const mttrByPriority  = calcMttrByPriority(incClosedInPeriod);
   const reopenRate      = calcReopenRate(incReopenedCount, incClosedInPeriod.length);
   const incAgingBuckets = calcIncidentAgingBuckets(incBacklogItems);
+  const reqLeadTime     = calcRequestLeadTime(reqClosedInPeriod);
 
   // Histórico mensal — processado em lotes de 4 meses em paralelo (16 req/lote).
   // Reduz de 13 round-trips sequenciais para ~4, sem sobrecarregar o SN.
   const HISTORY_BATCH = 4;
   const monthly      = [];
   const prbMonthly   = [];
+  const reqMonthly    = [];
   const sysMonthData = {}; // { ciName: [count per history index] }
   const altMonthData  = {}; // { resCode: [count per history index] }
   const altRawValues  = {}; // { displayValue: rawValue } — mapeamento para filtro SN
   const locMonthData  = {}; // { locationName: [count per history index] }
+  const catMonthData  = {}; // { catalogItemName: [count per history index] }
 
   const allHistoryResults = [];
   for (let bStart = 0; bStart < period.history.length; bStart += HISTORY_BATCH) {
@@ -508,25 +549,29 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
         const [hy, hm] = m.split('-').map(Number);
         const hs = new Date(hy, hm - 1, 1).toISOString().slice(0, 19) + 'Z';
         const he = new Date(hy, hm, 0, 23, 59, 59).toISOString().slice(0, 19) + 'Z';
-        const incOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
-        const incClosedQ    = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
-        const incCancelledQ = `${grpFilter}^state=8^closed_at>=${hs}^closed_at<=${he}`;
-        const prbOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}`;
-        const prbResolvedQ  = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}`;
-        const [rIncO, rIncC, rIncCanc, rPrbO, rPrbR] = await Promise.all([
+        const incOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}${ciFrag}`;
+        const incClosedQ    = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}${ciFrag}`;
+        const incCancelledQ = `${grpFilter}^state=8^closed_at>=${hs}^closed_at<=${he}${ciFrag}`;
+        const prbOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}${ciFrag}`;
+        const prbResolvedQ  = `${grpFilter}^resolved_at>=${hs}^resolved_at<=${he}${ciFrag}`;
+        const reqOpenedQ    = `${grpFilter}^opened_at>=${hs}^opened_at<=${he}${ciFrag}`;
+        const reqClosedQ    = `${grpFilter}^closed_at>=${hs}^closed_at<=${he}${ciFrag}`;
+        const [rIncO, rIncC, rIncCanc, rPrbO, rPrbR, rReqO, rReqC] = await Promise.all([
           snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incOpenedQ)}&sysparm_fields=sys_id,cmdb_ci.name,u_additional_res_code,location.name,priority&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incClosedQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/incident?sysparm_query=${encodeURIComponent(incCancelledQ)}&sysparm_fields=sys_id&sysparm_limit=1000`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbOpenedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
           snGet(snCfg, `table/problem?sysparm_query=${encodeURIComponent(prbResolvedQ)}&sysparm_fields=sys_id&sysparm_limit=200`).catch(() => ({ result: [] })),
+          snGet(snCfg, `table/sc_task?sysparm_query=${encodeURIComponent(reqOpenedQ)}&sysparm_fields=sys_id,request_item.cat_item.name,priority&sysparm_display_value=all&sysparm_limit=1000`).catch(() => ({ result: [] })),
+          snGet(snCfg, `table/sc_task?sysparm_query=${encodeURIComponent(reqClosedQ)}&sysparm_fields=sys_id,opened_at,closed_at&sysparm_limit=1000`).catch(() => ({ result: [] })),
         ]);
-        return { m, rIncO, rIncC, rIncCanc, rPrbO, rPrbR };
+        return { m, rIncO, rIncC, rIncCanc, rPrbO, rPrbR, rReqO, rReqC };
       })
     );
     allHistoryResults.push(...batch);
   }
 
-  allHistoryResults.forEach(({ m, rIncO, rIncC, rIncCanc, rPrbO, rPrbR }, mIdx) => {
+  allHistoryResults.forEach(({ m, rIncO, rIncC, rIncCanc, rPrbO, rPrbR, rReqO, rReqC }, mIdx) => {
     const incOpened    = rIncO.result || [];
     const incClosed    = (rIncC.result || []).length;
     const incCancelled = (rIncCanc.result || []).length;
@@ -562,6 +607,20 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
       opened:   (rPrbO.result || []).length,
       resolved: (rPrbR.result || []).length,
     });
+
+    const reqOpened = rReqO.result || [];
+    reqOpened.forEach(i => {
+      const cat = _snVal(i['request_item.cat_item.name']) || 'Outros';
+      if (!catMonthData[cat]) catMonthData[cat] = new Array(period.history.length).fill(0);
+      catMonthData[cat][mIdx]++;
+    });
+    const reqClosedMonth = rReqC.result || [];
+    reqMonthly.push({
+      label:          m,
+      opened:         reqOpened.length,
+      closed:         reqClosedMonth.length,
+      avgLeadTimeDays: calcRequestLeadTime(reqClosedMonth).avgDays,
+    });
   });
 
   // Backlog histórico de Incidentes — regressão a partir do backlog atual (sem clamp na cadeia)
@@ -578,6 +637,13 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
   for (let i = prbMonthly.length - 2; i >= 0; i--) {
     const next = prbMonthly[i + 1];
     prbMonthly[i].openBacklog = Math.max(0, next.openBacklog - next.opened + next.resolved);
+  }
+
+  // Backlog histórico de Requests — calculado de trás para frente a partir do backlog atual
+  reqMonthly[reqMonthly.length - 1].openBacklog = reqBacklog;
+  for (let i = reqMonthly.length - 2; i >= 0; i--) {
+    const next = reqMonthly[i + 1];
+    reqMonthly[i].openBacklog = Math.max(0, next.openBacklog - next.opened + next.closed);
   }
 
 
@@ -624,11 +690,17 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
     .map(([name, counts]) => ({ name, monthly: counts, total: counts.reduce((s, c) => s + c, 0) }))
     .sort((a, b) => b.total - a.total);
 
-  // Generic flat groupby — reuses the same `incidents` array
-  const _snGroupby = (field, val = v => _snVal(v) || 'N/A') => {
+  // Generic flat groupby — reuses o array `incidents` já carregado.
+  // rawValue preserva o valor interno (sys_id de referência ou código) para permitir
+  // drill-down por clique — a query de filtro precisa do valor bruto, não do display_value.
+  const _snGroupby = (field, val = v => _snVal(v) || 'N/A', raw = v => _snRaw(v)) => {
     const m = {};
-    incidents.forEach(i => { const k = val(i[field]); m[k] = (m[k] || 0) + 1; });
-    return Object.entries(m).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+    incidents.forEach(i => {
+      const k = val(i[field]);
+      if (!m[k]) m[k] = { name: k, total: 0, rawValue: raw(i[field]) ?? k };
+      m[k].total++;
+    });
+    return Object.values(m).sort((a, b) => b.total - a.total);
   };
   const byState           = _snGroupby('state');
   const byAssignedTo      = _snGroupby('assigned_to');
@@ -639,6 +711,43 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
   const byUrgency         = _snGroupby('urgency');
   const byCloseCode       = _snGroupby('close_code');
   const byContactType     = _snGroupby('contact_type');
+
+  // Requests (RITM) — breakdown por item de catálogo (top-N + Outros aplicado no frontend)
+  const catMap = {};
+  requests.forEach(i => {
+    const name = _snVal(i['request_item.cat_item.name']) || 'Outros';
+    if (!catMap[name]) catMap[name] = { name, total: 0 };
+    catMap[name].total++;
+  });
+  const byCatalogItem = Object.values(catMap).sort((a, b) => b.total - a.total);
+  const byCatalogItemMonthly = Object.entries(catMonthData)
+    .map(([name, counts]) => ({ name, monthly: counts, total: counts.reduce((s, c) => s + c, 0) }))
+    .sort((a, b) => b.total - a.total);
+
+  // Generic flat groupby para Requests — reusa o array `requests` já carregado.
+  // rawValue preserva o valor interno para permitir drill-down por clique (mesma lógica de _snGroupby).
+  const _reqGroupby = (field, val = v => _snVal(v) || 'N/A', raw = v => _snRaw(v)) => {
+    const m = {};
+    requests.forEach(i => {
+      const k = val(i[field]);
+      if (!m[k]) m[k] = { name: k, total: 0, rawValue: raw(i[field]) ?? k };
+      m[k].total++;
+    });
+    return Object.values(m).sort((a, b) => b.total - a.total);
+  };
+  const reqByPriority = { p1: 0, p2: 0, p3: 0, p4: 0 };
+  requests.forEach(i => {
+    const p = _snRaw(i.priority);
+    if (p === '1') reqByPriority.p1++;
+    else if (p === '2') reqByPriority.p2++;
+    else if (p === '3') reqByPriority.p3++;
+    else if (p === '4') reqByPriority.p4++;
+  });
+  const reqByState           = _reqGroupby('state');
+  const reqByAssignmentGroup = _reqGroupby('assignment_group');
+  const reqByAssignedTo      = _reqGroupby('assigned_to');
+  const reqByRequestedFor    = _reqGroupby('request_item.request.requested_for.name');
+  const reqByCI              = _reqGroupby('cmdb_ci.name');
 
   const now = Date.now();
   const prbList = prbs.map(p => {
@@ -657,6 +766,7 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
       impact:                  _snVal(p.impact)   || '',
       urgency:                 _snVal(p.urgency)  || '',
       category:                _snVal(p.category) || '',
+      cmdb_ci:                 _snVal(p['cmdb_ci.name']) || '',
       agingDays,
       state:                   _snRaw(p.state)    || '',
       assignment_group:        _snVal(p['assignment_group.name']) || '',
@@ -664,6 +774,7 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
       known_error:             _snRaw(p.known_error) === 'true' || p.known_error === true,
       workaround_instructions: _snVal(p.workaround_instructions) || '',
       rca_complete:            _snRaw(p.rca_complete) === 'true' || p.rca_complete === true,
+      url:                     `https://${snCfg.instance}/problem.do?sys_id=${_snRaw(p.sys_id) || p.sys_id}`,
       extra,
     };
   });
@@ -684,6 +795,20 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
   const openedThisMonth   = prbsOpenedInPeriod.length;
 
   const prbKpis = calcPrbKpis(prbList);
+
+  // Lista de requests em backlog (aging list) — mirror de prbList, ordenada por mais antiga
+  const reqList = reqBacklogItems.map(i => {
+    const openedAtRaw = _snRaw(i.opened_at) || (typeof i.opened_at === 'string' ? i.opened_at : null);
+    const agingDays   = openedAtRaw ? Math.floor((now - new Date(openedAtRaw).getTime()) / 86400000) : 0;
+    return {
+      id:          _snRaw(i.number) || String(i.number || ''),
+      title:       _snVal(i['request_item.cat_item.name']) || '',
+      priority:    _snRaw(i.priority) || '',
+      assigned_to: _snVal(i['assigned_to.name']) || '',
+      agingDays,
+    };
+  }).sort((a, b) => b.agingDays - a.agingDays);
+  const reqAgingBuckets = calcRequestAgingBuckets(reqList);
 
   const data = {
     incidents: {
@@ -733,6 +858,23 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
       withRcaPct:         prbKpis.withRcaPct,
       agingBuckets:       prbKpis.agingBuckets,
     },
+    requests: {
+      total:             requests.length,
+      closedThisMonth:   reqClosedInPeriod.length,
+      openBacklog:       reqBacklog,
+      avgLeadTimeDays:   reqLeadTime.avgDays,
+      byPriority:        reqByPriority,
+      byCatalogItem,
+      byCatalogItemMonthly,
+      byState:           reqByState,
+      byAssignmentGroup: reqByAssignmentGroup,
+      byAssignedTo:      reqByAssignedTo,
+      byRequestedFor:    reqByRequestedFor,
+      byCI:              reqByCI,
+      monthly:           reqMonthly,
+      list:              reqList.slice(0, 50),
+      agingBuckets:      reqAgingBuckets,
+    },
   };
 
   _writeCache('sn', displayName, period.month, data, snCacheKey);
@@ -741,7 +883,7 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null) {
 
 // ── Main entry ─────────────────────────────────────────────────────────────────
 
-async function buildReport(displayName, month, groupFields = [], agingState = 'In Review', historyMonths = 13, deliveryStates = null, usAgingColumns = null, prbAgingColumns = null) {
+async function buildReport(displayName, month, groupFields = [], agingState = 'In Review', historyMonths = 13, deliveryStates = null, usAgingColumns = null, prbAgingColumns = null, ciFilter = '') {
   const period = buildPeriod(month, Math.min(24, Math.max(1, historyMonths)));
 
   // Previous month period (for delta comparison)
@@ -754,7 +896,7 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
 
   const [azure, sn, prevAzure] = await Promise.all([
     fetchAzureReport(displayName, period, groupFields, agingState, deliveryStates, usAgingColumns).catch(() => _EMPTY_AZURE),
-    fetchSnReport(displayName, period, prbAgingColumns),
+    fetchSnReport(displayName, period, prbAgingColumns, ciFilter),
     fetchAzureReport(displayName, prevPeriod, [], '', deliveryStates).catch(() => null),
   ]);
 
@@ -768,6 +910,7 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
     prevQuality:     prevAzure ? { bugsOpen: prevAzure.bugsOpen, bugsNew: prevAzure.bugsNew } : null,
     incidents:       sn?.incidents || null,
     prbs:            sn?.prbs      || null,
+    requests:        sn?.requests  || null,
     usAgingColumns,
     prbAgingColumns,
   };
@@ -775,7 +918,7 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
 
 // ── Incident backlog list (for modal) ──────────────────────────────────────────
 
-async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', filterField = '', filterValue = '', group = '' } = {}) {
+async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', filterField = '', filterValue = '', ciFilter = '', group = '' } = {}) {
   const snCfg = getSnConfig();
   if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
 
@@ -803,25 +946,28 @@ async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', fi
   const end      = endDate.toISOString().slice(0, 19) + 'Z';
   const curMonth = new Date().toISOString().slice(0, 7);
 
-  // Optional extra filter by system/location field
+  // Optional extra filter — aliases curtos (usados pelos gráficos de volume/heatmap/bars)
+  // + whitelist de campos de agrupamento (usados pelo clique nas barras/donut do gráfico "Agrupamento por campo")
   const fieldFrag = filterField === 'cmdb_ci'         ? `^cmdb_ci.name=${filterValue}`
                   : filterField === 'resolution_code' ? `^u_additional_res_code=${filterValue}`
                   : filterField === 'location'        ? `^location.name=${filterValue}`
+                  : _INC_GROUPBY_WHITELIST.has(filterField) ? `^${filterField}=${filterValue}`
                   : '';
+  const ciFrag = ciFilter ? `^cmdb_ci.name=${ciFilter}` : '';
 
   let query;
   if (mode === 'opened') {
-    query = `${grpFilter}^opened_at>=${start}^opened_at<=${end}${fieldFrag}`;
+    query = `${grpFilter}^opened_at>=${start}^opened_at<=${end}${fieldFrag}${ciFrag}`;
   } else if (mode === 'closed') {
-    query = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}${fieldFrag}`;
+    query = `${grpFilter}^resolved_at>=${start}^resolved_at<=${end}${fieldFrag}${ciFrag}`;
   } else if (mode === 'cancelled') {
-    query = `${grpFilter}^state=8^closed_at>=${start}^closed_at<=${end}${fieldFrag}`;
+    query = `${grpFilter}^state=8^closed_at>=${start}^closed_at<=${end}${fieldFrag}${ciFrag}`;
   } else {
     // backlog — active at end of month
     const openStates = `^state!=6^state!=7`;
     query = month === curMonth
-      ? `${grpFilter}^active=true${openStates}${fieldFrag}`
-      : `${grpFilter}^opened_at<=${end}^resolved_atISEMPTY${openStates}${fieldFrag}^NQ${grpFilter}^opened_at<=${end}^resolved_at>${end}${openStates}${fieldFrag}`;
+      ? `${grpFilter}^active=true${openStates}${fieldFrag}${ciFrag}`
+      : `${grpFilter}^opened_at<=${end}^resolved_atISEMPTY${openStates}${fieldFrag}${ciFrag}^NQ${grpFilter}^opened_at<=${end}^resolved_at>${end}${openStates}${fieldFrag}${ciFrag}`;
   }
 
   try {
@@ -848,6 +994,151 @@ async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', fi
     }));
   } catch (e) {
     console.error('[SN incident backlog error]', e.message);
+    return null;
+  }
+}
+
+// ── Request backlog list (for modal) ───────────────────────────────────────────
+
+// Constrói fragmento de query para filtrar por faixa de dias em aberto (aging), relativo a agora.
+// dayMin/dayMax vêm dos limites do bucket clicado no gráfico de aging — não são campos nativos do SN,
+// então convertemos para uma janela absoluta de `opened_at`.
+function _agingRangeFrag(dayMin, dayMax) {
+  if (dayMin == null && dayMax == null) return '';
+  const now = Date.now();
+  const parts = [];
+  if (dayMin != null) parts.push(`opened_at<=${new Date(now - dayMin * 86400000).toISOString().slice(0, 19)}Z`);
+  if (dayMax != null && Number.isFinite(dayMax)) parts.push(`opened_at>=${new Date(now - dayMax * 86400000).toISOString().slice(0, 19)}Z`);
+  return parts.length ? '^' + parts.join('^') : '';
+}
+
+async function fetchSnRequestBacklog(displayName, month, { mode = 'backlog', filterField = '', filterValue = '', ciFilter = '', dayMin, dayMax, group = '' } = {}) {
+  const snCfg = getSnConfig();
+  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
+
+  let grpFilter;
+  if (group) {
+    grpFilter = `assignment_group.name=${group}`;
+  } else {
+    const snGrp = getProjectSnGroup(displayName);
+    if (snGrp?.assignmentGroup) {
+      const grp     = snGrp.assignmentGroup.trim();
+      const isSysId = /^[0-9a-f]{32}$/i.test(grp);
+      grpFilter     = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
+    } else {
+      // SN-only mode: displayName é o nome do grupo SN diretamente
+      const allowed = snCfg.assignmentGroups;
+      if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
+      if (!displayName) return null;
+      grpFilter = `assignment_group.name=${displayName}`;
+    }
+  }
+
+  const [y, m] = month.split('-').map(Number);
+  const start    = new Date(y, m - 1, 1).toISOString().slice(0, 19) + 'Z';
+  const endDate  = new Date(y, m, 0, 23, 59, 59);
+  const end      = endDate.toISOString().slice(0, 19) + 'Z';
+  const curMonth = new Date().toISOString().slice(0, 7);
+
+  // Optional extra filter — alias curto para item de catálogo (usado pelo gráfico de backlog por catálogo)
+  // + whitelist de campos de agrupamento (usados pelo clique nas barras/donut do gráfico "Agrupamento por campo")
+  const fieldFrag = filterField === 'cat_item' ? `^request_item.cat_item.name=${filterValue}`
+                  : _REQ_GROUPBY_WHITELIST.has(filterField) ? `^${filterField}=${filterValue}`
+                  : '';
+  const ciFrag = ciFilter ? `^cmdb_ci.name=${ciFilter}` : '';
+
+  const dayFrag = _agingRangeFrag(dayMin, dayMax);
+
+  let query;
+  if (mode === 'opened') {
+    query = `${grpFilter}^opened_at>=${start}^opened_at<=${end}${fieldFrag}${ciFrag}`;
+  } else if (mode === 'closed') {
+    query = `${grpFilter}^closed_at>=${start}^closed_at<=${end}${fieldFrag}${ciFrag}`;
+  } else {
+    // backlog — aberto ao fim do mês (mesma lógica ponto-no-tempo dos incidentes, sem estado "cancelado" separado)
+    query = month === curMonth
+      ? `${grpFilter}^active=true${fieldFrag}${ciFrag}${dayFrag}`
+      : `${grpFilter}^opened_at<=${end}^closed_atISEMPTY${fieldFrag}${ciFrag}^NQ${grpFilter}^opened_at<=${end}^closed_at>${end}${fieldFrag}${ciFrag}${dayFrag}`;
+  }
+
+  try {
+    const res = await snGet(snCfg,
+      `table/sc_task?sysparm_query=${encodeURIComponent(query)}` +
+      `&sysparm_fields=number,short_description,priority,state,opened_at,closed_at,assigned_to,assignment_group,request_item.cat_item.name,request_item.number,request_item.request.requested_for.name,sys_id` +
+      `&sysparm_display_value=all&sysparm_limit=500`
+    );
+    return (res.result || []).map(i => ({
+      number:          _snRaw(i.number) || _snVal(i.number) || '',
+      description:     _snVal(i.short_description) || '',
+      priority:        _snRaw(i.priority)           || '',
+      state:           _snVal(i.state)              || '',
+      openedAt:        _snRaw(i.opened_at)          || String(i.opened_at || ''),
+      closedAt:        _snRaw(i.closed_at)          || '',
+      assignedTo:      _snVal(i.assigned_to)        || '—',
+      assignmentGroup: _snVal(i.assignment_group)   || '—',
+      catalogItem:     _snVal(i['request_item.cat_item.name'])  || '—',
+      requestNumber:   _snVal(i['request_item.number'])         || '—',
+      requestedFor:    _snVal(i['request_item.request.requested_for.name']) || '—',
+      url:             `https://${snCfg.instance}/nav_to.do?uri=sc_task.do?sys_id=${_snRaw(i.sys_id) || i.sys_id}`,
+    }));
+  } catch (e) {
+    console.error('[SN request backlog error]', e.message);
+    return null;
+  }
+}
+
+// ── PRB backlog list (for modal) ───────────────────────────────────────────────
+// PRBs não são recortados por mês (a seção sempre mostra o backlog aberto atual —
+// mesma regra de `prbQuery` em fetchSnReport: state!=106^state!=107).
+
+async function fetchSnPrbBacklog(displayName, { filterField = '', filterValue = '', ciFilter = '', dayMin, dayMax, group = '' } = {}) {
+  const snCfg = getSnConfig();
+  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
+
+  let grpFilter;
+  if (group) {
+    grpFilter = `assignment_group.name=${group}`;
+  } else {
+    const snGrp = getProjectSnGroup(displayName);
+    if (snGrp?.assignmentGroup) {
+      const grp     = snGrp.assignmentGroup.trim();
+      const isSysId = /^[0-9a-f]{32}$/i.test(grp);
+      grpFilter     = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
+    } else {
+      // SN-only mode: displayName é o nome do grupo SN diretamente
+      const allowed = snCfg.assignmentGroups;
+      if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
+      if (!displayName) return null;
+      grpFilter = `assignment_group.name=${displayName}`;
+    }
+  }
+
+  const fieldFrag = _PRB_GROUPBY_WHITELIST.has(filterField) ? `^${filterField}=${filterValue}` : '';
+  const ciFrag    = ciFilter ? `^cmdb_ci.name=${ciFilter}` : '';
+  const dayFrag   = _agingRangeFrag(dayMin, dayMax);
+  const query     = `${grpFilter}^state!=106^state!=107${fieldFrag}${ciFrag}${dayFrag}`;
+
+  try {
+    const res = await snGet(snCfg,
+      `table/problem?sysparm_query=${encodeURIComponent(query)}` +
+      `&sysparm_fields=number,short_description,priority,impact,urgency,category,state,assignment_group.name,assigned_to.name,opened_at,sys_id` +
+      `&sysparm_display_value=all&sysparm_limit=500`
+    );
+    return (res.result || []).map(p => ({
+      number:          _snRaw(p.number) || _snVal(p.number) || '',
+      description:     _snVal(p.short_description) || '',
+      priority:        _snRaw(p.priority)  || '',
+      impact:          _snVal(p.impact)    || '',
+      urgency:         _snVal(p.urgency)   || '',
+      category:        _snVal(p.category)  || '—',
+      state:           _snVal(p.state)     || '',
+      openedAt:        _snRaw(p.opened_at) || String(p.opened_at || ''),
+      assignedTo:      _snVal(p['assigned_to.name'])      || '—',
+      assignmentGroup: _snVal(p['assignment_group.name']) || '—',
+      url:             `https://${snCfg.instance}/problem.do?sys_id=${_snRaw(p.sys_id) || p.sys_id}`,
+    }));
+  } catch (e) {
+    console.error('[SN PRB backlog error]', e.message);
     return null;
   }
 }
@@ -945,4 +1236,4 @@ async function fetchSnVolumeIncidents(displayName, month, nMonths = 1) {
   }
 }
 
-module.exports = { buildReport, buildPeriod, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents };
+module.exports = { buildReport, buildPeriod, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents, fetchSnRequestBacklog, fetchSnPrbBacklog };

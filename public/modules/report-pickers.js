@@ -44,6 +44,15 @@ const _PRB_GROUPBY_FIELDS = [
   { key: 'rca_complete',     get label() { return t('rpt_groupby_rca'); } },
 ];
 
+const _REQ_GROUPBY_FIELDS = [
+  { key: 'request_item.cat_item.name',             get label() { return t('rpt_groupby_cat_item'); } },
+  { key: 'priority',                               get label() { return t('rpt_groupby_priority'); } },
+  { key: 'assignment_group',                       get label() { return t('rpt_groupby_group'); } },
+  { key: 'assigned_to',                            get label() { return t('rpt_groupby_assignee'); } },
+  { key: 'state',                                  get label() { return t('rpt_groupby_state'); } },
+  { key: 'request_item.request.requested_for.name', get label() { return t('rpt_groupby_requested_for'); } },
+];
+
 function _acHtml(inputId, hiddenId, fields, currentKey) {
   const cur  = fields.find(f => f.key === currentKey);
   const opts = fields.map(f =>
@@ -562,7 +571,7 @@ function _applyIncChartPicker() {
     }
     S.incidentCharts[S.incPickerIdx] = update;
   } else {
-    const newChart = isGroupby ? { type, size, ref: 'cmdb_ci', chartStyle: 'donut', barColor: '' } : { type, size };
+    const newChart = isGroupby ? { type, size, ref: 'cmdb_ci.name', chartStyle: 'donut', barColor: '' } : { type, size };
     if (clampedMonths !== null) newChart.months = clampedMonths;
     S.incidentCharts.push(newChart);
   }
@@ -778,6 +787,184 @@ function _applyPrbChartPicker() {
 
   if (isEdit && S.prbCharts[S.prbPickerIdx]?.type === 'prb-oldest' && _agColState.length > 0) {
     S.prbAgingColumns = _agColState.slice();
+  }
+
+  _onSave();
+  _closeFieldPicker();
+  if (needReload) _onLoad(); else _onRerender();
+}
+
+// ── Request (RITM) chart picker ───────────────────────────────────────────────
+
+export function reportOpenReqChartPicker(idx) {
+  S.reqPickerIdx = idx !== undefined ? idx : -1;
+  const isEdit       = S.reqPickerIdx >= 0;
+  const currentChart = isEdit ? S.requestCharts[S.reqPickerIdx] : null;
+  const currentSize  = currentChart?.size || 'lg';
+  const currentType  = currentChart?.type || 'req-volume';
+
+  const REQ_TYPES = [
+    { val: 'req-volume',    get label() { return t('rpt_req_type_volume'); } },
+    { val: 'req-lead-time', get label() { return t('rpt_req_type_lead_time'); } },
+    { val: 'req-aging',     get label() { return t('rpt_req_type_aging'); } },
+    { val: 'req-catalog',   get label() { return t('rpt_req_type_catalog'); } },
+    { val: 'req-groupby',   get label() { return t('rpt_req_type_groupby'); } },
+  ];
+
+  const sizeOpts = [
+    { val: 'sm', get label() { return t('rpt_size_3col'); } },
+    { val: 'md', get label() { return t('rpt_size_2col'); } },
+    { val: 'lg', get label() { return t('rpt_size_full'); } },
+  ].map(o => `<button class="report-size-opt${currentSize === o.val ? ' active' : ''}" data-size="${o.val}">${o.label}</button>`).join('');
+
+  const typeSection = !isEdit
+    ? `<div class="report-field-picker-label">${t('rpt_label_chart_type')}</div>
+       <select id="report-req-type-sel" class="report-field-sel">
+         ${REQ_TYPES.map(t => `<option value="${t.val}">${t.label}</option>`).join('')}
+       </select>`
+    : `<div class="report-field-picker-label">${t('rpt_label_chart')}</div>
+       <div style="font-size:13px;color:var(--text-muted);padding:2px 0 8px">${_esc(REQ_TYPES.find(t => t.val === currentType)?.label || currentType)}</div>`;
+
+  const MONTH_OPTS = [3, 5, 6, 8, 10, 12, 13, 24];
+  const showVolume    = isEdit && (currentType === 'req-volume' || currentType === 'req-lead-time');
+  const showTarget    = isEdit && currentType === 'req-volume';
+  const showLeadTarget = isEdit && currentType === 'req-lead-time';
+  const showAging     = isEdit && currentType === 'req-aging';
+  const showGroupby   = isEdit && currentType === 'req-groupby';
+  const curGbStyle    = currentChart?.chartStyle || 'donut';
+  const curGbColor    = currentChart?.barColor   || '';
+
+  const specificSection = `
+    ${showGroupby ? `
+      <div class="report-field-picker-label">${t('rpt_label_groupby_field')}</div>
+      ${_acHtml('report-req-groupby-input', 'report-req-groupby-field', _REQ_GROUPBY_FIELDS, currentChart?.ref || 'request_item.cat_item.name')}
+      <div class="report-field-picker-label">${t('rpt_label_visual_style')}</div>
+      <div class="report-size-group" id="report-req-groupby-style">
+        ${[{val:'donut',get label(){return t('rpt_style_donut');}},{val:'bar',get label(){return t('rpt_style_bars');}},{val:'bar-vertical',get label(){return t('rpt_style_bars_v');}}]
+          .map(o => `<button class="report-size-opt${curGbStyle === o.val ? ' active' : ''}" data-style="${o.val}">${o.label}</button>`).join('')}
+      </div>
+      <div id="report-req-groupby-color-section"${curGbStyle === 'donut' ? ' style="display:none"' : ''}>
+        <div class="report-field-picker-label">${t('rpt_label_bar_color')}</div>
+        <select id="report-req-groupby-color-mode" class="report-field-sel">
+          <option value="multi"${!curGbColor ? ' selected' : ''}>${t('rpt_color_multi')}</option>
+          <option value="single"${curGbColor ? ' selected' : ''}>${t('rpt_color_single')}</option>
+        </select>
+        <div id="report-req-groupby-color-picker"${!curGbColor ? ' style="display:none"' : ''}>
+          <input type="color" id="report-req-groupby-color-input" value="${curGbColor || '#3b82f6'}"
+            style="margin-top:6px;width:100%;height:32px;border:none;padding:0;cursor:pointer;background:none">
+        </div>
+      </div>
+    ` : ''}
+    ${showVolume ? `
+      <div class="report-field-picker-label">${t('rpt_label_history_months')}</div>
+      <div class="report-size-group" style="flex-wrap:wrap" id="report-req-p-months">
+        ${MONTH_OPTS.map(n => `<button class="report-size-opt${n === (currentChart?.months || S.requestMonths) ? ' active' : ''}" data-months="${n}">${n} ${t('rpt_months')}</button>`).join('')}
+      </div>
+      ${showTarget ? `
+        <div class="report-field-picker-label" style="margin-top:8px">${t('rpt_label_monthly_target')}</div>
+        <input type="number" id="report-req-p-target" class="report-inc-months-input" min="0" max="9999" value="${S.requestTarget ?? ''}">
+      ` : ''}
+      ${showLeadTarget ? `
+        <div class="report-field-picker-label" style="margin-top:8px">${t('rpt_req_label_lead_target')}</div>
+        <input type="number" id="report-req-p-lead-target" class="report-inc-months-input" min="0" max="999" value="${currentChart?.target ?? ''}">
+      ` : ''}
+    ` : ''}
+    ${showAging ? `
+      <div class="report-field-picker-label">${t('rpt_label_aging_buckets')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 1</label><br>
+          <input type="number" id="report-req-aging-rb0" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.requestAgingBuckets[0]}"></div>
+        <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 2</label><br>
+          <input type="number" id="report-req-aging-rb1" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.requestAgingBuckets[1]}"></div>
+        <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 3</label><br>
+          <input type="number" id="report-req-aging-rb2" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.requestAgingBuckets[2]}"></div>
+        <div><label style="font-size:11px;color:var(--text-faint)">${t('rpt_label_limit')} 4</label><br>
+          <input type="number" id="report-req-aging-rb3" class="report-inc-months-input" style="width:100%;box-sizing:border-box" min="1" max="999" value="${S.requestAgingBuckets[3]}"></div>
+      </div>
+    ` : ''}`;
+
+  const picker = _openPicker({
+    title:      isEdit ? t('rpt_title_configure_chart') : t('rpt_title_new_chart'),
+    applyLabel: isEdit ? t('rpt_btn_apply') : t('rpt_btn_add'),
+    bodyHtml: `
+      ${typeSection}
+      ${specificSection}
+      <div class="report-field-picker-label">${t('rpt_label_size')}</div>
+      <div class="report-size-group" id="report-req-size-group">${sizeOpts}</div>`,
+    onApply: _applyReqChartPicker,
+  });
+
+  if (showGroupby) _acInit(picker, 'report-req-groupby-input', 'report-req-groupby-field');
+
+  picker.addEventListener('click', e => {
+    const opt = e.target.closest('.report-size-opt');
+    if (!opt) return;
+    const group = opt.closest('.report-size-group');
+    group?.querySelectorAll('.report-size-opt').forEach(b => b.classList.remove('active'));
+    opt.classList.add('active');
+    if (group?.id === 'report-req-groupby-style') {
+      const colorSection = document.getElementById('report-req-groupby-color-section');
+      if (colorSection) colorSection.style.display = opt.dataset.style === 'donut' ? 'none' : '';
+    }
+  });
+
+  if (showGroupby) {
+    document.getElementById('report-req-groupby-color-mode')?.addEventListener('change', e => {
+      const cp = document.getElementById('report-req-groupby-color-picker');
+      if (cp) cp.style.display = e.target.value === 'single' ? '' : 'none';
+    });
+  }
+}
+
+function _applyReqChartPicker() {
+  const picker = document.getElementById('report-field-picker');
+  if (!picker) return;
+  const isEdit = S.reqPickerIdx >= 0;
+  const size   = picker.querySelector('#report-req-size-group .report-size-opt.active')?.dataset.size || 'lg';
+  const type   = isEdit ? S.requestCharts[S.reqPickerIdx].type : (document.getElementById('report-req-type-sel')?.value || 'req-volume');
+
+  const newMonths   = parseInt(picker.querySelector('#report-req-p-months .report-size-opt.active')?.dataset.months);
+  const newTarget   = parseInt(document.getElementById('report-req-p-target')?.value);
+  const newLeadTgt  = parseInt(document.getElementById('report-req-p-lead-target')?.value);
+  const clampedMonths = !isNaN(newMonths) ? Math.min(24, Math.max(1, newMonths)) : null;
+
+  let needReload = false;
+  if (clampedMonths !== null) {
+    const curMonths = isEdit ? (S.requestCharts[S.reqPickerIdx]?.months || S.requestMonths) : S.requestMonths;
+    if (clampedMonths !== curMonths) needReload = true;
+  }
+  if (!isNaN(newTarget)) S.requestTarget = Math.max(0, newTarget);
+
+  const isAging = type === 'req-aging';
+  if (isAging) {
+    const rb0 = Math.max(1,       parseInt(document.getElementById('report-req-aging-rb0')?.value) || S.requestAgingBuckets[0]);
+    const rb1 = Math.max(rb0 + 1, parseInt(document.getElementById('report-req-aging-rb1')?.value) || S.requestAgingBuckets[1]);
+    const rb2 = Math.max(rb1 + 1, parseInt(document.getElementById('report-req-aging-rb2')?.value) || S.requestAgingBuckets[2]);
+    const rb3 = Math.max(rb2 + 1, parseInt(document.getElementById('report-req-aging-rb3')?.value) || S.requestAgingBuckets[3]);
+    S.requestAgingBuckets = [rb0, rb1, rb2, rb3];
+  }
+
+  const isGroupby   = type === 'req-groupby';
+  const gbRef       = document.getElementById('report-req-groupby-field')?.value;
+  const gbStyle     = picker.querySelector('#report-req-groupby-style .report-size-opt.active')?.dataset.style;
+  const gbColorMode = document.getElementById('report-req-groupby-color-mode')?.value;
+  const gbColor     = gbColorMode === 'single' ? (document.getElementById('report-req-groupby-color-input')?.value || '') : '';
+
+  if (isEdit) {
+    const update = { ...S.requestCharts[S.reqPickerIdx], size };
+    if (clampedMonths !== null) update.months = clampedMonths;
+    if (type === 'req-lead-time' && !isNaN(newLeadTgt)) update.target = Math.max(0, newLeadTgt);
+    if (isGroupby) {
+      if (gbRef)   update.ref        = gbRef;
+      if (gbStyle) update.chartStyle = gbStyle;
+      update.barColor = gbColor;
+    }
+    S.requestCharts[S.reqPickerIdx] = update;
+  } else {
+    const newChart = isGroupby ? { type, size, ref: 'request_item.cat_item.name', chartStyle: 'donut', barColor: '' } : { type, size };
+    if (clampedMonths !== null) newChart.months = clampedMonths;
+    if (type === 'req-lead-time' && !isNaN(newLeadTgt)) newChart.target = Math.max(0, newLeadTgt);
+    S.requestCharts.push(newChart);
   }
 
   _onSave();
@@ -1266,12 +1453,294 @@ export function reportOpenIncidentFilter(el) {
   let mode, month, filterField, filterValue, title;
   try { ({ mode, month, filterField, filterValue, title } = JSON.parse(raw)); } catch { return; }
   const params = new URLSearchParams({ project: S.reportProject, month, mode, filterField, filterValue });
+  if (S.ciFilter) params.set('ciFilter', S.ciFilter);
   _showIncidentsModal(title || 'Incidentes', params.toString());
 }
 
 export async function reportOpenIncidentsModal() {
   const params = new URLSearchParams({ project: S.reportProject, month: S.reportMonth || '', mode: 'backlog', filterField: '', filterValue: '' });
+  if (S.ciFilter) params.set('ciFilter', S.ciFilter);
   _showIncidentsModal(t('rpt_inc_modal_backlog'), params.toString());
+}
+
+// ── Requests (RITM) backlog modal — mirror do modal de incidentes ────────────
+
+function _closeRequestsModal() {
+  document.getElementById('report-req-modal-overlay')?.remove();
+}
+
+export function reportCloseRequestsModal() { _closeRequestsModal(); }
+
+export function reportExportRequestsCSV() {
+  const tbl = document.querySelector('#report-req-modal-overlay .report-inc-table');
+  if (!tbl) return;
+  const headers = Array.from(tbl.querySelectorAll('thead tr:first-child th')).map(th => th.textContent.trim());
+  const visibleRows = Array.from(tbl.querySelectorAll('tbody tr')).filter(tr => tr.style.display !== 'none');
+  const csvRows = [headers, ...visibleRows.map(tr =>
+    Array.from(tr.querySelectorAll('td')).map(td => `"${td.textContent.trim().replace(/"/g, '""')}"`)
+  )];
+  const csv = '﻿' + csvRows.map(r => r.join(';')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `requests_${S.reportProject || 'export'}_${S.reportMonth || ''}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function _buildRequestsTable(items) {
+  const priLabel = p => ({ '1': 'P1', '2': 'P2', '3': 'P3', '4': 'P4' }[p] || p || '—');
+  const priCls   = p => ({ '1': 'p1', '2': 'p2', '3': 'p3', '4': 'p4' }[p] || 'p4');
+  const fmtDate  = d => {
+    if (!d) return '—';
+    const dt = new Date(d);
+    if (isNaN(dt)) return d;
+    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+  const rows = items.map(i => `
+    <tr>
+      <td class="inc-num"><a href="${_esc(i.url)}" target="_blank" rel="noopener">${_esc(i.number) || '—'}</a></td>
+      <td class="inc-num">${_esc(i.requestNumber) || '—'}</td>
+      <td class="inc-desc">${_esc(i.catalogItem) || '—'}</td>
+      <td>${_esc(i.requestedFor) || '—'}</td>
+      <td><span class="report-inc-priority ${priCls(i.priority)}">${priLabel(i.priority)}</span></td>
+      <td>${_esc(i.state) || '—'}</td>
+      <td style="white-space:nowrap">${fmtDate(i.openedAt)}</td>
+      <td style="white-space:nowrap">${fmtDate(i.closedAt)}</td>
+      <td>${_esc(i.assignedTo) || '—'}</td>
+      <td>${_esc(i.assignmentGroup) || '—'}</td>
+    </tr>`).join('');
+  const selectVals = {
+    4: [...new Set(items.map(i => priLabel(i.priority)).filter(Boolean))].sort(),
+    5: [...new Set(items.map(i => i.state           || '—'))].sort(),
+    8: [...new Set(items.map(i => i.assignedTo      || '—'))].sort(),
+    9: [...new Set(items.map(i => i.assignmentGroup || '—'))].sort(),
+  };
+  const filterRow = `<tr class="inc-filter-row">${Array.from({ length: 10 }, (_, ci) => {
+    if (selectVals[ci]) {
+      const opts = selectVals[ci].map(v => `<option value="${_esc(v)}">${_esc(v)}</option>`).join('');
+      return `<th><select data-col="${ci}"><option value="">${t('rpt_filter_all')}</option>${opts}</select></th>`;
+    }
+    return `<th><input type="text" data-col="${ci}" placeholder="⌕" title="${t('rpt_search_field')}"></th>`;
+  }).join('')}</tr>`;
+  return `<table class="report-inc-table">
+    <thead>
+      <tr>
+        <th>${t('rpt_req_modal_number')}</th><th>${t('rpt_req_modal_ritm')}</th><th>${t('rpt_req_modal_catalog')}</th><th>${t('rpt_req_modal_requested_for')}</th>
+        <th>${t('rpt_req_modal_priority')}</th><th>${t('rpt_req_modal_state')}</th><th>${t('rpt_req_modal_opened')}</th><th>${t('rpt_req_modal_closed')}</th>
+        <th>${t('rpt_req_col_assignedto')}</th><th>${t('rpt_req_col_group')}</th>
+      </tr>
+      ${filterRow}
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function _showRequestsModal(title, fetchParams) {
+  _closeRequestsModal();
+  const overlay = document.createElement('div');
+  overlay.id        = 'report-req-modal-overlay';
+  overlay.className = 'report-inc-modal-overlay open';
+  overlay.onclick   = e => { if (e.target === overlay) _closeRequestsModal(); };
+
+  const panel = document.createElement('div');
+  panel.className = 'report-inc-modal-panel';
+  panel.innerHTML = `
+    <div class="report-inc-modal-header">
+      <div class="report-inc-modal-title">${_esc(title)}</div>
+      <div class="report-inc-modal-actions">
+        <button class="report-inc-export-btn" id="report-req-export-btn" onclick="reportExportRequestsCSV()" title="${t('rpt_req_export_tooltip')}">&#x2193; ${t('rpt_req_export_btn')}</button>
+        <button class="modal-maximize" id="report-req-max-btn" onclick="toggleReportReqMax()" title="Maximizar">&#x2922;</button>
+        <button class="report-inc-modal-close" onclick="reportCloseRequestsModal()">&#x2715;</button>
+      </div>
+    </div>
+    <div class="report-inc-modal-body">
+      <div class="report-loading" style="padding:32px 20px">${t('rpt_loading')}</div>
+    </div>`;
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  try {
+    const r = await fetch(`/api/sn-requests?${fetchParams}`);
+    const { requests, error } = await r.json();
+    const body = panel.querySelector('.report-inc-modal-body');
+    if (error) {
+      body.innerHTML = `<div class="report-inc-modal-empty">${t('rpt_inc_modal_error')} ${error}</div>`;
+    } else if (!requests || requests.length === 0) {
+      body.innerHTML = `<div class="report-inc-modal-empty">${t('rpt_no_requests_found')}</div>`;
+    } else {
+      body.innerHTML = `<div class="report-inc-modal-count">${requests.length} ${requests.length !== 1 ? t('rpt_req_count_p') : t('rpt_req_count_s')}</div>${_buildRequestsTable(requests)}`;
+      _initIncidentTableFilters(body.querySelector('.report-inc-table'));
+    }
+  } catch {
+    panel.querySelector('.report-inc-modal-body').innerHTML = `<div class="report-inc-modal-empty">${t('rpt_error_requests')}</div>`;
+  }
+}
+
+export function reportOpenRequestFilter(el) {
+  const raw = typeof el === 'string' ? el : (el?.dataset?.req || el?.getAttribute?.('data-req') || '');
+  if (!raw) return;
+  let mode, month, filterField, filterValue, title, dayMin, dayMax;
+  try { ({ mode, month, filterField, filterValue, title, dayMin, dayMax } = JSON.parse(raw)); } catch { return; }
+  const params = new URLSearchParams({ project: S.reportProject, month, mode, filterField, filterValue });
+  if (dayMin !== undefined) params.set('dayMin', dayMin);
+  if (dayMax !== undefined) params.set('dayMax', dayMax);
+  if (S.ciFilter) params.set('ciFilter', S.ciFilter);
+  _showRequestsModal(title || 'Requests', params.toString());
+}
+
+export async function reportOpenRequestsModal() {
+  const params = new URLSearchParams({ project: S.reportProject, month: S.reportMonth || '', mode: 'backlog', filterField: '', filterValue: '' });
+  if (S.ciFilter) params.set('ciFilter', S.ciFilter);
+  _showRequestsModal(t('rpt_req_modal_backlog'), params.toString());
+}
+
+export function toggleReportReqMax() {
+  const panel = document.querySelector('.report-inc-modal-panel');
+  if (!panel) return;
+  const isMax = panel.classList.toggle('maximized');
+  const btn = document.getElementById('report-req-max-btn');
+  if (btn) btn.textContent = isMax ? '⤡' : '⤢';
+}
+
+// ── PRBs backlog modal — mirror do modal de requests ──────────────────────────
+
+function _closePrbsModal() {
+  document.getElementById('report-prb-modal-overlay')?.remove();
+}
+
+export function reportClosePrbsModal() { _closePrbsModal(); }
+
+export function reportExportPrbsCSV() {
+  const tbl = document.querySelector('#report-prb-modal-overlay .report-inc-table');
+  if (!tbl) return;
+  const headers = Array.from(tbl.querySelectorAll('thead tr:first-child th')).map(th => th.textContent.trim());
+  const visibleRows = Array.from(tbl.querySelectorAll('tbody tr')).filter(tr => tr.style.display !== 'none');
+  const csvRows = [headers, ...visibleRows.map(tr =>
+    Array.from(tr.querySelectorAll('td')).map(td => `"${td.textContent.trim().replace(/"/g, '""')}"`)
+  )];
+  const csv = '﻿' + csvRows.map(r => r.join(';')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `prbs_${S.reportProject || 'export'}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function _buildPrbTable(items) {
+  const priLabel = p => ({ '1': 'P1', '2': 'P2', '3': 'P3', '4': 'P4' }[p] || p || '—');
+  const priCls   = p => ({ '1': 'p1', '2': 'p2', '3': 'p3', '4': 'p4' }[p] || 'p4');
+  const fmtDate  = d => {
+    if (!d) return '—';
+    const dt = new Date(d);
+    if (isNaN(dt)) return d;
+    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+  const rows = items.map(i => `
+    <tr>
+      <td class="inc-num"><a href="${_esc(i.url)}" target="_blank" rel="noopener">${_esc(i.number) || '—'}</a></td>
+      <td class="inc-desc">${_esc(i.description) || '—'}</td>
+      <td><span class="report-inc-priority ${priCls(i.priority)}">${priLabel(i.priority)}</span></td>
+      <td>${_esc(i.category) || '—'}</td>
+      <td>${_esc(i.state) || '—'}</td>
+      <td style="white-space:nowrap">${fmtDate(i.openedAt)}</td>
+      <td>${_esc(i.assignedTo) || '—'}</td>
+      <td>${_esc(i.assignmentGroup) || '—'}</td>
+    </tr>`).join('');
+  const selectVals = {
+    2: [...new Set(items.map(i => priLabel(i.priority)).filter(Boolean))].sort(),
+    3: [...new Set(items.map(i => i.category         || '—'))].sort(),
+    4: [...new Set(items.map(i => i.state             || '—'))].sort(),
+    6: [...new Set(items.map(i => i.assignedTo        || '—'))].sort(),
+    7: [...new Set(items.map(i => i.assignmentGroup   || '—'))].sort(),
+  };
+  const filterRow = `<tr class="inc-filter-row">${Array.from({ length: 8 }, (_, ci) => {
+    if (selectVals[ci]) {
+      const opts = selectVals[ci].map(v => `<option value="${_esc(v)}">${_esc(v)}</option>`).join('');
+      return `<th><select data-col="${ci}"><option value="">${t('rpt_filter_all')}</option>${opts}</select></th>`;
+    }
+    return `<th><input type="text" data-col="${ci}" placeholder="⌕" title="${t('rpt_search_field')}"></th>`;
+  }).join('')}</tr>`;
+  return `<table class="report-inc-table">
+    <thead>
+      <tr>
+        <th>${t('rpt_prb_modal_number')}</th><th>${t('rpt_prb_modal_desc')}</th><th>${t('rpt_prb_modal_priority')}</th><th>${t('rpt_prb_modal_category')}</th>
+        <th>${t('rpt_prb_modal_state')}</th><th>${t('rpt_prb_modal_opened')}</th><th>${t('rpt_prb_col_assignedto')}</th><th>${t('rpt_prb_col_group')}</th>
+      </tr>
+      ${filterRow}
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function _showPrbsModal(title, fetchParams) {
+  _closePrbsModal();
+  const overlay = document.createElement('div');
+  overlay.id        = 'report-prb-modal-overlay';
+  overlay.className = 'report-inc-modal-overlay open';
+  overlay.onclick   = e => { if (e.target === overlay) _closePrbsModal(); };
+
+  const panel = document.createElement('div');
+  panel.className = 'report-inc-modal-panel';
+  panel.innerHTML = `
+    <div class="report-inc-modal-header">
+      <div class="report-inc-modal-title">${_esc(title)}</div>
+      <div class="report-inc-modal-actions">
+        <button class="report-inc-export-btn" id="report-prb-export-btn" onclick="reportExportPrbsCSV()" title="${t('rpt_prb_export_tooltip')}">&#x2193; ${t('rpt_prb_export_btn')}</button>
+        <button class="modal-maximize" id="report-prb-max-btn" onclick="toggleReportPrbMax()" title="Maximizar">&#x2922;</button>
+        <button class="report-inc-modal-close" onclick="reportClosePrbsModal()">&#x2715;</button>
+      </div>
+    </div>
+    <div class="report-inc-modal-body">
+      <div class="report-loading" style="padding:32px 20px">${t('rpt_loading')}</div>
+    </div>`;
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  try {
+    const r = await fetch(`/api/sn-prbs?${fetchParams}`);
+    const { prbs, error } = await r.json();
+    const body = panel.querySelector('.report-inc-modal-body');
+    if (error) {
+      body.innerHTML = `<div class="report-inc-modal-empty">${t('rpt_inc_modal_error')} ${error}</div>`;
+    } else if (!prbs || prbs.length === 0) {
+      body.innerHTML = `<div class="report-inc-modal-empty">${t('rpt_no_prbs_found')}</div>`;
+    } else {
+      body.innerHTML = `<div class="report-inc-modal-count">${prbs.length} ${prbs.length !== 1 ? t('rpt_prb_count_p') : t('rpt_prb_count_s')}</div>${_buildPrbTable(prbs)}`;
+      _initIncidentTableFilters(body.querySelector('.report-inc-table'));
+    }
+  } catch {
+    panel.querySelector('.report-inc-modal-body').innerHTML = `<div class="report-inc-modal-empty">${t('rpt_error_prbs')}</div>`;
+  }
+}
+
+export function reportOpenPrbFilter(el) {
+  const raw = typeof el === 'string' ? el : (el?.dataset?.prb || el?.getAttribute?.('data-prb') || '');
+  if (!raw) return;
+  let filterField, filterValue, title, dayMin, dayMax;
+  try { ({ filterField, filterValue, title, dayMin, dayMax } = JSON.parse(raw)); } catch { return; }
+  const params = new URLSearchParams({ project: S.reportProject, filterField: filterField || '', filterValue: filterValue || '' });
+  if (dayMin !== undefined) params.set('dayMin', dayMin);
+  if (dayMax !== undefined) params.set('dayMax', dayMax);
+  if (S.ciFilter) params.set('ciFilter', S.ciFilter);
+  _showPrbsModal(title || 'PRBs', params.toString());
+}
+
+export async function reportOpenPrbsModal() {
+  const params = new URLSearchParams({ project: S.reportProject });
+  if (S.ciFilter) params.set('ciFilter', S.ciFilter);
+  _showPrbsModal(t('rpt_prb_modal_backlog'), params.toString());
+}
+
+export function toggleReportPrbMax() {
+  const panel = document.querySelector('.report-inc-modal-panel');
+  if (!panel) return;
+  const isMax = panel.classList.toggle('maximized');
+  const btn = document.getElementById('report-prb-max-btn');
+  if (btn) btn.textContent = isMax ? '⤡' : '⤢';
 }
 
 export function toggleReportIncMax() {
@@ -1318,6 +1787,44 @@ export function reportSaveTargetModal() {
     _onRerender();
   }
   document.getElementById('inc-target-modal')?.remove();
+}
+
+export function reportOpenReqTargetModal() {
+  document.getElementById('req-target-modal')?.remove();
+  const el = document.createElement('div');
+  el.id = 'req-target-modal';
+  el.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)';
+  el.innerHTML = `
+    <div style="background:var(--bg-card);border:1px solid var(--bg-border);border-radius:12px;padding:24px 24px 20px;width:300px;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+      <div style="font-size:14px;font-weight:600;color:var(--text-1)">${t('rpt_title_target_monthly')}</div>
+      <div style="font-size:12px;color:var(--text-2);line-height:1.5">${t('rpt_hint_target_monthly')}</div>
+      <input id="req-target-input" type="number" min="1" max="9999" placeholder="Ex: 30"
+        style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--bg-border);border-radius:6px;background:var(--bg-2);color:var(--text-1);font-size:14px;outline:none"
+        value="${S.requestTarget ?? ''}">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:2px">
+        <button onclick="document.getElementById('req-target-modal').remove()"
+          style="padding:6px 16px;border-radius:6px;border:1px solid var(--bg-border);background:transparent;color:var(--text-2);cursor:pointer;font-size:13px">
+          ${t('rpt_btn_cancel')}
+        </button>
+        <button onclick="reportSaveReqTargetModal()"
+          style="padding:6px 16px;border-radius:6px;border:none;background:var(--c-blue);color:#fff;cursor:pointer;font-size:13px;font-weight:600">
+          ${t('rpt_btn_save')}
+        </button>
+      </div>
+    </div>`;
+  el.addEventListener('click', e => { if (e.target === el) el.remove(); });
+  document.body.appendChild(el);
+  setTimeout(() => document.getElementById('req-target-input')?.focus(), 0);
+}
+
+export function reportSaveReqTargetModal() {
+  const val = parseInt(document.getElementById('req-target-input')?.value);
+  if (!isNaN(val) && val > 0) {
+    S.requestTarget = val;
+    _onSave();
+    _onRerender();
+  }
+  document.getElementById('req-target-modal')?.remove();
 }
 
 // ── Aging column picker ───────────────────────────────────────────────────────
