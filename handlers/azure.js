@@ -1,4 +1,4 @@
-const { getCfg, getDisplayName } = require('../config');
+const { getCfg, getDisplayName, saveConfig } = require('../config');
 const { azureGet } = require('../azureClient');
 const { fetchProjectDetail, fetchUATPlans } = require('../projectService');
 const { fetchTeamCapacity } = require('../teamCapacityService');
@@ -209,4 +209,22 @@ async function getContext({ filters = {} } = {}) {
   return { projects };
 }
 
-module.exports = { getDetail, getTeamCapacity, getUAT, getReportFields, getUSStates, getContext };
+function getBurndownConfig({ project } = {}) {
+  const cfg  = getCfg();
+  const pcfg = (cfg.projects || []).find(p => getDisplayName(p) === project);
+  const doneStates = pcfg?.burndownDoneStates?.length ? pcfg.burndownDoneStates : ['Closed'];
+  return { doneStates };
+}
+
+function saveBurndownConfig({ project, doneStates } = {}) {
+  if (!project) httpError(400, 'project required');
+  if (!Array.isArray(doneStates)) httpError(400, 'doneStates must be an array');
+  const cfg   = getCfg();
+  const pcfg  = (cfg.projects || []).find(p => getDisplayName(p) === project);
+  if (!pcfg) httpError(404, 'project not found');
+  pcfg.burndownDoneStates = doneStates.filter(s => typeof s === 'string' && s.trim());
+  saveConfig(cfg);
+  return { ok: true };
+}
+
+module.exports = { getDetail, getTeamCapacity, getUAT, getReportFields, getUSStates, getContext, getBurndownConfig, saveBurndownConfig };

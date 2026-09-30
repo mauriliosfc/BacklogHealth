@@ -29,6 +29,8 @@ const EMPTY_STATE_HTML = `
   </div>
 </div>`;
 
+const APP_VERSION = (() => { try { return require('../package.json').version; } catch { return ''; } })();
+
 const VIEWS_DIR = nodePath.join(__dirname, '..', 'views');
 const templates = {
   dashboard:   fs.readFileSync(nodePath.join(VIEWS_DIR, 'dashboard.html'),    'utf8'),
@@ -117,6 +119,7 @@ function renderDashboard(results) {
     EMPTY_CLASS:   isEmpty ? 'cards-grid--empty' : '',
     SUMMARY_BAR:   isEmpty ? '' : buildSummaryBar(results),
     SOURCE_TOGGLE: getAppMode() === 'full' ? SOURCE_TOGGLE_HTML : '',
+    VERSION:       APP_VERSION,
   });
 }
 

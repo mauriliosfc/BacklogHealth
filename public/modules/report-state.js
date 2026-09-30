@@ -16,6 +16,9 @@ export const S = {
   agingBuckets:       [7, 14, 30, 60],
   prbMonths:          5,
   prbAgingBuckets:    [30, 60, 90, 180],
+  requestMonths:      5,
+  requestTarget:      null,
+  requestAgingBuckets: [2, 5, 10, 20],
   deliveryStates:     ['Closed', 'Done', 'Resolved'],
   slaEnabled:         false,
   slaThresholds:      { p1: 4, p2: 8, p3: 72 },
@@ -30,7 +33,14 @@ export const S = {
   indDragSrcSection:  null,
   incidentCharts:     [],       // [{type:'inc-volume'|'inc-bars'|..., size:'sm'|'md'|'lg'}]
   prbCharts:          [],       // [{type:'prb-evolution'|'prb-donut'|..., size:'sm'|'md'|'lg'}]
+  requestCharts:      [],       // [{type:'req-volume'|'req-lead-time'|..., size:'sm'|'md'|'lg'}]
   incPickerIdx:       -1,
   prbPickerIdx:       -1,
+  reqPickerIdx:       -1,
   agingPickerIdx:     -1,
+  usAgingColumns:     null,   // [{key, label}] — null = defaults
+  prbAgingColumns:    null,   // [{key, label}] — null = defaults
+  agingColPickerType: null,   // 'us' | 'prb' — type currently open in picker
+  ciFilter:           '',     // '' = ALL — Configuration Item ativo (Incidentes/PRBs/Requests)
+  ciList:             [],     // nomes de CI conhecidos (populado só quando ciFilter === '')
 };

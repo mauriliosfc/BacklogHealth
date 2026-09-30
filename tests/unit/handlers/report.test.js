@@ -1,9 +1,9 @@
 jest.mock('../../../config');
 jest.mock('../../../reportService');
 
-const { getReportConfig, saveReportConfig, getReport, getIncidents } = require('../../../handlers/report');
+const { getReportConfig, saveReportConfig, getReport, getIncidents, getRequests, getPrbs } = require('../../../handlers/report');
 const { getCfg, getDisplayName, saveConfig } = require('../../../config');
-const { buildReport, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog } = require('../../../reportService');
+const { buildReport, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog, fetchSnRequestBacklog, fetchSnPrbBacklog } = require('../../../reportService');
 
 beforeEach(() => {
   getCfg.mockReturnValue({ projects: [{ name: 'Alpha', workItemType: 'User Story' }] });
@@ -100,6 +100,29 @@ describe('getReportConfig', () => {
     const result = getReportConfig({ project: 'Nonexistent' });
 
     expect(result.incidentMonths).toBe(5);
+  });
+
+  test('retorna defaults para campos de requests quando não configurados', () => {
+    const result = getReportConfig({ project: 'Alpha' });
+
+    expect(result.requestMonths).toBe(5);
+    expect(result.requestTarget).toBeNull();
+    expect(result.requestCharts).toBeNull();
+    expect(result.requestAgingBuckets).toBeNull();
+  });
+
+  test('retorna campos de requests configurados no projeto', () => {
+    const requestCharts = [{ type: 'req-volume', size: 'lg' }];
+    getCfg.mockReturnValue({
+      projects: [{ name: 'Alpha', requestMonths: 8, requestTarget: 50, requestCharts, requestAgingBuckets: [2, 5, 10, 20] }],
+    });
+
+    const result = getReportConfig({ project: 'Alpha' });
+
+    expect(result.requestMonths).toBe(8);
+    expect(result.requestTarget).toBe(50);
+    expect(result.requestCharts).toEqual(requestCharts);
+    expect(result.requestAgingBuckets).toEqual([2, 5, 10, 20]);
   });
 });
 
@@ -237,6 +260,77 @@ describe('saveReportConfig', () => {
     const result = saveReportConfig({ project: 'Alpha', incidentMonths: 3 });
     expect(result).toEqual({ ok: true });
   });
+
+  test('salva usAgingColumns quando é array', () => {
+    const cols = [{ key: 'title', label: 'Título' }, { key: 'agingDays', label: 'Aging' }];
+    saveReportConfig({ project: 'Alpha', usAgingColumns: cols });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].usAgingColumns).toEqual(cols);
+  });
+
+  test('salva prbAgingColumns quando é array', () => {
+    const cols = [{ key: 'title', label: 'Título' }, { key: 'state', label: 'Status' }];
+    saveReportConfig({ project: 'Alpha', prbAgingColumns: cols });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].prbAgingColumns).toEqual(cols);
+  });
+
+  test('não altera usAgingColumns quando parâmetro não é array', () => {
+    saveReportConfig({ project: 'Alpha', usAgingColumns: null });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].usAgingColumns).toBeUndefined();
+  });
+
+  test('atualiza requestMonths com clamp (1–24)', () => {
+    saveReportConfig({ project: 'Alpha', requestMonths: 100 });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].requestMonths).toBe(24);
+  });
+
+  test('atualiza requestTarget (mínimo 0)', () => {
+    saveReportConfig({ project: 'Alpha', requestTarget: -10 });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].requestTarget).toBe(0);
+  });
+
+  test('salva requestCharts quando array', () => {
+    const charts = [{ type: 'req-catalog', size: 'lg' }];
+    saveReportConfig({ project: 'Alpha', requestCharts: charts });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].requestCharts).toEqual(charts);
+  });
+
+  test('salva requestAgingBuckets quando array de 4 posições', () => {
+    saveReportConfig({ project: 'Alpha', requestAgingBuckets: [2, 5, 10, 20] });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].requestAgingBuckets).toEqual([2, 5, 10, 20]);
+  });
+
+  test('não salva requestAgingBuckets quando array tem tamanho diferente de 4', () => {
+    saveReportConfig({ project: 'Alpha', requestAgingBuckets: [2, 5] });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].requestAgingBuckets).toBeUndefined();
+  });
+});
+
+// ── getReportConfig colunas ────────────────────────────────────────────────────
+
+describe('getReportConfig — usAgingColumns e prbAgingColumns', () => {
+  test('retorna null quando não configurado', () => {
+    getCfg.mockReturnValue({ projects: [{ name: 'Alpha' }] });
+    const result = getReportConfig({ project: 'Alpha' });
+    expect(result.usAgingColumns).toBeNull();
+    expect(result.prbAgingColumns).toBeNull();
+  });
+
+  test('retorna colunas configuradas no projeto', () => {
+    const usCols  = [{ key: 'title', label: 'Título' }, { key: 'agingDays', label: 'Aging' }];
+    const prbCols = [{ key: 'title', label: 'Título' }, { key: 'state', label: 'Status' }];
+    getCfg.mockReturnValue({ projects: [{ name: 'Alpha', usAgingColumns: usCols, prbAgingColumns: prbCols }] });
+    const result = getReportConfig({ project: 'Alpha' });
+    expect(result.usAgingColumns).toEqual(usCols);
+    expect(result.prbAgingColumns).toEqual(prbCols);
+  });
 });
 
 // ── getReport ─────────────────────────────────────────────────────────────────
@@ -251,7 +345,13 @@ describe('getReport', () => {
   test('chama buildReport com parâmetros corretos', async () => {
     await getReport({ project: 'Alpha', month: '2026-06', groupFields: [], agingState: 'In Review', incidentMonths: null, deliveryStates: null, refresh: false });
 
-    expect(buildReport).toHaveBeenCalledWith('Alpha', '2026-06', [], 'In Review', expect.any(Number), null);
+    expect(buildReport).toHaveBeenCalledWith('Alpha', '2026-06', [], 'In Review', expect.any(Number), null, null, null, '');
+  });
+
+  test('repassa ciFilter para buildReport quando fornecido', async () => {
+    await getReport({ project: 'Alpha', month: '2026-06', deliveryStates: null, ciFilter: 'MMS - CNH-L-P' });
+
+    expect(buildReport).toHaveBeenCalledWith('Alpha', '2026-06', [], 'In Review', expect.any(Number), null, null, null, 'MMS - CNH-L-P');
   });
 
   test('retorna { payload, months, month }', async () => {
@@ -299,6 +399,7 @@ describe('getIncidents', () => {
       mode:        'backlog',
       filterField: 'cmdb_ci',
       filterValue: 'SAP',
+      ciFilter:    '',
       group:       '',
     });
     expect(result).toEqual({ incidents });
@@ -313,7 +414,162 @@ describe('getIncidents', () => {
       mode:        'backlog',
       filterField: '',
       filterValue: '',
+      ciFilter:    '',
       group:       'L_BRA_OPS',
+    });
+  });
+
+  test('passa ciFilter para fetchSnIncidentBacklog quando fornecido (filtro de Configuration Item)', async () => {
+    fetchSnIncidentBacklog.mockResolvedValue([]);
+
+    await getIncidents({ project: 'Alpha', month: '2026-06', ciFilter: 'MMS - CNH-L-P' });
+
+    expect(fetchSnIncidentBacklog).toHaveBeenCalledWith('Alpha', '2026-06', {
+      mode:        'backlog',
+      filterField: '',
+      filterValue: '',
+      ciFilter:    'MMS - CNH-L-P',
+      group:       '',
+    });
+  });
+});
+
+// ── getRequests ───────────────────────────────────────────────────────────────
+
+describe('getRequests', () => {
+  test('delega para fetchSnRequestBacklog com parâmetros corretos', async () => {
+    const requests = [{ number: 'RITM001' }];
+    fetchSnRequestBacklog.mockResolvedValue(requests);
+
+    const result = await getRequests({
+      project:     'Alpha',
+      month:       '2026-06',
+      mode:        'backlog',
+      filterField: 'cat_item',
+      filterValue: 'Acesso VPN',
+    });
+
+    expect(fetchSnRequestBacklog).toHaveBeenCalledWith('Alpha', '2026-06', {
+      mode:        'backlog',
+      filterField: 'cat_item',
+      filterValue: 'Acesso VPN',
+      ciFilter:    '',
+      group:       '',
+    });
+    expect(result).toEqual({ requests });
+  });
+
+  test('passa group para fetchSnRequestBacklog quando fornecido', async () => {
+    fetchSnRequestBacklog.mockResolvedValue([]);
+
+    await getRequests({ project: '', month: '2026-06', group: 'L_BRA_OPS' });
+
+    expect(fetchSnRequestBacklog).toHaveBeenCalledWith('', '2026-06', {
+      mode:        'backlog',
+      filterField: '',
+      filterValue: '',
+      ciFilter:    '',
+      group:       'L_BRA_OPS',
+    });
+  });
+
+  test('passa dayMin/dayMax para fetchSnRequestBacklog quando fornecidos (clique no gráfico de aging)', async () => {
+    fetchSnRequestBacklog.mockResolvedValue([]);
+
+    await getRequests({ project: 'Alpha', month: '2026-06', dayMin: 5, dayMax: 10 });
+
+    expect(fetchSnRequestBacklog).toHaveBeenCalledWith('Alpha', '2026-06', {
+      mode:        'backlog',
+      filterField: '',
+      filterValue: '',
+      ciFilter:    '',
+      dayMin:      5,
+      dayMax:      10,
+      group:       '',
+    });
+  });
+
+  test('passa ciFilter para fetchSnRequestBacklog quando fornecido (filtro de Configuration Item)', async () => {
+    fetchSnRequestBacklog.mockResolvedValue([]);
+
+    await getRequests({ project: 'Alpha', month: '2026-06', ciFilter: 'MMS - CNH-L-P' });
+
+    expect(fetchSnRequestBacklog).toHaveBeenCalledWith('Alpha', '2026-06', {
+      mode:        'backlog',
+      filterField: '',
+      filterValue: '',
+      ciFilter:    'MMS - CNH-L-P',
+      group:       '',
+    });
+  });
+});
+
+// ── getPrbs ───────────────────────────────────────────────────────────────────
+
+describe('getPrbs', () => {
+  test('delega para fetchSnPrbBacklog com parâmetros corretos', async () => {
+    const prbs = [{ number: 'PRB001' }];
+    fetchSnPrbBacklog.mockResolvedValue(prbs);
+
+    const result = await getPrbs({
+      project:     'Alpha',
+      filterField: 'category',
+      filterValue: 'Software',
+    });
+
+    expect(fetchSnPrbBacklog).toHaveBeenCalledWith('Alpha', {
+      filterField: 'category',
+      filterValue: 'Software',
+      ciFilter:    '',
+      dayMin:      undefined,
+      dayMax:      undefined,
+      group:       '',
+    });
+    expect(result).toEqual({ prbs });
+  });
+
+  test('passa dayMin/dayMax para fetchSnPrbBacklog quando fornecidos (clique no gráfico de aging)', async () => {
+    fetchSnPrbBacklog.mockResolvedValue([]);
+
+    await getPrbs({ project: 'Alpha', dayMin: 30, dayMax: 60 });
+
+    expect(fetchSnPrbBacklog).toHaveBeenCalledWith('Alpha', {
+      filterField: '',
+      filterValue: '',
+      ciFilter:    '',
+      dayMin:      30,
+      dayMax:      60,
+      group:       '',
+    });
+  });
+
+  test('passa group para fetchSnPrbBacklog quando fornecido', async () => {
+    fetchSnPrbBacklog.mockResolvedValue([]);
+
+    await getPrbs({ project: '', group: 'L_BRA_OPS' });
+
+    expect(fetchSnPrbBacklog).toHaveBeenCalledWith('', {
+      filterField: '',
+      filterValue: '',
+      ciFilter:    '',
+      dayMin:      undefined,
+      dayMax:      undefined,
+      group:       'L_BRA_OPS',
+    });
+  });
+
+  test('passa ciFilter para fetchSnPrbBacklog quando fornecido (filtro de Configuration Item)', async () => {
+    fetchSnPrbBacklog.mockResolvedValue([]);
+
+    await getPrbs({ project: 'Alpha', ciFilter: 'MMS - CNH-L-P' });
+
+    expect(fetchSnPrbBacklog).toHaveBeenCalledWith('Alpha', {
+      filterField: '',
+      filterValue: '',
+      ciFilter:    'MMS - CNH-L-P',
+      dayMin:      undefined,
+      dayMax:      undefined,
+      group:       '',
     });
   });
 });

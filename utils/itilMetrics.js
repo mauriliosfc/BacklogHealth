@@ -97,6 +97,54 @@ function calcIncidentAgingBuckets(items, thresholds) {
   };
 }
 
+// ── Request (RITM) metrics ────────────────────────────────────────────────────
+
+/**
+ * Calculates average lead time (fulfillment time) from a list of closed requests (sc_req_item).
+ * Each item must have: opened_at, closed_at.
+ * Returns days (null when no data).
+ */
+function calcRequestLeadTime(reqClosedInPeriod) {
+  const days = (reqClosedInPeriod || [])
+    .map(i => _diffDays(i.opened_at, i.closed_at))
+    .filter(d => d !== null);
+  const avg = _avg(days);
+  return {
+    avgDays: avg === null ? null : Math.round(avg * 10) / 10,
+    count:   days.length,
+  };
+}
+
+/**
+ * Calculates request (RITM) backlog aging distribution.
+ * list: array of open sc_req_item with a precomputed `agingDays` field (mirrors calcPrbAgingBuckets).
+ * thresholds: [d1, d2, d3] in days — default [2, 5, 10].
+ * Returns { buckets: [{label, count, pct}], total }.
+ */
+function calcRequestAgingBuckets(list, thresholds) {
+  const [t1, t2, t3] = (thresholds && thresholds.length === 3) ? thresholds : [2, 5, 10];
+  const labels = [`< ${t1}d`, `${t1}–${t2}d`, `${t2}–${t3}d`, `> ${t3}d`];
+  const counts = [0, 0, 0, 0];
+
+  (list || []).forEach(i => {
+    const days = i.agingDays ?? 0;
+    if      (days < t1) counts[0]++;
+    else if (days < t2) counts[1]++;
+    else if (days < t3) counts[2]++;
+    else                 counts[3]++;
+  });
+
+  const total = counts.reduce((s, v) => s + v, 0);
+  return {
+    total,
+    buckets: labels.map((label, i) => ({
+      label,
+      count: counts[i],
+      pct:   total > 0 ? Math.round((counts[i] / total) * 100) : 0,
+    })),
+  };
+}
+
 // ── PRB metrics ───────────────────────────────────────────────────────────────
 
 /**
@@ -211,6 +259,12 @@ function getIndicatorCatalog() {
     { id: 'prb_ke',       section: 'prbs', label: 'Known Errors',                  description: 'PRBs com causa conhecida mas sem solução permanente disponível. Permitem resolução mais rápida de novos incidentes via workaround.', defaultVisible: false },
     { id: 'prb_wa',       section: 'prbs', label: 'Com workaround (%)',            description: 'Percentual de PRBs abertos que possuem workaround documentado. Workarounds reduzem o MTTR de incidentes relacionados.', defaultVisible: false },
     { id: 'prb_rca',      section: 'prbs', label: 'RCA completo (%)',              description: 'Percentual de PRBs com Análise de Causa Raiz concluída. Sem RCA não é possível prevenir recorrência.',  defaultVisible: false },
+    // Requests (RITM)
+    { id: 'req_total',      section: 'requests', label: 'Abertas no mês',        description: 'Total de requests (RITM) abertas no período selecionado. Compara com o target mensal configurado.', defaultVisible: true  },
+    { id: 'req_closed',     section: 'requests', label: 'Atendidas no mês',      description: 'Requests encerradas (closed_at preenchido) dentro do período. Indica a capacidade de atendimento da equipe.', defaultVisible: true  },
+    { id: 'req_backlog',    section: 'requests', label: 'Backlog aberto',        description: 'Total de requests em aberto no fim do período, independente de quando foram criadas.', defaultVisible: true  },
+    { id: 'req_lead_time',  section: 'requests', label: 'Lead time médio',       description: 'Média de dias entre abertura e encerramento das requests do período.', defaultVisible: true  },
+    { id: 'req_target',     section: 'requests', label: 'vs Target',            description: 'Percentual do volume de requests em relação ao target mensal configurado. Acima de 100% = alerta.', defaultVisible: true  },
   ];
 }
 
@@ -240,6 +294,8 @@ module.exports = {
   calcMttrByPriority,
   calcReopenRate,
   calcIncidentAgingBuckets,
+  calcRequestLeadTime,
+  calcRequestAgingBuckets,
   calcPrbKpis,
   calcPrbAgingBuckets,
   calcPrbByCategory,

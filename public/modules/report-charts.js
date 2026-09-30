@@ -12,9 +12,23 @@ const _PRB_STATES = {
 };
 
 // Builds onclick attribute string for incidents modal (pure string helper).
-function _incOnclick(mode, month, filterField, filterValue, title) {
+export function _incOnclick(mode, month, filterField, filterValue, title) {
   const json = JSON.stringify({ mode, month, filterField, filterValue, title }).replace(/'/g, '&#39;');
   return `data-inc='${json}' onclick="reportOpenIncidentFilter(this)" style="cursor:pointer"`;
+}
+
+// Builds onclick attribute string for the requests (RITM) modal (mirror de _incOnclick).
+// extra (opcional): campos adicionais mesclados no JSON (ex: {dayMin, dayMax} para o clique em aging).
+export function _reqOnclick(mode, month, filterField, filterValue, title, extra) {
+  const json = JSON.stringify({ mode, month, filterField, filterValue, title, ...extra }).replace(/'/g, '&#39;');
+  return `data-req='${json}' onclick="reportOpenRequestFilter(this)" style="cursor:pointer"`;
+}
+
+// Builds onclick attribute string for the PRBs modal (mirror de _incOnclick/_reqOnclick).
+// PRBs não são recortados por mês — sem estado "month" no payload.
+export function _prbOnclick(filterField, filterValue, title, extra) {
+  const json = JSON.stringify({ filterField, filterValue, title, ...extra }).replace(/'/g, '&#39;');
+  return `data-prb='${json}' onclick="reportOpenPrbFilter(this)" style="cursor:pointer"`;
 }
 
 export function _esc(s) {
@@ -176,7 +190,7 @@ export function _renderVolatilityChart(sprints) {
   ]);
 }
 
-export function _renderTypeDonut(byType, metricLabel) {
+export function _renderTypeDonut(byType, metricLabel, onClick) {
   const emptyHint = metricLabel === 'Story Points' ? t('rpt_chart_no_sp') : t('rpt_chart_no_us');
   if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
@@ -191,12 +205,14 @@ export function _renderTypeDonut(byType, metricLabel) {
     const arc    = (t.count / total) * circ;
     const offset = circ - accumulated;
     const pct    = Math.round(t.count / total * 100);
+    const clickAttrs = onClick ? onClick(t) : '';
     segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
       stroke="${COLORS[i % COLORS.length]}" stroke-width="26"
       stroke-dasharray="${arc.toFixed(2)} ${(circ - arc).toFixed(2)}"
       stroke-dashoffset="${offset.toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})"
-      style="cursor:default;transition:opacity .15s"
+      style="cursor:${clickAttrs ? 'pointer' : 'default'};transition:opacity .15s"
+      ${clickAttrs}
       onmouseenter="this.style.opacity='.7'" onmouseleave="this.style.opacity='1'">
       <title>${_esc(t.type)}: ${t.count} (${pct}%)</title>
     </circle>`;
@@ -207,7 +223,8 @@ export function _renderTypeDonut(byType, metricLabel) {
 
   const legendItems = byType.map((t, i) => {
     const pct = Math.round(t.count / total * 100);
-    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint)">` +
+    const clickAttrs = onClick ? onClick(t) : '';
+    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint)${clickAttrs ? ';cursor:pointer' : ''}" ${clickAttrs}>` +
       `<span style="width:10px;height:10px;border-radius:2px;background:${COLORS[i % COLORS.length]};display:inline-block;flex-shrink:0"></span>` +
       `${_esc(t.type)}: <strong style="color:var(--text-1)">${t.count} (${pct}%)</strong></span>`;
   }).join('');
@@ -220,7 +237,7 @@ export function _renderTypeDonut(byType, metricLabel) {
 
 // Shared donut renderer — same visual style as _renderTypeDonut (Azure).
 // items: [{ type: string, count: number, color?: string }]
-export function _donutChart(items, centerLabel) {
+export function _donutChart(items, centerLabel, onClick) {
   const total = items.reduce((s, i) => s + i.count, 0);
   if (!total) return `<div class="report-empty-hint">${t('rpt_chart_no_data')}</div>`;
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
@@ -232,12 +249,14 @@ export function _donutChart(items, centerLabel) {
     const offset = circ - accumulated;
     const pct    = Math.round(item.count / total * 100);
     const color  = item.color || COLORS[i % COLORS.length];
+    const clickAttrs = onClick ? onClick(item) : '';
     segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
       stroke="${color}" stroke-width="26"
       stroke-dasharray="${arc.toFixed(2)} ${(circ - arc).toFixed(2)}"
       stroke-dashoffset="${offset.toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})"
-      style="cursor:default;transition:opacity .15s"
+      style="cursor:${clickAttrs ? 'pointer' : 'default'};transition:opacity .15s"
+      ${clickAttrs}
       onmouseenter="this.style.opacity='.7'" onmouseleave="this.style.opacity='1'">
       <title>${_esc(item.type)}: ${item.count} (${pct}%)</title>
     </circle>`;
@@ -248,7 +267,8 @@ export function _donutChart(items, centerLabel) {
   const legendItems = items.map((item, i) => {
     const pct   = Math.round(item.count / total * 100);
     const color = item.color || COLORS[i % COLORS.length];
-    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint)">` +
+    const clickAttrs = onClick ? onClick(item) : '';
+    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint)${clickAttrs ? ';cursor:pointer' : ''}" ${clickAttrs}>` +
       `<span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0"></span>` +
       `${_esc(item.type)}: <strong style="color:var(--text-1)">${item.count} (${pct}%)</strong></span>`;
   }).join('');
@@ -258,7 +278,7 @@ export function _donutChart(items, centerLabel) {
     `</div>`;
 }
 
-export function _renderTypeBar(byType, barColor, metricLabel, size) {
+export function _renderTypeBar(byType, barColor, metricLabel, size, onClick) {
   const emptyHint = metricLabel === 'Story Points' ? t('rpt_chart_no_sp') : t('rpt_chart_no_us');
   if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
@@ -296,7 +316,8 @@ export function _renderTypeBar(byType, barColor, metricLabel, size) {
     const y     = padT + i * (barH + gap);
     const bW    = (t.count / maxVal) * trackW;
     const color = barColor || COLORS[i % COLORS.length];
-    bars   += `<rect x="${padL}" y="${y}" width="${bW.toFixed(1)}" height="${barH}" fill="${color}" opacity=".8" rx="3"/>`;
+    const clickAttrs = onClick ? onClick(t) : '';
+    bars   += `<rect x="${padL}" y="${y}" width="${bW.toFixed(1)}" height="${barH}" fill="${color}" opacity=".8" rx="3" ${clickAttrs}/>`;
     bars   += `<text x="${(padL + bW + 6).toFixed(1)}" y="${(y + barH / 2 + 4).toFixed(1)}" font-size="10" font-weight="700" fill="var(--text-1)">${t.count}</text>`;
     const lbl = t.type.length > 15 ? t.type.slice(0, 14) + '…' : t.type;
     labels += `<text x="${padL - 8}" y="${(y + barH / 2 + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--text-faint)">${_esc(lbl)}</text>`;
@@ -310,7 +331,7 @@ export function _renderTypeBar(byType, barColor, metricLabel, size) {
   </svg>`;
 }
 
-export function _renderTypeBarVertical(byType, barColor, metricLabel, size) {
+export function _renderTypeBarVertical(byType, barColor, metricLabel, size, onClick) {
   const emptyHint = metricLabel === 'Story Points' ? t('rpt_chart_no_sp') : t('rpt_chart_no_us');
   if (!byType || !byType.length) return `<div class="report-empty-hint">${emptyHint}</div>`;
   const total = byType.reduce((s, t) => s + t.count, 0);
@@ -344,7 +365,8 @@ export function _renderTypeBarVertical(byType, barColor, metricLabel, size) {
     const bH    = (t.count / maxVal) * cH;
     const y     = padT + cH - bH;
     const color = barColor || COLORS[i % COLORS.length];
-    bars += `<rect x="${(cx - barW / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bH.toFixed(1)}" fill="${color}" opacity=".8" rx="3"/>`;
+    const clickAttrs = onClick ? onClick(t) : '';
+    bars += `<rect x="${(cx - barW / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bH.toFixed(1)}" fill="${color}" opacity=".8" rx="3" ${clickAttrs}/>`;
     if (bH > 14) {
       bars += `<text x="${cx.toFixed(1)}" y="${(y + bH / 2 + 4).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${t.count}</text>`;
     } else {
@@ -362,19 +384,20 @@ export function _renderTypeBarVertical(byType, barColor, metricLabel, size) {
   </svg>`;
 }
 
-export function _renderIncPriorityDonut(inc) {
-  const p1     = inc?.p1    || 0;
-  const p2     = inc?.p2    || 0;
-  const p3     = inc?.p3    || 0;
+export function _renderIncPriorityDonut(inc, onClick) {
+  const p1     = inc?.byPriority?.p1 || 0;
+  const p2     = inc?.byPriority?.p2 || 0;
+  const p3     = inc?.byPriority?.p3 || 0;
   const outros = Math.max(0, (inc?.total || 0) - p1 - p2 - p3);
   const items  = [
-    { get type() { return t('rpt_priority_p1'); }, count: p1,     color: '#ef4444' },
-    { get type() { return t('rpt_priority_p2'); }, count: p2,     color: '#f97316' },
-    { get type() { return t('rpt_priority_p3'); }, count: p3,     color: '#eab308' },
+    { get type() { return t('rpt_priority_p1'); }, count: p1,     color: '#ef4444', rawValue: '1' },
+    { get type() { return t('rpt_priority_p2'); }, count: p2,     color: '#f97316', rawValue: '2' },
+    { get type() { return t('rpt_priority_p3'); }, count: p3,     color: '#eab308', rawValue: '3' },
     ...(outros > 0 ? [{ get type() { return t('rpt_others'); }, count: outros, color: '#6b7280' }] : []),
   ].filter(item => item.count > 0);
   if (!items.length) return `<div class="report-empty-hint">${t('rpt_chart_no_incidents')}</div>`;
-  return _donutChart(items, 'Incidentes');
+  const _onClick = onClick ? item => (item.rawValue ? onClick(item) : '') : undefined;
+  return _donutChart(items, 'Incidentes', _onClick);
 }
 
 export function _renderIncidentsVolumeChart(monthly, months, target, selectedMonth) {
@@ -691,41 +714,65 @@ export function _renderUsAgingBuckets(usAging) {
   return svgHtml + _legendHtml(COLORS.map((color, i) => ({ type: 'rect', color, label: buckets[i]?.label || '' })));
 }
 
-export function _renderUsTop10(usAging) {
+export const US_AGING_DEFAULT_COLS = [
+  { key: 'title',    label: 'Título' },
+  { key: 'sprint',   label: 'Sprint' },
+  { key: 'agingDays', label: 'Aging' },
+];
+
+export function _renderUsTop10(usAging, columns) {
   if (!usAging) return `<div class="report-empty-hint">${t('rpt_aging_no_data')}</div>`;
   const list = (usAging.list || usAging.top10 || []).slice(0, 10);
   if (!list.length) return `<div class="report-empty-hint">${t('rpt_aging_no_us_found')}</div>`;
 
+  const cols    = (Array.isArray(columns) && columns.length) ? columns : US_AGING_DEFAULT_COLS;
   const maxDays = Math.max(...list.map(u => u.agingDays || 0), 1);
 
-  const rows = list.map((u, i) => {
-    const pct       = Math.round((u.agingDays || 0) / maxDays * 100);
-    const barColor  = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : '#0d9488';
-    const daysColor = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : 'var(--text-muted)';
-    return `<tr>
-      <td class="report-td" style="color:var(--text-faint);width:24px;text-align:center">${i + 1}</td>
-      <td class="report-td" style="width:60px">
-        <a href="${u.url || '#'}" target="_blank" style="color:var(--c-blue);text-decoration:none;font-family:monospace;font-size:11px">#${u.id}</a>
-      </td>
-      <td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(u.title)}">${_esc(u.title)}</td>
-      <td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px" title="${_esc(u.sprint)}">${_esc(u.sprint)}</td>
-      <td class="report-td" style="min-width:130px">
+  const _cellUs = (col, u) => {
+    if (col.key === 'agingDays') {
+      const pct      = Math.round((u.agingDays || 0) / maxDays * 100);
+      const barColor  = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : '#0d9488';
+      const daysColor = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : 'var(--text-muted)';
+      return `<td class="report-td" style="min-width:130px">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="flex:1;height:5px;background:var(--bg-el);border-radius:3px;overflow:hidden">
             <div style="width:${pct}%;height:100%;background:${barColor};border-radius:3px"></div>
           </div>
           <span style="font-size:11px;font-weight:700;color:${daysColor};min-width:34px;text-align:right">${u.agingDays}d</span>
         </div>
-      </td>
-    </tr>`;
-  }).join('');
+      </td>`;
+    }
+    if (col.key === 'title') return `<td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(u.title)}">${_esc(u.title)}</td>`;
+    if (col.key === 'sprint') return `<td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px" title="${_esc(u.sprint)}">${_esc(u.sprint)}</td>`;
+    if (col.key === 'assignee') return `<td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px" title="${_esc(u.assignee)}">${_esc(u.assignee || '—')}</td>`;
+    // extra Azure field
+    const fieldRef = col.key.startsWith('az:') ? col.key.slice(3) : col.key;
+    const val = u.extra ? (u.extra[fieldRef] ?? '') : '';
+    return `<td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(val)}">${_esc(val)}</td>`;
+  };
+
+  const rows = list.map((u, i) => `<tr>
+    <td class="report-td" style="color:var(--text-faint);width:24px;text-align:center">${i + 1}</td>
+    <td class="report-td" style="width:60px">
+      <a href="${u.url || '#'}" target="_blank" style="color:var(--c-blue);text-decoration:none;font-family:monospace;font-size:11px">#${u.id}</a>
+    </td>
+    ${cols.map(col => _cellUs(col, u)).join('')}
+  </tr>`).join('');
+
+  const hasFlex = cols.find(c => c.key === 'title');
+  const colgroup = `<col style="width:28px"><col style="width:68px">` +
+    cols.map(c => {
+      if (c.key === 'agingDays') return `<col style="width:150px">`;
+      if (c.key === 'title')     return hasFlex ? `<col>` : `<col style="width:160px">`;
+      return `<col style="width:120px">`;
+    }).join('');
 
   return `<table class="report-table" style="width:100%;table-layout:fixed">
-    <colgroup>
-      <col style="width:28px"><col style="width:68px"><col>
-      <col style="width:120px"><col style="width:150px">
-    </colgroup>
-    <thead><tr><th></th><th>ID</th><th>Título</th><th>Sprint</th><th>Aging</th></tr></thead>
+    <colgroup>${colgroup}</colgroup>
+    <thead><tr>
+      <th></th><th>ID</th>
+      ${cols.map(c => `<th>${_esc(c.label)}</th>`).join('')}
+    </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
@@ -834,16 +881,16 @@ export function _renderIncidentLocationChart(byLocationMonthly, monthly, months)
 
 // ── PRB charts ────────────────────────────────────────────────────────────────
 
-export function _renderPrbStatusDonut(list) {
+export function _renderPrbStatusDonut(list, onClick) {
   const counts = {};
   (list || []).forEach(p => { const k = String(p.state); counts[k] = (counts[k] || 0) + 1; });
   const total = Object.values(counts).reduce((s, v) => s + v, 0);
   if (total === 0) return '<div class="report-empty-hint">Sem PRBs para o período</div>';
   const items = Object.entries(counts).map(([state, count]) => {
     const cfg = _PRB_STATES[state] || { label: state, color: '#6b7280' };
-    return { type: cfg.label, count, color: cfg.color };
+    return { type: cfg.label, count, color: cfg.color, rawValue: state };
   });
-  return _donutChart(items, 'PRBs');
+  return _donutChart(items, 'PRBs', onClick);
 }
 
 export function _renderPrbEvolutionChart(monthly, months) {
@@ -915,11 +962,11 @@ export function _renderPrbAgingChart(list, buckets) {
 
   const [t1, t2, t3, t4] = (Array.isArray(buckets) && buckets.length === 4) ? buckets : [30, 60, 90, 180];
   const BUCKETS = [
-    { label: `≤${t1}d`,           test: d => d <= t1 },
-    { label: `${t1+1}–${t2}d`,    test: d => d > t1 && d <= t2 },
-    { label: `${t2+1}–${t3}d`,    test: d => d > t2 && d <= t3 },
-    { label: `${t3+1}–${t4}d`,    test: d => d > t3 && d <= t4 },
-    { label: `>${t4}d`,            test: d => d > t4 },
+    { label: `≤${t1}d`,           test: d => d <= t1,              min: undefined, max: t1 },
+    { label: `${t1+1}–${t2}d`,    test: d => d > t1 && d <= t2,    min: t1,        max: t2 },
+    { label: `${t2+1}–${t3}d`,    test: d => d > t2 && d <= t3,    min: t2,        max: t3 },
+    { label: `${t3+1}–${t4}d`,    test: d => d > t3 && d <= t4,    min: t3,        max: t4 },
+    { label: `>${t4}d`,            test: d => d > t4,              min: t4,        max: undefined },
   ];
 
   const counts = BUCKETS.map(() => ({}));
@@ -960,8 +1007,10 @@ export function _renderPrbAgingChart(list, buckets) {
       return `<rect x="${bx}" y="${yTop}" width="${bw}" height="${h}" fill="${_PRB_STATES[st].color}" rx="1"/>` +
         (h > 12 ? `<text x="${cx}" y="${segY}" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">${count}</text>` : '');
     }).join('');
-    return segs +
-      (totals[i] > 0 ? `<text x="${cx}" y="${pad.t + chartH - (totals[i] / maxTotal) * chartH - 4}" text-anchor="middle" font-size="8" fill="var(--text-muted)">${totals[i]}</text>` : '') +
+    const clickAttrs = totals[i] > 0 ? _prbOnclick('', '', `PRBs ${BUCKETS[i].label}`, { dayMin: BUCKETS[i].min, dayMax: BUCKETS[i].max }) : '';
+    const overlay = totals[i] > 0 ? `<rect x="${bx}" y="${pad.t}" width="${bw}" height="${chartH}" fill="transparent" ${clickAttrs}/>` : '';
+    return segs + overlay +
+      (totals[i] > 0 ? `<text x="${cx}" y="${pad.t + chartH - (totals[i] / maxTotal) * chartH - 4}" text-anchor="middle" font-size="8" fill="var(--text-muted)" style="pointer-events:none">${totals[i]}</text>` : '') +
       `<text x="${cx}" y="${pad.t + chartH + 14}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${BUCKETS[i].label}</text>`;
   }).join('');
 
@@ -977,49 +1026,76 @@ export function _renderPrbAgingChart(list, buckets) {
   ));
 }
 
-export function _renderPrbOldestList(list) {
+export const PRB_AGING_DEFAULT_COLS = [
+  { key: 'title',    label: 'Título' },
+  { key: 'state',    label: 'Status' },
+  { key: 'priority', label: 'Prior.' },
+  { key: 'agingDays', label: 'Aging' },
+];
+
+export function _renderPrbOldestList(list, columns) {
   if (!list || list.length === 0) return '<div class="report-empty-row">No PRBs</div>';
 
   const P_COLORS = { '1':'#ef4444','2':'#f97316','3':'#eab308','4':'#6b7280' };
-
+  const cols   = (Array.isArray(columns) && columns.length) ? columns : PRB_AGING_DEFAULT_COLS;
   const sorted  = [...list].sort((a, b) => (b.agingDays || 0) - (a.agingDays || 0)).slice(0, 10);
   const maxDays = Math.max(...sorted.map(p => p.agingDays || 0), 1);
 
-  const rows = sorted.map((p, i) => {
-    const st  = String(p.state);
-    const pr  = String(p.priority);
-    const pct = Math.round((p.agingDays || 0) / maxDays * 100);
-    const barColor  = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : '#0d9488';
-    const daysColor = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : 'var(--text-muted)';
-    return `<tr>
-      <td class="report-td" style="color:var(--text-faint);width:24px;text-align:center">${i + 1}</td>
-      <td class="report-td" style="font-family:monospace;font-size:11px;white-space:nowrap">${_esc(p.id || '—')}</td>
-      <td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.title)}">${_esc(p.title || '—')}</td>
-      <td class="report-td"><span style="font-size:11px;font-weight:600;color:${_PRB_STATES[st]?.color || 'var(--text-faint)'}">${_esc(_PRB_STATES[st]?.label || st)}</span></td>
-      <td class="report-td" style="text-align:center"><span style="font-size:11px;font-weight:700;color:${P_COLORS[pr] || 'var(--text-faint)'}">P${_esc(pr)}</span></td>
-      <td class="report-td" style="min-width:130px">
+  const _cellPrb = (col, p) => {
+    if (col.key === 'agingDays') {
+      const pct      = Math.round((p.agingDays || 0) / maxDays * 100);
+      const barColor  = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : '#0d9488';
+      const daysColor = pct > 66 ? '#ef4444' : pct > 33 ? '#f97316' : 'var(--text-muted)';
+      return `<td class="report-td" style="min-width:130px">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="flex:1;height:5px;background:var(--bg-el);border-radius:3px;overflow:hidden">
             <div style="width:${pct}%;height:100%;background:${barColor};border-radius:3px"></div>
           </div>
           <span style="font-size:11px;font-weight:700;color:${daysColor};min-width:34px;text-align:right">${p.agingDays}d</span>
         </div>
-      </td>
-    </tr>`;
-  }).join('');
+      </td>`;
+    }
+    if (col.key === 'title')    return `<td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.title)}">${_esc(p.title || '—')}</td>`;
+    if (col.key === 'state') {
+      const st = String(p.state);
+      return `<td class="report-td"><span style="font-size:11px;font-weight:600;color:${_PRB_STATES[st]?.color || 'var(--text-faint)'}">${_esc(_PRB_STATES[st]?.label || st)}</span></td>`;
+    }
+    if (col.key === 'priority') {
+      const pr = String(p.priority);
+      return `<td class="report-td" style="text-align:center"><span style="font-size:11px;font-weight:700;color:${P_COLORS[pr] || 'var(--text-faint)'}">P${_esc(pr)}</span></td>`;
+    }
+    if (col.key === 'impact')          return `<td class="report-td">${_esc(p.impact || '—')}</td>`;
+    if (col.key === 'urgency')         return `<td class="report-td">${_esc(p.urgency || '—')}</td>`;
+    if (col.key === 'assigned_to')     return `<td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(p.assigned_to || '—')}</td>`;
+    if (col.key === 'assignment_group') return `<td class="report-td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(p.assignment_group || '—')}</td>`;
+    // extra SN field
+    const fieldName = col.key.startsWith('sn:') ? col.key.slice(3) : col.key;
+    const val = p.extra ? (p.extra[fieldName] ?? '') : '';
+    return `<td class="report-td" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(val)}">${_esc(val)}</td>`;
+  };
+
+  const rows = sorted.map((p, i) => `<tr>
+    <td class="report-td" style="color:var(--text-faint);width:24px;text-align:center">${i + 1}</td>
+    <td class="report-td" style="font-family:monospace;font-size:11px;white-space:nowrap">${p.url ? `<a href="${_esc(p.url)}" target="_blank" rel="noopener">${_esc(p.id || '—')}</a>` : _esc(p.id || '—')}</td>
+    ${cols.map(col => _cellPrb(col, p)).join('')}
+  </tr>`).join('');
+
+  const hasFlex = cols.find(c => c.key === 'title');
+  const colgroup = `<col style="width:28px"><col style="width:100px">` +
+    cols.map(c => {
+      if (c.key === 'agingDays') return `<col style="width:150px">`;
+      if (c.key === 'title')     return hasFlex ? `<col>` : `<col style="width:160px">`;
+      if (c.key === 'state')     return `<col style="width:140px">`;
+      if (c.key === 'priority')  return `<col style="width:52px">`;
+      return `<col style="width:110px">`;
+    }).join('');
 
   return `<table class="report-table" style="width:100%;table-layout:fixed">
-    <colgroup>
-      <col style="width:28px"><col style="width:100px"><col>
-      <col style="width:140px"><col style="width:52px"><col style="width:150px">
-    </colgroup>
+    <colgroup>${colgroup}</colgroup>
     <thead><tr>
       <th class="report-th">#</th>
       <th class="report-th">ID</th>
-      <th class="report-th">Título</th>
-      <th class="report-th">Status</th>
-      <th class="report-th">Prior.</th>
-      <th class="report-th">Aging</th>
+      ${cols.map(c => `<th class="report-th">${_esc(c.label)}</th>`).join('')}
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -1106,16 +1182,248 @@ export function _renderIncSlaBars(slaByPriority) {
   return `<div style="padding:4px 0">${rows.join('')}</div>`;
 }
 
-export function _renderPrbCategoryChart(list) {
+export function _renderPrbCategoryChart(list, onClick) {
   if (!list || !list.length) return '<div class="report-empty-hint">Sem PRBs para o período</div>';
+  const NO_CATEGORY = 'Não categorizado';
   const counts = {};
   list.forEach(p => {
-    const cat = (p.category && String(p.category).trim()) || 'Não categorizado';
+    const cat = (p.category && String(p.category).trim()) || NO_CATEGORY;
     counts[cat] = (counts[cat] || 0) + 1;
   });
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 7);
   if (!sorted.length) return '<div class="report-empty-hint">Sem dados de categoria</div>';
   const COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
-  const items = sorted.map(([type, count], i) => ({ type, count, color: COLORS[i % COLORS.length] }));
-  return _donutChart(items, 'PRBs');
+  const items = sorted.map(([type, count], i) => ({ type, count, color: COLORS[i % COLORS.length], rawValue: type !== NO_CATEGORY ? type : undefined }));
+  const _onClick = onClick ? item => (item.rawValue ? onClick(item) : '') : undefined;
+  return _donutChart(items, 'PRBs', _onClick);
+}
+
+// ── Request (RITM) charts ──────────────────────────────────────────────────────
+
+export function _renderRequestVolumeChart(monthly, months, target, selectedMonth) {
+  const data = (monthly || []).slice(-months);
+  if (!data.length) return `<div class="report-empty-hint">${t('rpt_chart_no_req_data')}</div>`;
+
+  const W = 600, H = 214;
+  const pad = { t: 20, r: 20, b: 20, l: 44 };
+  const cW = W - pad.l - pad.r;
+  const cH = H - pad.t - pad.b;
+
+  const maxVal = Math.max(...data.map(m => Math.max(m.opened || 0, m.closed || 0, m.openBacklog || 0)), target || 0, 1);
+  const rawStep = maxVal / 4;
+  const step = Math.max(1, Math.ceil(rawStep / 4) * 4);
+  const yMax = Math.ceil(maxVal / step) * step;
+
+  const grpW = cW / data.length;
+  const barW = Math.min(grpW * 0.28, 18);
+  const gap  = 4;
+
+  let bars = '', labels = '', gridLines = '', yLabels = '';
+
+  for (let v = 0; v <= yMax; v += step) {
+    const y = pad.t + cH - (v / yMax) * cH;
+    gridLines += `<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${W - pad.r}" y2="${y.toFixed(1)}" stroke="var(--bg-border)" stroke-width="1"${v > 0 ? ' stroke-dasharray="4,4"' : ''}/>`;
+    yLabels   += `<text x="${pad.l - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-faint)">${v}</text>`;
+  }
+
+  data.forEach((m, i) => {
+    const cx     = pad.l + i * grpW + grpW / 2;
+    const opened = m.opened || 0;
+    const closed = m.closed || 0;
+    const hO = (opened / yMax) * cH;
+    const hC = (closed / yMax) * cH;
+    const isSel = selectedMonth && m.label === selectedMonth;
+
+    if (isSel) {
+      bars += `<rect x="${(pad.l + i * grpW + 2).toFixed(1)}" y="${pad.t}" width="${(grpW - 4).toFixed(1)}" height="${cH}" fill="var(--bg-border)" rx="3" opacity="0.35"/>`;
+    }
+
+    const totalGrpW = 2 * barW + gap;
+    const xO = cx - totalGrpW / 2;
+    const xC = xO + barW + gap;
+
+    const mLbl = _fmtMonth(m.label);
+    if (hO > 0) {
+      bars += `<rect x="${xO.toFixed(1)}" y="${(pad.t + cH - hO).toFixed(1)}" width="${barW}" height="${hO.toFixed(1)}" fill="${isSel ? '#60a5fa' : '#93c5fd'}" rx="2" ${_reqOnclick('opened', m.label, '', '', `Abertas · ${mLbl}`)}/>`;
+      bars += `<text x="${(xO + barW / 2).toFixed(1)}" y="${(pad.t + cH - hO - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)" style="pointer-events:none">${opened}</text>`;
+    }
+    if (hC > 0) {
+      bars += `<rect x="${xC.toFixed(1)}" y="${(pad.t + cH - hC).toFixed(1)}" width="${barW}" height="${hC.toFixed(1)}" fill="${isSel ? '#10b981' : '#34d399'}" rx="2" ${_reqOnclick('closed', m.label, '', '', `Atendidas · ${mLbl}`)}/>`;
+      bars += `<text x="${(xC + barW / 2).toFixed(1)}" y="${(pad.t + cH - hC - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-faint)" style="pointer-events:none">${closed}</text>`;
+    }
+
+    const labelColor  = isSel ? 'var(--text-muted)' : 'var(--text-faint)';
+    const labelWeight = isSel ? 'font-weight="600"' : '';
+    labels += `<text x="${cx.toFixed(1)}" y="${(H - pad.b + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="${labelColor}" ${labelWeight}>${_esc(_fmtMonth(m.label))}</text>`;
+  });
+
+  const targetLine = target > 0 ? (() => {
+    const ty = pad.t + cH - (Math.min(target, yMax) / yMax) * cH;
+    return `<line x1="${pad.l}" y1="${ty.toFixed(1)}" x2="${W - pad.r}" y2="${ty.toFixed(1)}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="6,4"/>`;
+  })() : '';
+
+  const backlogVals = data.map(m => Math.abs(m.openBacklog ?? 0));
+  const bkPts = data.map((m, i) => {
+    const cx = pad.l + i * grpW + grpW / 2;
+    const y  = pad.t + cH - (backlogVals[i] / yMax) * cH;
+    return [cx, y];
+  });
+  const backlogLine = `<polyline points="${bkPts.map(p => p.join(',')).join(' ')}" fill="none" stroke="#f97316" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+  const backlogDots = bkPts.map((p, i) =>
+    `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4" fill="#f97316" style="cursor:default"><title>${_fmtMonth(data[i].label)}: ${backlogVals[i]} em backlog</title></circle>`
+  ).join('');
+
+  const axes = `
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + cH}" stroke="var(--bg-border)" stroke-width="1"/>
+    <line x1="${pad.l}" y1="${pad.t + cH}" x2="${W - pad.r}" y2="${pad.t + cH}" stroke="var(--bg-border)" stroke-width="1"/>`;
+
+  const legendItems = [
+    { type: 'rect', color: '#93c5fd', get label() { return t('rpt_legend_opened'); } },
+    { type: 'rect', color: '#34d399', get label() { return t('rpt_req_legend_closed'); } },
+    { type: 'line', color: '#f97316', get label() { return t('rpt_legend_backlog'); }, dashed: true, dot: true },
+    ...(target > 0 ? [{ type: 'line', color: '#ef4444', label: `Target (${target})`, dashed: true }] : []),
+  ];
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
+    ${gridLines}${axes}${bars}${targetLine}${backlogLine}${backlogDots}${labels}${yLabels}
+  </svg>` + _legendHtml(legendItems);
+}
+
+export function _renderRequestLeadTimeTrend(monthly, months, target) {
+  const data = (monthly || []).slice(-(months || S.requestMonths));
+  const withData = data.filter(m => m.avgLeadTimeDays !== null && m.avgLeadTimeDays !== undefined);
+  if (!withData.length) return `<div class="report-empty-hint">${t('rpt_chart_no_req_data')}</div>`;
+
+  const W = 600, padT = 24, padB = 30, padL = 32, padR = 16;
+  const cH = 150;
+  const H  = padT + cH + padB;
+  const cW = W - padL - padR;
+  const n  = data.length;
+
+  const maxV = Math.max(...data.map(m => m.avgLeadTimeDays || 0), target || 0, 1);
+  const xOf  = i => padL + (n === 1 ? cW / 2 : i / (n - 1) * cW);
+  const yOf  = v => padT + cH - (v / maxV) * cH;
+
+  const grid = Array.from({ length: 4 }, (_, i) => {
+    const v = Math.round(maxV * i / 3);
+    const y = yOf(v);
+    return `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="var(--bg-border)" stroke-width="0.4" stroke-dasharray="3,3"/>` +
+      `<text x="${padL - 4}" y="${y + 4}" text-anchor="end" font-size="7.5" fill="var(--text-faint)">${v}</text>`;
+  }).join('');
+
+  const pts  = data.map((m, i) => `${xOf(i)},${yOf(m.avgLeadTimeDays || 0)}`).join(' ');
+  const dots = data.map((m, i) =>
+    `<circle cx="${xOf(i)}" cy="${yOf(m.avgLeadTimeDays || 0)}" r="3" fill="#a78bfa"><title>${_fmtMonth(m.label)}: ${m.avgLeadTimeDays ?? '—'}d</title></circle>`
+  ).join('');
+
+  const targetLine = target > 0
+    ? `<line x1="${padL}" y1="${yOf(target).toFixed(1)}" x2="${W - padR}" y2="${yOf(target).toFixed(1)}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="6,4"/>`
+    : '';
+
+  const xlabels = data.map((m, i) =>
+    `<text x="${xOf(i)}" y="${H - 4}" text-anchor="middle" font-size="8" fill="var(--text-muted)">${_fmtMonth(m.label)}</text>`
+  ).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
+    ${grid}
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + cH}" stroke="var(--bg-border)" stroke-width="0.5"/>
+    <line x1="${padL}" y1="${padT + cH}" x2="${W - padR}" y2="${padT + cH}" stroke="var(--bg-border)" stroke-width="0.5"/>
+    <polyline points="${pts}" fill="none" stroke="#a78bfa" stroke-width="1.8"/>${dots}${targetLine}${xlabels}
+  </svg>` + _legendHtml([
+    { type: 'line', color: '#a78bfa', get label() { return t('rpt_req_lead_time_legend'); } },
+    ...(target > 0 ? [{ type: 'line', color: '#ef4444', label: `Target (${target}d)`, dashed: true }] : []),
+  ]);
+}
+
+export function _renderRequestAgingChart(list, buckets) {
+  if (!list || list.length === 0) return `<div class="report-empty-hint">${t('rpt_chart_no_req_data')}</div>`;
+
+  const [t1, t2, t3, t4] = (Array.isArray(buckets) && buckets.length === 4) ? buckets : [2, 5, 10, 20];
+  const BUCKETS = [
+    { label: `≤${t1}d`,        test: d => d <= t1,             color: '#22c55e', min: undefined, max: t1 },
+    { label: `${t1+1}–${t2}d`, test: d => d > t1 && d <= t2,    color: '#4ade80', min: t1,        max: t2 },
+    { label: `${t2+1}–${t3}d`, test: d => d > t2 && d <= t3,    color: '#f59e0b', min: t2,        max: t3 },
+    { label: `${t3+1}–${t4}d`, test: d => d > t3 && d <= t4,    color: '#f97316', min: t3,        max: t4 },
+    { label: `>${t4}d`,        test: d => d > t4,               color: '#ef4444', min: t4,        max: undefined },
+  ];
+
+  const counts = BUCKETS.map(() => 0);
+  list.forEach(r => {
+    const bi = BUCKETS.findIndex(b => b.test(r.agingDays || 0));
+    if (bi >= 0) counts[bi]++;
+  });
+  const maxTotal = Math.max(...counts, 1);
+
+  const W = 600, H = 172;
+  const pad = { t: 20, r: 20, b: 32, l: 36 };
+  const chartW = W - pad.l - pad.r;
+  const chartH = H - pad.t - pad.b;
+  const slotW  = chartW / BUCKETS.length;
+  const bw     = Math.floor(slotW * 0.5);
+
+  const gridLines = Array.from({ length: 5 }, (_, i) => {
+    const val = Math.round(maxTotal * i / 4);
+    const y   = pad.t + chartH - (val / maxTotal) * chartH;
+    return `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="var(--text-faint)" stroke-width="0.3" stroke-dasharray="3,3"/>` +
+      `<text x="${pad.l - 4}" y="${y + 4}" text-anchor="end" font-size="7.5" fill="var(--text-faint)">${val}</text>`;
+  }).join('');
+
+  const bars = BUCKETS.map((b, i) => {
+    const cx = pad.l + i * slotW + slotW / 2;
+    const bx = cx - bw / 2;
+    const count = counts[i];
+    const h  = (count / maxTotal) * chartH;
+    const y  = pad.t + chartH - h;
+    const clickAttrs = count > 0 ? _reqOnclick('backlog', S.reportMonth, '', '', `Requests ${b.label}`, { dayMin: b.min, dayMax: b.max }) : '';
+    return (count > 0 ? `<rect x="${bx}" y="${y}" width="${bw}" height="${h}" fill="${b.color}" rx="2" ${clickAttrs}/>` +
+      `<text x="${cx}" y="${y - 4}" text-anchor="middle" font-size="9" fill="var(--text-muted)" style="pointer-events:none">${count}</text>` : '') +
+      `<text x="${cx}" y="${pad.t + chartH + 14}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${b.label}</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
+    ${gridLines}
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + chartH}" stroke="var(--text-faint)" stroke-width="0.5"/>
+    <line x1="${pad.l}" y1="${pad.t + chartH}" x2="${W - pad.r}" y2="${pad.t + chartH}" stroke="var(--text-faint)" stroke-width="0.5"/>
+    ${bars}
+  </svg>`;
+}
+
+export function _renderRequestCatalogBars(byCatalogItem, reportMonth) {
+  const all = byCatalogItem || [];
+  if (!all.length) return `<div class="report-empty-hint">${t('rpt_chart_no_req_data')}</div>`;
+
+  const cutoff = 9;
+  let items;
+  if (all.length <= cutoff) {
+    items = all;
+  } else {
+    const topN   = all.slice(0, cutoff);
+    const rest   = all.slice(cutoff);
+    const outros = rest.reduce((s, c) => s + (c.total || 0), 0);
+    items = outros > 0 ? [...topN, { name: 'Outros', total: outros }] : topN;
+  }
+
+  const maxVal = Math.max(...items.map(c => c.total), 1);
+  const barH   = 24, gap = 8;
+  const padL = 110, padR = 40, padT = 10, padB = 4;
+  const W = 600;
+  const innerH = items.length * (barH + gap) - gap;
+  const H = padT + innerH + padB;
+  const trackW = W - padL - padR;
+
+  const bars = items.map((c, i) => {
+    const y  = padT + i * (barH + gap);
+    const bW = (c.total / maxVal) * trackW;
+    const clickable = c.name !== 'Outros' && reportMonth;
+    return `<rect x="${padL}" y="${y}" width="${bW.toFixed(1)}" height="${barH}" fill="#60a5fa" opacity=".8" rx="3" ${clickable ? _reqOnclick('opened', reportMonth, 'cat_item', c.name, `${c.name} · ${_fmtMonth(reportMonth)}`) : ''}/>` +
+      `<text x="${(padL + bW + 6).toFixed(1)}" y="${(y + barH / 2 + 4).toFixed(1)}" font-size="10" font-weight="700" fill="var(--text-1)">${c.total}</text>` +
+      `<text x="${padL - 8}" y="${(y + barH / 2 + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--text-faint)">${_esc(c.name.length > 15 ? c.name.slice(0, 14) + '…' : c.name)}</text>`;
+  }).join('');
+
+  const axes = `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + innerH}" stroke="var(--bg-border)" stroke-width="1"/>
+    <line x1="${padL}" y1="${padT + innerH}" x2="${W - padR}" y2="${padT + innerH}" stroke="var(--bg-border)" stroke-width="1"/>`;
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block" xmlns="http://www.w3.org/2000/svg">
+    ${axes}${bars}
+  </svg>`;
 }

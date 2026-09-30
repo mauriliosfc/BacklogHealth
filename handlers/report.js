@@ -1,5 +1,6 @@
 const { getCfg, getDisplayName, saveConfig } = require('../config');
-const { buildReport, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog } = require('../reportService');
+const { buildReport, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents, fetchSnRequestBacklog, fetchSnPrbBacklog } = require('../reportService');
+const { buildXlsx } = require('../utils/xlsxServer');
 
 function getReportConfig({ project }) {
   const cfg  = getCfg();
@@ -26,10 +27,16 @@ function getReportConfig({ project }) {
     slaTargets:            pcfg?.slaTargets            || null,
     prbMonths:             pcfg?.prbMonths             ?? 5,
     prbAgingBuckets:       pcfg?.prbAgingBuckets       || null,
+    usAgingColumns:        pcfg?.usAgingColumns        || null,
+    prbAgingColumns:       pcfg?.prbAgingColumns       || null,
+    requestMonths:         pcfg?.requestMonths         ?? 5,
+    requestTarget:         pcfg?.requestTarget         ?? null,
+    requestCharts:         pcfg?.requestCharts         || null,
+    requestAgingBuckets:   pcfg?.requestAgingBuckets   || null,
   };
 }
 
-function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarget, incidentGroupBy, heatmapMax, heatmapTopN, locationMonths, agingState, agingCharts, agingBuckets, deliveryStates, indicatorCards, indicatorCardsPerRow, incidentCharts, prbCharts, slaTargets, prbMonths, prbAgingBuckets } = {}) {
+function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarget, incidentGroupBy, heatmapMax, heatmapTopN, locationMonths, agingState, agingCharts, agingBuckets, deliveryStates, indicatorCards, indicatorCardsPerRow, incidentCharts, prbCharts, slaTargets, prbMonths, prbAgingBuckets, usAgingColumns, prbAgingColumns, requestMonths, requestTarget, requestCharts, requestAgingBuckets } = {}) {
   const cfg  = getCfg();
   let pcfg = (cfg.projects || []).find(p => getDisplayName(p) === project);
   if (!pcfg) {
@@ -55,6 +62,12 @@ function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarge
   if (Array.isArray(prbCharts))      pcfg.prbCharts      = prbCharts;
   if (prbMonths !== undefined)       { const pm = parseInt(prbMonths); pcfg.prbMonths = Math.min(24, Math.max(1, Number.isNaN(pm) ? 5 : pm)); }
   if (Array.isArray(prbAgingBuckets) && prbAgingBuckets.length === 4) pcfg.prbAgingBuckets = prbAgingBuckets.map(v => Math.max(1, parseInt(v) || 1));
+  if (Array.isArray(usAgingColumns))  pcfg.usAgingColumns  = usAgingColumns.filter(c => c.key && c.key !== 'az:undefined');
+  if (Array.isArray(prbAgingColumns)) pcfg.prbAgingColumns = prbAgingColumns.filter(c => c.key && c.key !== 'sn:undefined');
+  if (requestMonths !== undefined)   { const rm = parseInt(requestMonths); pcfg.requestMonths = Math.min(24, Math.max(1, Number.isNaN(rm) ? 5 : rm)); }
+  if (requestTarget !== undefined)   pcfg.requestTarget = requestTarget === null ? null : Math.max(0, parseInt(requestTarget) || 0);
+  if (Array.isArray(requestCharts))  pcfg.requestCharts = requestCharts;
+  if (Array.isArray(requestAgingBuckets) && requestAgingBuckets.length === 4) pcfg.requestAgingBuckets = requestAgingBuckets.map(v => Math.max(1, parseInt(v) || 1));
   if (slaTargets !== undefined && typeof slaTargets === 'object') {
     const t = {};
     if (slaTargets.p1 !== undefined) t.p1 = Math.min(100, Math.max(0, parseInt(slaTargets.p1) || 0));
@@ -66,15 +79,19 @@ function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarge
   return { ok: true };
 }
 
-async function getReport({ project, month, groupFields = [], agingState = 'In Review', incidentMonths, deliveryStates, refresh: doRefresh = false }) {
+async function getReport({ project, month, groupFields = [], agingState = 'In Review', incidentMonths, deliveryStates, ciFilter = '', refresh: doRefresh = false }) {
   const cfg         = getCfg();
   const projects    = cfg.projects || [];
   const pcfgReport  = projects.find(p => getDisplayName(p) === project)
+    || (cfg.snGroupConfigs?.[project])
     || (projects[0] ? { ...projects[0] } : null);
   const resolvedProject = project || (projects[0] ? getDisplayName(projects[0]) : '');
   const nMonths     = Math.max(6, Math.min(24, Math.max(1, parseInt(incidentMonths || pcfgReport?.incidentMonths) || 13)));
   const months      = getLast6Months(nMonths);
   const resolvedMonth = months.includes(month) ? month : months[0];
+
+  const usAgingColumns  = pcfgReport?.usAgingColumns  || null;
+  const prbAgingColumns = pcfgReport?.prbAgingColumns || null;
 
   if (doRefresh) {
     const DEFAULT_DONE     = ['Closed', 'Done', 'Resolved'];
@@ -89,13 +106,55 @@ async function getReport({ project, month, groupFields = [], agingState = 'In Re
     );
   }
 
-  const payload = await buildReport(resolvedProject, resolvedMonth, groupFields, agingState, nMonths, deliveryStates);
+  const payload = await buildReport(resolvedProject, resolvedMonth, groupFields, agingState, nMonths, deliveryStates, usAgingColumns, prbAgingColumns, ciFilter);
   return { payload, months, month: resolvedMonth };
 }
 
-async function getIncidents({ project, month, mode = 'backlog', filterField = '', filterValue = '', group = '' }) {
-  const incidents = await fetchSnIncidentBacklog(project, month, { mode, filterField, filterValue, group });
+async function getIncidents({ project, month, mode = 'backlog', filterField = '', filterValue = '', ciFilter = '', group = '' }) {
+  const incidents = await fetchSnIncidentBacklog(project, month, { mode, filterField, filterValue, ciFilter, group });
   return { incidents };
 }
 
-module.exports = { getReportConfig, saveReportConfig, getReport, getIncidents };
+async function getRequests({ project, month, mode = 'backlog', filterField = '', filterValue = '', ciFilter = '', dayMin, dayMax, group = '' }) {
+  const requests = await fetchSnRequestBacklog(project, month, { mode, filterField, filterValue, ciFilter, dayMin, dayMax, group });
+  return { requests };
+}
+
+async function getPrbs({ project, filterField = '', filterValue = '', ciFilter = '', dayMin, dayMax, group = '' }) {
+  const prbs = await fetchSnPrbBacklog(project, { filterField, filterValue, ciFilter, dayMin, dayMax, group });
+  return { prbs };
+}
+
+async function getVolumeIncidents({ project, month, nMonths = '1' }) {
+  const incidents = await fetchSnVolumeIncidents(project, month, Math.max(1, parseInt(nMonths) || 1));
+  return { incidents };
+}
+
+const XLSX_HEADERS = [
+  'Assignment group', 'Number', 'Tags', 'Opened', 'Opened by',
+  'Short description', 'Description', 'Caller', 'Requested by',
+  'Priority', 'On hold reason', 'State', 'Assigned to', 'Service',
+  'Configuration item', 'Updated', 'Resolution', 'Resolution code',
+  'Causal Code', 'Additional resolution code', 'Resolution notes',
+  'Resolution hours',
+];
+const XLSX_KEYS = [
+  'assignmentGroup', 'number', 'tags', 'opened', 'openedBy',
+  'shortDescription', 'description', 'caller', 'requestedBy',
+  'priority', 'onHoldReason', 'state', 'assignedTo', 'service',
+  'configItem', 'updated', 'resolution', 'resolutionCode',
+  'causalCode', 'additionalResCode', 'resolutionNotes',
+  'resolutionHours',
+];
+
+async function getVolumeIncidentsXlsx({ project, month, nMonths = '1' }) {
+  const incidents = await fetchSnVolumeIncidents(project, month, Math.max(1, parseInt(nMonths) || 1));
+  if (!incidents) return null;
+  const rows = incidents.map(i => XLSX_KEYS.map(k => {
+    const v = i[k] ?? '';
+    return typeof v === 'number' ? v : String(v);
+  }));
+  return buildXlsx(XLSX_HEADERS, rows);
+}
+
+module.exports = { getReportConfig, saveReportConfig, getReport, getIncidents, getVolumeIncidents, getVolumeIncidentsXlsx, getRequests, getPrbs };

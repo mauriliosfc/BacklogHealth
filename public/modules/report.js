@@ -13,12 +13,16 @@ import {
   _renderPrbStatusDonut, _renderPrbEvolutionChart, _renderPrbAgingChart,
   _renderPrbOldestList, _renderIncPriorityTrend, _renderIncSlaBars,
   _renderPrbCategoryChart,
+  _renderRequestVolumeChart, _renderRequestLeadTimeTrend,
+  _renderRequestAgingChart, _renderRequestCatalogBars,
+  _incOnclick, _reqOnclick, _prbOnclick,
 } from './report-charts.js';
 import {
   initPickerCallbacks,
   reportOpenFieldPicker,
   reportOpenIncChartPicker,
   reportOpenPrbChartPicker,
+  reportOpenReqChartPicker,
   reportOpenIncidentVolumePicker,
   reportOpenIncidentGroupByPicker,
   reportOpenHeatmapPicker,
@@ -31,9 +35,22 @@ import {
   reportOpenIncidentFilter,
   reportOpenIncidentsModal,
   toggleReportIncMax,
+  reportCloseRequestsModal,
+  reportExportRequestsCSV,
+  reportOpenRequestFilter,
+  reportOpenRequestsModal,
+  toggleReportReqMax,
   reportOpenTargetModal,
   reportSaveTargetModal,
+  reportOpenReqTargetModal,
+  reportSaveReqTargetModal,
+  reportClosePrbsModal,
+  reportExportPrbsCSV,
+  reportOpenPrbFilter,
+  reportOpenPrbsModal,
+  toggleReportPrbMax,
   exportReportHtml,
+  exportVolumeIncidentsXLSX,
   openIncidentsForGroup,
 } from './report-pickers.js';
 import { t } from './i18n.js';
@@ -41,6 +58,7 @@ export {
   reportOpenFieldPicker,
   reportOpenIncChartPicker,
   reportOpenPrbChartPicker,
+  reportOpenReqChartPicker,
   reportOpenIncidentVolumePicker,
   reportOpenIncidentGroupByPicker,
   reportOpenHeatmapPicker,
@@ -53,9 +71,22 @@ export {
   reportOpenIncidentFilter,
   reportOpenIncidentsModal,
   toggleReportIncMax,
+  reportCloseRequestsModal,
+  reportExportRequestsCSV,
+  reportOpenRequestFilter,
+  reportOpenRequestsModal,
+  toggleReportReqMax,
   reportOpenTargetModal,
   reportSaveTargetModal,
+  reportOpenReqTargetModal,
+  reportSaveReqTargetModal,
+  reportClosePrbsModal,
+  reportExportPrbsCSV,
+  reportOpenPrbFilter,
+  reportOpenPrbsModal,
+  toggleReportPrbMax,
   exportReportHtml,
+  exportVolumeIncidentsXLSX,
   openIncidentsForGroup,
 };
 
@@ -120,6 +151,13 @@ const _prbChartDrag = _makeDraggable({
   afterDrop: () => { _saveReportConfig(); _rerender(); },
 });
 
+const _reqChartDrag = _makeDraggable({
+  guardSelector: _DRAG_GUARD,
+  getList:   () => S.requestCharts,
+  setList:   list => { S.requestCharts = list; },
+  afterDrop: () => { _saveReportConfig(); _rerender(); },
+});
+
 const _DEFAULT_CHARTS = [
   { type: 'sprint',     size: 'lg' },
   { type: 'volatility', size: 'md' },
@@ -138,6 +176,13 @@ const _DEFAULT_PRB_CHARTS = [
   { type: 'prb-donut',     size: 'md' },
   { type: 'prb-aging',     size: 'md' },
   { type: 'prb-oldest',    size: 'lg' },
+];
+
+const _DEFAULT_REQUEST_CHARTS = [
+  { type: 'req-volume',    size: 'lg' },
+  { type: 'req-lead-time', size: 'md' },
+  { type: 'req-aging',     size: 'md' },
+  { type: 'req-catalog',   size: 'lg' },
 ];
 
 // Catalog of all configurable indicator cards — source of truth for both sections.
@@ -165,6 +210,12 @@ const _INDICATOR_CATALOG = [
   { id: 'prb_ke',      section: 'prbs', get label() { return t('rpt_ind_prb_ke'); },  get desc() { return t('rpt_ind_prb_ke_desc'); },  defaultVisible: false },
   { id: 'prb_wa',      section: 'prbs', get label() { return t('rpt_ind_prb_wa'); },  get desc() { return t('rpt_ind_prb_wa_desc'); },  defaultVisible: false },
   { id: 'prb_rca',     section: 'prbs', get label() { return t('rpt_ind_prb_rca'); }, get desc() { return t('rpt_ind_prb_rca_desc'); }, defaultVisible: false },
+  // ── Requests (RITM) ──
+  { id: 'req_total',     section: 'requests', get label() { return t('rpt_ind_req_total'); },     get desc() { return t('rpt_ind_req_total_desc'); },     defaultVisible: true },
+  { id: 'req_closed',    section: 'requests', get label() { return t('rpt_ind_req_closed'); },    get desc() { return t('rpt_ind_req_closed_desc'); },    defaultVisible: true },
+  { id: 'req_backlog',   section: 'requests', get label() { return t('rpt_ind_req_backlog'); },   get desc() { return t('rpt_ind_req_backlog_desc'); },   defaultVisible: true },
+  { id: 'req_lead_time', section: 'requests', get label() { return t('rpt_ind_req_lead_time'); }, get desc() { return t('rpt_ind_req_lead_time_desc'); }, defaultVisible: true },
+  { id: 'req_target',    section: 'requests', get label() { return t('rpt_ind_req_target'); },    get desc() { return t('rpt_ind_req_target_desc'); },    defaultVisible: true },
 ];
 
 async function _loadReportConfig() {
@@ -176,7 +227,10 @@ async function _loadReportConfig() {
   S.indicatorCardsPerRow  = {};
   S.incidentCharts = [];
   S.prbCharts      = [];
+  S.requestCharts  = [];
   S.slaTargets     = { p1: 95, p2: 90, p3: 85 };
+  S.ciFilter       = '';
+  S.ciList         = [];
 
   // 0. Load SLA config from sn-config (parallel, non-blocking)
   fetch('/api/sn-config?' + new URLSearchParams({ project: S.reportProject }))
@@ -208,6 +262,12 @@ async function _loadReportConfig() {
     if (Array.isArray(data.incidentCharts) && data.incidentCharts.length) S.incidentCharts = data.incidentCharts;
     if (Array.isArray(data.prbCharts)      && data.prbCharts.length)      S.prbCharts      = data.prbCharts;
     if (data.slaTargets != null && typeof data.slaTargets === 'object') S.slaTargets = { p1: 95, p2: 90, p3: 85, ...data.slaTargets };
+    if (Array.isArray(data.usAgingColumns)  && data.usAgingColumns.length)  S.usAgingColumns  = data.usAgingColumns;
+    if (Array.isArray(data.prbAgingColumns) && data.prbAgingColumns.length) S.prbAgingColumns = data.prbAgingColumns;
+    if (data.requestMonths != null)  S.requestMonths = data.requestMonths;
+    if (data.requestTarget != null)  S.requestTarget = data.requestTarget;
+    if (Array.isArray(data.requestCharts) && data.requestCharts.length) S.requestCharts = data.requestCharts;
+    if (Array.isArray(data.requestAgingBuckets) && data.requestAgingBuckets.length === 4) S.requestAgingBuckets = data.requestAgingBuckets;
     if (data.reportCharts?.length) {
       charts = data.reportCharts;
     } else if (data.groupFields?.length) {
@@ -242,6 +302,7 @@ async function _loadReportConfig() {
   S.reportCharts = charts || _DEFAULT_CHARTS.map(c => ({ ...c }));
   if (!S.incidentCharts.length) { S.incidentCharts = _DEFAULT_INCIDENT_CHARTS.map(c => ({ ...c })); needsSave = true; }
   if (!S.prbCharts.length)      { S.prbCharts      = _DEFAULT_PRB_CHARTS.map(c => ({ ...c }));      needsSave = true; }
+  if (!S.requestCharts.length)  { S.requestCharts  = _DEFAULT_REQUEST_CHARTS.map(c => ({ ...c }));  needsSave = true; }
   if (!charts || needsSave) _saveReportConfig(); // persist to config.json
 }
 
@@ -249,7 +310,7 @@ function _saveReportConfig() {
   fetch('/api/report-config', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ project: S.reportProject, reportCharts: S.reportCharts, incidentMonths: S.incidentMonths, incidentTarget: S.incidentTarget, incidentGroupBy: S.incidentGroupBy, heatmapMax: S.heatmapMax, heatmapTopN: S.heatmapTopN, locationMonths: S.locationMonths, agingState: S.agingState, agingCharts: S.agingCharts, agingBuckets: S.agingBuckets, deliveryStates: S.deliveryStates, indicatorCards: S.indicatorCards, indicatorCardsPerRow: S.indicatorCardsPerRow, incidentCharts: S.incidentCharts, prbCharts: S.prbCharts, slaTargets: S.slaTargets, prbMonths: S.prbMonths, prbAgingBuckets: S.prbAgingBuckets }),
+    body:    JSON.stringify({ project: S.reportProject, reportCharts: S.reportCharts, incidentMonths: S.incidentMonths, incidentTarget: S.incidentTarget, incidentGroupBy: S.incidentGroupBy, heatmapMax: S.heatmapMax, heatmapTopN: S.heatmapTopN, locationMonths: S.locationMonths, agingState: S.agingState, agingCharts: S.agingCharts, agingBuckets: S.agingBuckets, deliveryStates: S.deliveryStates, indicatorCards: S.indicatorCards, indicatorCardsPerRow: S.indicatorCardsPerRow, incidentCharts: S.incidentCharts, prbCharts: S.prbCharts, slaTargets: S.slaTargets, prbMonths: S.prbMonths, prbAgingBuckets: S.prbAgingBuckets, usAgingColumns: S.usAgingColumns, prbAgingColumns: S.prbAgingColumns, requestMonths: S.requestMonths, requestTarget: S.requestTarget, requestCharts: S.requestCharts, requestAgingBuckets: S.requestAgingBuckets }),
   })
   .then(r => r.json())
   .then(d => { if (!d.ok) console.error('[report] save failed:', d); })
@@ -366,16 +427,16 @@ function _renderIncidentChartCell(chart, idx, inc) {
     case 'inc-priority-donut':
       title     = t('rpt_priority_donut_title');
       subtitle  = t('rpt_priority_donut_sub');
-      content   = _renderIncPriorityDonut(inc);
+      content   = _renderIncPriorityDonut(inc, item => _incOnclick('opened', S.reportMonth, 'priority', item.rawValue, item.type));
       break;
     case 'inc-groupby': {
-      const _flat = arr => (arr || []).map(d => ({ type: d.name, count: d.total }));
+      const _flat = arr => (arr || []).map(d => ({ type: d.name, count: d.total, rawValue: d.rawValue }));
       const _incGroupbyFields = {
         'cmdb_ci.name':          { get label() { return t('rpt_groupby_ic'); },           data: () => _flat(inc.bySystem) },
         'u_additional_res_code': { get label() { return t('rpt_groupby_res_code'); },     data: () => _flat(inc.byGroupAlt) },
         'assignment_group':      { get label() { return t('rpt_groupby_assignment'); },   data: () => _flat(inc.byAssignmentGroup) },
         'assigned_to':           { get label() { return t('rpt_groupby_assignee'); },     data: () => _flat(inc.byAssignedTo) },
-        'priority':              { get label() { return t('rpt_groupby_priority'); },     data: () => { const p = inc.byPriority || {}; return [{ type: 'P1', count: p.p1||0 }, { type: 'P2', count: p.p2||0 }, { type: 'P3', count: p.p3||0 }].filter(x => x.count > 0); } },
+        'priority':              { get label() { return t('rpt_groupby_priority'); },     data: () => { const p = inc.byPriority || {}; return [{ type: 'P1', count: p.p1||0, rawValue: '1' }, { type: 'P2', count: p.p2||0, rawValue: '2' }, { type: 'P3', count: p.p3||0, rawValue: '3' }].filter(x => x.count > 0); } },
         'impact':                { get label() { return t('rpt_groupby_impact'); },       data: () => _flat(inc.byImpact) },
         'urgency':               { get label() { return t('rpt_groupby_urgency'); },      data: () => _flat(inc.byUrgency) },
         'state':                 { get label() { return t('rpt_groupby_state'); },        data: () => _flat(inc.byState) },
@@ -385,13 +446,15 @@ function _renderIncidentChartCell(chart, idx, inc) {
         'close_code':            { get label() { return t('rpt_groupby_close_code'); },   data: () => _flat(inc.byCloseCode) },
         'contact_type':          { get label() { return t('rpt_groupby_contact_type'); }, data: () => _flat(inc.byContactType) },
       };
-      const _gf  = _incGroupbyFields[chart.ref] || _incGroupbyFields['cmdb_ci.name'];
+      const _gref = _incGroupbyFields[chart.ref] ? chart.ref : 'cmdb_ci.name';
+      const _gf  = _incGroupbyFields[_gref];
       const _gd  = _gf.data();
+      const _onClick = item => _incOnclick('opened', S.reportMonth, _gref, item.rawValue || item.type, `${item.type} · ${S.reportMonth}`);
       title   = `${t('rpt_inc_by')} ${_gf.label}`;
       subtitle = '';
-      content = chart.chartStyle === 'bar'          ? _renderTypeBar(        _gd, chart.barColor, t('rpt_filter_incidents'), size)
-              : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical( _gd, chart.barColor, t('rpt_filter_incidents'), size)
-              : _renderTypeDonut(_gd, t('rpt_filter_incidents'));
+      content = chart.chartStyle === 'bar'          ? _renderTypeBar(        _gd, chart.barColor, t('rpt_filter_incidents'), size, _onClick)
+              : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical( _gd, chart.barColor, t('rpt_filter_incidents'), size, _onClick)
+              : _renderTypeDonut(_gd, t('rpt_filter_incidents'), _onClick);
       break;
     }
     default: return '';
@@ -427,24 +490,46 @@ function _renderPrbChartCell(chart, idx, prbs) {
   let title, subtitle, content;
   switch (chart.type) {
     case 'prb-evolution': { const prbChartMonths = chart.months || S.prbMonths; title = t('rpt_prb_evolution'); subtitle = `${prbChartMonths} ${t('rpt_months')}`; content = _renderPrbEvolutionChart(prbs.monthly, prbChartMonths); break; }
-    case 'prb-donut':     title = t('rpt_prb_status_title'); subtitle = t('rpt_prb_status_sub'); content = _renderPrbStatusDonut(prbs.list); break;
+    case 'prb-donut':
+      title = t('rpt_prb_status_title'); subtitle = t('rpt_prb_status_sub');
+      content = _renderPrbStatusDonut(prbs.list, item => _prbOnclick('state', item.rawValue, item.type));
+      break;
     case 'prb-aging':     title = t('rpt_aging_backlog'); subtitle = t('rpt_prb_aging_sub'); content = _renderPrbAgingChart(prbs.list, S.prbAgingBuckets); break;
-    case 'prb-oldest':    title = t('rpt_prb_oldest_title'); subtitle = t('rpt_prb_oldest_sub'); content = _renderPrbOldestList(prbs.list); break;
-    case 'prb-category':  title = 'Distribuição por Categoria'; subtitle = 'Root cause por categoria'; content = _renderPrbCategoryChart(prbs.list); break;
+    case 'prb-oldest':    title = t('rpt_prb_oldest_title'); subtitle = t('rpt_prb_oldest_sub'); content = _renderPrbOldestList(prbs.list, S.prbAgingColumns); break;
+    case 'prb-category':
+      title = 'Distribuição por Categoria'; subtitle = 'Root cause por categoria';
+      content = _renderPrbCategoryChart(prbs.list, item => _prbOnclick('category', item.rawValue, item.type));
+      break;
     case 'prb-groupby': {
       const _prbGroupbyFields = {
         get category() { return t('rpt_groupby_category'); },
         get state()    { return t('rpt_groupby_state'); },
         get priority() { return t('rpt_groupby_priority'); },
+        get assignment_group() { return t('rpt_groupby_group'); },
+        get assigned_to()      { return t('rpt_groupby_assignee'); },
+        get known_error()      { return t('rpt_groupby_known_error'); },
+        get rca_complete()     { return t('rpt_groupby_rca'); },
       };
       const _pgKey   = chart.ref || 'category';
       const _pgLabel = _prbGroupbyFields[_pgKey] || _pgKey;
       const _pgData  = _computePrbGroupby(prbs.list, _pgKey);
+      // _computePrbGroupby traduz booleanos ("Sim"/"Não") e vazios ("(sem valor)") para exibição —
+      // aqui revertemos para o valor bruto que o backend espera (true/false), ou desabilitamos
+      // o clique quando não há um valor de filtro válido.
+      const _pgFilterValue = type => {
+        if (_pgKey === 'known_error' || _pgKey === 'rca_complete') {
+          if (type === t('rpt_yes')) return 'true';
+          if (type === t('rpt_no'))  return 'false';
+          return null;
+        }
+        return type === t('rpt_no_value') ? null : type;
+      };
+      const _onClick = item => { const v = _pgFilterValue(item.type); return v !== null ? _prbOnclick(_pgKey, v, item.type) : ''; };
       title   = `${t('rpt_prbs_by')} ${_pgLabel}`;
       subtitle = '';
-      content = chart.chartStyle === 'bar'          ? _renderTypeBar(        _pgData, chart.barColor, 'PRBs', size)
-              : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical( _pgData, chart.barColor, 'PRBs', size)
-              : _renderTypeDonut(_pgData, 'PRBs');
+      content = chart.chartStyle === 'bar'          ? _renderTypeBar(        _pgData, chart.barColor, 'PRBs', size, _onClick)
+              : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical( _pgData, chart.barColor, 'PRBs', size, _onClick)
+              : _renderTypeDonut(_pgData, 'PRBs', _onClick);
       break;
     }
     default: return '';
@@ -467,6 +552,86 @@ function _renderPrbChartCell(chart, idx, prbs) {
         ${canRemove ? `<button class="report-field-remove-btn" title="${t('rpt_remove_chart')}" onclick="reportRemovePrbChart(${idx})" draggable="false">×</button>` : ''}
       </div>
     </div>
+    ${subtitle ? `<div class="report-prb-chart-sub" style="${chart.type === 'prb-oldest' ? 'display:flex;align-items:center;justify-content:space-between' : ''}">
+      <span>${subtitle}</span>
+      ${chart.type === 'prb-oldest' ? `<button class="report-field-picker-btn" title="${t('rpt_agcol_configure')}" onclick="reportOpenPrbChartPicker(${idx})" draggable="false" style="flex-shrink:0">⚙</button>` : ''}
+    </div>` : ''}
+    ${content}
+  </div>`;
+}
+
+// ── Request (RITM) chart cell (draggable) ─────────────────────────────────────
+
+function _renderRequestChartCell(chart, idx, req) {
+  const size      = chart.size || 'lg';
+  const canRemove = S.requestCharts.length > 1;
+  let title, subtitle, content;
+  switch (chart.type) {
+    case 'req-volume': {
+      const chartMonths = chart.months || S.requestMonths;
+      title    = t('rpt_req_volume_title');
+      subtitle = `${t('rpt_req_history_sub')}${S.requestTarget > 0 ? ` — target: ${S.requestTarget}` : ''} · ${chartMonths} ${t('rpt_months')}`;
+      content  = _renderRequestVolumeChart(req.monthly, chartMonths, S.requestTarget, S.reportMonth);
+      break;
+    }
+    case 'req-lead-time': {
+      const chartMonths = chart.months || S.requestMonths;
+      title    = t('rpt_req_lead_time_title');
+      subtitle = `${t('rpt_req_lead_time_sub')} · ${chartMonths} ${t('rpt_months')}`;
+      content  = _renderRequestLeadTimeTrend(req.monthly, chartMonths, chart.target);
+      break;
+    }
+    case 'req-aging':
+      title    = t('rpt_aging_backlog');
+      subtitle = t('rpt_req_aging_sub');
+      content  = _renderRequestAgingChart(req.list, S.requestAgingBuckets);
+      break;
+    case 'req-catalog':
+      title    = t('rpt_req_catalog_title');
+      subtitle = t('rpt_req_catalog_sub');
+      content  = _renderRequestCatalogBars(req.byCatalogItem, S.reportMonth);
+      break;
+    case 'req-groupby': {
+      const _flat = arr => (arr || []).map(d => ({ type: d.name, count: d.total, rawValue: d.rawValue }));
+      const _reqGroupbyFields = {
+        'request_item.cat_item.name':               { get label() { return t('rpt_groupby_cat_item'); },      data: () => _flat(req.byCatalogItem) },
+        'priority':                                 { get label() { return t('rpt_groupby_priority'); },       data: () => { const p = req.byPriority || {}; return [{ type: 'P1', count: p.p1||0, rawValue: '1' }, { type: 'P2', count: p.p2||0, rawValue: '2' }, { type: 'P3', count: p.p3||0, rawValue: '3' }, { type: 'P4', count: p.p4||0, rawValue: '4' }].filter(x => x.count > 0); } },
+        'assignment_group':                         { get label() { return t('rpt_groupby_group'); },          data: () => _flat(req.byAssignmentGroup) },
+        'assigned_to':                               { get label() { return t('rpt_groupby_assignee'); },       data: () => _flat(req.byAssignedTo) },
+        'state':                                     { get label() { return t('rpt_groupby_state'); },          data: () => _flat(req.byState) },
+        'request_item.request.requested_for.name':   { get label() { return t('rpt_groupby_requested_for'); },  data: () => _flat(req.byRequestedFor) },
+      };
+      const _gref = _reqGroupbyFields[chart.ref] ? chart.ref : 'request_item.cat_item.name';
+      const _gf = _reqGroupbyFields[_gref];
+      const _gd = _gf.data();
+      const _onClick = item => _reqOnclick('opened', S.reportMonth, _gref, item.rawValue || item.type, `${item.type} · ${S.reportMonth}`);
+      title    = `${t('rpt_req_by')} ${_gf.label}`;
+      subtitle = '';
+      content  = chart.chartStyle === 'bar'          ? _renderTypeBar(        _gd, chart.barColor, t('rpt_filter_requests'), size, _onClick)
+               : chart.chartStyle === 'bar-vertical' ? _renderTypeBarVertical( _gd, chart.barColor, t('rpt_filter_requests'), size, _onClick)
+               : _renderTypeDonut(_gd, t('rpt_filter_requests'), _onClick);
+      break;
+    }
+    default: return '';
+  }
+
+  return `<div class="report-section report-donut-cell report-donut-cell-${size}"
+    draggable="true"
+    ondragstart="reportReqChartDragStart(event,${idx})"
+    ondragover="reportReqChartDragOver(event)"
+    ondragleave="reportReqChartDragLeave(event)"
+    ondrop="reportReqChartDrop(event,${idx})"
+    ondragend="reportReqChartDragEnd(event)">
+    <div class="report-field-picker-header">
+      <div class="report-donut-title-row">
+        <span class="report-drag-handle" title="${t('rpt_drag_reorder')}"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" style="opacity:0.45;vertical-align:middle"><circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="12" r="1.5"/><circle cx="7" cy="12" r="1.5"/></svg></span>
+        <div class="report-subsection-title">${title}</div>
+      </div>
+      <div class="report-field-chart-actions" draggable="false">
+        <button class="report-field-picker-btn" title="${t('rpt_configure_chart')}" onclick="reportOpenReqChartPicker(${idx})" draggable="false">&#9881;</button>
+        ${canRemove ? `<button class="report-field-remove-btn" title="${t('rpt_remove_chart')}" onclick="reportRemoveReqChart(${idx})" draggable="false">×</button>` : ''}
+      </div>
+    </div>
     ${subtitle ? `<div class="report-prb-chart-sub">${subtitle}</div>` : ''}
     ${content}
   </div>`;
@@ -485,6 +650,20 @@ function _computePrbGroupby(list, field) {
   return Object.entries(counts)
     .map(([type, count]) => ({ type, count }))
     .sort((a, b) => b.count - a.count);
+}
+
+// Reconstrói a lista de Configuration Items conhecidos a partir de um payload SEM filtro de CI
+// (união de Incidentes + PRBs + Requests) — só é chamada quando S.ciFilter === '', para a lista
+// nunca encolher para 1 item depois de aplicar um filtro.
+// Usa `bySystem` (snapshot do período atual, total sempre > 0) e não `bySystemMonthly` (histórico
+// de vários meses) — CI que só teve incidente em mês passado mas nada no período atual não aparece,
+// evitando um filtro que zera tudo ao ser aplicado.
+function _rebuildCiList(payload) {
+  const names = new Set();
+  (payload.incidents?.bySystem || []).forEach(s => { if (s.name && s.name !== 'Outros' && s.total > 0) names.add(s.name); });
+  (payload.prbs?.list || []).forEach(p => { if (p.cmdb_ci) names.add(p.cmdb_ci); });
+  (payload.requests?.byCI || []).forEach(c => { if (c.name && c.name !== 'N/A' && c.total > 0) names.add(c.name); });
+  S.ciList = [...names].sort((a, b) => a.localeCompare(b));
 }
 
 function _deltaHtml(curr, prev, lowerIsBetter = false) {
@@ -610,7 +789,10 @@ function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality
         <button class="report-add-chart-btn" onclick="reportAddChart()">+ ${t('rpt_add_chart')}</button>
       </div>
     </div>
-    <div class="report-subsection-title" style="margin-top:20px">US Aging — ${_esc(usAging?.state || S.agingState)}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px">
+      <div class="report-subsection-title">US Aging — ${_esc(usAging?.state || S.agingState)}</div>
+      <button class="report-field-picker-btn" title="${t('rpt_agcol_configure')}" onclick="reportOpenAgingPicker(1)" draggable="false">⚙</button>
+    </div>
     <div class="report-prb-chart-sub">${usAging ? `${usAging.total} US em "${_esc(usAging.state)}" · sem filtro de sprint` : `Aguardando dados para "${_esc(S.agingState)}"`}</div>
     <div class="report-donuts-grid">
       <div class="report-donut-cell report-donut-cell-${S.agingCharts[0]?.size || 'md'}">
@@ -623,9 +805,11 @@ function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality
       <div class="report-donut-cell report-donut-cell-${S.agingCharts[1]?.size || 'md'}">
         <div class="report-field-picker-header">
           <div class="report-donut-title-row"><div class="report-subsection-title">${t('rpt_aging_top10')} "${_esc(usAging?.state || S.agingState)}"</div></div>
-          <div class="report-field-chart-actions"><button class="report-field-picker-btn" title="${t('rpt_configure_chart')}" onclick="reportOpenAgingPicker(1)" draggable="false">⚙</button></div>
+          <div class="report-field-chart-actions">
+            <button class="report-field-picker-btn" title="${t('rpt_configure_chart')}" onclick="reportOpenAgingPicker(1)" draggable="false">⚙</button>
+          </div>
         </div>
-        ${_renderUsTop10(usAging)}
+        ${_renderUsTop10(usAging, S.usAgingColumns)}
       </div>
     </div>
   </div>`;
@@ -667,7 +851,7 @@ function _getResolvedCards(section) {
     .sort((a, b) => a.order - b.order);
 }
 
-function _renderCardValue(id, inc, prbs) {
+function _renderCardValue(id, inc, prbs, req) {
   const curMonth = new Date().toISOString().slice(0, 7);
   const monthly  = inc?.monthly || [];
   const prev     = monthly.length >= 2 ? monthly[monthly.length - 2] : null;
@@ -733,7 +917,7 @@ function _renderCardValue(id, inc, prbs) {
       return { val: String(prbs?.resolvedThisMonth ?? 0), label: t('rpt_ind_prb_resolved'), sub: t('rpt_sub_in_period'), cls: (prbs?.resolvedThisMonth || 0) > 0 ? 'green' : '' };
     case 'prb_backlog': {
       const cls = (prbs?.open ?? 0) > 10 ? 'red' : (prbs?.open ?? 0) > 3 ? 'yellow' : 'green';
-      return { val: String(prbs?.open ?? 0), label: t('rpt_ind_prb_backlog'), sub: t('rpt_sub_total_open'), cls };
+      return { val: String(prbs?.open ?? 0), label: t('rpt_ind_prb_backlog'), sub: t('rpt_sub_click_list'), cls, clickable: true, onclick: 'reportOpenPrbsModal()' };
     }
     case 'prb_mttr': {
       const cls = (prbs?.avgResolutionDays || 0) > 30 ? 'red' : (prbs?.avgResolutionDays || 0) > 14 ? 'yellow' : 'green';
@@ -751,17 +935,41 @@ function _renderCardValue(id, inc, prbs) {
       const v = prbs?.withRcaPct ?? null;
       return { val: v !== null ? `${v}%` : '—', label: t('rpt_ind_prb_rca'), sub: `${prbs?.withRcaCount ?? '—'} de ${prbs?.open ?? '—'}`, cls: v === null ? '' : v < 60 ? 'red' : v < 80 ? 'yellow' : 'green' };
     }
+    case 'req_total': {
+      const riskCls = S.requestTarget !== null
+        ? ((req?.total ?? 0) > S.requestTarget * 1.2 ? 'red' : (req?.total ?? 0) > S.requestTarget ? 'yellow' : '')
+        : '';
+      const sub = S.requestTarget !== null ? `Target: ${S.requestTarget}` : t('rpt_sub_no_target');
+      return { val: String(req?.total ?? 0), label: t('rpt_ind_req_total'), sub, cls: riskCls };
+    }
+    case 'req_closed':
+      return { val: String(req?.closedThisMonth ?? 0), label: t('rpt_ind_req_closed'), sub: t('rpt_sub_resolved_period'), cls: (req?.closedThisMonth || 0) > 0 ? 'green' : '' };
+    case 'req_backlog': {
+      const backlogCls = (req?.openBacklog ?? 0) > 20 ? 'red' : (req?.openBacklog ?? 0) > 10 ? 'yellow' : 'green';
+      return { val: String(req?.openBacklog ?? 0), label: t('rpt_ind_req_backlog'), sub: t('rpt_sub_click_list'), cls: backlogCls, clickable: true, onclick: 'reportOpenRequestsModal()' };
+    }
+    case 'req_lead_time': {
+      const v = req?.avgLeadTimeDays ?? null;
+      return { val: v !== null ? `${v}d` : '—', label: t('rpt_ind_req_lead_time'), sub: t('rpt_sub_avg_days'), cls: v === null ? '' : v > 5 ? 'red' : v > 2 ? 'yellow' : 'green' };
+    }
+    case 'req_target': {
+      if (S.requestTarget === null) {
+        return { val: '<span style="font-size:20px;line-height:1;opacity:.55">&#9881;</span>', label: t('rpt_ind_req_target'), sub: t('rpt_sub_click_configure'), cls: '', clickable: true, onclick: 'reportOpenReqTargetModal()' };
+      }
+      const pct = S.requestTarget > 0 ? Math.round((req?.total ?? 0) / S.requestTarget * 100) : null;
+      return { val: pct !== null ? `${pct}%` : '—', label: t('rpt_ind_req_target'), sub: pct !== null ? (pct > 100 ? t('rpt_sub_above_target') : t('rpt_sub_within_target')) : t('rpt_sub_no_target'), cls: pct !== null && pct > 100 ? 'red' : '' };
+    }
     default: return null;
   }
 }
 
-function _renderIndicatorCards(section, inc, prbs) {
+function _renderIndicatorCards(section, inc, prbs, req) {
   const cards   = _getResolvedCards(section);
   const visible = cards.filter(c => c.visible);
   if (!visible.length) return '';
   const perRow  = S.indicatorCardsPerRow[section] || 4;
   const html    = visible.map(c => {
-    const d = _renderCardValue(c.id, inc, prbs);
+    const d = _renderCardValue(c.id, inc, prbs, req);
     if (!d) return '';
     const inner = `<div class="report-prb-card-val ${d.cls || ''}">${d.val}</div>
       <div class="report-prb-card-label">${_esc(d.label)}</div>
@@ -776,7 +984,7 @@ function _renderIndicatorCards(section, inc, prbs) {
 function _renderIndicatorConfigPanel(section) {
   const cards  = _getResolvedCards(section);
   const perRow = S.indicatorCardsPerRow[section] || 4;
-  const label  = section === 'incidents' ? 'Incidents' : 'PRBs';
+  const label  = section === 'incidents' ? 'Incidents' : section === 'requests' ? 'Requests' : 'PRBs';
   const items  = cards.map(c => `
     <div class="report-ind-cfg-item"
       draggable="true"
@@ -826,8 +1034,29 @@ function _renderPRBs(prbs, incidents) {
   </div>`;
 }
 
+function _renderRequests(req) {
+  if (!req) return '';
+
+  return `<div class="report-section" data-section="requests">
+    <div class="report-section-header-row">
+      <div class="report-section-title">${t('rpt_section_requests')}</div>
+      <div class="report-field-chart-actions">
+        <button class="report-field-picker-btn" title="${t('rpt_cfg_indicators')}" onclick="reportOpenIndicatorConfig('requests')" draggable="false">&#9881;</button>
+      </div>
+    </div>
+    ${S.indConfigSection === 'requests' ? _renderIndicatorConfigPanel('requests') : ''}
+    ${_renderIndicatorCards('requests', null, null, req)}
+    <div class="report-donuts-grid">
+      ${S.requestCharts.map((chart, idx) => _renderRequestChartCell(chart, idx, req)).join('')}
+      <div class="report-add-chart-section" style="flex-basis:100%">
+        <button class="report-add-chart-btn" onclick="reportAddReqChart()">+ ${t('rpt_add_chart')}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function _buildHTML(payload) {
-  const { metadata, hasSn, hasAzure, delivery, quality, incidents, prbs, prevDelivery, prevQuality } = payload;
+  const { metadata, hasSn, hasAzure, delivery, quality, incidents, prbs, requests, prevDelivery, prevQuality } = payload;
 
   // Cache age indicator
   const ageMs  = metadata.generatedAtTs ? Date.now() - metadata.generatedAtTs : 0;
@@ -851,6 +1080,9 @@ function _buildHTML(payload) {
     <button class="report-print-btn" onclick="exportReportHtml()" title="${t('rpt_export_html')}">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3"/><polyline points="10 6 8 8 6 6"/><line x1="8" y1="8" x2="8" y2="2"/></svg>
       ${t('rpt_export_html')}</button>
+    <button id="btn-export-volume-xlsx" class="report-print-btn" onclick="exportVolumeIncidentsXLSX()" title="${t('rpt_export_incidents')}">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3"/><polyline points="10 6 8 8 6 6"/><line x1="8" y1="8" x2="8" y2="2"/></svg>
+      ${t('rpt_export_incidents')}</button>
   </div>`;
 
   const _af = S.activeSectionFilter;
@@ -858,10 +1090,18 @@ function _buildHTML(payload) {
     ${hasAzure ? `<button class="report-filter-btn${_af === 'sprint' ? ' report-filter-btn--active' : ''}" data-filter="sprint" onclick="reportSetSectionFilter('sprint')">${t('rpt_filter_azure')}</button>` : ''}
     <button class="report-filter-btn${_af === 'incidents' ? ' report-filter-btn--active' : ''}" data-filter="incidents" onclick="reportSetSectionFilter('incidents')">${t('rpt_filter_incidents')}</button>
     <button class="report-filter-btn${_af === 'prbs' ? ' report-filter-btn--active' : ''}" data-filter="prbs" onclick="reportSetSectionFilter('prbs')">${t('rpt_filter_prbs')}</button>
+    ${requests ? `<button class="report-filter-btn${_af === 'requests' ? ' report-filter-btn--active' : ''}" data-filter="requests" onclick="reportSetSectionFilter('requests')">${t('rpt_filter_requests')}</button>` : ''}
     <button class="report-filter-btn${_af === 'all' ? ' report-filter-btn--active' : ''}" data-filter="all" onclick="reportSetSectionFilter('all')">${t('rpt_filter_all')}</button>
   </div>`;
 
   const sectionFilterAttr = S.activeSectionFilter !== 'all' ? ` data-section-filter="${S.activeSectionFilter}"` : '';
+
+  const ciFilterBar = (incidents || prbs || requests) && S.ciList.length
+    ? `<div class="report-filter-bar" style="margin-top:4px">
+        <button class="report-filter-btn${!S.ciFilter ? ' report-filter-btn--active' : ''}" onclick="reportSetCiFilter('ALL')">${t('rpt_filter_all')}</button>
+        ${S.ciList.map(ci => `<button class="report-filter-btn${S.ciFilter === ci ? ' report-filter-btn--active' : ''}" onclick="reportSetCiFilter('${_esc(ci).replace(/'/g, "\\'")}')">${_esc(ci)}</button>`).join('')}
+      </div>`
+    : '';
 
   return `
     <div class="report-content"${sectionFilterAttr}>
@@ -876,9 +1116,11 @@ function _buildHTML(payload) {
       ${snWarning}
       ${notesBar}
       ${filterBar}
+      ${ciFilterBar}
       ${hasAzure ? _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality) : ''}
       ${incidents ? _renderIncidents(incidents) : ''}
       ${prbs      ? _renderPRBs(prbs, incidents) : ''}
+      ${requests  ? _renderRequests(requests) : ''}
     </div>
   `;
 }
@@ -934,6 +1176,16 @@ export function reportSetSectionFilter(filter) {
   wrap.querySelectorAll('.report-filter-btn').forEach(b => {
     b.classList.toggle('report-filter-btn--active', b.dataset.filter === filter);
   });
+}
+
+// Filtro por Configuration Item — reconsulta o backend (Incidentes + PRBs + Requests).
+// _load() sempre reseta a aba de seção para 'all'; preservamos a aba ativa antes de recarregar
+// e a reaplicamos depois, para trocar de CI não derrubar a aba Incidentes/Problems/Requests escolhida.
+export async function reportSetCiFilter(ci) {
+  const savedSectionFilter = S.activeSectionFilter;
+  S.ciFilter = ci === 'ALL' ? '' : ci;
+  await _load();
+  if (savedSectionFilter !== 'all') reportSetSectionFilter(savedSectionFilter);
 }
 
 export function openReportSnConfig() {
@@ -1025,7 +1277,7 @@ export function reportIndDragEnd() {
 // ── Copilot integration ────────────────────────────────────────────────────────
 
 function _buildReportContext(payload) {
-  const { metadata, delivery, quality, incidents, prbs } = payload;
+  const { metadata, delivery, quality, incidents, prbs, requests } = payload;
 
   const ctx = {
     fonte:    'Monthly Review Report',
@@ -1108,6 +1360,23 @@ function _buildReportContext(payload) {
     };
   }
 
+  if (requests) {
+    ctx.requests = {
+      totalNoPeriodo:     requests.total,
+      target:             S.requestTarget > 0 ? S.requestTarget : null,
+      atendidasNoPeriodo: requests.closedThisMonth,
+      backlogAtual:       requests.openBacklog,
+      leadTimeMedioDias:  requests.avgLeadTimeDays,
+      topItensCatalogo:   (requests.byCatalogItem || []).slice(0, 5).map(c => ({ item: c.name, total: c.total })),
+      tendenciaMensal: (requests.monthly || []).slice(-6).map(m => ({
+        mes:      m.label,
+        abertas:  m.opened,
+        fechadas: m.closed,
+        backlog:  m.openBacklog ?? null,
+      })),
+    };
+  }
+
   const systemPrompt =
     `Você é um analista sênior de operações de TI. Os dados abaixo são do Service Delivery Report do projeto "${ctx.projeto}" referente ao período "${ctx.periodo}". ` +
     `Com base nesses dados, ajude a identificar riscos, tendências negativas e ações concretas a serem tomadas. ` +
@@ -1180,6 +1449,24 @@ export function reportAddPrbChart() {
   reportOpenPrbChartPicker(-1);
 }
 
+// ── Request (RITM) chart drag / remove / add ──────────────────────────────────
+
+export function reportRemoveReqChart(idx) {
+  S.requestCharts.splice(idx, 1);
+  _saveReportConfig();
+  _rerender();
+}
+
+export function reportReqChartDragStart(e, idx)  { _reqChartDrag.start(e, idx); }
+export function reportReqChartDragOver(e)        { _reqChartDrag.over(e); }
+export function reportReqChartDragLeave(e)       { _reqChartDrag.leave(e); }
+export function reportReqChartDrop(e, targetIdx) { _reqChartDrag.drop(e, targetIdx); }
+export function reportReqChartDragEnd(e)         { _reqChartDrag.end(e); }
+
+export function reportAddReqChart() {
+  reportOpenReqChartPicker(-1);
+}
+
 function _rerender() {
   if (!S.lastPayload) { _load(true, true); return; }
   const body = document.getElementById('report-modal-body');
@@ -1193,6 +1480,7 @@ function _rerender() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (document.getElementById('report-inc-modal-overlay')) { reportCloseIncidentsModal(); return; }
+    if (document.getElementById('report-req-modal-overlay')) { reportCloseRequestsModal(); return; }
     if (document.getElementById('report-modal')?.classList.contains('open')) closeReport();
   }
 });
@@ -1214,12 +1502,14 @@ async function _load(refresh = false, preserveScroll = false) {
   q.set('groupFields', donutRefs.join(','));
   q.set('agingState', S.agingState);
   const _allMonths = [
-    S.incidentMonths, S.prbMonths,
+    S.incidentMonths, S.prbMonths, S.requestMonths,
     ...S.incidentCharts.map(c => c.months || 0),
     ...S.prbCharts.map(c => c.months || 0),
+    ...S.requestCharts.map(c => c.months || 0),
   ];
   q.set('incidentMonths', String(Math.max(..._allMonths)));
   q.set('deliveryStates', S.deliveryStates.join(','));
+  if (S.ciFilter) q.set('ciFilter', S.ciFilter);
 
   try {
     const r = await fetch('/api/report?' + q);
@@ -1228,6 +1518,7 @@ async function _load(refresh = false, preserveScroll = false) {
     S.lastPayload = data.payload;
     S.reportMonth = data.month;
     _populateMonths(data.months, data.month);
+    if (!S.ciFilter) _rebuildCiList(data.payload);
     body.innerHTML = _buildHTML(data.payload);
     if (preserveScroll && savedScroll) body.scrollTop = savedScroll;
   } catch (e) {

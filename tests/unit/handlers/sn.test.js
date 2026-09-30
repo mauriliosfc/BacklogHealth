@@ -1,8 +1,8 @@
 jest.mock('../../../config');
 jest.mock('../../../servicenowClient');
 
-const { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg } = require('../../../handlers/sn');
-const { getSnConfig, saveSnConfig, getProjectSnGroup, getCfg } = require('../../../config');
+const { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg, removeSnGroup } = require('../../../handlers/sn');
+const { getSnConfig, saveSnConfig, saveConfig, getProjectSnGroup, getCfg } = require('../../../config');
 const { snGet } = require('../../../servicenowClient');
 
 // ── getSnCfg ──────────────────────────────────────────────────────────────────
@@ -243,6 +243,19 @@ describe('fetchGroups', () => {
     expect(groups).toEqual([]);
   });
 
+  test('pagina resultados quando primeira página retorna 2000 registros', async () => {
+    const page1 = Array.from({ length: 2000 }, (_, i) => ({ name: `Group ${i}`, sys_id: `id${i}` }));
+    const page2 = [{ name: 'Group Extra', sys_id: 'idExtra' }];
+    snGet.mockResolvedValueOnce({ result: page1 }).mockResolvedValueOnce({ result: page2 });
+    const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
+    expect(groups).toHaveLength(2001);
+    expect(snGet).toHaveBeenCalledTimes(2);
+    const [, url1] = snGet.mock.calls[0];
+    const [, url2] = snGet.mock.calls[1];
+    expect(url1).toContain('sysparm_offset=0');
+    expect(url2).toContain('sysparm_offset=2000');
+  });
+
   test('salva assignmentGroups via saveSnCfg', () => {
     // Verifica que saveSnCfg repassa assignmentGroups para saveSnConfig
     saveSnCfg({ instance: 'x', user: 'u', pass: 'p', assignmentGroups: ['Ops', 'DB'] });
@@ -303,6 +316,65 @@ describe('getAllProjectsSnCfg', () => {
     });
     const { projects } = getAllProjectsSnCfg();
     expect(Object.keys(projects[0])).toEqual(['name', 'assignmentGroup', 'assignmentGroupName']);
+  });
+});
+
+// ── removeSnGroup ─────────────────────────────────────────────────────────────
+
+describe('removeSnGroup', () => {
+  test('retorna { ok: false } quando group não fornecido', () => {
+    expect(removeSnGroup({})).toEqual({ ok: false });
+    expect(removeSnGroup()).toEqual({ ok: false });
+  });
+
+  test('remove grupo de assignmentGroups e chama saveConfig', () => {
+    const cfg = { servicenow: { assignmentGroups: ['IT Support', 'Network Ops', 'Database'] } };
+    getCfg.mockReturnValue(cfg);
+
+    const result = removeSnGroup({ group: 'Network Ops' });
+
+    expect(cfg.servicenow.assignmentGroups).toEqual(['IT Support', 'Database']);
+    expect(saveConfig).toHaveBeenCalledWith(cfg);
+    expect(result).toEqual({ ok: true });
+  });
+
+  test('não falha quando servicenow.assignmentGroups não existe', () => {
+    getCfg.mockReturnValue({ servicenow: {} });
+    expect(() => removeSnGroup({ group: 'IT Support' })).not.toThrow();
+    expect(saveConfig).toHaveBeenCalled();
+  });
+
+  test('não falha quando servicenow não existe', () => {
+    getCfg.mockReturnValue({});
+    expect(() => removeSnGroup({ group: 'IT Support' })).not.toThrow();
+    expect(saveConfig).toHaveBeenCalled();
+  });
+
+  test('remove entrada de snGroupConfigs', () => {
+    const cfg = {
+      servicenow: { assignmentGroups: ['IT Support'] },
+      snGroupConfigs: { 'IT Support': { someConfig: true }, 'Other': { x: 1 } },
+    };
+    getCfg.mockReturnValue(cfg);
+
+    removeSnGroup({ group: 'IT Support' });
+
+    expect(cfg.snGroupConfigs).not.toHaveProperty('IT Support');
+    expect(cfg.snGroupConfigs).toHaveProperty('Other');
+  });
+
+  test('não falha quando snGroupConfigs não existe', () => {
+    getCfg.mockReturnValue({ servicenow: { assignmentGroups: ['IT Support'] } });
+    expect(() => removeSnGroup({ group: 'IT Support' })).not.toThrow();
+  });
+
+  test('retorna { ok: true } quando grupo não está na lista (idempotente)', () => {
+    getCfg.mockReturnValue({ servicenow: { assignmentGroups: ['Other'] } });
+
+    const result = removeSnGroup({ group: 'IT Support' });
+
+    expect(result).toEqual({ ok: true });
+    expect(saveConfig).toHaveBeenCalled();
   });
 });
 
