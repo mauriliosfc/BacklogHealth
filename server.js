@@ -15,6 +15,7 @@ const reportH   = require('./handlers/report');
 const snH       = require('./handlers/sn');
 const feedbackH    = require('./handlers/feedback');
 const healthCfgH   = require('./handlers/healthConfig');
+const indicatorCfgH = require('./handlers/indicatorConfig');
 
 const PUBLIC_DIR = nodePath.join(__dirname, 'public');
 
@@ -225,6 +226,18 @@ async function main() {
       if (req.method === 'POST') {
         const body = await readBody(req);
         return json(res, () => healthCfgH.saveHealthConfig(JSON.parse(body || '{}')));
+      }
+    }
+
+    // ── GET/POST /api/indicator-config ──────────────────────────────────────
+    if (url.startsWith('/api/indicator-config')) {
+      if (req.method === 'GET') {
+        const qp = new URLSearchParams(url.split('?')[1] || '');
+        return json(res, () => indicatorCfgH.getIndicatorConfig({ project: qp.get('project') || '' }));
+      }
+      if (req.method === 'POST') {
+        const body = await readBody(req);
+        return json(res, () => indicatorCfgH.saveIndicatorConfig(JSON.parse(body || '{}')));
       }
     }
 
