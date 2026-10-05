@@ -7,6 +7,14 @@ import { openItemsModal } from './itemsModal.js';
 export const _detailState = { project: null, sprints: [] };
 let _ctx = { filtered: [], workItemType: 'User Story' };
 
+const FALLBACK_INDICATOR_CFG = {
+  completion:       { states: ['Closed', 'Done', 'Resolved'], color: '' },
+  uat:              { states: ['UAT'], color: '' },
+  bugRate:          { basis: 'hours', color: '' },
+  estimateCoverage: { scope: 'all', color: '' },
+  effortSaved:      { color: '' },
+};
+
 const SPRINT_COL_DEFS = [
   { id: 'period',    key: 'th_period' },
   { id: 'items',     key: null },
@@ -16,7 +24,7 @@ const SPRINT_COL_DEFS = [
   { id: 'actions',   key: 'th_actions' },
 ];
 const LS_COL_KEY = 'sprintColVisibility';
-const LS_ORIG_EST = 'origEstOverride::';
+export const LS_ORIG_EST = 'origEstOverride::';
 
 function getSavedColVisibility() {
   try { return JSON.parse(localStorage.getItem(LS_COL_KEY) || '{}'); } catch { return {}; }
@@ -76,9 +84,13 @@ export async function loadDetailData(project, selectedSprints = _detailState.spr
   document.getElementById('modal-sub').textContent = t('detail_loading');
   document.getElementById('modal-body').innerHTML = '<div class="modal-loading">' + t('detail_fetching') + '</div>';
   try {
-    const resp = await fetch('/detail?' + new URLSearchParams({ project }));
+    const [resp, indicatorResp] = await Promise.all([
+      fetch('/detail?' + new URLSearchParams({ project })),
+      fetch('/api/indicator-config?' + new URLSearchParams({ project })).catch(() => null),
+    ]);
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
+    const indicatorCfg = indicatorResp && indicatorResp.ok ? await indicatorResp.json() : FALLBACK_INDICATOR_CFG;
 
     const filtered = selectedSprints.length > 0
       ? data.items.filter(i => selectedSprints.includes(i.iteration))
@@ -100,7 +112,7 @@ export async function loadDetailData(project, selectedSprints = _detailState.spr
     const bugCompletedWork  = bugItems.reduce((s, t) => s + t.completedWork, 0);
     const totalBugs         = bugItems.length;
     _ctx = { filtered, workItemType: data.workItemType || 'User Story' };
-    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story', project, taskOriginalEstimate, isOrigEstOverride);
+    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story', project, taskOriginalEstimate, indicatorCfg);
     initSprintColSelector();
   } catch(e) {
     document.getElementById('modal-body').innerHTML = '<p style="color:#f87171;padding:20px">Erro: ' + e.message + '</p>';
@@ -185,7 +197,7 @@ function ring(pct, color) {
     '</svg><div class="ring-pct" style="color:' + color + '">' + pct + '%</div></div>';
 }
 
-function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story', projectName = '', taskOriginalEstimate = 0, isOrigEstOverride = false) {
+function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story', projectName = '', taskOriginalEstimate = 0, indicatorCfg = FALLBACK_INDICATOR_CFG) {
   const total = items.length;
   if (!total) return '<p style="color:#64748b;padding:20px">' + t('detail_no_items') + '</p>';
 
@@ -211,8 +223,8 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const noEst         = openMainItems.filter(i => i.pts == null || i.pts === 0).length;  // open only — matches dashboard
   const mainNoEst     = mainItems.filter(i => i.pts == null || i.pts === 0).length;      // all US — used in coverage ring
   const donePts      = items.filter(i => ['Closed','Done','Resolved'].includes(i.state)).reduce((s,i)=>s+(i.pts||0),0);
-  const mainClosed   = mainItems.filter(i => ['Closed','Done','Resolved'].includes(i.state)).length;
-  const mainUAT      = mainItems.filter(i => i.state === 'UAT').length;
+  const mainClosed   = mainItems.filter(i => indicatorCfg.completion.states.includes(i.state)).length;
+  const mainUAT      = mainItems.filter(i => indicatorCfg.uat.states.includes(i.state)).length;
   const uatPct       = mainTotal ? Math.round(mainUAT / mainTotal * 100) : 0;
   const completedHrs = taskCompletedWork || 0;
   const completedHrsFmt = completedHrs % 1 === 0 ? completedHrs : completedHrs.toFixed(1);
@@ -220,15 +232,25 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const bugHrsFmt = bugHrs % 1 === 0 ? bugHrs : bugHrs.toFixed(1);
   const closedPct    = mainTotal ? Math.round(mainClosed / mainTotal * 100) : 0;
   const totalHrs     = completedHrs + bugHrs;
-  const bugRate      = totalHrs ? Math.round(bugHrs / totalHrs * 100) : 0;
-  const estPct       = mainTotal ? Math.round((mainTotal - mainNoEst) / mainTotal * 100) : 0;
+  const bugRate      = indicatorCfg.bugRate.basis === 'count'
+    ? ((mainTotal + bugs) ? Math.round(bugs / (mainTotal + bugs) * 100) : 0)
+    : (totalHrs ? Math.round(bugHrs / totalHrs * 100) : 0);
+  const covTotal     = indicatorCfg.estimateCoverage.scope === 'open' ? openMainItems.length : mainTotal;
+  const covNoEst     = indicatorCfg.estimateCoverage.scope === 'open' ? noEst : mainNoEst;
+  const estPct       = covTotal ? Math.round((covTotal - covNoEst) / covTotal * 100) : 0;
   const origEst      = taskOriginalEstimate || 0;
   const origEstFmt   = origEst % 1 === 0 ? origEst : origEst.toFixed(1);
   const savingsPct   = origEst > 0 ? Math.round((origEst - completedHrs) / origEst * 100) : null;
   const perfRingPct  = savingsPct !== null ? Math.min(Math.abs(savingsPct), 100) : 0;
-  const perfColor    = savingsPct === null ? '#475569' : savingsPct >= 0 ? '#22c55e' : '#ef4444';
-  const perfClass    = savingsPct === null ? '' : savingsPct >= 0 ? 'green' : 'red';
+  const perfColorAuto = savingsPct === null ? '#475569' : savingsPct >= 0 ? '#22c55e' : '#ef4444';
+  const perfColor    = indicatorCfg.effortSaved.color || perfColorAuto;
+  const perfClass    = indicatorCfg.effortSaved.color ? '' : (savingsPct === null ? '' : savingsPct >= 0 ? 'green' : 'red');
+  const perfTextColorStyle = indicatorCfg.effortSaved.color ? (';color:' + perfColor) : (savingsPct === null ? ';color:#475569' : '');
   const perfDisplay  = savingsPct === null ? '\u2014' : (savingsPct > 0 ? '+' : '') + savingsPct + '%';
+  const completionColor = indicatorCfg.completion.color || '#22c55e';
+  const uatColor         = indicatorCfg.uat.color || '#f59e0b';
+  const bugRateColor     = indicatorCfg.bugRate.color || '#ef4444';
+  const coverageColor    = indicatorCfg.estimateCoverage.color || '#60a5fa';
 
   const byStatus = {};
   items.filter(i => ITEM_TYPES.includes(i.type)).forEach(i => { byStatus[i.state] = (byStatus[i.state]||0) + 1; });
@@ -244,6 +266,9 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   // Labels dinâmicos
   const itemLabel = isTaskMode ? t('label_tasks') : t('label_user_stories');
   const estimateLabel = isTaskMode ? t('label_hours') : t('label_story_points');
+
+  const escProj = projectName.replace(/'/g, "\\'");
+  const cfgIcon = key => '<span class="ind-cfg-icon" onclick="openIndicatorConfig(\'' + escProj + '\',\'' + key + '\')" title="' + t('btn_indicator_cfg') + '">✏</span>';
 
   const sprintRows = sortedSprintEntries.map(([key, d]) => {
     const iter = iterMap[key]||{};
@@ -285,11 +310,11 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
 
     '<div class="d-section"><div class="d-section-title">' + t('section_health_ind') + '</div>' +
       '<div style="display:flex;gap:32px;flex-wrap:wrap">' +
-        '<div class="progress-ring">' + ring(closedPct,'#22c55e') + '<div><div class="d-label">' + t('health_completion') + '</div><div class="d-val green" style="font-size:22px">' + closedPct + '%</div><div class="d-sub">' + t('health_us_closed', { closed: mainClosed, total: mainTotal }) + '</div></div></div>' +
-        '<div class="progress-ring">' + ring(uatPct,'#f59e0b') + '<div><div class="d-label">' + t('health_uat') + '</div><div class="d-val ' + (uatPct>30?'red':uatPct>15?'yellow':'') + '" style="font-size:22px;color:#f59e0b">' + uatPct + '%</div><div class="d-sub">' + t('health_us_uat', { count: mainUAT, total: mainTotal }) + '</div></div></div>' +
-        '<div class="progress-ring">' + ring(bugRate,'#ef4444') + '<div><div class="d-label">' + t('health_bug_rate') + '</div><div class="d-val ' + (bugRate>20?'red':bugRate>10?'yellow':'') + '" style="font-size:22px">' + bugRate + '%</div><div class="d-sub">' + t('health_bugs_total', { count: bugs }) + '</div></div></div>' +
-        '<div class="progress-ring">' + ring(estPct,'#60a5fa') + '<div><div class="d-label">' + t('health_coverage') + '</div><div class="d-val blue" style="font-size:22px">' + estPct + '%</div><div class="d-sub">' + t('health_us_estimated', { estimated: mainTotal - mainNoEst, total: mainTotal }) + '</div></div></div>' +
-        '<div class="progress-ring">' + ring(perfRingPct, perfColor) + '<div><div class="d-label">' + t('health_performance') + '</div><div class="d-val ' + perfClass + '" style="font-size:22px' + (savingsPct === null ? ';color:#475569' : '') + '">' + perfDisplay + '</div><div class="d-sub"><span class="orig-est-wrap" onclick="editOrigEst(\'' + projectName.replace(/'/g, "\\'") + '\')" title="' + t('orig_est_edit_title') + '">' + origEstFmt + 'h est. <span class="orig-est-icon' + (isOrigEstOverride ? ' orig-est-icon--active' : '') + '">\u270F</span></span> \u00B7 ' + completedHrsFmt + 'h log.</div></div></div>' +
+        '<div class="progress-ring">' + ring(closedPct,completionColor) + '<div><div class="d-label">' + t('health_completion') + ' ' + cfgIcon('completion') + '</div><div class="d-val green" style="font-size:22px">' + closedPct + '%</div><div class="d-sub">' + t('health_us_closed', { closed: mainClosed, total: mainTotal }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(uatPct,uatColor) + '<div><div class="d-label">' + t('health_uat') + ' ' + cfgIcon('uat') + '</div><div class="d-val ' + (uatPct>30?'red':uatPct>15?'yellow':'') + '" style="font-size:22px;color:' + uatColor + '">' + uatPct + '%</div><div class="d-sub">' + t('health_us_uat', { count: mainUAT, total: mainTotal }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(bugRate,bugRateColor) + '<div><div class="d-label">' + t('health_bug_rate') + ' ' + cfgIcon('bugRate') + '</div><div class="d-val ' + (bugRate>20?'red':bugRate>10?'yellow':'') + '" style="font-size:22px">' + bugRate + '%</div><div class="d-sub">' + t('health_bugs_total', { count: bugs }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(estPct,coverageColor) + '<div><div class="d-label">' + t('health_coverage') + ' ' + cfgIcon('estimateCoverage') + '</div><div class="d-val blue" style="font-size:22px">' + estPct + '%</div><div class="d-sub">' + t('health_us_estimated', { estimated: covTotal - covNoEst, total: covTotal }) + '</div></div></div>' +
+        '<div class="progress-ring">' + ring(perfRingPct, perfColor) + '<div><div class="d-label">' + t('health_performance') + ' ' + cfgIcon('effortSaved') + '</div><div class="d-val ' + perfClass + '" style="font-size:22px' + perfTextColorStyle + '">' + perfDisplay + '</div><div class="d-sub">' + origEstFmt + 'h est. · ' + completedHrsFmt + 'h log.</div></div></div>' +
       '</div>' +
     '</div>' +
 
@@ -342,37 +367,6 @@ export function openDetailStat(stat) {
       break;
     }
   }
-}
-
-export function editOrigEst(project) {
-  const lsKey = LS_ORIG_EST + project;
-  const wrap = document.querySelector('.orig-est-wrap');
-  if (!wrap) return;
-
-  const current = localStorage.getItem(lsKey) || '';
-  wrap.outerHTML =
-    '<span class="orig-est-wrap orig-est-editing">' +
-      '<input type="number" class="orig-est-input" min="0" step="0.5" value="' + current + '" placeholder="horas">' +
-      '<button class="orig-est-btn" id="_oeSave">\u2713</button>' +
-      '<button class="orig-est-btn orig-est-btn--clear" id="_oeClear" title="' + 'Usar valor calculado' + '">\u2715</button>' +
-    '</span>';
-
-  const inp = document.querySelector('.orig-est-input');
-  if (inp) { inp.focus(); inp.select(); }
-
-  function save() {
-    const v = parseFloat(document.querySelector('.orig-est-input')?.value);
-    if (!isNaN(v) && v > 0) localStorage.setItem(lsKey, String(v));
-    else localStorage.removeItem(lsKey);
-    loadDetailData(_detailState.project, _detailState.sprints);
-  }
-  function cancel() { loadDetailData(_detailState.project, _detailState.sprints); }
-
-  const saveBtn = document.getElementById('_oeSave');
-  const clearBtn = document.getElementById('_oeClear');
-  if (saveBtn) saveBtn.onclick = save;
-  if (clearBtn) clearBtn.onclick = () => { localStorage.removeItem(lsKey); loadDetailData(_detailState.project, _detailState.sprints); };
-  if (inp) inp.onkeydown = e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); };
 }
 
 function buildTimeline(bySprint, iterMap) {

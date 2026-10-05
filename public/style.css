@@ -394,6 +394,16 @@ h2 { font-size: 16px; font-weight: 700; }
 .hcfg-error { font-size: 12px; color: var(--c-red); background: var(--c-red-bg); border-radius: 6px; padding: 8px 12px; margin-top: 12px; }
 .hcfg-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--bg-border); }
 
+.hcfg-box.icfg-box { max-width: 520px; }
+.icfg-desc { font-size: 12px; color: var(--text-faint); margin-bottom: 8px; }
+.icfg-loading { font-size: 13px; color: var(--text-faint); }
+.icfg-states-list { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; padding: 2px 0; margin-bottom: 10px; }
+.icfg-state-opt { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--text-1); }
+.icfg-state-opt input { accent-color: var(--c-blue); width: 15px; height: 15px; }
+.icfg-color-row { display: flex; align-items: center; gap: 8px; }
+.icfg-color-row select { width: auto; flex: 1; }
+.icfg-color-row input[type="color"] { width: 36px; height: 28px; padding: 0; border: 1px solid var(--bg-border); border-radius: 6px; background: var(--bg-el); cursor: pointer; }
+
 /* Sprint selector inline in card header */
 .card-sprint-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; min-width: 0; }
 .sprint-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
@@ -564,15 +574,9 @@ tr:hover td { background: var(--hover-bg); }
 .bar-fill { height: 100%; border-radius: 4px; }
 .bar-num { width: 36px; color: var(--text-2); font-weight: 600; text-align: right; }
 .bar-pct { width: 36px; color: var(--text-faintr); font-size: 11px; }
-.orig-est-wrap { cursor: pointer; display: inline-flex; align-items: center; gap: 3px; border-radius: 4px; padding: 1px 4px; transition: background .15s; }
-.orig-est-wrap:hover { background: var(--hover-bg); }
-.orig-est-icon { font-size: 10px; color: var(--text-faint); display: inline-block; transform: rotate(-45deg); }
-.orig-est-icon--active { color: var(--c-blue); }
-.orig-est-editing { cursor: default; gap: 4px; }
-.orig-est-input { width: 68px; background: var(--bg-el); border: 1px solid var(--c-blue); border-radius: 5px; color: var(--text-1); padding: 2px 6px; font-size: 12px; outline: none; }
-.orig-est-btn { background: none; border: 1px solid var(--bg-border); border-radius: 4px; color: var(--text-faint); padding: 2px 7px; font-size: 12px; cursor: pointer; transition: all .15s; }
-.orig-est-btn:hover { background: var(--bg-el); color: var(--text-1); }
-.orig-est-btn--clear:hover { color: var(--c-red2); border-color: var(--c-red2); }
+.ind-cfg-icon { font-size: 10px; color: var(--text-faint); cursor: pointer; opacity: 0; transition: opacity .15s, color .15s; display: inline-block; transform: rotate(-45deg); }
+.ind-cfg-icon:hover { color: var(--c-blue); }
+.d-label:hover .ind-cfg-icon { opacity: 1; }
 .sprint-section-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--bg-border); margin-bottom: 14px; }
 .sprint-section-header .d-section-title { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
 .sprint-col-btn-wrap { position: relative; }
@@ -1355,7 +1359,7 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 @keyframes report-spin { to { transform: rotate(360deg); } }
 
 /* Section filter bar */
-.report-filter-bar { display: flex; gap: 6px; padding: 2px 0 4px; }
+.report-filter-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
 .report-filter-btn { background: var(--bg-el); border: 1px solid var(--bg-border); color: var(--text-2); padding: 5px 14px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
 .report-filter-btn:hover { background: var(--bg-el2); color: var(--text-1); }
 .report-filter-btn--active { background: var(--c-blue); border-color: var(--c-blue); color: #fff; }
