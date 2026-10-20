@@ -38,3 +38,23 @@ export function toggleSource(src) {
   );
   localStorage.setItem('dashSource', src);
 }
+
+export async function refreshSnView() {
+  const snView = document.getElementById('sn-view');
+  if (!snView) return;
+  const isVisible = snView.style.display !== 'none';
+  if (!isVisible) {
+    _snLoaded = false;
+    return;
+  }
+  _snLoaded = true;
+  snView.innerHTML = '<div class="sn-view-loading">Carregando incidentes...</div>';
+  try {
+    const r = await fetch('/api/sn-view');
+    const d = await r.json();
+    snView.innerHTML = d.html;
+  } catch (e) {
+    snView.innerHTML = `<div class="sn-view-error">Erro ao carregar: ${e.message}</div>`;
+    _snLoaded = false;
+  }
+}

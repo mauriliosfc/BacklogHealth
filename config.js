@@ -1,7 +1,10 @@
 const fs          = require("fs");
 const { CONFIG_PATH } = require('./utils/paths');
 
-const PORT = 3030;
+// Mesma detecção de ambiente usada em utils/paths.js (ELECTRON_DATA_DIR → pkg → dev):
+// o app empacotado (Electron ou pkg) sempre usa 3030; rodando via `node server.js`/`npm run dev`
+// usa 3031, para não colidir com uma instância do app já instalada na máquina.
+const PORT = (process.env.ELECTRON_DATA_DIR || process.pkg) ? 3030 : 3031;
 
 let cfg = {};
 

@@ -1096,8 +1096,11 @@ function _buildHTML(payload) {
 
   const sectionFilterAttr = S.activeSectionFilter !== 'all' ? ` data-section-filter="${S.activeSectionFilter}"` : '';
 
+  // data-role="ci-filter" identifica esta barra pro export de HTML (exportReportHtml em
+  // report-pickers.js) — ela reconsulta o ServiceNow ao vivo, então não faz sentido (nem funciona)
+  // num arquivo estático exportado; o export trata essa barra como somente-leitura.
   const ciFilterBar = (incidents || prbs || requests) && S.ciList.length
-    ? `<div class="report-filter-bar" style="margin-top:4px">
+    ? `<div class="report-filter-bar" data-role="ci-filter" style="margin-top:4px">
         <button class="report-filter-btn${!S.ciFilter ? ' report-filter-btn--active' : ''}" onclick="reportSetCiFilter('ALL')">${t('rpt_filter_all')}</button>
         ${S.ciList.map(ci => `<button class="report-filter-btn${S.ciFilter === ci ? ' report-filter-btn--active' : ''}" onclick="reportSetCiFilter('${_esc(ci).replace(/'/g, "\\'")}')">${_esc(ci)}</button>`).join('')}
       </div>`
