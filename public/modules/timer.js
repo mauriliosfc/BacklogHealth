@@ -3,6 +3,7 @@ import { t } from './i18n.js';
 import { applyTranslations } from './i18n.js';
 import { applyAliases } from './alias.js';
 import { applyOrder } from './cardOrder.js';
+import { refreshSnView } from './sourceToggle.js';
 
 const INTERVAL = 300;
 let remaining = INTERVAL;
@@ -45,6 +46,7 @@ export async function doRefresh() {
     applyAliases();
     if (typeof window.reapplySnDismissed === 'function') window.reapplySnDismissed();
     if (typeof window.reapplyHealthFilter === 'function') window.reapplyHealthFilter();
+    await refreshSnView();
     const savedView = localStorage.getItem('dashView') || 'grid';
     if (content && savedView === 'list' && content.classList.contains('cards-grid')) {
       content.classList.replace('cards-grid', 'cards-list');
