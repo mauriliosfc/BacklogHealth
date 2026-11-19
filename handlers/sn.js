@@ -1,10 +1,43 @@
 const { getSnConfig, saveSnConfig, saveConfig, getProjectSnGroup, getCfg } = require('../config');
 const { snGet } = require('../servicenowClient');
 const { httpError } = require('./utils');
+const { getSnMode, isSnConfigured } = require('../utils/snMode');
+
+const _browser = v => (v === 'chromium' ? 'chromium' : 'edge');
+const _host = v => String(v || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+
+// Monta o snCfg usado pelo snGet a partir de parâmetros crus (onboarding/teste antes de salvar).
+function _buildSnCfg({ instance, user, pass, mode, mcpUsername, mcpCaBundle, mcpLoginUrl, mcpBrowser } = {}) {
+  if (getSnMode({ mode }) === 'mcp') {
+    if (!instance) httpError(400, 'instance is required.');
+    const saved = getSnConfig()?.mcp || {};
+    return {
+      mode: 'mcp',
+      instance: _host(instance),
+      mcp: {
+        username: mcpUsername !== undefined ? String(mcpUsername || '').trim() : (saved.username || ''),
+        caBundle: mcpCaBundle !== undefined ? String(mcpCaBundle || '').trim() : (saved.caBundle || ''),
+        loginUrl: mcpLoginUrl !== undefined ? String(mcpLoginUrl || '').trim() : (saved.loginUrl || ''),
+        browser:  _browser(mcpBrowser !== undefined ? mcpBrowser : saved.browser),
+      },
+    };
+  }
+  if (!instance || !user || !pass) httpError(400, 'instance, user and pass are required.');
+  return { mode: 'api', instance: instance.trim(), user: user.trim(), pass };
+}
 
 function getSnCfg({ project = '' } = {}) {
   const sn   = getSnConfig();
-  const resp = { instance: sn?.instance || '', user: sn?.user || '', hasPass: !!(sn?.pass) };
+  const resp = {
+    instance:    sn?.instance || '',
+    user:        sn?.user || '',
+    hasPass:     !!(sn?.pass),
+    mode:        getSnMode(sn),
+    mcpUsername: sn?.mcp?.username || '',
+    mcpCaBundle: sn?.mcp?.caBundle || '',
+    mcpLoginUrl: sn?.mcp?.loginUrl || '',
+    mcpBrowser:  _browser(sn?.mcp?.browser),
+  };
   if (project) {
     const grp = getProjectSnGroup(project);
     resp.assignmentGroup     = grp?.assignmentGroup     || '';
@@ -23,6 +56,13 @@ function saveSnCfg(p = {}) {
     ...(p.user              !== undefined ? { user: String(p.user).trim() } : {}),
     ...(p.pass                            ? { pass: p.pass }                : {}),
     ...(p.assignmentGroups  !== undefined ? { assignmentGroups: Array.isArray(p.assignmentGroups) ? p.assignmentGroups : [] } : {}),
+    ...(p.mode              !== undefined ? { mode: getSnMode({ mode: p.mode }) } : {}),
+    ...(['mcpUsername', 'mcpCaBundle', 'mcpLoginUrl', 'mcpBrowser'].some(k => p[k] !== undefined) ? { mcp: {
+      ...(p.mcpUsername !== undefined ? { username: String(p.mcpUsername || '').trim() } : {}),
+      ...(p.mcpCaBundle !== undefined ? { caBundle: String(p.mcpCaBundle || '').trim() } : {}),
+      ...(p.mcpLoginUrl !== undefined ? { loginUrl: String(p.mcpLoginUrl || '').trim() } : {}),
+      ...(p.mcpBrowser  !== undefined ? { browser:  _browser(p.mcpBrowser) }            : {}),
+    } } : {}),
   };
   const projectGroup = p.project ? {
     projectName:         p.project,
@@ -35,14 +75,10 @@ function saveSnCfg(p = {}) {
   return { ok: true };
 }
 
-async function testSn({ instance, user, pass } = {}) {
-  if (!instance || !user || !pass)
-    httpError(400, 'instance, user and pass are required.');
+async function testSn(p = {}) {
+  const snCfg = _buildSnCfg(p);
   try {
-    await snGet(
-      { instance: instance.trim(), user: user.trim(), pass },
-      'table/incident?sysparm_limit=1&sysparm_fields=sys_id'
-    );
+    await snGet(snCfg, 'table/incident?sysparm_limit=1&sysparm_fields=sys_id');
     return { ok: true };
   } catch (e) {
     // HTTP 200 with error in body — front-end reads error message
@@ -52,26 +88,43 @@ async function testSn({ instance, user, pass } = {}) {
 
 // Returns all active assignment groups from the sys_user_group table.
 // Accepts raw credentials so it can be called before config is saved (onboarding).
-async function fetchGroups({ instance, user, pass } = {}) {
-  if (!instance || !user || !pass)
-    httpError(400, 'instance, user and pass are required.');
-  try {
-    const snCfg = { instance: instance.trim(), user: user.trim(), pass };
-    const PAGE_SIZE = 2000;
-    const all = [];
-    let offset = 0;
-    while (true) {
-      const qs = [
-        'sysparm_fields=name,sys_id',
-        `sysparm_limit=${PAGE_SIZE}`,
-        `sysparm_offset=${offset}`,
-      ].join('&');
-      const data = await snGet(snCfg, `table/sys_user_group?${qs}`);
-      const page = data.result || [];
+// Instâncias grandes têm dezenas de milhares de grupos (40+ páginas): as páginas são
+// buscadas em lotes paralelos, parando no primeiro lote com página incompleta.
+const GROUPS_PAGE_SIZE   = 2000;
+const GROUPS_CONCURRENCY = 6;
+
+async function _fetchAllGroupRows(snCfg) {
+  const fetchPage = async offset => {
+    const qs = [
+      'sysparm_fields=name,sys_id',
+      `sysparm_limit=${GROUPS_PAGE_SIZE}`,
+      `sysparm_offset=${offset}`,
+    ].join('&');
+    const data = await snGet(snCfg, `table/sys_user_group?${qs}`);
+    return data.result || [];
+  };
+  const all = [];
+  const first = await fetchPage(0);
+  all.push(...first);
+  if (first.length < GROUPS_PAGE_SIZE) return all;
+  let next = 1;
+  while (true) {
+    const offsets = Array.from({ length: GROUPS_CONCURRENCY }, (_, i) => (next + i) * GROUPS_PAGE_SIZE);
+    next += GROUPS_CONCURRENCY;
+    const pages = await Promise.all(offsets.map(fetchPage));
+    let done = false;
+    for (const page of pages) {
       all.push(...page);
-      if (page.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
+      if (page.length < GROUPS_PAGE_SIZE) { done = true; break; }
     }
+    if (done) return all;
+  }
+}
+
+async function fetchGroups(p = {}) {
+  const snCfg = _buildSnCfg(p);
+  try {
+    const all = await _fetchAllGroupRows(snCfg);
     const groups = [...new Map(
       all
         .filter(r => r.name)
@@ -83,11 +136,31 @@ async function fetchGroups({ instance, user, pass } = {}) {
   }
 }
 
+// A lista de grupos muda pouco e é cara de baixar — cache em memória por instância/modo/usuário.
+const GROUPS_CACHE_TTL_MS = 60 * 60 * 1000;
+let _groupsCache = null;   // { key, at, value }
+let _groupsInFlight = null; // { key, promise }
+
+function _clearGroupsCache() { _groupsCache = null; _groupsInFlight = null; }
+
 // Fetches groups using credentials already saved in config (no need to pass them again).
 async function fetchGroupsFromConfig() {
   const sn = getSnConfig();
-  if (!sn?.instance || !sn?.user || !sn?.pass) httpError(400, 'ServiceNow not configured.');
-  return fetchGroups({ instance: sn.instance, user: sn.user, pass: sn.pass });
+  if (!isSnConfigured(sn)) httpError(400, 'ServiceNow not configured.');
+  const mode = getSnMode(sn);
+  const key  = [mode, sn.instance, mode === 'api' ? sn.user : ''].join('|');
+  if (_groupsCache && _groupsCache.key === key && Date.now() - _groupsCache.at < GROUPS_CACHE_TTL_MS) {
+    return _groupsCache.value;
+  }
+  if (_groupsInFlight && _groupsInFlight.key === key) return _groupsInFlight.promise;
+  const promise = fetchGroups({ instance: sn.instance, user: sn.user, pass: sn.pass, mode })
+    .then(value => {
+      if (!value.error && value.groups.length) _groupsCache = { key, at: Date.now(), value };
+      return value;
+    })
+    .finally(() => { if (_groupsInFlight && _groupsInFlight.promise === promise) _groupsInFlight = null; });
+  _groupsInFlight = { key, promise };
+  return promise;
 }
 
 function getAllProjectsSnCfg() {
@@ -116,14 +189,14 @@ function removeSnGroup({ group } = {}) {
 // Uses saved credentials — no need to pass them again.
 async function fetchPrbFields() {
   const sn = getSnConfig();
-  if (!sn?.instance || !sn?.user || !sn?.pass) httpError(400, 'ServiceNow not configured.');
+  if (!isSnConfigured(sn)) httpError(400, 'ServiceNow not configured.');
   try {
     const qs = [
       'sysparm_query=name=problem^active=true^internal_type!=collection^internal_type!=glide_list',
       'sysparm_fields=element,column_label',
       'sysparm_limit=500',
     ].join('&');
-    const data = await snGet({ instance: sn.instance, user: sn.user, pass: sn.pass }, `table/sys_dictionary?${qs}`);
+    const data = await snGet(sn, `table/sys_dictionary?${qs}`);
     const fields = (data.result || [])
       .filter(r => r.element && r.column_label)
       .map(r => ({ key: r.element, label: r.column_label }))
@@ -134,4 +207,4 @@ async function fetchPrbFields() {
   }
 }
 
-module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg, removeSnGroup, fetchPrbFields };
+module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg, removeSnGroup, fetchPrbFields, _clearGroupsCache };

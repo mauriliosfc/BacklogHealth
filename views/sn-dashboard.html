@@ -6,6 +6,7 @@
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/snmcp.css">
 </head>
 <body class="dashboard-body">
 
@@ -107,7 +108,7 @@
             Open Incidents
           </div>
           <div class="sn-kpi-val sn-kpi-val--red">{{KPI_OPEN}}</div>
-          <div class="sn-kpi-sub">{{KPI_P1}} P1 &middot; {{KPI_P2}} P2 &middot; {{KPI_P3}} P3</div>
+          <div class="sn-kpi-sub">{{KPI_P1}} P1 &middot; {{KPI_P2}} P2 &middot; {{KPI_P3}} P3 &middot; {{KPI_P4}} P4</div>
         </div>
         <div class="sn-kpi-stat">
           <div class="sn-kpi-lbl">
@@ -454,41 +455,46 @@
 
       <!-- Credenciais globais -->
       <div class="snm-section">
-        <div class="snm-section-title">Credenciais globais</div>
+        <div class="snm-section-title" data-i18n="snm_global_title">Credenciais globais</div>
+        <div class="snmcp-mode" role="tablist" style="margin-bottom:12px">
+          <button type="button" class="snmcp-mode-btn active" data-snm-mode="api" onclick="snConfigSetMode('api')" data-i18n="snmcp_mode_api">Username and password (API)</button>
+          <button type="button" class="snmcp-mode-btn" data-snm-mode="mcp" onclick="snConfigSetMode('mcp')" data-i18n="snmcp_mode_mcp">Corporate login (SSO/MFA)</button>
+        </div>
         <div class="snm-fields">
           <div class="snm-field">
-            <label class="snm-label">INSTANCE</label>
+            <label class="snm-label" data-i18n="sn_instance_label">INSTANCE</label>
             <input type="text" id="snm-instance" class="snm-input-full" placeholder="empresa.service-now.com" autocomplete="off">
           </div>
-          <div class="snm-field">
-            <label class="snm-label">USERNAME</label>
+          <div class="snm-field" data-snm-api>
+            <label class="snm-label" data-i18n="sn_user_label">USERNAME</label>
             <input type="text" id="snm-user" class="snm-input-full" placeholder="usuario" autocomplete="off">
           </div>
-          <div class="snm-field">
-            <label class="snm-label">PASSWORD / TOKEN</label>
+          <div class="snm-field" data-snm-api>
+            <label class="snm-label" data-i18n="sn_pass_label">PASSWORD / TOKEN</label>
             <input type="password" id="snm-pass" class="snm-input-full" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" autocomplete="off">
           </div>
         </div>
+        <div id="snm-mcp-panel" style="display:none;margin-top:4px"></div>
         <div class="snm-actions-row">
-          <button class="snm-btn" onclick="snConfigTest()">Testar conexão</button>
-          <button class="snm-btn snm-btn-primary" onclick="snConfigSaveGlobal()">Salvar credenciais</button>
+          <button class="snm-btn" data-snm-api onclick="snConfigTest()" data-i18n="sn_test_btn">Testar conexão</button>
+          <button class="snm-btn snm-btn-primary" onclick="snConfigSaveGlobal()" data-i18n="snm_save_global">Salvar credenciais</button>
           <span id="snm-global-status" class="snm-status"></span>
         </div>
       </div>
 
       <!-- Assignment group do projeto -->
       <div class="snm-section">
-        <div class="snm-section-title">Assignment Group do projeto</div>
+        <div class="snm-section-title" data-i18n="snm_ag_title">Assignment Group</div>
         <div class="snm-field">
-          <label class="snm-label">SYS_ID ou NOME DO GRUPO</label>
+          <label class="snm-label" data-i18n="snm_ag_label">SYS_ID ou NOME DO GRUPO</label>
           <input type="text" id="snm-ag" class="snm-input-full" placeholder="ex: 8a4dde73c6112278017a6a4baf547aa7" autocomplete="off">
         </div>
         <div class="snm-field">
-          <label class="snm-label">NOME DE EXIBIÇÃO</label>
+          <label class="snm-label" data-i18n="snm_ag_name_label">NOME DE EXIBIÇÃO</label>
           <input type="text" id="snm-ag-name" class="snm-input-full" placeholder="ex: TI - Suporte Alpha" autocomplete="off">
         </div>
         <div class="snm-actions-row">
-          <button class="snm-btn snm-btn-primary" onclick="snConfigSaveProject()">Salvar grupo</button>
+          <button class="snm-btn snm-btn-primary" onclick="snConfigSaveProject()" data-i18n="snm_save_group">Salvar grupo</button>
           <span id="snm-proj-status" class="snm-status"></span>
         </div>
       </div>

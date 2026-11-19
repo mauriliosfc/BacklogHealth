@@ -1,5 +1,6 @@
 const { getCfg } = require('../config');
 const { snGet }  = require('../servicenowClient');
+const { getSnMode } = require('../utils/snMode');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -105,7 +106,7 @@ async function fetchSNGroups(snCfg) {
   // Pre-populate selected groups so they always appear even with 0 incidents.
   if (allowed) {
     for (const groupName of allowed) {
-      groupMap[groupName] = { name: groupName, p1: 0, p2: 0, p3: 0, total: 0, incidents: [] };
+      groupMap[groupName] = { name: groupName, p1: 0, p2: 0, p3: 0, p4: 0, total: 0, incidents: [] };
     }
   }
 
@@ -113,13 +114,14 @@ async function fetchSNGroups(snCfg) {
     const groupName = _snVal(inc.assignment_group) || 'Unassigned';
     if (allowed && !allowed.has(groupName)) continue;
     if (!groupMap[groupName]) {
-      groupMap[groupName] = { name: groupName, p1: 0, p2: 0, p3: 0, total: 0, incidents: [] };
+      groupMap[groupName] = { name: groupName, p1: 0, p2: 0, p3: 0, p4: 0, total: 0, incidents: [] };
     }
     const g = groupMap[groupName];
     const p = parseInt(_snVal(inc.priority) || '5', 10);
     if (p === 1)      g.p1++;
     else if (p === 2) g.p2++;
     else if (p === 3) g.p3++;
+    else if (p === 4) g.p4++;
     g.total++;
     if (g.incidents.length < 3) {
       g.incidents.push({
@@ -133,17 +135,23 @@ async function fetchSNGroups(snCfg) {
   }
 
   const groups = Object.values(groupMap)
-    .sort((a, b) => (b.p1 * 100 + b.p2 * 10 + b.p3) - (a.p1 * 100 + a.p2 * 10 + a.p3));
+    .sort((a, b) => _prioScore(b) - _prioScore(a));
 
   const kpi = {
     totalOpen:    groups.reduce((s, g) => s + g.total, 0),
     totalP1:      groups.reduce((s, g) => s + g.p1, 0),
     totalP2:      groups.reduce((s, g) => s + g.p2, 0),
     totalP3:      groups.reduce((s, g) => s + g.p3, 0),
+    totalP4:      groups.reduce((s, g) => s + (g.p4 || 0), 0),
     activeGroups: groups.filter(g => g.total > 0).length,
   };
 
   return { groups, kpi };
+}
+
+// Ordenação dos grupos: P1 pesa mais que qualquer volume de P2, e assim por diante
+function _prioScore(g) {
+  return g.p1 * 1e9 + g.p2 * 1e6 + g.p3 * 1e3 + (g.p4 || 0);
 }
 
 // ── HTML builders ─────────────────────────────────────────────────────────────
@@ -185,6 +193,11 @@ function _incCardHTML(g) {
     <div class="sn-stat-cell">
       <div class="sn-stat-val sn-stat-muted">${g.p3}</div>
       <div class="sn-stat-lbl"><span class="sn-prio-badge sn-p3">P3</span></div>
+    </div>
+    <div class="sn-stat-sep"></div>
+    <div class="sn-stat-cell">
+      <div class="sn-stat-val sn-stat-muted">${g.p4 || 0}</div>
+      <div class="sn-stat-lbl"><span class="sn-prio-badge sn-p4">P4</span></div>
     </div>
   </div>
   <div class="sn-inc-list">${incRows}</div>
@@ -259,6 +272,16 @@ async function fetchSNResolved(snCfg, groupNames) {
   return incs;
 }
 
+function _emptyKpi() {
+  return { totalOpen: 0, totalP1: 0, totalP2: 0, totalP3: 0, totalP4: 0, activeGroups: 0, resolvedThisMonth: 0, mttr: '—' };
+}
+
+function _pendingHtml() {
+  return `<div class="sn-empty-incidents" data-sn-pending="1">
+      <span data-i18n="snmcp_pending_cards">Connecting to Service Now. If a login window opened, complete the sign-in there.</span>
+    </div>`;
+}
+
 // ── Public: called by dashboard.js buildAndCache ──────────────────────────────
 
 async function fetchAndBuildCards() {
@@ -266,6 +289,16 @@ async function fetchAndBuildCards() {
   const snCfg      = cfg.servicenow;
   const groupNames = Array.isArray(snCfg?.assignmentGroups) && snCfg.assignmentGroups.length > 0
     ? snCfg.assignmentGroups : null;
+
+  // Modo MCP sem sessão: não bloqueia a página esperando o login. Dispara a conexão em
+  // background (o MCP abre a janela de SSO/MFA) e mostra um aviso; o front recarrega ao conectar.
+  if (getSnMode(snCfg) === 'mcp') {
+    const snMcp = require('../snMcp');
+    if (!snMcp.isConnected()) {
+      snMcp.connect(snCfg).catch(() => {});
+      return { kpi: _emptyKpi(), cardsHtml: _pendingHtml(), error: null, pending: true };
+    }
+  }
 
   try {
     const [snData, resolvedIncs] = await Promise.all([
@@ -281,7 +314,7 @@ async function fetchAndBuildCards() {
       Failed to load incidents: ${escHtml(err.message)}
     </div>`;
     return {
-      kpi: { totalOpen: 0, totalP1: 0, totalP2: 0, totalP3: 0, activeGroups: 0, resolvedThisMonth: 0, mttr: '—' },
+      kpi: _emptyKpi(),
       cardsHtml: errHtml,
       error: err.message,
     };
@@ -298,7 +331,7 @@ async function buildSnViewHtml() {
           Open Incidents
         </div>
         <div class="sn-kpi-val sn-kpi-val--red">${kpi.totalOpen}</div>
-        <div class="sn-kpi-sub">${kpi.totalP1} P1 &middot; ${kpi.totalP2} P2 &middot; ${kpi.totalP3} P3</div>
+        <div class="sn-kpi-sub">${kpi.totalP1} P1 &middot; ${kpi.totalP2} P2 &middot; ${kpi.totalP3} P3 &middot; ${kpi.totalP4} P4</div>
       </div>
       <div class="sn-kpi-stat">
         <div class="sn-kpi-lbl">

@@ -1767,6 +1767,7 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .sn-p1 { background: var(--c-red-bg);    color: var(--c-red);    border: 1px solid #7f1d1d; }
 .sn-p2 { background: var(--c-yellow-bg); color: var(--c-yellow); border: 1px solid #78350f; }
 .sn-p3 { background: var(--bg-el);       color: var(--text-faint); border: 1px solid var(--bg-border); }
+.sn-p4, .sn-p5 { background: transparent; color: var(--text-faint); border: 1px dashed var(--bg-border); }
 .sn-inc-list { display: flex; flex-direction: column; flex: 1; }
 .sn-inc-row {
   padding: 8px 14px; display: flex; align-items: flex-start; gap: 8px;
@@ -1929,6 +1930,7 @@ body.report-body { font-family: 'Segoe UI', system-ui, sans-serif; background: v
 .sn-ms-opt { padding: 9px 14px; font-size: 13px; cursor: pointer; color: var(--text-2); transition: background .1s; }
 .sn-ms-opt:hover { background: var(--bg-el); color: var(--text-1); }
 .sn-ms-opt mark { background: none; color: #06b6d4; font-weight: 600; }
+.sn-ms-opt.sn-ms-loading, .sn-ms-opt.sn-ms-loading:hover { cursor: default; background: none; color: var(--text-faint); font-style: italic; }
 .sn-group-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px 3px 10px; background: var(--bg-el); border: 1px solid var(--bg-border); border-radius: 20px; font-size: 12px; color: var(--text-2); white-space: nowrap; }
 .sn-group-chip-rm { background: none; border: none; cursor: pointer; color: var(--text-faint); font-size: 15px; line-height: 1; padding: 0; transition: color .15s; }
 .sn-group-chip-rm:hover { color: #ef4444; }
@@ -2050,3 +2052,4 @@ body.electron-app .su-topbar-right {
   position: relative;
   z-index: 160;
 }
+

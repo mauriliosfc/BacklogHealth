@@ -6,6 +6,7 @@
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <script>(function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);if(navigator.userAgent.indexOf('Electron')!==-1)document.body.classList.add('electron-app');})();</script>
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/snmcp.css">
 </head>
 <body class="setup-body">
 
@@ -194,26 +195,33 @@
 
           <div class="su-form-card">
             <div class="su-hint su-sn-hint" data-i18n="sn_hint">Configure Service Now to include incidents and PRBs in Monthly Review reports.</div>
+            <div class="snmcp-mode" role="tablist">
+              <button type="button" class="snmcp-mode-btn active" data-sn-mode="api" onclick="snSetMode('api')" data-i18n="snmcp_mode_api">Username and password (API)</button>
+              <button type="button" class="snmcp-mode-btn" data-sn-mode="mcp" onclick="snSetMode('mcp')" data-i18n="snmcp_mode_mcp">Corporate login (SSO/MFA)</button>
+            </div>
             <div class="su-field">
               <label class="su-label" data-i18n="sn_instance_label">INSTANCE</label>
               <div class="su-input-wrap">
                 <input type="text" id="sn-instance" class="su-input" data-i18n-placeholder="sn_instance_placeholder" placeholder="company.service-now.com" autocomplete="off" oninput="markDirty('sn')">
               </div>
             </div>
-            <div class="su-field">
-              <label class="su-label" data-i18n="sn_user_label">USERNAME</label>
-              <div class="su-input-wrap">
-                <input type="text" id="sn-user" class="su-input" placeholder="username" autocomplete="off" oninput="markDirty('sn')">
+            <div id="sn-api-fields" style="display:flex;flex-direction:column;gap:18px">
+              <div class="su-field">
+                <label class="su-label" data-i18n="sn_user_label">USERNAME</label>
+                <div class="su-input-wrap">
+                  <input type="text" id="sn-user" class="su-input" placeholder="username" autocomplete="off" oninput="markDirty('sn')">
+                </div>
               </div>
-            </div>
-            <div class="su-field">
-              <label class="su-label" data-i18n="sn_pass_label">PASSWORD / TOKEN</label>
-              <div class="su-input-wrap">
-                <input type="password" id="sn-pass" class="su-input" placeholder="••••••••" autocomplete="off" oninput="markDirty('sn')">
+              <div class="su-field">
+                <label class="su-label" data-i18n="sn_pass_label">PASSWORD / TOKEN</label>
+                <div class="su-input-wrap">
+                  <input type="password" id="sn-pass" class="su-input" placeholder="••••••••" autocomplete="off" oninput="markDirty('sn')">
+                </div>
               </div>
+              <button class="su-test-btn" onclick="snTest()" data-i18n="sn_test_btn">Test Connection</button>
             </div>
+            <div id="sn-mcp-panel" style="display:none"></div>
             <div class="su-sn-status" id="sn-status"></div>
-            <button class="su-test-btn" onclick="snTest()" data-i18n="sn_test_btn">Test Connection</button>
           </div>
 
           <!-- Global assignment groups multiselect — shown when SN is configured -->
@@ -412,9 +420,12 @@
 
 <script type="module">
   import { initI18n, applyTranslations, t, setLocale, getLocale } from '/modules/i18n.js';
+  import { mountSnMcpPanel } from '/modules/snMcpPanel.js';
   await initI18n();
   applyTranslations();
   window._t = t;
+  window.mountSnMcpPanel = mountSnMcpPanel;
+  if (typeof window._snMcpReady === 'function') window._snMcpReady();
   window.setLocale = setLocale;
   const activeLang = getLocale();
   document.querySelectorAll('.btn-lang').forEach(btn => {
@@ -926,10 +937,12 @@
       if (d.instance) document.getElementById('sn-instance').value = d.instance;
       if (d.user)     document.getElementById('sn-user').value     = d.user;
       if (d.hasPass)  document.getElementById('sn-pass').placeholder = '••••••••  (saved)';
+      _snMcpInitial = { username: d.mcpUsername || '', caBundle: d.mcpCaBundle || '', loginUrl: d.mcpLoginUrl || '', browser: d.mcpBrowser || 'edge' };
+      snSetMode(d.mode === 'mcp' ? 'mcp' : 'api', { silent: true });
       _snGlobalGroups = Array.isArray(d.assignmentGroups) ? [...d.assignmentGroups] : [];
       snMsRender();
       _snLoadGlobalGroups();
-      const configured = !!(d.instance && d.user);
+      const configured = d.mode === 'mcp' ? !!d.instance : !!(d.instance && d.user);
       _snConfigured = configured;
       _applyMode();
       const banner = document.getElementById('sn-banner');
@@ -938,9 +951,40 @@
     } catch(_) {}
   }
 
+  // ── Modo de conexão: API (usuário/senha) ou MCP (SSO/MFA) ────────────────
+  let _snMode       = 'api';
+  let _snMcpPanel   = null;
+  let _snMcpInitial = { username: '', caBundle: '' };
+
+  function _snMountMcpPanel() {
+    if (_snMcpPanel || !window.mountSnMcpPanel) return;
+    _snMcpPanel = window.mountSnMcpPanel(document.getElementById('sn-mcp-panel'), {
+      getInstance: () => document.getElementById('sn-instance').value,
+      initial:     _snMcpInitial,
+      onChange:    () => markDirty('sn'),
+      // Login concluído: salva modo + instância e libera a seleção de grupos
+      onConnected: () => snSaveAndMark(),
+    });
+  }
+  window._snMcpReady = () => { if (_snMode === 'mcp') _snMountMcpPanel(); };
+
+  function snSetMode(mode, { silent = false } = {}) {
+    _snMode = mode === 'mcp' ? 'mcp' : 'api';
+    document.querySelectorAll('[data-sn-mode]').forEach(b => b.classList.toggle('active', b.dataset.snMode === _snMode));
+    document.getElementById('sn-api-fields').style.display = _snMode === 'api' ? 'flex' : 'none';
+    document.getElementById('sn-mcp-panel').style.display  = _snMode === 'mcp' ? '' : 'none';
+    document.getElementById('sn-status').textContent = '';
+    if (_snMode === 'mcp') {
+      _snMountMcpPanel();
+      if (_snMcpPanel) _snMcpPanel.setValues(_snMcpInitial);
+    }
+    if (!silent) markDirty('sn');
+  }
+
   // ── Global assignment groups — multiselect ───────────────────────────────
   let _snGlobalGroups = [];  // selected (saved to config)
   let _snAllGroups    = [];  // all available from SN API
+  let _snGroupsState  = 'idle'; // 'idle' | 'loading' | 'ready' — evita baixar a lista a cada abertura da aba
   let _snMsQuery      = '';
 
   function snMsRender() {
@@ -958,11 +1002,25 @@
     _snMsRenderDropdown();
   }
 
+  // Instâncias grandes têm dezenas de milhares de grupos — renderiza só os primeiros resultados.
+  const SN_MS_MAX_OPTS = 100;
+
   function _snMsRenderDropdown() {
     const dd = document.getElementById('sn-ms-dropdown');
     if (!dd) return;
+    const input = document.getElementById('sn-ms-input');
+    if (input && document.activeElement !== input) { dd.style.display = 'none'; return; }
+    if (_snGroupsState === 'loading' && !_snAllGroups.length) {
+      dd.innerHTML = `<div class="sn-ms-opt sn-ms-loading">${_snEsc(_tr('settings_sn_groups_loading', 'Loading groups from Service Now…'))}</div>`;
+      dd.style.display = 'block';
+      return;
+    }
     const q   = _snMsQuery.toLowerCase();
-    const opts = _snAllGroups.filter(g => !_snGlobalGroups.includes(g) && (!q || g.toLowerCase().includes(q)));
+    const opts = [];
+    for (const g of _snAllGroups) {
+      if (opts.length >= SN_MS_MAX_OPTS) break;
+      if (!_snGlobalGroups.includes(g) && (!q || g.toLowerCase().includes(q))) opts.push(g);
+    }
     if (!opts.length) { dd.style.display = 'none'; return; }
     dd.innerHTML = opts.map(g =>
       `<div class="sn-ms-opt" onmousedown="event.preventDefault();snMsSelect('${g.replace(/'/g, "\\'")}')">` +
@@ -1025,16 +1083,25 @@
     } catch(_) {}
   }
 
-  async function _snLoadGlobalGroups() {
+  async function _snLoadGlobalGroups(force) {
+    if (_snGroupsState === 'loading') return;
+    if (_snGroupsState === 'ready' && !force) { snMsRender(); return; }
+    _snGroupsState = 'loading';
+    _snMsRenderDropdown();
+    let ok = false;
     try {
       const r = await fetch('/api/sn-groups');
-      if (!r.ok) return;
-      const d = await r.json();
-      if (d.error) return;
-      _snAllGroupsById = {};
-      (d.groups || []).forEach(g => { _snAllGroupsById[g.name || g] = g.sys_id || g.name || g; });
-      _snAllGroups = Object.keys(_snAllGroupsById);
+      if (r.ok) {
+        const d = await r.json();
+        if (!d.error) {
+          _snAllGroupsById = {};
+          (d.groups || []).forEach(g => { _snAllGroupsById[g.name || g] = g.sys_id || g.name || g; });
+          _snAllGroups = Object.keys(_snAllGroupsById);
+          ok = true;
+        }
+      }
     } catch(_) {}
+    _snGroupsState = ok ? 'ready' : 'idle';
     snMsRender();
   }
   _loadSnConfig();
@@ -1060,10 +1127,13 @@
     const user     = document.getElementById('sn-user').value.trim();
     const pass     = document.getElementById('sn-pass').value;
     const st = document.getElementById('sn-status');
+    if (_snMode === 'mcp' && !instance) { st.className = 'su-sn-status error'; st.textContent = _tr('snmcp_err_instance', 'Fill in the instance first.'); return false; }
     st.className = 'su-sn-status'; st.textContent = _tr('sn_saving', 'Saving…');
     try {
-      const body = { instance, user };
-      if (pass) body.pass = pass;
+      const body = _snMode === 'mcp'
+        ? Object.assign({ instance, mode: 'mcp' }, _snMcpPanel ? _snMcpPanel.getValues() : {})
+        : { instance, user, mode: 'api' };
+      if (_snMode === 'api' && pass) body.pass = pass;
       const r = await fetch('/api/sn-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json().catch(() => ({}));
       if (r.ok) { st.className = 'su-sn-status ok'; st.textContent = _tr('sn_saved', 'Saved!'); return true; }
@@ -1086,7 +1156,7 @@
       if (banner) banner.style.display = 'none';
       _snConfigured = true;
       _applyMode();
-      _snLoadGlobalGroups();
+      _snLoadGlobalGroups(true);
     } else {
       showMsg('sn-msg', 'err', document.getElementById('sn-status').textContent || 'Error');
     }
