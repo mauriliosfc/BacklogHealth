@@ -13,6 +13,7 @@ const azureH    = require('./handlers/azure');
 const aiH       = require('./handlers/ai');
 const reportH   = require('./handlers/report');
 const snH       = require('./handlers/sn');
+const snMcpH    = require('./handlers/snMcp');
 const feedbackH    = require('./handlers/feedback');
 const healthCfgH   = require('./handlers/healthConfig');
 const indicatorCfgH = require('./handlers/indicatorConfig');
@@ -62,7 +63,9 @@ async function main() {
       console.log('⚙️  Sem projetos configurados. Iniciando dashboard em modo vazio...');
     } else if (getAppMode() === 'sn-only') {
       console.log('🟣 Modo ServiceNow-only. Carregando incidentes...');
-      await dashH.buildAndCache();
+      // No modo MCP o build não bloqueia: sem sessão, os cards mostram "conectando" e o login
+      // acontece na janela do MCP; ao conectar, o cache é reconstruído (listener abaixo).
+      await dashH.buildAndCache().catch(e => console.error('[startup] SN build failed:', e.message));
       console.log('✅ Dados SN carregados! Iniciando servidor...');
     } else {
       console.log('⚙️  Configuração não encontrada. Iniciando tela de setup...');
@@ -391,6 +394,19 @@ async function main() {
       }
     }
 
+    // ── Service Now via MCP (login SSO/MFA) ───────────────────────────────
+    if (req.method === 'GET' && url === '/api/sn-mcp/status') {
+      return json(res, () => snMcpH.getMcpStatus());
+    }
+    if (req.method === 'POST' && url.startsWith('/api/sn-mcp/')) {
+      const body   = await readBody(req);
+      const params = JSON.parse(body || '{}');
+      if (url === '/api/sn-mcp/install')    return json(res, () => snMcpH.installMcp(params));
+      if (url === '/api/sn-mcp/connect')    return json(res, () => snMcpH.connectMcp(params));
+      if (url === '/api/sn-mcp/warmup')     return json(res, () => snMcpH.warmupMcp(params));
+      if (url === '/api/sn-mcp/disconnect') return json(res, () => snMcpH.disconnectMcp());
+    }
+
     // ── POST /api/sn-test ──────────────────────────────────────────────────
     if (req.method === 'POST' && url === '/api/sn-test') {
       const body = await readBody(req);
@@ -434,10 +450,31 @@ async function main() {
     res.end(state.html);
   });
 
+  _wireSnMcpLifecycle();
+
   server.listen(PORT, () => {
     console.log(`\n Dashboard rodando em: http://localhost:${PORT}`);
     console.log(` Servindo arquivos de: ${PUBLIC_DIR}\n`);
   });
+}
+
+// Modo MCP: reconstrói o dashboard SN-only quando a sessão conecta e encerra o processo
+// Python (e o Chromium de login) junto com o servidor.
+function _wireSnMcpLifecycle() {
+  const snMcp = require('./snMcp');
+  let wasConnected = false;
+  snMcp.events.on('status', s => {
+    const connected = s.state === 'connected';
+    if (connected && !wasConnected && getAppMode() === 'sn-only') {
+      dashH.buildAndCache().catch(e => console.error('[sn-mcp] rebuild failed:', e.message));
+    }
+    wasConnected = connected;
+  });
+  // Modo SSO salvo: sobe o MCP em background (sem login) para o primeiro uso responder rápido
+  const sn = getCfg().servicenow;
+  if (sn && sn.mode === 'mcp' && sn.instance) snMcp.warmup(sn).catch(() => {});
+  process.on('exit', () => snMcp.shutdown());
+  ['SIGINT', 'SIGTERM'].forEach(sig => process.once(sig, () => { snMcp.shutdown(); process.exit(0); }));
 }
 
 main().catch(console.error);

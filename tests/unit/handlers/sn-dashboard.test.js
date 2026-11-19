@@ -1,5 +1,6 @@
 jest.mock('../../../config');
 jest.mock('../../../servicenowClient');
+jest.mock('../../../snMcp', () => ({ isConnected: jest.fn(), connect: jest.fn() }));
 
 const { getCfg }  = require('../../../config');
 const { snGet }   = require('../../../servicenowClient');
@@ -142,7 +143,7 @@ describe('fetchSNGroups', () => {
     expect(kpi.totalOpen).toBe(1);
   });
 
-  test('incidentes P4/P5 entram no total mas não nos contadores p1/p2/p3', async () => {
+  test('P4 tem contador próprio; P5 entra só no total', async () => {
     snGet.mockResolvedValueOnce({ result: [
       { number: 'INC0050', short_description: 'Minor issue', priority: '4',
         assignment_group: 'Network Ops', opened_at: new Date().toISOString(), sys_id: 'fff001' },
@@ -154,9 +155,11 @@ describe('fetchSNGroups', () => {
     expect(netOps.p1).toBe(0);
     expect(netOps.p2).toBe(0);
     expect(netOps.p3).toBe(0);
+    expect(netOps.p4).toBe(1);
     expect(netOps.total).toBe(2);
     expect(kpi.totalOpen).toBe(2);
     expect(kpi.totalP1).toBe(0);
+    expect(kpi.totalP4).toBe(1);
     expect(kpi.activeGroups).toBe(1);
   });
 
@@ -414,5 +417,67 @@ describe('fetchSNResolved', () => {
     const result = await snDash.fetchSNResolved(snCfg, null);
     expect(result).toHaveLength(1);
     expect(result[0].sys_id.value).toBe('r1');
+  });
+});
+
+// ── Modo MCP ──────────────────────────────────────────────────────────────────
+
+describe('fetchAndBuildCards — modo MCP', () => {
+  const snMcp = require('../../../snMcp');
+  const MCP_CFG = { servicenow: { mode: 'mcp', instance: 'dev.service-now.com' } };
+
+  test('sem sessão: não consulta, dispara conexão e mostra aviso pendente', async () => {
+    getCfg.mockReturnValue(MCP_CFG);
+    snMcp.isConnected.mockReturnValue(false);
+    snMcp.connect.mockResolvedValue({});
+
+    const r = await snDash.fetchAndBuildCards();
+
+    expect(r.pending).toBe(true);
+    expect(r.cardsHtml).toContain('data-sn-pending="1"');
+    expect(r.cardsHtml).toContain('snmcp_pending_cards');
+    expect(r.kpi.totalOpen).toBe(0);
+    expect(snMcp.connect).toHaveBeenCalledWith(MCP_CFG.servicenow);
+    expect(snGet).not.toHaveBeenCalled();
+  });
+
+  test('com sessão: consulta normalmente via snGet', async () => {
+    getCfg.mockReturnValue(MCP_CFG);
+    snMcp.isConnected.mockReturnValue(true);
+
+    const r = await snDash.fetchAndBuildCards();
+
+    expect(r.pending).toBeUndefined();
+    expect(snGet).toHaveBeenCalled();
+    expect(snMcp.connect).not.toHaveBeenCalled();
+  });
+});
+
+// ── P4 no card e na ordenação ─────────────────────────────────────────────────
+
+describe('P4', () => {
+  test('card mostra a coluna P4 com o contador', () => {
+    const html = snDash.buildIncidentCardsHTML([{ name: 'Ops', p1: 0, p2: 0, p3: 12, p4: 28, total: 40, incidents: [] }]);
+    expect(html).toContain('sn-prio-badge sn-p4');
+    expect(html).toMatch(/>28<\/div>\s*<div class="sn-stat-lbl"><span class="sn-prio-badge sn-p4">P4/);
+  });
+
+  test('grupo com P3 vem antes de grupo só com muitos P4', async () => {
+    const inc = (p, g, i) => ({ number: `INC${p}${i}`, short_description: 'x', priority: String(p),
+      assignment_group: g, opened_at: new Date().toISOString(), sys_id: `${g}${p}${i}` });
+    snGet.mockResolvedValueOnce({ result: [
+      ...Array.from({ length: 50 }, (_, i) => inc(4, 'SoP4', i)),
+      inc(3, 'ComP3', 1),
+    ]});
+    const { groups } = await snDash.fetchSNGroups(BASE_CFG.servicenow);
+    expect(groups.map(g => g.name)).toEqual(['ComP3', 'SoP4']);
+  });
+
+  test('KPI do topo inclui P4 no resumo', async () => {
+    snGet.mockResolvedValue({ result: [
+      { number: 'INC1', short_description: 'x', priority: '4', assignment_group: 'Ops', opened_at: new Date().toISOString(), sys_id: 'a' },
+    ]});
+    const html = await snDash.buildSnViewHtml();
+    expect(html).toContain('0 P3 &middot; 1 P4');
   });
 });

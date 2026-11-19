@@ -1975,6 +1975,13 @@ export async function exportReportHtml() {
   clone.querySelectorAll('button').forEach(el => { if (!el.closest('.report-filter-bar')) el.style.display = 'none'; });
   clone.querySelectorAll('[onclick]').forEach(el => { if (!el.closest('.report-filter-bar')) el.removeAttribute('onclick'); });
   clone.querySelectorAll('.report-filter-btn[onclick]').forEach(el => el.removeAttribute('onclick'));
+  // A barra de Configuration Item reconsulta o ServiceNow ao vivo — não tem como funcionar num
+  // HTML estático. Mantém visível (mostra qual CI estava ativo na exportação) mas não-clicável,
+  // pra não interferir no filtro de seção (que reaproveita a mesma classe .report-filter-btn).
+  clone.querySelectorAll('[data-role="ci-filter"] .report-filter-btn').forEach(el => {
+    el.style.cursor = 'default';
+    el.title = 'Configuration Item no momento da exportação (somente leitura)';
+  });
   clone.querySelectorAll('textarea').forEach(el => {
     const p = document.createElement('p');
     p.className = 'report-notes-text';
@@ -2008,10 +2015,11 @@ ${clone.innerHTML}
 <script>
 (function(){
   var body=document.querySelector('.report-modal-body');
-  document.querySelectorAll('.report-filter-btn').forEach(function(btn){
+  var sectionBtns=document.querySelectorAll('.report-filter-bar:not([data-role="ci-filter"]) .report-filter-btn');
+  sectionBtns.forEach(function(btn){
     btn.addEventListener('click',function(){
       var filter=btn.getAttribute('data-filter');
-      document.querySelectorAll('.report-filter-btn').forEach(function(b){b.classList.remove('report-filter-btn--active');});
+      sectionBtns.forEach(function(b){b.classList.remove('report-filter-btn--active');});
       btn.classList.add('report-filter-btn--active');
       if(filter==='all') body.removeAttribute('data-section-filter');
       else body.setAttribute('data-section-filter',filter);

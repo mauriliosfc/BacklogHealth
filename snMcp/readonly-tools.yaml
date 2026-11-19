@@ -1,0 +1,10 @@
+# Pacote de ferramentas do mfa-servicenow-mcp usado pelo Backlog Health.
+# Somente leitura: nenhuma ferramenta de escrita é exposta pelo servidor.
+# Carregado via TOOL_PACKAGE_CONFIG_PATH + MCP_TOOL_PACKAGE=dashboard_readonly.
+none: []
+
+dashboard_readonly:
+  - sn_health
+  - sn_query
+  - sn_aggregate
+  - sn_schema

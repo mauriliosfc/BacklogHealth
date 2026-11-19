@@ -172,6 +172,7 @@ async function buildSNCache() {
     KPI_P1:        kpi.totalP1,
     KPI_P2:        kpi.totalP2,
     KPI_P3:        kpi.totalP3,
+    KPI_P4:        kpi.totalP4,
     KPI_GROUPS:    kpi.activeGroups,
     KPI_RESOLVED:  kpi.resolvedThisMonth,
     KPI_MTTR:      kpi.mttr,

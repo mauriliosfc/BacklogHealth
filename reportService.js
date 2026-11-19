@@ -4,6 +4,7 @@ const { getCfg, getProjectConfig, getSnConfig, getProjectSnGroup } = require('./
 const { azureGet, azurePost } = require('./azureClient');
 const { paginatedItems } = require('./utils/paginate');
 const { snGet } = require('./servicenowClient');
+const { isSnConfigured } = require('./utils/snMode');
 
 const { CACHE_DIR } = require('./utils/paths');
 const { calcMttrByPriority, calcReopenRate, calcIncidentAgingBuckets, calcPrbKpis, calcRequestLeadTime, calcRequestAgingBuckets } = require('./utils/itilMetrics');
@@ -377,7 +378,7 @@ function _snRaw(v) {
 
 async function fetchSnReport(displayName, period, prbAgingColumns = null, ciFilter = '') {
   const snCfg  = getSnConfig();
-  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
+  if (!isSnConfigured(snCfg)) return null;
 
   const snGrp  = getProjectSnGroup(displayName);
   let grp, isSysId;
@@ -920,7 +921,7 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
 
 async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', filterField = '', filterValue = '', ciFilter = '', group = '' } = {}) {
   const snCfg = getSnConfig();
-  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
+  if (!isSnConfigured(snCfg)) return null;
 
   let grpFilter;
   if (group) {
@@ -1014,7 +1015,7 @@ function _agingRangeFrag(dayMin, dayMax) {
 
 async function fetchSnRequestBacklog(displayName, month, { mode = 'backlog', filterField = '', filterValue = '', ciFilter = '', dayMin, dayMax, group = '' } = {}) {
   const snCfg = getSnConfig();
-  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
+  if (!isSnConfigured(snCfg)) return null;
 
   let grpFilter;
   if (group) {
@@ -1093,7 +1094,7 @@ async function fetchSnRequestBacklog(displayName, month, { mode = 'backlog', fil
 
 async function fetchSnPrbBacklog(displayName, { filterField = '', filterValue = '', ciFilter = '', dayMin, dayMax, group = '' } = {}) {
   const snCfg = getSnConfig();
-  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
+  if (!isSnConfigured(snCfg)) return null;
 
   let grpFilter;
   if (group) {
@@ -1148,7 +1149,7 @@ async function fetchSnPrbBacklog(displayName, { filterField = '', filterValue = 
 // with the full set of fields needed for CSV export.
 async function fetchSnVolumeIncidents(displayName, month, nMonths = 1) {
   const snCfg = getSnConfig();
-  if (!snCfg?.instance || !snCfg?.user || !snCfg?.pass) return null;
+  if (!isSnConfigured(snCfg)) return null;
 
   let grpFilter;
   const snGrp = getProjectSnGroup(displayName);

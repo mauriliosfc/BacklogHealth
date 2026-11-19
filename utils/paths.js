@@ -17,5 +17,7 @@ function _dataDir() {
 const DATA_DIR    = _dataDir();
 const CONFIG_PATH = nodePath.join(DATA_DIR, 'config.json');
 const CACHE_DIR   = nodePath.join(DATA_DIR, 'cache');
+// Ambiente isolado do MCP do Service Now (uv, Python, venv, Chromium e sessão de login)
+const SN_MCP_DIR  = nodePath.join(DATA_DIR, 'sn-mcp');
 
-module.exports = { DATA_DIR, CONFIG_PATH, CACHE_DIR };
+module.exports = { DATA_DIR, CONFIG_PATH, CACHE_DIR, SN_MCP_DIR };

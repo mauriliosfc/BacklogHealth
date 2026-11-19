@@ -1,0 +1,46 @@
+/* Estilos do login Service Now via MCP — compartilhado por setup, onboarding e dashboards.
+   Usa apenas os tokens de cor comuns (--bg-*, --text-*, --c-*). */
+/* ── Service Now via MCP (login SSO/MFA) ───────────────────────────────────── */
+.snmcp-mode { display: flex; gap: 4px; padding: 4px; background: var(--bg-el); border: 1px solid var(--bg-border); border-radius: 10px; }
+.snmcp-mode-btn { flex: 1; padding: 9px 10px; border: none; border-radius: 7px; background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .15s, color .15s; }
+.snmcp-mode-btn:hover { color: var(--text-1); }
+.snmcp-mode-btn.active { background: #06b6d4; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+
+.snmcp-panel { display: flex; flex-direction: column; gap: 14px; }
+.snmcp-hint { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.snmcp-step { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--bg-border); border-radius: 10px; background: var(--bg-el); }
+.snmcp-step-num { flex: 0 0 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: var(--bg-el2, var(--bg-border)); color: var(--text-2, var(--text-muted)); }
+.snmcp-step.is-active .snmcp-step-num { background: var(--c-blue); color: #fff; }
+.snmcp-step.is-done   .snmcp-step-num { background: var(--c-green); color: #fff; }
+.snmcp-step.is-error  .snmcp-step-num { background: var(--c-red); color: #fff; }
+.snmcp-step.is-disabled { opacity: .55; }
+.snmcp-step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.snmcp-step-title { font-size: 13px; font-weight: 700; color: var(--text-1); }
+.snmcp-step-desc { font-size: 12px; color: var(--text-muted); line-height: 1.45; word-break: break-word; }
+.snmcp-step.is-error .snmcp-step-desc { color: var(--c-red2, var(--c-red)); }
+.snmcp-step.is-done  .snmcp-step-desc { color: var(--c-green); }
+.snmcp-step[data-step="account"] .snmcp-step-desc { color: var(--text-muted); }
+.snmcp-input { width: 100%; box-sizing: border-box; background: var(--bg-card); border: 1px solid var(--bg-border); color: var(--text-1); border-radius: 8px; padding: 9px 12px; font-size: 13px; font-family: inherit; outline: none; }
+.snmcp-input:focus { border-color: var(--c-blue); }
+.snmcp-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.snmcp-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--bg-border); background: var(--bg-card); color: var(--text-1); font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; transition: opacity .15s; }
+.snmcp-btn:hover:not(:disabled) { opacity: .85; }
+.snmcp-btn:disabled { opacity: .5; cursor: not-allowed; }
+.snmcp-btn--primary { background: #06b6d4; border-color: #06b6d4; color: #fff; }
+.snmcp-btn--ghost { background: transparent; color: var(--text-muted); }
+.snmcp-btn[hidden], .snmcp-progress[hidden], .snmcp-banner[hidden], .snmcp-banner-btn[hidden] { display: none; }
+.snmcp-progress { height: 6px; border-radius: 3px; background: var(--bg-border); overflow: hidden; }
+.snmcp-progress-bar { height: 100%; width: 0; background: var(--c-blue); transition: width .4s; }
+.snmcp-adv summary { font-size: 11px; color: var(--text-faint); cursor: pointer; }
+.snmcp-adv[open] { display: flex; flex-direction: column; gap: 6px; }
+.snmcp-adv-label { font-size: 10px; font-weight: 700; color: var(--text-faint); letter-spacing: 1px; text-transform: uppercase; margin-top: 6px; }
+.snmcp-adv-hint { font-size: 11px; color: var(--text-faint); }
+
+.snmcp-banner { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 9000; display: flex; align-items: center; gap: 10px; max-width: min(640px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--bg-border); box-shadow: var(--shadow); font-size: 12px; color: var(--text-1); }
+.snmcp-banner-dot { flex: 0 0 8px; height: 8px; border-radius: 50%; background: var(--c-blue); }
+.snmcp-banner[data-kind="busy"]  .snmcp-banner-dot { animation: snmcp-pulse 1.2s ease-in-out infinite; }
+.snmcp-banner[data-kind="error"] .snmcp-banner-dot { background: var(--c-red); }
+.snmcp-banner[data-kind="idle"]  .snmcp-banner-dot { background: var(--c-yellow); }
+.snmcp-banner-text { flex: 1; line-height: 1.4; }
+.snmcp-banner-btn { padding: 6px 12px; border: none; border-radius: 7px; background: #06b6d4; color: #fff; font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; white-space: nowrap; }
+@keyframes snmcp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
