@@ -672,6 +672,7 @@ input{font-family:inherit}
 }
 .hidden{display:none!important}
 </style>
+<link rel="stylesheet" href="/snmcp.css">
 </head>
 <body>
 
@@ -1016,6 +1017,11 @@ input{font-family:inherit}
             ServiceNow
           </div>
 
+          <div class="snmcp-mode" role="tablist" style="margin-bottom:14px">
+            <button type="button" class="snmcp-mode-btn active" data-ob-sn-mode="api" onclick="obSnSetMode('api')" data-i18n="snmcp_mode_api">Username and password (API)</button>
+            <button type="button" class="snmcp-mode-btn" data-ob-sn-mode="mcp" onclick="obSnSetMode('mcp')" data-i18n="snmcp_mode_mcp">Corporate login (SSO/MFA)</button>
+          </div>
+
           <div class="field">
             <label class="field-label" for="snInstance">
               <span data-i18n="ob_sn_instance_label">Instance</span>
@@ -1031,6 +1037,7 @@ input{font-family:inherit}
             </div>
           </div>
 
+          <div id="obSnApiFields">
           <div class="field">
             <label class="field-label" for="snUser">
               <span data-i18n="ob_sn_user_label">Username</span>
@@ -1058,6 +1065,8 @@ input{font-family:inherit}
             </svg>
             <span data-i18n="ob_sn_test_btn">Test connection</span>
           </button>
+          </div>
+          <div id="obSnMcpPanel" style="display:none"></div>
           <div class="conn-status" id="statusSn">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="20 6 9 17 4 12"/>
@@ -1544,35 +1553,11 @@ async function testSN() {
       body: JSON.stringify({ instance, user, pass }),
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || resp.statusText);
+    // /api/sn-test responde 200 com { error } quando a conexão falha
+    if (!resp.ok || !data.ok) throw new Error(data.error || resp.statusText);
 
     state.snTested = true;
-
-    // Fetch assignment groups from this instance
-    try {
-      const gResp = await fetch('/api/sn-groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instance, user, pass }),
-      });
-      const gData = await gResp.json();
-      const newGroups = (gData.groups || []).map(g => (typeof g === 'object' && g !== null) ? g : { name: g, sys_id: '' });
-
-      // Only reset selections when the group list actually changed (different SN instance / different groups).
-      // If the user is just re-testing the same instance, preserve existing selections.
-      const newGroupNames  = new Set(newGroups.map(g => g.name));
-      const oldGroupNames  = new Set(state.snGroups.map(g => g.name || g));
-      const groupListChanged = newGroupNames.size !== oldGroupNames.size || [...newGroupNames].some(n => !oldGroupNames.has(n));
-      if (groupListChanged) {
-        state.selectedSNGroups = new Set();
-      } else {
-        // Same group list: remove any orphaned selections (groups no longer in the list)
-        for (const k of state.selectedSNGroups) {
-          if (!newGroupNames.has(k)) state.selectedSNGroups.delete(k);
-        }
-      }
-      state.snGroups = newGroups;
-    } catch (_) { state.snGroups = []; state.selectedSNGroups = new Set(); }
+    await _obLoadSnGroups({ instance, user, pass });
 
     statusEl.classList.add('success');
     const groupCount = state.snGroups.length;
@@ -1586,6 +1571,68 @@ async function testSN() {
   } finally {
     btn.classList.remove('testing');
   }
+}
+
+// Busca os assignment groups da instância (modo API: credenciais; modo MCP: sessão SSO)
+async function _obLoadSnGroups(body) {
+  try {
+    const gResp = await fetch('/api/sn-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const gData = await gResp.json();
+    const newGroups = (gData.groups || []).map(g => (typeof g === 'object' && g !== null) ? g : { name: g, sys_id: '' });
+
+    // Only reset selections when the group list actually changed (different SN instance / different groups).
+    // If the user is just re-testing the same instance, preserve existing selections.
+    const newGroupNames  = new Set(newGroups.map(g => g.name));
+    const oldGroupNames  = new Set(state.snGroups.map(g => g.name || g));
+    const groupListChanged = newGroupNames.size !== oldGroupNames.size || [...newGroupNames].some(n => !oldGroupNames.has(n));
+    if (groupListChanged) {
+      state.selectedSNGroups = new Set();
+    } else {
+      // Same group list: remove any orphaned selections (groups no longer in the list)
+      for (const k of state.selectedSNGroups) {
+        if (!newGroupNames.has(k)) state.selectedSNGroups.delete(k);
+      }
+    }
+    state.snGroups = newGroups;
+  } catch (_) { state.snGroups = []; state.selectedSNGroups = new Set(); }
+}
+
+/* ════════════════
+   SERVICENOW — MODO SSO/MFA (MCP)
+════════════════ */
+let _obSnMode = 'api';
+let _obSnMcpPanel = null;
+
+function _obMountMcpPanel() {
+  if (_obSnMcpPanel || !window.mountSnMcpPanel) return;
+  _obSnMcpPanel = window.mountSnMcpPanel(document.getElementById('obSnMcpPanel'), {
+    getInstance: () => document.getElementById('snInstance').value,
+    onConnected: async (st) => {
+      const instance = document.getElementById('snInstance').value.trim();
+      state.snTested = true;
+      await _obLoadSnGroups(Object.assign({ instance, mode: 'mcp' }, _obSnMcpPanel.getValues()));
+      const statusEl   = document.getElementById('statusSn');
+      const statusText = document.getElementById('statusSnText');
+      statusEl.className = 'conn-status success';
+      const n = state.snGroups.length;
+      statusText.textContent = (st.user ? st.user + ' · ' : '') + instance + (n ? ' · ' + n + ' group' + (n !== 1 ? 's' : '') : '');
+    },
+  });
+}
+window._snMcpReady = () => { if (_obSnMode === 'mcp') _obMountMcpPanel(); };
+
+function obSnSetMode(mode) {
+  _obSnMode = mode === 'mcp' ? 'mcp' : 'api';
+  document.querySelectorAll('[data-ob-sn-mode]').forEach(b => b.classList.toggle('active', b.dataset.obSnMode === _obSnMode));
+  document.getElementById('obSnApiFields').style.display = _obSnMode === 'api' ? '' : 'none';
+  document.getElementById('obSnMcpPanel').style.display  = _obSnMode === 'mcp' ? '' : 'none';
+  document.getElementById('statusSn').className = 'conn-status';
+  state.snTested = false;
+  if (_obSnMode === 'mcp') _obMountMcpPanel();
 }
 
 /* ════════════════
@@ -1978,14 +2025,17 @@ async function finishSetup() {
     const instance = document.getElementById('snInstance')?.value?.trim();
     const user = document.getElementById('snUser')?.value?.trim();
     const pass = document.getElementById('snPass')?.value?.trim();
+    const isMcp = _obSnMode === 'mcp';
 
-    if (instance && user && pass) {
+    if (instance && (isMcp || (user && pass))) {
       // Include selected assignment groups (if user went through the groups step)
       const selectedGroupNames = state.snGroups.length > 0
         ? Array.from(state.selectedSNGroups)
         : undefined;
       try {
-        const body = { instance, user, pass };
+        const body = isMcp
+          ? Object.assign({ instance, mode: 'mcp' }, _obSnMcpPanel ? _obSnMcpPanel.getValues() : {})
+          : { instance, user, pass, mode: 'api' };
         if (selectedGroupNames !== undefined) body.assignmentGroups = selectedGroupNames;
         const resp = await fetch('/api/sn-config', {
           method: 'POST',
@@ -2074,9 +2124,12 @@ requestAnimationFrame(() => requestAnimationFrame(() => {
 
 <script type="module">
 import { initI18n, applyTranslations, t, setLocale, getLocale } from '/modules/i18n.js';
+import { mountSnMcpPanel } from '/modules/snMcpPanel.js';
 await initI18n();
 applyTranslations();
 window._t = t;
+window.mountSnMcpPanel = mountSnMcpPanel;
+if (typeof window._snMcpReady === 'function') window._snMcpReady();
 updateStepLabels(); // reaplica labels dinâmicos que applyTranslations() sobrescreveu
 window.setLocale = (lang) => {
   setLocale(lang);

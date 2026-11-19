@@ -17,9 +17,10 @@ import { openTeamCapacity, showDashboardView, tcRefresh, tcChangeProject } from 
 import { openFeedback, closeFeedback, closeFeedbackOverlay, submitFeedback, openFeedbackSuccess, closeFeedbackSuccess, closeFeedbackSuccessOverlay } from './modules/feedback.js';
 import { openUAT, closeUAT, closeUATOverlay, toggleUATMax, refreshUAT, uatChangeSprint, uatTogglePlan, uatFilterPlan, uatClearPlanFilter, uatFilterPlanPrio, uatClearPlanPrioFilter } from './modules/uat.js';
 import { openReport, closeReport, closeReportOverlay, toggleReportMax, reportChangeMonth, reportRefresh, reportOpenFieldPicker, reportAddChart, reportRemoveChart, reportResizeChart, reportDragStart, reportDragOver, reportDragLeave, reportDrop, reportDragEnd, openReportSnConfig, reportOpenAgingPicker, reportOpenIncidentVolumePicker, reportOpenIncidentGroupByPicker, reportOpenHeatmapPicker, reportOpenLocationPicker, reportSaveNotes, reportOpenDeliveryStatesPicker, reportOpenSlaPicker, reportOpenIncidentsModal, reportCloseIncidentsModal, reportOpenCopilot, reportOpenIncidentFilter, reportExportIncidentsCSV, openIncidentsForGroup, toggleReportIncMax, exportReportHtml, exportVolumeIncidentsXLSX, reportOpenIndicatorConfig, reportCloseIndicatorConfig, reportToggleIndicator, reportSetCardsPerRow, reportIndDragStart, reportIndDragOver, reportIndDragLeave, reportIndDrop, reportIndDragEnd, reportRemoveIncChart, reportIncChartDragStart, reportIncChartDragOver, reportIncChartDragLeave, reportIncChartDrop, reportIncChartDragEnd, reportAddIncChart, reportOpenIncChartPicker, reportRemovePrbChart, reportPrbChartDragStart, reportPrbChartDragOver, reportPrbChartDragLeave, reportPrbChartDrop, reportPrbChartDragEnd, reportAddPrbChart, reportOpenPrbChartPicker, reportSetSectionFilter, reportOpenTargetModal, reportSaveTargetModal, reportOpenReqTargetModal, reportSaveReqTargetModal, reportRemoveReqChart, reportReqChartDragStart, reportReqChartDragOver, reportReqChartDragLeave, reportReqChartDrop, reportReqChartDragEnd, reportAddReqChart, reportOpenReqChartPicker, reportOpenRequestsModal, reportCloseRequestsModal, reportOpenRequestFilter, reportExportRequestsCSV, toggleReportReqMax, reportClosePrbsModal, reportExportPrbsCSV, reportOpenPrbFilter, reportOpenPrbsModal, toggleReportPrbMax, reportSetCiFilter } from './modules/report.js';
-import { openSnConfig, closeSnConfig, closeSnConfigOverlay, snConfigTest, snConfigSaveGlobal, snConfigSaveProject } from './modules/snConfig.js';
+import { openSnConfig, closeSnConfig, closeSnConfigOverlay, snConfigTest, snConfigSaveGlobal, snConfigSaveProject, snConfigSetMode } from './modules/snConfig.js';
 import { initUpdater, updDownload, updInstall, updDismiss } from './modules/updater.js';
 import { toggleSource } from './modules/sourceToggle.js';
+import { initSnStatus } from './modules/snStatus.js';
 
 // Expor funções ao window para inline handlers no HTML
 window.toggleTheme       = toggleTheme;
@@ -209,6 +210,7 @@ window.closeSnConfigOverlay  = closeSnConfigOverlay;
 window.snConfigTest          = snConfigTest;
 window.snConfigSaveGlobal    = snConfigSaveGlobal;
 window.snConfigSaveProject   = snConfigSaveProject;
+window.snConfigSetMode       = snConfigSetMode;
 window.openHealthConfig      = openHealthConfig;
 window.closeHealthConfig     = closeHealthConfig;
 window.saveHealthConfigModal = saveHealthConfigModal;
@@ -405,6 +407,7 @@ initDragOrder();
 _applyView(localStorage.getItem('dashView') || 'grid');
 _applySnView(localStorage.getItem('snView') || 'grid');
 startTimer();
+initSnStatus();
 
 // Restaura a view ativa após reload (ex: troca de idioma)
 if (localStorage.getItem('activeView') === 'tc') {

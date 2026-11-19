@@ -1,5 +1,6 @@
 const fs          = require("fs");
 const { CONFIG_PATH } = require('./utils/paths');
+const { isSnConfigured } = require('./utils/snMode');
 
 // Mesma detecção de ambiente usada em utils/paths.js (ELECTRON_DATA_DIR → pkg → dev):
 // o app empacotado (Electron ou pkg) sempre usa 3030; rodando via `node server.js`/`npm run dev`
@@ -104,14 +105,17 @@ function getSnConfig() {
   return cfg.servicenow || null;
 }
 
-function saveSnConfig({ instance, user, pass, assignmentGroups } = {}, projectGroup = null) {
-  if (instance !== undefined || user !== undefined || pass !== undefined || assignmentGroups !== undefined) {
+function saveSnConfig({ instance, user, pass, assignmentGroups, mode, mcp } = {}, projectGroup = null) {
+  if (instance !== undefined || user !== undefined || pass !== undefined || assignmentGroups !== undefined || mode !== undefined || mcp !== undefined) {
+    const current = cfg.servicenow || {};
     cfg.servicenow = {
-      ...(cfg.servicenow || {}),
+      ...current,
       ...(instance         !== undefined ? { instance }         : {}),
       ...(user             !== undefined ? { user }             : {}),
       ...(pass             !== undefined ? { pass }             : {}),
       ...(assignmentGroups !== undefined ? { assignmentGroups } : {}),
+      ...(mode             !== undefined ? { mode }             : {}),
+      ...(mcp              !== undefined ? { mcp: { ...(current.mcp || {}), ...mcp } } : {}),
     };
   }
   if (projectGroup) {
@@ -140,7 +144,7 @@ function getProjectSnGroup(displayName) {
 function getAppMode() {
   const hasAzure = !!(cfg.org && cfg.pat && Array.isArray(cfg.projects) && cfg.projects.length);
   const sn = cfg.servicenow;
-  const hasSN = !!(sn && sn.instance && sn.user && sn.pass);
+  const hasSN = isSnConfigured(sn);
   if (hasAzure && hasSN) return 'full';
   if (hasAzure)          return 'azure';
   if (hasSN)             return 'sn-only';

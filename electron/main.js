@@ -168,6 +168,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// Encerra o processo do MCP do Service Now (Python + Chromium de login) ao sair
+app.on('before-quit', () => {
+  try { require('../snMcp').shutdown(); } catch (_) {}
+});
+
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     waitForServer().then(createWindow).catch(() => {});

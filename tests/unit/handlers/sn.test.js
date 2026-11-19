@@ -1,9 +1,11 @@
 jest.mock('../../../config');
 jest.mock('../../../servicenowClient');
 
-const { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg, removeSnGroup } = require('../../../handlers/sn');
+const { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg, removeSnGroup, _clearGroupsCache } = require('../../../handlers/sn');
 const { getSnConfig, saveSnConfig, saveConfig, getProjectSnGroup, getCfg } = require('../../../config');
 const { snGet } = require('../../../servicenowClient');
+
+beforeEach(() => _clearGroupsCache());
 
 // ── getSnCfg ──────────────────────────────────────────────────────────────────
 
@@ -246,14 +248,45 @@ describe('fetchGroups', () => {
   test('pagina resultados quando primeira página retorna 2000 registros', async () => {
     const page1 = Array.from({ length: 2000 }, (_, i) => ({ name: `Group ${i}`, sys_id: `id${i}` }));
     const page2 = [{ name: 'Group Extra', sys_id: 'idExtra' }];
+    snGet.mockResolvedValue({ result: [] });
     snGet.mockResolvedValueOnce({ result: page1 }).mockResolvedValueOnce({ result: page2 });
     const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
     expect(groups).toHaveLength(2001);
-    expect(snGet).toHaveBeenCalledTimes(2);
     const [, url1] = snGet.mock.calls[0];
     const [, url2] = snGet.mock.calls[1];
     expect(url1).toContain('sysparm_offset=0');
     expect(url2).toContain('sysparm_offset=2000');
+  });
+
+  test('busca as páginas seguintes em lotes paralelos até uma página incompleta', async () => {
+    const full = n => ({ result: Array.from({ length: 2000 }, (_, i) => ({ name: `G${n}-${i}`, sys_id: `${n}-${i}` })) });
+    const byOffset = { 0: 1, 2000: 2, 4000: 3, 6000: 4, 8000: 5, 10000: 6, 12000: 7, 14000: 8 };
+    snGet.mockImplementation(async (_cfg, url) => {
+      const off = Number(/sysparm_offset=(\d+)/.exec(url)[1]);
+      if (off === 16000) return { result: [{ name: 'Ultimo', sys_id: 'z' }] };
+      if (off > 16000) return { result: [] };
+      return full(byOffset[off]);
+    });
+    let inFlight = 0, maxInFlight = 0;
+    const impl = snGet.getMockImplementation();
+    snGet.mockImplementation(async (...a) => {
+      inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise(r => setTimeout(r, 1));
+      try { return await impl(...a); } finally { inFlight--; }
+    });
+    const { groups } = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
+    expect(groups).toHaveLength(8 * 2000 + 1);
+    expect(maxInFlight).toBe(6);
+    // 1 página inicial + 2 lotes de 6; nada além do lote que achou o fim
+    expect(snGet).toHaveBeenCalledTimes(13);
+  });
+
+  test('falha em qualquer página do lote → { error, groups: [] }', async () => {
+    const page1 = Array.from({ length: 2000 }, (_, i) => ({ name: `Group ${i}`, sys_id: `id${i}` }));
+    snGet.mockResolvedValue({ result: [] });
+    snGet.mockResolvedValueOnce({ result: page1 }).mockRejectedValueOnce(new Error('HTTP 500'));
+    const r = await fetchGroups({ instance: 'x', user: 'u', pass: 'p' });
+    expect(r).toEqual({ error: 'HTTP 500', groups: [] });
   });
 
   test('salva assignmentGroups via saveSnCfg', () => {
@@ -398,5 +431,125 @@ describe('fetchGroupsFromConfig', () => {
     ]});
     const { groups } = await fetchGroupsFromConfig();
     expect(groups).toEqual([{ name: 'IT Support', sys_id: 'grp1' }]);
+  });
+
+  test('segunda chamada usa o cache sem consultar a Service Now', async () => {
+    getSnConfig.mockReturnValue({ instance: 'corp', user: 'admin', pass: 'secret' });
+    snGet.mockResolvedValue({ result: [{ name: 'IT', sys_id: 'g1' }] });
+    await fetchGroupsFromConfig();
+    const r = await fetchGroupsFromConfig();
+    expect(r.groups).toEqual([{ name: 'IT', sys_id: 'g1' }]);
+    expect(snGet).toHaveBeenCalledTimes(1);
+  });
+
+  test('chamadas simultâneas compartilham a mesma busca', async () => {
+    getSnConfig.mockReturnValue({ instance: 'corp', user: 'admin', pass: 'secret' });
+    snGet.mockResolvedValue({ result: [{ name: 'IT', sys_id: 'g1' }] });
+    const [a, b] = await Promise.all([fetchGroupsFromConfig(), fetchGroupsFromConfig()]);
+    expect(a).toBe(b);
+    expect(snGet).toHaveBeenCalledTimes(1);
+  });
+
+  test('não guarda no cache quando a busca falha', async () => {
+    getSnConfig.mockReturnValue({ instance: 'corp', user: 'admin', pass: 'secret' });
+    snGet.mockRejectedValueOnce(new Error('timeout')).mockResolvedValue({ result: [{ name: 'IT', sys_id: 'g1' }] });
+    expect((await fetchGroupsFromConfig()).error).toBe('timeout');
+    expect((await fetchGroupsFromConfig()).groups).toEqual([{ name: 'IT', sys_id: 'g1' }]);
+    expect(snGet).toHaveBeenCalledTimes(2);
+  });
+
+  test('cache expira depois de 1 hora', async () => {
+    getSnConfig.mockReturnValue({ instance: 'corp', user: 'admin', pass: 'secret' });
+    snGet.mockResolvedValue({ result: [{ name: 'IT', sys_id: 'g1' }] });
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    await fetchGroupsFromConfig();
+    now.mockReturnValue(1_000_000 + 60 * 60 * 1000 + 1);
+    await fetchGroupsFromConfig();
+    now.mockRestore();
+    expect(snGet).toHaveBeenCalledTimes(2);
+  });
+
+  test('trocar instância ou modo ignora o cache anterior', async () => {
+    snGet.mockResolvedValue({ result: [{ name: 'IT', sys_id: 'g1' }] });
+    getSnConfig.mockReturnValue({ instance: 'corp', user: 'admin', pass: 'secret' });
+    await fetchGroupsFromConfig();
+    getSnConfig.mockReturnValue({ mode: 'mcp', instance: 'corp' });
+    await fetchGroupsFromConfig();
+    getSnConfig.mockReturnValue({ mode: 'mcp', instance: 'outra' });
+    await fetchGroupsFromConfig();
+    expect(snGet).toHaveBeenCalledTimes(3);
+  });
+});
+
+// ── Modo MCP ──────────────────────────────────────────────────────────────────
+
+describe('modo MCP', () => {
+  const { fetchPrbFields } = require('../../../handlers/sn');
+
+  test('getSnCfg expõe modo e configurações do MCP', () => {
+    getSnConfig.mockReturnValue({ mode: 'mcp', instance: 'x.service-now.com', mcp: { username: 'joao', caBundle: 'C:/ca.pem' } });
+    expect(getSnCfg({})).toMatchObject({ mode: 'mcp', mcpUsername: 'joao', mcpCaBundle: 'C:/ca.pem', hasPass: false });
+  });
+
+  test('getSnCfg expõe URL de login e navegador (Edge por padrão)', () => {
+    getSnConfig.mockReturnValue({ mode: 'mcp', instance: 'x', mcp: { loginUrl: 'https://x/login_with_sso.do?glide_sso_id=1' } });
+    expect(getSnCfg({})).toMatchObject({ mcpLoginUrl: 'https://x/login_with_sso.do?glide_sso_id=1', mcpBrowser: 'edge' });
+    getSnConfig.mockReturnValue({ mode: 'mcp', instance: 'x', mcp: { browser: 'chromium' } });
+    expect(getSnCfg({}).mcpBrowser).toBe('chromium');
+  });
+
+  test('saveSnCfg salva URL de login e navegador normalizado', () => {
+    saveSnCfg({ mcpLoginUrl: ' https://x/sso ', mcpBrowser: 'firefox' });
+    expect(saveSnConfig).toHaveBeenCalledWith(expect.objectContaining({ mcp: { loginUrl: 'https://x/sso', browser: 'edge' } }), null);
+  });
+
+  test('getSnCfg usa api como modo padrão', () => {
+    getSnConfig.mockReturnValue({ instance: 'x' });
+    expect(getSnCfg({}).mode).toBe('api');
+  });
+
+  test('saveSnCfg salva modo e dados do MCP', () => {
+    saveSnCfg({ instance: 'https://x.service-now.com/', mode: 'mcp', mcpUsername: ' joao ', mcpCaBundle: '' });
+    expect(saveSnConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ instance: 'x.service-now.com', mode: 'mcp', mcp: { username: 'joao', caBundle: '' } }),
+      null,
+    );
+  });
+
+  test('saveSnCfg normaliza modo desconhecido para api', () => {
+    saveSnCfg({ mode: 'qualquer' });
+    expect(saveSnConfig).toHaveBeenCalledWith(expect.objectContaining({ mode: 'api' }), null);
+  });
+
+  test('testSn no modo MCP exige só a instância e passa o modo para o snGet', async () => {
+    getSnConfig.mockReturnValue(null);
+    snGet.mockResolvedValue({ result: [] });
+    const r = await testSn({ mode: 'mcp', instance: 'https://x.service-now.com', mcpUsername: 'joao' });
+    expect(r).toEqual({ ok: true });
+    expect(snGet).toHaveBeenCalledWith(
+      { mode: 'mcp', instance: 'x.service-now.com', mcp: { username: 'joao', caBundle: '', loginUrl: '', browser: 'edge' } },
+      expect.stringContaining('table/incident'),
+    );
+  });
+
+  test('testSn no modo MCP sem instância → 400', async () => {
+    await expect(testSn({ mode: 'mcp' })).rejects.toMatchObject({ status: 400 });
+  });
+
+  test('fetchGroupsFromConfig funciona no modo MCP sem usuário/senha', async () => {
+    getSnConfig.mockReturnValue({ mode: 'mcp', instance: 'x.service-now.com' });
+    snGet.mockResolvedValue({ result: [{ name: 'Network', sys_id: 'g1' }] });
+    const r = await fetchGroupsFromConfig();
+    expect(r.groups).toEqual([{ name: 'Network', sys_id: 'g1' }]);
+    expect(snGet.mock.calls[0][0]).toMatchObject({ mode: 'mcp', instance: 'x.service-now.com' });
+  });
+
+  test('fetchPrbFields repassa a config completa (com modo) ao snGet', async () => {
+    const sn = { mode: 'mcp', instance: 'x.service-now.com' };
+    getSnConfig.mockReturnValue(sn);
+    snGet.mockResolvedValue({ result: [{ element: 'u_x', column_label: 'X' }] });
+    const r = await fetchPrbFields();
+    expect(r.fields).toEqual([{ key: 'u_x', label: 'X' }]);
+    expect(snGet).toHaveBeenCalledWith(sn, expect.stringContaining('sys_dictionary'));
   });
 });
