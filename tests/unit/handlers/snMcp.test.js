@@ -1,7 +1,6 @@
 jest.mock('../../../config');
 jest.mock('../../../snMcp', () => ({
   getStatus: jest.fn(),
-  install:   jest.fn(),
   connect:   jest.fn(),
   warmup:    jest.fn(),
   logout:    jest.fn(),
@@ -9,19 +8,19 @@ jest.mock('../../../snMcp', () => ({
 
 const { getSnConfig } = require('../../../config');
 const snMcp = require('../../../snMcp');
-const { getMcpStatus, installMcp, connectMcp, warmupMcp, disconnectMcp } = require('../../../handlers/snMcp');
+const handlers = require('../../../handlers/snMcp');
+const { getMcpStatus, connectMcp, warmupMcp, disconnectMcp } = handlers;
 
 beforeEach(() => {
-  snMcp.install.mockResolvedValue();
   snMcp.connect.mockResolvedValue({ state: 'connected' });
   snMcp.warmup.mockResolvedValue(true);
 });
 
 describe('getMcpStatus', () => {
-  test('devolve status do MCP com o modo salvo', () => {
+  test('devolve status da sessão SSO com o modo salvo', () => {
     getSnConfig.mockReturnValue({ mode: 'mcp' });
-    snMcp.getStatus.mockReturnValue({ state: 'connected', user: 'João' });
-    expect(getMcpStatus()).toEqual({ state: 'connected', user: 'João', mode: 'mcp' });
+    snMcp.getStatus.mockReturnValue({ state: 'connected', user: 'João', edgeAvailable: true });
+    expect(getMcpStatus()).toEqual({ state: 'connected', user: 'João', edgeAvailable: true, mode: 'mcp' });
   });
 
   test('modo padrão é api', () => {
@@ -31,34 +30,8 @@ describe('getMcpStatus', () => {
   });
 });
 
-describe('installMcp', () => {
-  test('dispara instalação em background com o CA bundle salvo', () => {
-    getSnConfig.mockReturnValue({ mcp: { caBundle: 'C:/ca.pem' } });
-    expect(installMcp()).toEqual({ ok: true, started: true });
-    expect(snMcp.install).toHaveBeenCalledWith({ caBundle: 'C:/ca.pem', browser: 'edge' });
-  });
-
-  test('repassa o navegador escolhido (Chromium baixa o navegador junto)', () => {
-    getSnConfig.mockReturnValue({ mcp: { browser: 'chromium' } });
-    installMcp();
-    expect(snMcp.install).toHaveBeenCalledWith(expect.objectContaining({ browser: 'chromium' }));
-  });
-
-  test('CA bundle informado tem prioridade', () => {
-    getSnConfig.mockReturnValue({ mcp: { caBundle: 'C:/ca.pem' } });
-    installMcp({ mcpCaBundle: ' D:/outro.pem ' });
-    expect(snMcp.install).toHaveBeenCalledWith({ caBundle: 'D:/outro.pem', browser: 'edge' });
-  });
-
-  test('falha da instalação não derruba a requisição', async () => {
-    getSnConfig.mockReturnValue(null);
-    snMcp.install.mockRejectedValue(new Error('rede'));
-    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    expect(installMcp()).toEqual({ ok: true, started: true });
-    await new Promise(r => setImmediate(r));
-    expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
-  });
+test('não existe mais a instalação de componentes', () => {
+  expect(handlers.installMcp).toBeUndefined();
 });
 
 describe('connectMcp', () => {
@@ -70,16 +43,26 @@ describe('connectMcp', () => {
     }));
   });
 
-  test('repassa URL de login e navegador', () => {
+  test('repassa a URL de login e ignora campos legados (navegador, CA)', () => {
     getSnConfig.mockReturnValue({ instance: 'a.service-now.com' });
-    connectMcp({ mcpLoginUrl: ' https://a/sso ', mcpBrowser: 'chromium' });
-    expect(snMcp.connect).toHaveBeenCalledWith(expect.objectContaining({ mcp: { loginUrl: 'https://a/sso', browser: 'chromium' } }));
+    connectMcp({ mcpLoginUrl: ' https://a/sso ', mcpBrowser: 'chromium', mcpCaBundle: 'C:/ca.pem' });
+    expect(snMcp.connect).toHaveBeenCalledWith(expect.objectContaining({ mcp: { loginUrl: 'https://a/sso' } }));
   });
 
   test('cai para a instância salva', () => {
     getSnConfig.mockReturnValue({ instance: 'salva.service-now.com', mcp: { username: 'ana' } });
     connectMcp();
     expect(snMcp.connect).toHaveBeenCalledWith(expect.objectContaining({ instance: 'salva.service-now.com', mcp: { username: 'ana' } }));
+  });
+
+  test('falha do login não derruba a requisição', async () => {
+    getSnConfig.mockReturnValue({ instance: 'a.service-now.com' });
+    snMcp.connect.mockRejectedValue(new Error('janela fechada'));
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    expect(connectMcp()).toEqual({ ok: true, started: true });
+    await new Promise(r => setImmediate(r));
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   test('400 sem instância', () => {
@@ -89,14 +72,14 @@ describe('connectMcp', () => {
 });
 
 describe('disconnectMcp', () => {
-  test('faz logout do MCP', () => {
+  test('faz logout (apaga sessão e perfil)', () => {
     expect(disconnectMcp()).toEqual({ ok: true });
     expect(snMcp.logout).toHaveBeenCalled();
   });
 });
 
 describe('warmupMcp', () => {
-  test('pré-aquece com a instância salva', () => {
+  test('confere a sessão salva com a instância salva', () => {
     getSnConfig.mockReturnValue({ mode: 'mcp', instance: 'a.service-now.com' });
     expect(warmupMcp()).toEqual({ ok: true, started: true });
     expect(snMcp.warmup).toHaveBeenCalledWith(expect.objectContaining({ mode: 'mcp', instance: 'a.service-now.com' }));

@@ -3,11 +3,10 @@ const { snGet } = require('../servicenowClient');
 const { httpError } = require('./utils');
 const { getSnMode, isSnConfigured } = require('../utils/snMode');
 
-const _browser = v => (v === 'chromium' ? 'chromium' : 'edge');
 const _host = v => String(v || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
 
 // Monta o snCfg usado pelo snGet a partir de parâmetros crus (onboarding/teste antes de salvar).
-function _buildSnCfg({ instance, user, pass, mode, mcpUsername, mcpCaBundle, mcpLoginUrl, mcpBrowser } = {}) {
+function _buildSnCfg({ instance, user, pass, mode, mcpUsername, mcpLoginUrl } = {}) {
   if (getSnMode({ mode }) === 'mcp') {
     if (!instance) httpError(400, 'instance is required.');
     const saved = getSnConfig()?.mcp || {};
@@ -16,9 +15,7 @@ function _buildSnCfg({ instance, user, pass, mode, mcpUsername, mcpCaBundle, mcp
       instance: _host(instance),
       mcp: {
         username: mcpUsername !== undefined ? String(mcpUsername || '').trim() : (saved.username || ''),
-        caBundle: mcpCaBundle !== undefined ? String(mcpCaBundle || '').trim() : (saved.caBundle || ''),
         loginUrl: mcpLoginUrl !== undefined ? String(mcpLoginUrl || '').trim() : (saved.loginUrl || ''),
-        browser:  _browser(mcpBrowser !== undefined ? mcpBrowser : saved.browser),
       },
     };
   }
@@ -34,9 +31,7 @@ function getSnCfg({ project = '' } = {}) {
     hasPass:     !!(sn?.pass),
     mode:        getSnMode(sn),
     mcpUsername: sn?.mcp?.username || '',
-    mcpCaBundle: sn?.mcp?.caBundle || '',
     mcpLoginUrl: sn?.mcp?.loginUrl || '',
-    mcpBrowser:  _browser(sn?.mcp?.browser),
   };
   if (project) {
     const grp = getProjectSnGroup(project);
@@ -57,11 +52,9 @@ function saveSnCfg(p = {}) {
     ...(p.pass                            ? { pass: p.pass }                : {}),
     ...(p.assignmentGroups  !== undefined ? { assignmentGroups: Array.isArray(p.assignmentGroups) ? p.assignmentGroups : [] } : {}),
     ...(p.mode              !== undefined ? { mode: getSnMode({ mode: p.mode }) } : {}),
-    ...(['mcpUsername', 'mcpCaBundle', 'mcpLoginUrl', 'mcpBrowser'].some(k => p[k] !== undefined) ? { mcp: {
+    ...(['mcpUsername', 'mcpLoginUrl'].some(k => p[k] !== undefined) ? { mcp: {
       ...(p.mcpUsername !== undefined ? { username: String(p.mcpUsername || '').trim() } : {}),
-      ...(p.mcpCaBundle !== undefined ? { caBundle: String(p.mcpCaBundle || '').trim() } : {}),
       ...(p.mcpLoginUrl !== undefined ? { loginUrl: String(p.mcpLoginUrl || '').trim() } : {}),
-      ...(p.mcpBrowser  !== undefined ? { browser:  _browser(p.mcpBrowser) }            : {}),
     } } : {}),
   };
   const projectGroup = p.project ? {

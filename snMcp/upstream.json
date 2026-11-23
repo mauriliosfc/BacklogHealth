@@ -1,0 +1,91 @@
+{
+  "package": "mfa-servicenow-mcp",
+  "repository": "https://github.com/jshsakura/mfa-servicenow-mcp",
+  "referenceVersion": "1.25.48",
+  "reviewedAt": "2026-11-23",
+  "trackedFiles": [
+    "servicenow_mcp/auth/auth_manager.py",
+    "servicenow_mcp/auth/_url_predicates.py",
+    "servicenow_mcp/auth/_response_predicates.py",
+    "servicenow_mcp/auth/_cookies.py",
+    "servicenow_mcp/auth/_keepalive.py",
+    "servicenow_mcp/auth/_browser_dom.py",
+    "servicenow_mcp/browser/login.py",
+    "servicenow_mcp/utils/instances.py"
+  ],
+  "cases": [
+    {
+      "id": "C1", "title": "Páginas de login e MFA pela URL",
+      "upstream": [{ "file": "servicenow_mcp/auth/_url_predicates.py", "symbols": ["_is_login_page_url", "_is_mfa_challenge_url", "_visible_window_mid_auth"] }],
+      "node": ["snMcp/loginRules.js#isLoginPageUrl", "snMcp/loginRules.js#isMfaChallengeUrl", "snMcp/loginRules.js#isMidAuth"]
+    },
+    {
+      "id": "C2", "title": "Cookie jar completo (JSESSIONID e BIGipServer*)",
+      "upstream": [{ "file": "servicenow_mcp/auth/auth_manager.py", "symbols": ["_build_instance_cookie_header", "JSESSIONID", "BIGipServer"] }],
+      "node": ["snMcp/loginRules.js#selectInstanceCookies", "snMcp/loginRules.js#missingRequiredCookies", "snMcp/edgeLogin.js#runLogin"]
+    },
+    {
+      "id": "C3", "title": "Rotação do cookie do balanceador (BIG-IP)",
+      "upstream": [
+        { "file": "servicenow_mcp/auth/_response_predicates.py", "symbols": ["_extract_bigip_routing_hint"] },
+        { "file": "servicenow_mcp/auth/auth_manager.py", "symbols": ["_absorb_response_bigip_rotation"] },
+        { "file": "servicenow_mcp/auth/_cookies.py", "symbols": ["_replace_cookie_value_in_header", "_cookie_header_to_dict"] }
+      ],
+      "node": ["snMcp/loginRules.js#absorbBigipRotation", "snMcp/sessionStore.js#absorbBigipRotation", "snMcp/index.js#get"]
+    },
+    {
+      "id": "C4", "title": "Captura do g_ck (X-UserToken) com novas tentativas e iframes",
+      "upstream": [{ "file": "servicenow_mcp/auth/auth_manager.py", "symbols": ["GCK_CAPTURE_MAX_ATTEMPTS", "GCK_CAPTURE_INTERVAL_SECONDS", "g_ck"] }],
+      "node": ["snMcp/edgeLogin.js#JS_GCK", "snMcp/edgeLogin.js#runLogin"]
+    },
+    {
+      "id": "C5", "title": "Limpeza de cookies de sessão antigos antes do login",
+      "upstream": [
+        { "file": "servicenow_mcp/auth/_response_predicates.py", "symbols": ["_STALE_PROFILE_COOKIE_NAMES"] },
+        { "file": "servicenow_mcp/auth/auth_manager.py", "symbols": ["_purge_stale_profile_cookies"] }
+      ],
+      "node": ["snMcp/loginRules.js#STALE_SESSION_COOKIES", "snMcp/edgeLogin.js#_purgeStaleCookies"]
+    },
+    {
+      "id": "C6", "title": "Login sem janela primeiro, com saída rápida quando precisa de uma pessoa",
+      "upstream": [{ "file": "servicenow_mcp/auth/auth_manager.py", "symbols": ["_login_with_browser", "_has_valid_mfa_remembered_cookie", "force_interactive", "headless"] }],
+      "node": ["snMcp/sessionManager.js#_login", "snMcp/edgeLogin.js#runLogin"]
+    },
+    {
+      "id": "C7", "title": "Intervalo mínimo entre logins, circuit breaker e janela fechada",
+      "upstream": [
+        { "file": "servicenow_mcp/auth/auth_manager.py", "symbols": ["_MIN_LOGIN_INTERVAL_SECONDS", "_SELF_HEAL_CIRCUIT_THRESHOLD", "_enforce_login_circuit", "LOGIN_COOLDOWN"] },
+        { "file": "servicenow_mcp/auth/_url_predicates.py", "symbols": ["_looks_like_user_close", "_login_cancelled_message"] }
+      ],
+      "node": ["snMcp/sessionManager.js#_checkCooldown", "snMcp/sessionManager.js#ensureSession"]
+    },
+    {
+      "id": "C8", "title": "Sondagem da sessão e sessão nascida morta",
+      "upstream": [{ "file": "servicenow_mcp/auth/auth_manager.py", "symbols": ["_probe_browser_api_with_cookie", "_is_browser_session_valid", "sys_user_preference", "born-dead"] }],
+      "node": ["snMcp/sessionManager.js#_probe", "snMcp/sessionManager.js#ensureSession"]
+    },
+    {
+      "id": "C9", "title": "Keep-alive da sessão",
+      "upstream": [{ "file": "servicenow_mcp/auth/_keepalive.py", "symbols": ["_DEFAULT_INTERVAL_S", "_DEFAULT_MAX_IDLE_S", "_MIN_INTERVAL_S"] }],
+      "node": ["snMcp/sessionManager.js#_keepAliveTick"]
+    },
+    {
+      "id": "C10", "title": "Página de SSO (login_locate_sso.do) com o ID preenchido",
+      "upstream": [
+        { "file": "servicenow_mcp/browser/login.py", "symbols": ["SSO_USER_FIELD", "SSO_SUBMIT_SELECTORS", "SSO_ERROR_SELECTOR", "sso_login"] },
+        { "file": "servicenow_mcp/utils/instances.py", "symbols": ["SSO_LOCATOR_PATH"] }
+      ],
+      "node": ["snMcp/edgeLogin.js#jsFillSsoLocator", "snMcp/edgeLogin.js#startUrlFor"]
+    },
+    {
+      "id": "C11", "title": "Nome e formato do arquivo de sessão e do perfil",
+      "upstream": [{ "file": "servicenow_mcp/auth/auth_manager.py", "symbols": ["_get_instance_user_suffix", "_save_session_to_disk", "_resolve_user_data_dir"] }],
+      "node": ["snMcp/edgeLogin.js#sessionSuffix", "snMcp/edgeLogin.js#writeSessionFile", "snMcp/sessionStore.js#readSessionHeaders"]
+    },
+    {
+      "id": "C12", "title": "Rotação do g_ck nas respostas",
+      "upstream": [{ "file": "servicenow_mcp/auth/auth_manager.py", "symbols": ["_absorb_response_token_rotation"] }],
+      "node": ["snMcp/sessionStore.js#persistRotatedToken", "snMcp/sessionStore.js#rotatedTokenFrom"]
+    }
+  ]
+}

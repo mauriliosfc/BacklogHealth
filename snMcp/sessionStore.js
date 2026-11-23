@@ -1,13 +1,13 @@
-// Leitura da sessão autenticada que o mfa-servicenow-mcp grava em disco após o login SSO/MFA.
+// Leitura e atualização da sessão SSO salva em disco (session_<host>_<user>.json).
 //
-// O MCP salva `session_<host>_<user>.json` na pasta de sessão com, entre outras chaves:
-//   cookie_header, user_agent, session_token (g_ck / X-UserToken), instance_url
-// e usa exatamente esses três valores como headers nas chamadas REST (Cookie, User-Agent,
-// X-UserToken). Reaproveitamos a mesma sessão para chamar a Table API direto do Node —
-// em paralelo e com os mesmos parâmetros do modo API — deixando o MCP só com login/keep-alive.
+// O formato é o mesmo do mfa-servicenow-mcp, para a migração reaproveitar sessões existentes:
+//   cookie_header, user_agent, session_token (g_ck / X-UserToken), instance_url, ...
+// Esses três valores viram os headers das chamadas REST (Cookie, User-Agent, X-UserToken).
+// Quem grava após o login é snMcp/edgeLogin.js (writeSessionFile).
 
 const fs       = require('fs');
 const nodePath = require('path');
+const { absorbBigipRotation: absorbBigip } = require('./loginRules');
 
 function _host(v) {
   return String(v || '').trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase();
@@ -58,12 +58,10 @@ function createSessionStore({ fsImpl = fs } = {}) {
 
   // O ServiceNow pode rotacionar o g_ck numa resposta. Grava o novo valor no arquivo do MCP
   // (escrita atômica, preservando as demais chaves) — o MCP adota token rotacionado do disco.
-  function persistRotatedToken(file, token) {
-    if (!file || !token) return false;
+  function _writeMerged(file, patch) {
     let data;
     try { data = _read(file); } catch (_) { return false; }
-    if (data.session_token === token) return false;
-    const next = { ...data, session_token: token };
+    const next = { ...data, ...patch };
     const tmp  = `${file}.${process.pid}.tmp`;
     try {
       fsImpl.writeFileSync(tmp, JSON.stringify(next), 'utf8');
@@ -76,13 +74,32 @@ function createSessionStore({ fsImpl = fs } = {}) {
     return true;
   }
 
+  function persistRotatedToken(file, token) {
+    if (!file || !token) return false;
+    let data;
+    try { data = _read(file); } catch (_) { return false; }
+    if (data.session_token === token) return false;
+    return _writeMerged(file, { session_token: token });
+  }
+
+  // Origem: auth_manager.py · _absorb_response_bigip_rotation — o F5 indica (Set-Cookie
+  // BIGipServerpool_*) o backend que tem a sessão; gravar e repetir a chamada evita um novo login.
+  function absorbBigipRotation(file, setCookie) {
+    if (!file || !setCookie) return false;
+    let data;
+    try { data = _read(file); } catch (_) { return false; }
+    const next = absorbBigip(data.cookie_header, setCookie);
+    if (!next) return false;
+    return _writeMerged(file, { cookie_header: next });
+  }
+
   // Token rotacionado presente nos headers de resposta (Node entrega em minúsculas).
   function rotatedTokenFrom(responseHeaders) {
     if (!responseHeaders) return '';
     return String(responseHeaders['x-usertoken'] || responseHeaders['x-csrf-token'] || '').trim();
   }
 
-  return { findSessionFile, readSessionHeaders, persistRotatedToken, rotatedTokenFrom };
+  return { findSessionFile, readSessionHeaders, persistRotatedToken, absorbBigipRotation, rotatedTokenFrom };
 }
 
 module.exports = { createSessionStore, sessionStore: createSessionStore() };

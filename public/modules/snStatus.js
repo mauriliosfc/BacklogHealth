@@ -1,6 +1,6 @@
-// Indicador de sessão do Service Now no modo MCP (login SSO/MFA).
-// - Mostra um aviso flutuante enquanto o login está pendente (janela do MCP aberta), em erro
-//   ou quando os componentes não estão instalados.
+// Indicador de sessão do Service Now no modo SSO (login SSO/MFA pelo Edge).
+// - Mostra um aviso flutuante enquanto o login está pendente (janela do Edge aberta), em erro
+//   ou quando o Microsoft Edge não foi encontrado.
 // - Quando a sessão conecta e a tela tem cards "conectando" ([data-sn-pending]), recarrega os dados.
 // No modo API não faz nada (para de consultar após a primeira resposta).
 
@@ -8,7 +8,7 @@ import { t } from './i18n.js';
 
 const BUSY_MS = 2000;
 const IDLE_MS = 15000;
-const BUSY    = ['updating', 'starting', 'connecting', 'awaiting_login'];
+const BUSY    = ['connecting', 'awaiting_login'];
 
 let timer     = null;
 let lastState = null;
@@ -65,16 +65,13 @@ function _render(st) {
     case 'awaiting_login':
       return _show('busy', _tt('snmcp_banner_awaiting', 'Service Now needs you to sign in. Complete the SSO/MFA login in the window that opened.'));
     case 'connecting':
-    case 'starting':
       return _show('busy', _tt('snmcp_banner_connecting', 'Connecting to Service Now…'));
-    case 'updating':
-      return _show('busy', _tt('snmcp_conn_updating', 'Updating login components…'));
     case 'error':
+      if (st.reason === 'edge_missing') {
+        return _show('error', _tt('snmcp_conn_edge_missing', 'Microsoft Edge was not found on this computer. Install it to use the corporate sign-in.'));
+      }
       return _show('error', _tt('snmcp_banner_error', 'Could not connect to Service Now. {{msg}}', { msg: st.reason === 'cancelled' ? _tt('snmcp_banner_cancelled', 'The login window was closed.') : (st.message || '') }),
         'connect', _tt('snmcp_banner_reconnect', 'Reconnect'));
-    case 'not_installed':
-      return _show('error', _tt('snmcp_banner_not_installed', 'Service Now login components are not installed.'),
-        'settings', _tt('snmcp_banner_settings', 'Open settings'));
     case 'stopped':
       if (pending) return _show('idle', _tt('snmcp_banner_stopped', 'Service Now is disconnected.'), 'connect', _tt('snmcp_banner_signin', 'Sign in'));
       return _hide();

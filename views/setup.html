@@ -937,7 +937,7 @@
       if (d.instance) document.getElementById('sn-instance').value = d.instance;
       if (d.user)     document.getElementById('sn-user').value     = d.user;
       if (d.hasPass)  document.getElementById('sn-pass').placeholder = '••••••••  (saved)';
-      _snMcpInitial = { username: d.mcpUsername || '', caBundle: d.mcpCaBundle || '', loginUrl: d.mcpLoginUrl || '', browser: d.mcpBrowser || 'edge' };
+      _snMcpInitial = { username: d.mcpUsername || '', loginUrl: d.mcpLoginUrl || '' };
       snSetMode(d.mode === 'mcp' ? 'mcp' : 'api', { silent: true });
       _snGlobalGroups = Array.isArray(d.assignmentGroups) ? [...d.assignmentGroups] : [];
       snMsRender();
@@ -954,7 +954,7 @@
   // ── Modo de conexão: API (usuário/senha) ou MCP (SSO/MFA) ────────────────
   let _snMode       = 'api';
   let _snMcpPanel   = null;
-  let _snMcpInitial = { username: '', caBundle: '' };
+  let _snMcpInitial = { username: '', loginUrl: '' };
 
   function _snMountMcpPanel() {
     if (_snMcpPanel || !window.mountSnMcpPanel) return;

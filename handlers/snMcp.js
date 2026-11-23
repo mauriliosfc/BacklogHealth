@@ -1,5 +1,5 @@
-// Handlers do modo MCP do Service Now (login SSO/MFA). Funções puras, sem req/res.
-// Instalação e login rodam em background — o front acompanha via getMcpStatus (polling).
+// Handlers do modo SSO do Service Now (login SSO/MFA pelo Edge). Funções puras, sem req/res.
+// O login roda em background — o front acompanha via getMcpStatus (polling).
 
 const { getSnConfig } = require('../config');
 const { httpError }   = require('./utils');
@@ -18,9 +18,7 @@ function _cfgFrom(p = {}) {
     mcp: {
       ...(saved.mcp || {}),
       ...(p.mcpUsername !== undefined ? { username: String(p.mcpUsername || '').trim() } : {}),
-      ...(p.mcpCaBundle !== undefined ? { caBundle: String(p.mcpCaBundle || '').trim() } : {}),
       ...(p.mcpLoginUrl !== undefined ? { loginUrl: String(p.mcpLoginUrl || '').trim() } : {}),
-      ...(p.mcpBrowser  !== undefined ? { browser: p.mcpBrowser === 'chromium' ? 'chromium' : 'edge' } : {}),
     },
   };
 }
@@ -30,22 +28,14 @@ function getMcpStatus() {
   return { ...snMcp.getStatus(), mode: sn.mode === 'mcp' ? 'mcp' : 'api' };
 }
 
-function installMcp(p = {}) {
-  const saved    = getSnConfig()?.mcp || {};
-  const caBundle = p.mcpCaBundle !== undefined ? String(p.mcpCaBundle || '').trim() : (saved.caBundle || '');
-  const browser  = (p.mcpBrowser !== undefined ? p.mcpBrowser : saved.browser) === 'chromium' ? 'chromium' : 'edge';
-  snMcp.install({ caBundle, browser }).catch(e => console.error('[sn-mcp] install failed:', e.message));
-  return { ok: true, started: true };
-}
-
-// Sobe o MCP e valida a sessão. Se não houver sessão salva, o MCP abre a janela de login.
+// Valida a sessão salva ou faz o login (sem janela quando possível; senão abre o Edge).
 function connectMcp(p = {}) {
   const cfg = _cfgFrom(p);
-  snMcp.connect(cfg).catch(e => console.error('[sn-mcp] connect failed:', e.message));
+  snMcp.connect(cfg).catch(e => console.error('[sn-sso] connect failed:', e.message));
   return { ok: true, started: true };
 }
 
-// Pré-aquece o processo do MCP (sem login) para o clique em "Entrar" responder rápido.
+// Abertura de tela: confere a sessão salva em background (nunca abre o navegador).
 function warmupMcp(p = {}) {
   const sn = getSnConfig() || {};
   const instance = _host(p.instance !== undefined ? p.instance : sn.instance);
@@ -54,10 +44,10 @@ function warmupMcp(p = {}) {
   return { ok: true, started: true };
 }
 
-// "Sair / trocar conta": encerra o processo e apaga a sessão salva.
+// "Sair / trocar conta": apaga a sessão e o perfil do Edge.
 function disconnectMcp() {
   snMcp.logout();
   return { ok: true };
 }
 
-module.exports = { getMcpStatus, installMcp, connectMcp, warmupMcp, disconnectMcp };
+module.exports = { getMcpStatus, connectMcp, warmupMcp, disconnectMcp };
