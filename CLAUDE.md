@@ -21,6 +21,15 @@ dash_azure_gestao_pessoal/
 ├── reportService.js       ← buildReport, fetchAzureReport, fetchSnReport, cacheInvalidate (cache JSON 6h)
 ├── servicenowClient.js    ← snGet (HTTPS Basic auth, mesma estrutura do azureClient)
 ├── aiClient.js            ← chatCompletion, testConnection (Foundry / Azure OpenAI / genérico)
+├── snMcp/                 ← login SSO do Service Now pelo Edge (CDP, sem Python) — ver docs/sn-sso.md
+│   ├── index.js           ← fachada: get() na Table API com a sessão, limite de 8, 202/429, BIG-IP
+│   ├── sessionManager.js  ← estados, sessão salva → sem janela → janela, cooldown, keep-alive
+│   ├── edgeLogin.js       ← fluxo SSO → Microsoft → instância; captura cookies, g_ck e UA
+│   ├── cdpPipe.js         ← CDP por --remote-debugging-pipe, findEdge, killProfileProcesses
+│   ├── loginRules.js      ← regras puras portadas do mfa-servicenow-mcp (URLs, cookies, BIG-IP)
+│   ├── sessionStore.js    ← arquivo de sessão (token e BIG-IP rotacionados)
+│   └── upstream.json      ← versão de referência do original + mapa de casos (docs/sn-sso-upstream.md)
+├── scripts/               ← release.js, check-sn-upstream.js, sn-sso-debug.js
 ├── electron/
 │   ├── main.js            ← BrowserWindow, Menu.setApplicationMenu(null), nativeTheme, ipcMain, update check
 │   ├── preload.js         ← contextBridge — expõe electronAPI ao renderer (themeChanged, updater events)
@@ -34,7 +43,8 @@ dash_azure_gestao_pessoal/
 │   ├── ai.js              ← getAiConfig, saveAiCfg, testAiConnection, chat
 │   ├── report.js          ← getReportConfig, saveReportConfig, getReport, getIncidents
 │   ├── sn.js              ← getSnCfg, saveSnCfg, testSn
-│   └── feedback.js        ← submitFeedback
+│   ├── feedback.js        ← submitFeedback
+│   └── snMcp.js           ← getMcpStatus, connectMcp, warmupMcp, disconnectMcp (modo SSO)
 ├── utils/
 │   ├── paths.js           ← DATA_DIR, CONFIG_PATH, CACHE_DIR (prioridade: ELECTRON_DATA_DIR → pkg → __dirname)
 │   ├── health.js          ← calcHealth (compartilhado com frontend via mesma lógica)
@@ -73,7 +83,9 @@ dash_azure_gestao_pessoal/
 ├── tests/
 │   ├── unit/
 │   │   ├── config.test.js
-│   │   ├── handlers/      ← ai, azure, projects, report, sn, utils (259 testes)
+│   │   ├── handlers/      ← ai, azure, projects, report, sn, sn-dashboard, snMcp, utils
+│   │   ├── snMcp/         ← loginRules, cdpPipe, edgeLogin, sessionManager, sessionStore, index
+│   │   ├── scripts/       ← check-sn-upstream, sn-sso-debug
 │   │   └── utils/         ← health, paginate
 │   └── integration/       ← planejado: supertest + nock
 ├── dist/electron/         ← Backlog Health Setup x.x.x.exe + Backlog Health x.x.x.exe (não versionado)
@@ -220,7 +232,7 @@ npm run test:coverage   # exibe cobertura por arquivo
 - Mensagens de teste em português
 - Framework: Jest (`jest.config.js` na raiz, `clearMocks: true`)
 
-### Estado atual: 259 testes, 12 suites, todos passando
+### Estado atual: 600 testes, 28 suites, todos passando
 
 | Arquivo | Cobertura |
 |---|---|
@@ -265,6 +277,10 @@ npm run test:coverage   # exibe cobertura por arquivo
 | 168 | Queries SN: datas com `new Date(y, m-1, d, h, min, sec).toISOString()` | `"YYYY-MM-DDT00:00:00Z"` é UTC — no BRT (UTC-3) corresponde às 21h do dia anterior; divergência causava contagens diferentes das exibidas no SN e nas extrações Excel |
 | 169 | Encerramento de incidente = apenas `resolved_at`; `closed_at` ignorado em todos os cálculos | Double-count ao usar `OR closed_at`; `closed_at` sem `resolved_at` não representa trabalho concluído — regra aplicada nos 5 locais onde isso é calculado (`incClosedQuery`, `incClosedQ` do histórico, `incAvgResolutionDays`, `fetchSnIncidentBacklog` mode='closed', `calcMttrByPriority`) |
 | 170 | Meses por gráfico em `chart.months` (não global) em `incidentCharts`/`prbCharts` | Global compartilhado altera todos os gráficos ao mudar um; `chart.months` no objeto com fallback para `S.incidentMonths`/`S.prbMonths`; servidor recebe `Math.max(...todos)` — toda nova chart que suportar configuração de meses deve seguir esse padrão |
+| 177 | Modo SSO do SN: navegador só faz login; dados pela Table API com a sessão, limite de 8 simultâneas + retry 202/429 | Sessão SSO aceita ~12 transações; acima disso 202 sem corpo virava "zero" — não aumentar o paralelismo |
+| 179 | Login SSO em Node controlando o Edge por CDP (`--remote-debugging-pipe`), sem Python/Playwright | EXE ~80 MB, sem instalação; casos especiais portados do `mfa-servicenow-mcp` com `// Origem:` — antes de mudar `snMcp/`, ler `docs/sn-sso.md` e `docs/sn-sso-upstream.md` |
+| 181 | Nome/formato de perfil e sessão iguais aos do MCP (`session-edge/profile_<host>_<user>`) | Migração da 1.3.x sem novo login — não renomear |
+| 182 | `npm run check:sn-upstream` + `snMcp/upstream.json` | Ao portar correção do original, atualizar `referenceVersion` e o histórico em `docs/sn-sso-upstream.md` |
 
 ---
 

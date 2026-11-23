@@ -394,14 +394,13 @@ async function main() {
       }
     }
 
-    // ── Service Now via MCP (login SSO/MFA) ───────────────────────────────
+    // ── Service Now SSO (login SSO/MFA pelo Edge) ─────────────────────────
     if (req.method === 'GET' && url === '/api/sn-mcp/status') {
       return json(res, () => snMcpH.getMcpStatus());
     }
     if (req.method === 'POST' && url.startsWith('/api/sn-mcp/')) {
       const body   = await readBody(req);
       const params = JSON.parse(body || '{}');
-      if (url === '/api/sn-mcp/install')    return json(res, () => snMcpH.installMcp(params));
       if (url === '/api/sn-mcp/connect')    return json(res, () => snMcpH.connectMcp(params));
       if (url === '/api/sn-mcp/warmup')     return json(res, () => snMcpH.warmupMcp(params));
       if (url === '/api/sn-mcp/disconnect') return json(res, () => snMcpH.disconnectMcp());
@@ -458,19 +457,19 @@ async function main() {
   });
 }
 
-// Modo MCP: reconstrói o dashboard SN-only quando a sessão conecta e encerra o processo
-// Python (e o Chromium de login) junto com o servidor.
+// Modo SSO: reconstrói o dashboard SN-only quando a sessão conecta e, ao sair, cancela um login
+// em andamento (fecha o Edge) e para o keep-alive.
 function _wireSnMcpLifecycle() {
   const snMcp = require('./snMcp');
   let wasConnected = false;
   snMcp.events.on('status', s => {
     const connected = s.state === 'connected';
     if (connected && !wasConnected && getAppMode() === 'sn-only') {
-      dashH.buildAndCache().catch(e => console.error('[sn-mcp] rebuild failed:', e.message));
+      dashH.buildAndCache().catch(e => console.error('[sn-sso] rebuild failed:', e.message));
     }
     wasConnected = connected;
   });
-  // Modo SSO salvo: sobe o MCP em background (sem login) para o primeiro uso responder rápido
+  // Modo SSO salvo: confere a sessão salva em background (sem navegador) para já abrir conectado
   const sn = getCfg().servicenow;
   if (sn && sn.mode === 'mcp' && sn.instance) snMcp.warmup(sn).catch(() => {});
   process.on('exit', () => snMcp.shutdown());

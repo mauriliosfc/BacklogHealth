@@ -25,8 +25,7 @@ coverage/
 test-results/
 playwright-report/
 
-# Ambiente do MCP do Service Now (uv, Python, Chromium, sessão de login) — gerado em runtime
+# Sessão e perfil do Edge do login SSO do Service Now — gerado em runtime
 sn-mcp/
-# Runtime do SSO embutido nos EXEs — gerado por scripts/build-sn-mcp-runtime.js
-build/sn-mcp-runtime/
-build/.sn-mcp-runtime-stage/
+# Relatórios do scripts/check-sn-upstream.js (diff com o mfa-servicenow-mcp original)
+build/sn-upstream/

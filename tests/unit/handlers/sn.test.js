@@ -486,21 +486,22 @@ describe('fetchGroupsFromConfig', () => {
 describe('modo MCP', () => {
   const { fetchPrbFields } = require('../../../handlers/sn');
 
-  test('getSnCfg expõe modo e configurações do MCP', () => {
+  test('getSnCfg expõe modo e configurações do SSO', () => {
     getSnConfig.mockReturnValue({ mode: 'mcp', instance: 'x.service-now.com', mcp: { username: 'joao', caBundle: 'C:/ca.pem' } });
-    expect(getSnCfg({})).toMatchObject({ mode: 'mcp', mcpUsername: 'joao', mcpCaBundle: 'C:/ca.pem', hasPass: false });
+    const r = getSnCfg({});
+    expect(r).toMatchObject({ mode: 'mcp', mcpUsername: 'joao', hasPass: false });
+    expect(r).not.toHaveProperty('mcpCaBundle');   // campo legado do instalador Python, ignorado
+    expect(r).not.toHaveProperty('mcpBrowser');
   });
 
-  test('getSnCfg expõe URL de login e navegador (Edge por padrão)', () => {
+  test('getSnCfg expõe a URL de login', () => {
     getSnConfig.mockReturnValue({ mode: 'mcp', instance: 'x', mcp: { loginUrl: 'https://x/login_with_sso.do?glide_sso_id=1' } });
-    expect(getSnCfg({})).toMatchObject({ mcpLoginUrl: 'https://x/login_with_sso.do?glide_sso_id=1', mcpBrowser: 'edge' });
-    getSnConfig.mockReturnValue({ mode: 'mcp', instance: 'x', mcp: { browser: 'chromium' } });
-    expect(getSnCfg({}).mcpBrowser).toBe('chromium');
+    expect(getSnCfg({})).toMatchObject({ mcpLoginUrl: 'https://x/login_with_sso.do?glide_sso_id=1' });
   });
 
-  test('saveSnCfg salva URL de login e navegador normalizado', () => {
-    saveSnCfg({ mcpLoginUrl: ' https://x/sso ', mcpBrowser: 'firefox' });
-    expect(saveSnConfig).toHaveBeenCalledWith(expect.objectContaining({ mcp: { loginUrl: 'https://x/sso', browser: 'edge' } }), null);
+  test('saveSnCfg salva a URL de login e ignora campos legados (CA, navegador)', () => {
+    saveSnCfg({ mcpLoginUrl: ' https://x/sso ', mcpBrowser: 'chromium', mcpCaBundle: 'C:/ca.pem' });
+    expect(saveSnConfig).toHaveBeenCalledWith(expect.objectContaining({ mcp: { loginUrl: 'https://x/sso' } }), null);
   });
 
   test('getSnCfg usa api como modo padrão', () => {
@@ -509,9 +510,9 @@ describe('modo MCP', () => {
   });
 
   test('saveSnCfg salva modo e dados do MCP', () => {
-    saveSnCfg({ instance: 'https://x.service-now.com/', mode: 'mcp', mcpUsername: ' joao ', mcpCaBundle: '' });
+    saveSnCfg({ instance: 'https://x.service-now.com/', mode: 'mcp', mcpUsername: ' joao ' });
     expect(saveSnConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ instance: 'x.service-now.com', mode: 'mcp', mcp: { username: 'joao', caBundle: '' } }),
+      expect.objectContaining({ instance: 'x.service-now.com', mode: 'mcp', mcp: { username: 'joao' } }),
       null,
     );
   });
@@ -527,7 +528,7 @@ describe('modo MCP', () => {
     const r = await testSn({ mode: 'mcp', instance: 'https://x.service-now.com', mcpUsername: 'joao' });
     expect(r).toEqual({ ok: true });
     expect(snGet).toHaveBeenCalledWith(
-      { mode: 'mcp', instance: 'x.service-now.com', mcp: { username: 'joao', caBundle: '', loginUrl: '', browser: 'edge' } },
+      { mode: 'mcp', instance: 'x.service-now.com', mcp: { username: 'joao', loginUrl: '' } },
       expect.stringContaining('table/incident'),
     );
   });

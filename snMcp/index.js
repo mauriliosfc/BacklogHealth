@@ -1,16 +1,12 @@
-// Fachada do modo MCP do Service Now.
+// Fachada do modo SSO do Service Now (config: servicenow.mode = 'mcp', nome mantido por
+// compatibilidade com configs existentes).
 //   get(snCfg, path)  → mesmo contrato de snGet no modo API: resolve com { result }
-//   connect / logout / getStatus / install → usados por handlers/snMcp.js
+//   connect / logout / getStatus / warmup → usados por handlers/snMcp.js e server.js
 //
-// Dados: o MCP executa uma ferramenta por vez (síncrono no event loop), então consultar pela
-// ferramenta sn_query é lento. Por isso o MCP cuida só do login (SSO/MFA, keep-alive, relogin)
-// e os dados vêm direto da Table API com a sessão que ele grava em disco — mesmas chamadas,
-// mesmo paralelismo e mesmos parâmetros do modo API. Se a REST direta não aceitar a sessão,
-// cai automaticamente para o adaptador sn_query (tableAdapter).
+// Login: snMcp/sessionManager.js (Edge via CDP, sem Python). Dados: Table API direto do Node com
+// a sessão salva — mesmas chamadas, paralelismo e parâmetros do modo API.
 
-const { snMcpGet }             = require('./tableAdapter');
-const { createProcessManager, sessionDirFor, getLoginBrowser } = require('./mcpProcess');
-const { installer: defaultInstaller } = require('./installer');
+const { createSessionManager } = require('./sessionManager');
 const { sessionStore: defaultSessionStore } = require('./sessionStore');
 
 const DIRECT_MAX_CONCURRENT = 8;     // instância testada aceita ~12 por sessão; folga p/ keep-alive e outras telas
@@ -19,19 +15,16 @@ const BUSY_BASE_DELAY_MS    = 400;
 
 function createSnMcpFacade({
   manager,
-  installer     = defaultInstaller,
   sessionStore  = defaultSessionStore,
   restGet       = (...a) => require('../servicenowClient').restGet(...a),
-  log           = (...a) => console.warn('[sn-mcp]', ...a),
+  log           = (...a) => console.warn('[sn-sso]', ...a),
   sleep         = ms => new Promise(r => setTimeout(r, ms)),
   maxConcurrent = DIRECT_MAX_CONCURRENT,
   busyRetries   = BUSY_RETRIES,
   busyDelayMs   = BUSY_BASE_DELAY_MS,
 } = {}) {
-  let directDisabled = '';   // motivo do fallback para sn_query ('' = caminho direto ativo)
-
   // A sessão SSO é uma sessão de usuário única: o ServiceNow recusa (HTTP 202) transações
-  // simultâneas acima de ~12 na mesma sessão. Limitamos o paralelismo do caminho direto.
+  // simultâneas acima de ~12 na mesma sessão. Limitamos o paralelismo.
   let active = 0;
   const queue = [];
   function _acquire() {
@@ -43,38 +36,30 @@ function createSnMcpFacade({
     if (next) next(); else active = Math.max(0, active - 1);
   }
 
-  function _viaTools(snCfg, path) {
-    return snMcpGet(path, (name, args) => manager.callTool(snCfg, name, args));
-  }
-
-  function _disableDirect(reason) {
-    if (!directDisabled) log(`direct REST disabled, using MCP tools: ${reason}`);
-    directDisabled = reason;
-    manager.setTransport?.('mcp-tools', reason);
-  }
-
   async function _direct(snCfg, path) {
-    const dir  = sessionDirFor(installer.paths, getLoginBrowser(snCfg));
-    const file = sessionStore.findSessionFile(dir, snCfg.instance);
-    if (!file) {
+    const file = manager.getSessionFile(snCfg);
+    let headers;
+    try {
+      headers = sessionStore.readSessionHeaders(file);
+    } catch (_) {
       const err = new Error('session file not found');
       err.code = 'SN_NO_SESSION_FILE';
       throw err;
     }
-    const headers = sessionStore.readSessionHeaders(file);
+    let setCookie = null;
     const onResponseHeaders = h => {
       const token = sessionStore.rotatedTokenFrom(h);
       if (token) sessionStore.persistRotatedToken(file, token);
+      if (h && h['set-cookie']) setCookie = h['set-cookie'];
     };
     // Excesso de concorrência na sessão (202/429): espera crescente e tenta de novo
     let retryAfterMs = 0;
     for (let attempt = 0; ; attempt++) {
       await _acquire();
       try {
-        const data = await restGet(snCfg, path, { headers, onResponseHeaders });
-        manager.setTransport?.('direct');
-        return data;
+        return await restGet(snCfg, path, { headers, onResponseHeaders });
       } catch (e) {
+        if (e.code === 'SN_AUTH') e.setCookie = setCookie;
         if (e.code !== 'SN_BUSY' || attempt >= busyRetries) {
           if (e.code === 'SN_BUSY') log(`gave up after ${attempt + 1} attempts (session busy): ${path.split('?')[0]}`);
           throw e;
@@ -90,49 +75,52 @@ function createSnMcpFacade({
 
   async function get(snCfg, path) {
     await manager.ensureSession(snCfg);
-    if (directDisabled) return _viaTools(snCfg, path);
-
-    try {
-      return await _direct(snCfg, path);
-    } catch (e) {
-      if (e.code === 'SN_NO_SESSION_FILE') {
-        _disableDirect('no session file');
-        return _viaTools(snCfg, path);
-      }
-      if (e.code !== 'SN_AUTH') throw e;
-    }
-
-    // Sessão recusada: o MCP revalida (e abre a janela de login se precisar), depois 1 nova tentativa
-    manager.invalidateSession();
-    await manager.ensureSession(snCfg);
+    manager.touch();
     try {
       return await _direct(snCfg, path);
     } catch (e) {
       if (e.code !== 'SN_AUTH' && e.code !== 'SN_NO_SESSION_FILE') throw e;
-      // O MCP considera a sessão válida, mas a REST direta não aceita: usa as ferramentas do MCP
-      _disableDirect(e.message);
-      return _viaTools(snCfg, path);
+      // O balanceador indicou outro backend para esta sessão: grava e repete uma vez, sem novo login
+      if (e.code === 'SN_AUTH' && sessionStore.absorbBigipRotation(manager.getSessionFile(snCfg), e.setCookie)) {
+        log('BIG-IP routing cookie rotated, retrying');
+        try {
+          return await _direct(snCfg, path);
+        } catch (e2) {
+          if (e2.code !== 'SN_AUTH') throw e2;
+        }
+      }
     }
+
+    // Sessão recusada: revalida (login silencioso ou janela, se preciso) e tenta 1 vez de novo
+    manager.invalidateSession();
+    await manager.ensureSession(snCfg);
+    return _direct(snCfg, path);
   }
 
+  // Clique em "Entrar": ignora o cooldown automático e zera o contador de falhas.
   function connect(snCfg) {
-    directDisabled = '';   // nova conexão: tenta o caminho direto de novo
+    return manager.ensureSession(snCfg, { force: true });
+  }
+
+  // Conexão disparada pelo app (ex.: abrir o dashboard SN): respeita cooldown e circuit breaker,
+  // para uma página recarregando em loop não abrir janelas de login seguidas.
+  function ensure(snCfg) {
     return manager.ensureSession(snCfg);
   }
 
-  return { get, connect, warmup: snCfg => manager.warmup(snCfg), isDirectDisabled: () => directDisabled };
+  return { get, connect, ensure, warmup: snCfg => manager.warmup(snCfg) };
 }
 
-const manager = createProcessManager({ installer: defaultInstaller });
+const manager = createSessionManager();
 const facade  = createSnMcpFacade({ manager });
 
 module.exports = {
   createSnMcpFacade,
   get:     facade.get,
   connect: facade.connect,
+  ensure:  facade.ensure,
   warmup:  facade.warmup,
-  getStatus: () => ({ ...manager.getStatus(), components: defaultInstaller.getInfo() }),
-  install:   opts => defaultInstaller.install(opts),
+  getStatus: () => ({ ...manager.getStatus(), edgeAvailable: manager.edgeAvailable() }),
   shutdown:  () => manager.stop({ silent: true }),
   logout:    () => manager.logout(),
   stop:      () => manager.stop(),

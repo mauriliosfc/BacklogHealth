@@ -5,7 +5,7 @@ let _snOpen     = false;
 let _snProject  = null;
 let _snMode     = 'api';
 let _mcpPanel   = null;
-let _mcpInitial = { username: '', caBundle: '' };
+let _mcpInitial = { username: '', loginUrl: '' };
 
 function _tt(key, fallback) {
   const v = t(key);
@@ -78,7 +78,7 @@ async function _loadSnData(project) {
   if (elPass) elPass.value = '';
   if (elPass && globalCfg.hasPass) elPass.placeholder = '•••••••• ' + _tt('snm_saved_suffix', '(salvo)');
 
-  _mcpInitial = { username: globalCfg.mcpUsername || '', caBundle: globalCfg.mcpCaBundle || '', loginUrl: globalCfg.mcpLoginUrl || '', browser: globalCfg.mcpBrowser || 'edge' };
+  _mcpInitial = { username: globalCfg.mcpUsername || '', loginUrl: globalCfg.mcpLoginUrl || '' };
   snConfigSetMode(globalCfg.mode === 'mcp' ? 'mcp' : 'api');
 
   const elAg  = document.getElementById('snm-ag');
