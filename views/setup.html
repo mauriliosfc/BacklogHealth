@@ -617,6 +617,8 @@
 
   // ── Load projects ─────────────────────────────────────────────────────────
   async function loadProjects() {
+    // Nova conexão: tipos de item podem ser de outra organização
+    Object.keys(_WIT_CACHE).forEach(k => delete _WIT_CACHE[k]);
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
     if (!org || !pat) { showErr(_tr('setup_err_fill', 'Fill in the organization and PAT before continuing.')); return; }
@@ -654,31 +656,82 @@
     }
   }
 
-  // ── WIT toggle HTML ───────────────────────────────────────────────────────
+  // ── Seletor do tipo de item principal ─────────────────────────────────────
+  // Tipos carregados por projeto (POST /api/work-item-types), com cache.
+  // Falha na API → apenas User Story e Task, como antes.
+  const _WIT_CACHE   = {};          // projeto → { types: [{name, recommended}], recommended } | 'loading' | 'error'
+  const _WIT_AUTO    = new Set();   // chaves cujo tipo ainda é o padrão automático (não escolhido pelo usuário)
+  const _WIT_DEFAULT = ['User Story', 'Task'];
+
+  function _escHtml(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function _witOptions(project, currentType) {
+    const entry = _WIT_CACHE[project];
+    const loaded = entry && typeof entry === 'object';
+    const opt = (name, label) => `<option value="${_escHtml(name)}"${name === currentType ? ' selected' : ''}>${_escHtml(label || name)}</option>`;
+    if (!loaded) {
+      const names = [...new Set([currentType, ..._WIT_DEFAULT].filter(Boolean))];
+      return names.map(n => opt(n)).join('');
+    }
+    const recLabel = _tr('setup_wit_recommended', 'recommended');
+    const main  = entry.types.filter(t => t.recommended || t.name === 'Task');
+    const other = entry.types.filter(t => !t.recommended && t.name !== 'Task');
+    const known = new Set(entry.types.map(t => t.name));
+    // Tipo salvo que não existe na lista (ex.: 'User Story' legado num processo Scrum) continua visível
+    const extra = currentType && !known.has(currentType) ? opt(currentType) : '';
+    return extra +
+      `<optgroup label="${_escHtml(_tr('setup_wit_group_main', 'Suggested'))}">` +
+        main.map(t => opt(t.name, t.recommended ? `${t.name} (${recLabel})` : t.name)).join('') +
+      '</optgroup>' +
+      (other.length
+        ? `<optgroup label="${_escHtml(_tr('setup_wit_group_other', 'Other types'))}">` + other.map(t => opt(t.name)).join('') + '</optgroup>'
+        : '');
+  }
+
   function _witToggle(key, currentType) {
-    const esc = key.replace(/"/g, '&quot;');
+    const project = _snBaseKey(key);
+    if (!_WIT_CACHE[project]) _loadWorkItemTypes(project);
     return `<div class="su-wit-wrap">
-      <div class="su-wit-label">HEALTH ITEM SELECTION</div>
-      <div class="su-wit-toggle">
-        <button type="button" class="su-wit-btn ${currentType === 'User Story' ? 'active' : ''}"
-          onclick="setWIT('${esc}','User Story',this)">
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 6.5l2 2 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          User Story
-        </button>
-        <button type="button" class="su-wit-btn ${currentType === 'Task' ? 'active' : ''}"
-          onclick="setWIT('${esc}','Task',this)">
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1.5" y="3" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1.5" y="6" width="10" height="1.5" rx=".75" fill="currentColor"/><rect x="1.5" y="9" width="7" height="1.5" rx=".75" fill="currentColor"/></svg>
-          Task
-        </button>
-      </div>
+      <div class="su-wit-label">${_escHtml(_tr('setup_wit_label', 'Main work item type'))}</div>
+      <select class="su-wit-select" data-key="${_escHtml(key)}" data-project="${_escHtml(project)}" onchange="setWIT(this.dataset.key, this.value)">
+        ${_witOptions(project, currentType)}
+      </select>
+      <div class="su-wit-hint">${_escHtml(_tr('setup_wit_hint', 'Health metrics are calculated from this type. Bugs are always counted separately.'))}</div>
     </div>`;
   }
 
-  function setWIT(key, type, btn) {
+  async function _loadWorkItemTypes(project) {
+    _WIT_CACHE[project] = 'loading';
+    const org = document.getElementById('inp-org').value.trim();
+    const pat = document.getElementById('inp-pat').value.trim();
+    try {
+      const r = await fetch('/api/work-item-types', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ org, pat, project }),
+      });
+      const data = await r.json();
+      if (!r.ok || !Array.isArray(data.types) || !data.types.length) throw new Error(data.error || 'empty');
+      _WIT_CACHE[project] = { types: data.types, recommended: data.recommended || null };
+    } catch (_) {
+      _WIT_CACHE[project] = 'error';
+      return;
+    }
+    // Seleções novas ainda no padrão automático passam a usar o tipo recomendado
+    const rec = _WIT_CACHE[project].recommended;
+    document.querySelectorAll('.su-wit-select').forEach(sel => {
+      if (sel.dataset.project !== project) return;
+      const key = sel.dataset.key;
+      if (rec && _WIT_AUTO.has(key)) WORK_ITEM_TYPES[key] = rec;
+      sel.innerHTML = _witOptions(project, WORK_ITEM_TYPES[key] || 'User Story');
+    });
+  }
+
+  function setWIT(key, type) {
     WORK_ITEM_TYPES[key] = type;
-    const toggle = btn.closest('.su-wit-toggle');
-    toggle.querySelectorAll('.su-wit-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    _WIT_AUTO.delete(key);
+    markDirty('projects');
   }
 
   // ── Team row ──────────────────────────────────────────────────────────────
@@ -782,7 +835,11 @@
     const key = cb.value;
     if (cb.checked) {
       SELECTED_SET.add(key);
-      if (!WORK_ITEM_TYPES[key]) WORK_ITEM_TYPES[key] = 'User Story';
+      if (!WORK_ITEM_TYPES[key]) {
+        const cached = _WIT_CACHE[_snBaseKey(key)];
+        WORK_ITEM_TYPES[key] = (cached && typeof cached === 'object' && cached.recommended) || 'User Story';
+        _WIT_AUTO.add(key);
+      }
     } else {
       SELECTED_SET.delete(key);
     }
@@ -853,16 +910,13 @@
   }
 
   // ── Build projects param ──────────────────────────────────────────────────
+  // JSON evita quebrar com ':' ou ',' em nomes de tipo/time (formato legado "nome:tipo:time")
   function _buildProjectsParam() {
     return [...SELECTED_SET].map(key => {
       const workItemType = WORK_ITEM_TYPES[key] || 'User Story';
       const pipeIdx = key.indexOf('|');
-      if (pipeIdx >= 0) {
-        const name = key.slice(0, pipeIdx);
-        const team = key.slice(pipeIdx + 1);
-        return `${name}:${workItemType}:${team}`;
-      }
-      return `${key}:${workItemType}`;
+      if (pipeIdx >= 0) return { name: key.slice(0, pipeIdx), team: key.slice(pipeIdx + 1), workItemType };
+      return { name: key, workItemType };
     });
   }
 
@@ -882,7 +936,7 @@
     document.getElementById('sp-azure').style.display   = 'inline-block';
     document.getElementById('lbl-save-azure').textContent = _tr('settings_save_azure_saving', 'Saving…');
     try {
-      const body = 'org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat) + '&projects=' + encodeURIComponent(selected.join(','));
+      const body = 'org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat) + '&projectsJson=' + encodeURIComponent(JSON.stringify(selected));
       const r    = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.ok) {
@@ -918,7 +972,7 @@
     document.getElementById('sp-save').style.display = 'inline-block';
     document.getElementById('lbl-save').textContent  = _tr('setup_btn_saving', 'Saving…');
     try {
-      const body = 'org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat) + '&projects=' + encodeURIComponent(selected.join(','));
+      const body = 'org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat) + '&projectsJson=' + encodeURIComponent(JSON.stringify(selected));
       const r    = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.ok) { location.href = '/'; return; }

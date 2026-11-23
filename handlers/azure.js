@@ -3,6 +3,7 @@ const { azureGet } = require('../azureClient');
 const { fetchProjectDetail, fetchUATPlans } = require('../projectService');
 const { fetchTeamCapacity } = require('../teamCapacityService');
 const { httpError } = require('./utils');
+const { getWorkItemProfile } = require('../utils/workItemProfile');
 
 async function getDetail({ project }) {
   const cfg          = getCfg();
@@ -61,13 +62,18 @@ async function getContext({ filters = {} } = {}) {
   const details      = await Promise.all(displayNames.map(id => fetchProjectDetail(id)));
 
   const US_TYPES = ['User Story', 'Product Backlog Item', 'Requirement'];
-  const CLOSED   = ['Closed', 'Done', 'Resolved'];
-  const ACTIVE   = ['Active', 'In Progress', 'Doing', 'Committed'];
-  const r1       = v => Math.round(v * 10) / 10;
+  const CLOSED_DEFAULT = ['Closed', 'Done', 'Resolved'];
+  const ACTIVE_DEFAULT = ['Active', 'In Progress', 'Doing', 'Committed'];
+  const r1      = v => Math.round(v * 10) / 10;
 
   const projects = details.map(data => {
     const { project, items, taskItems, bugItems, iterMap, workItemType } = data;
     const isTaskMode = workItemType === 'Task';
+    // Tipos não legados trazem perfil (tipos e estados do Azure); legados mantêm as listas fixas
+    const st         = data.profile?.states || null;
+    const CLOSED     = st ? st.done   : CLOSED_DEFAULT;
+    const ACTIVE     = st ? st.active : ACTIVE_DEFAULT;
+    const isNew      = s => (st ? st.new.includes(s) : s === 'New');
 
     const activeFilter = (filters[project] || []).map(f => f.split('\\').pop());
     const hasFilter    = activeFilter.length > 0;
@@ -78,14 +84,14 @@ async function getContext({ filters = {} } = {}) {
     const filteredTasks = taskItems.filter(t => inFilter(spName(t.iteration)));
     const filteredBugs  = bugItems.filter(b => inFilter(spName(b.iteration)));
 
-    const ITEM_TYPES  = isTaskMode ? ['Task'] : US_TYPES;
+    const ITEM_TYPES  = data.profile?.mainTypes || (isTaskMode ? ['Task'] : US_TYPES);
     const mainItems   = filteredItems.filter(i => ITEM_TYPES.includes(i.type));
     const mainTotal   = mainItems.length;
 
     const totalPts    = filteredItems.reduce((s, i) => s + (i.pts || 0), 0);
     const donePts     = filteredItems.filter(i => CLOSED.includes(i.state)).reduce((s, i) => s + (i.pts || 0), 0);
     const inProgress  = filteredItems.filter(i => ACTIVE.includes(i.state)).length;
-    const newCount    = filteredItems.filter(i => i.state === 'New').length;
+    const newCount    = filteredItems.filter(i => isNew(i.state)).length;
     const taskHrs     = r1(filteredTasks.reduce((s, t) => s + (t.completedWork || 0), 0));
     const bugHrs      = r1(filteredBugs.reduce((s, b) => s + (b.completedWork || 0), 0));
     const openBugsCount = items.filter(
@@ -212,7 +218,9 @@ async function getContext({ filters = {} } = {}) {
 function getBurndownConfig({ project } = {}) {
   const cfg  = getCfg();
   const pcfg = (cfg.projects || []).find(p => getDisplayName(p) === project);
-  const doneStates = pcfg?.burndownDoneStates?.length ? pcfg.burndownDoneStates : ['Closed'];
+  const typeDone   = pcfg ? getWorkItemProfile(pcfg).states?.done : null;
+  const doneStates = pcfg?.burndownDoneStates?.length ? pcfg.burndownDoneStates
+    : (typeDone?.length ? typeDone : ['Closed']);
   return { doneStates };
 }
 

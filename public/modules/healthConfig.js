@@ -1,5 +1,5 @@
 import { DEFAULT_THRESHOLDS, setThresholds, calcHealth } from './health.js';
-import { CLOSED_STATES, ACTIVE_BUG_STATES } from './constants.js';
+import { ACTIVE_BUG_STATES, getProfile, closedStates } from './constants.js';
 import { t } from './i18n.js';
 
 export function openHealthConfig() {
@@ -131,13 +131,11 @@ export async function saveHealthConfigModal() {
 function _refreshAllHealthCards() {
   document.querySelectorAll('#content .card[data-project]').forEach(card => {
     const allItems    = JSON.parse(card.dataset.items || '[]');
-    const workItemType = card.dataset.workitemtype || 'User Story';
-    const ITEM_TYPES  = workItemType === 'Task'
-      ? ['Task']
-      : ['User Story', 'Product Backlog Item', 'Requirement'];
-    const mainItems  = allItems.filter(i => ITEM_TYPES.includes(i.type));
+    const profile    = getProfile(card);
+    const CLOSED_STATES = closedStates(profile);
+    const mainItems  = allItems.filter(i => profile.mainTypes.includes(i.type));
     const openItems  = mainItems.filter(i => !CLOSED_STATES.includes(i.state));
-    const semEst     = openItems.filter(i => i.pts == null || i.pts === 0).length;
+    const semEst     = profile.hasEstimate ? openItems.filter(i => i.pts == null || i.pts === 0).length : 0;
     const semResp    = openItems.filter(i => !i.assigned).length;
     const bugs       = allItems.filter(i => i.type === 'Bug' && ACTIVE_BUG_STATES.includes(i.state)).length;
     const health     = calcHealth(openItems.length, semEst, semResp, bugs);

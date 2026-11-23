@@ -2,6 +2,8 @@ const fs       = require('fs');
 const nodePath = require('path');
 const { getCfg, getAppMode } = require('../config');
 const { fetchProject, buildCardHTML } = require('../projectService');
+const { getWorkItemProfile, lacksEstimate, statesOr } = require('../utils/workItemProfile');
+const { AUTH_ERROR_CODE } = require('../azureClient');
 const state = require('./state');
 
 const EMPTY_STATE_HTML = `
@@ -52,19 +54,14 @@ function renderTemplate(html, vars) {
 function buildSummaryBar(results) {
   const ok = results.filter(r => !r.error);
   if (!ok.length) return '';
-  const CLOSED = ['Closed', 'Done', 'Resolved', 'Removed'];
   const ACTIVE  = ['Active', 'In Progress', 'New'];
   let totalItems = 0, totalOpen = 0, totalIssues = 0;
   for (const r of ok) {
-    const isTask = r.workItemType === 'Task';
-    const TYPES  = isTask ? ['Task'] : ['User Story', 'Product Backlog Item', 'Requirement'];
-    const mains  = (r.items || []).filter(i => TYPES.includes(i.fields?.['System.WorkItemType']));
+    const profile = r.profile || getWorkItemProfile({ workItemType: r.workItemType });
+    const CLOSED  = statesOr(profile, 'closed', ['Closed', 'Done', 'Resolved', 'Removed']);
+    const mains  = (r.items || []).filter(i => profile.mainTypes.includes(i.fields?.['System.WorkItemType']));
     const opens  = mains.filter(i => !CLOSED.includes(i.fields?.['System.State']));
-    const semEst = opens.filter(i => isTask
-      ? (i.fields?.['Microsoft.VSTS.Scheduling.RemainingWork'] == null || i.fields['Microsoft.VSTS.Scheduling.RemainingWork'] === 0) &&
-        (i.fields?.['Microsoft.VSTS.Scheduling.OriginalEstimate'] == null || i.fields['Microsoft.VSTS.Scheduling.OriginalEstimate'] === 0)
-      : i.fields?.['Microsoft.VSTS.Scheduling.StoryPoints'] == null
-    ).length;
+    const semEst = opens.filter(i => lacksEstimate(i.fields, profile)).length;
     const semResp = opens.filter(i => !i.fields?.['System.AssignedTo']).length;
     const bugs    = (r.items || []).filter(i =>
       i.fields?.['System.WorkItemType'] === 'Bug' && ACTIVE.includes(i.fields?.['System.State'])
@@ -103,6 +100,19 @@ const SOURCE_TOGGLE_HTML = `<div class="source-switcher">
   <button class="btn-source" data-source="sn" onclick="toggleSource('sn')" title="Projetos ServiceNow">SN</button>
 </div>`;
 
+// Aviso no topo quando o PAT do Azure DevOps foi recusado (expirado, revogado ou sem permissão)
+function buildAuthBanner(results) {
+  if (!results.some(r => r.errorCode === AUTH_ERROR_CODE)) return '';
+  return `<div class="az-auth-banner" role="alert">
+    <svg class="az-auth-banner-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+    <div class="az-auth-banner-text">
+      <div class="az-auth-banner-title" data-i18n="err_azure_auth_title">Seu token do Azure DevOps expirou ou é inválido</div>
+      <div class="az-auth-banner-sub" data-i18n="err_azure_auth_sub">Gere um novo Personal Access Token no Azure DevOps (permissões Work Items e Project and Team, leitura) e atualize em Configurações para voltar a carregar os projetos.</div>
+    </div>
+    <a class="az-auth-banner-btn" href="/settings" data-i18n="err_azure_auth_btn">Atualizar token</a>
+  </div>`;
+}
+
 function renderDashboard(results) {
   const cfg     = getCfg();
   const isEmpty = !cfg.projects || cfg.projects.length === 0;
@@ -117,7 +127,7 @@ function renderDashboard(results) {
     LAST_UPDATE:   new Date().toLocaleString('pt-BR'),
     CARDS:         isEmpty ? EMPTY_STATE_HTML : buildCardHTML(results, baseUrl),
     EMPTY_CLASS:   isEmpty ? 'cards-grid--empty' : '',
-    SUMMARY_BAR:   isEmpty ? '' : buildSummaryBar(results),
+    SUMMARY_BAR:   isEmpty ? '' : buildAuthBanner(results) + buildSummaryBar(results),
     SOURCE_TOGGLE: getAppMode() === 'full' ? SOURCE_TOGGLE_HTML : '',
     VERSION:       APP_VERSION,
   });
@@ -191,4 +201,4 @@ async function buildAndCache() {
   state.html    = renderDashboard(results);
 }
 
-module.exports = { renderDashboard, renderSetup, buildAndCache, buildSummaryBar };
+module.exports = { renderDashboard, renderSetup, buildAndCache, buildSummaryBar, buildAuthBanner };

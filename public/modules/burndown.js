@@ -1,4 +1,5 @@
 import { fmtD, buildSprintData } from './utils.js';
+import { profileFromDetail } from './constants.js';
 import { t, getDateLocale } from './i18n.js';
 
 let _bdProject    = null;
@@ -47,7 +48,7 @@ export async function openBurndownFromDaily(project, currentIter) {
 
     const doneStates = cfgData.doneStates || ['Closed'];
     const iterMap    = data.iterMap || {};
-    const { sprintMeta: allSprints } = buildSprintData(data.items, iterMap, doneStates);
+    const { sprintMeta: allSprints } = buildSprintData(data.items, iterMap, doneStates, profileFromDetail(data).mainTypes);
 
     const sprint = allSprints.find(s => s.key === currentIter)
                 || allSprints.find(s => s.isCurrent)

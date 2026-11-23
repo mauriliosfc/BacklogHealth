@@ -1,11 +1,13 @@
 import { buildSprintData, fmtD } from './utils.js';
 import { t, getDateLocale } from './i18n.js';
-import { getItemTypes, CLOSED_STATES } from './constants.js';
+import { legacyProfile, profileFromDetail, profileStates, closedStates, isHoursProfile } from './constants.js';
+
+const _escHtml = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 import { getAlias } from './alias.js';
 import { openItemsModal } from './itemsModal.js';
 
 export const _detailState = { project: null, sprints: [] };
-let _ctx = { filtered: [], workItemType: 'User Story' };
+let _ctx = { filtered: [], workItemType: 'User Story', profile: legacyProfile('User Story') };
 
 const FALLBACK_INDICATOR_CFG = {
   completion:       { states: ['Closed', 'Done', 'Resolved'], color: '' },
@@ -111,8 +113,9 @@ export async function loadDetailData(project, selectedSprints = _detailState.spr
     const taskOriginalEstimate = isOrigEstOverride ? savedOverride : rawOrigEst;
     const bugCompletedWork  = bugItems.reduce((s, t) => s + t.completedWork, 0);
     const totalBugs         = bugItems.length;
-    _ctx = { filtered, workItemType: data.workItemType || 'User Story' };
-    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story', project, taskOriginalEstimate, indicatorCfg);
+    const profile = profileFromDetail(data);
+    _ctx = { filtered, workItemType: data.workItemType || 'User Story', profile };
+    document.getElementById('modal-body').innerHTML = buildDetailHTML(filtered, data.iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, data.workItemType || 'User Story', project, taskOriginalEstimate, indicatorCfg, profile);
     initSprintColSelector();
   } catch(e) {
     document.getElementById('modal-body').innerHTML = '<p style="color:#f87171;padding:20px">Erro: ' + e.message + '</p>';
@@ -164,7 +167,14 @@ document.addEventListener('keydown', e => {
   }
 });
 
-function statusColor(s) {
+function statusColor(s, profile) {
+  const st = profile && profile.states;
+  if (st) {
+    if (st.active.includes(s))  return '#60a5fa';
+    if (st.done.includes(s))    return '#22c55e';
+    if (st.removed.includes(s)) return '#ef4444';
+    return '#64748b';
+  }
   if (['Active','In Progress','Doing','Committed'].includes(s)) return '#60a5fa';
   if (['Closed','Done'].includes(s)) return '#22c55e';
   if (['Resolved'].includes(s)) return '#a78bfa';
@@ -197,12 +207,13 @@ function ring(pct, color) {
     '</svg><div class="ring-pct" style="color:' + color + '">' + pct + '%</div></div>';
 }
 
-function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story', projectName = '', taskOriginalEstimate = 0, indicatorCfg = FALLBACK_INDICATOR_CFG) {
+function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, totalBugs, bugCompletedWork, workItemType = 'User Story', projectName = '', taskOriginalEstimate = 0, indicatorCfg = FALLBACK_INDICATOR_CFG, profile = legacyProfile(workItemType)) {
   const total = items.length;
   if (!total) return '<p style="color:#64748b;padding:20px">' + t('detail_no_items') + '</p>';
 
-  const isTaskMode = workItemType === 'Task';
-  const ITEM_TYPES = getItemTypes(workItemType);
+  const ITEM_TYPES    = profile.mainTypes;
+  const CLOSED_STATES = closedStates(profile);
+  const NEW_STATES    = profileStates(profile, 'new', ['New']);
 
   const filterBanner = selectedSprints && selectedSprints.length > 0
     ? '<div style="background:#1e3a5f;border:1px solid #2d5a8e;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:12px;color:#93c5fd">' +
@@ -214,15 +225,15 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
   const mainItems = items.filter(i => ITEM_TYPES.includes(i.type));
   const mainTotal = mainItems.length;
   const totalPts = items.reduce((s, i) => s + (i.pts || 0), 0);
-  const closed   = items.filter(i => ['Closed','Done'].includes(i.state)).length;
-  const active   = items.filter(i => ['Active','In Progress','Doing','Committed'].includes(i.state)).length;
-  const newItems = items.filter(i => i.state === 'New').length;
+  const active   = items.filter(i => profileStates(profile, 'active', ['Active','In Progress','Doing','Committed']).includes(i.state)).length;
+  const newItems = items.filter(i => NEW_STATES.includes(i.state)).length;
   const bugs     = totalBugs || items.filter(i => i.type === 'Bug').length;
   const us            = mainTotal;
   const openMainItems = mainItems.filter(i => !CLOSED_STATES.includes(i.state));
-  const noEst         = openMainItems.filter(i => i.pts == null || i.pts === 0).length;  // open only — matches dashboard
-  const mainNoEst     = mainItems.filter(i => i.pts == null || i.pts === 0).length;      // all US — used in coverage ring
-  const donePts      = items.filter(i => ['Closed','Done','Resolved'].includes(i.state)).reduce((s,i)=>s+(i.pts||0),0);
+  const lacksEst      = i => profile.hasEstimate && (i.pts == null || i.pts === 0);
+  const noEst         = openMainItems.filter(lacksEst).length;  // open only — matches dashboard
+  const mainNoEst     = mainItems.filter(lacksEst).length;      // all US — used in coverage ring
+  const donePts      = items.filter(i => profileStates(profile, 'done', ['Closed','Done','Resolved']).includes(i.state)).reduce((s,i)=>s+(i.pts||0),0);
   const mainClosed   = mainItems.filter(i => indicatorCfg.completion.states.includes(i.state)).length;
   const mainUAT      = mainItems.filter(i => indicatorCfg.uat.states.includes(i.state)).length;
   const uatPct       = mainTotal ? Math.round(mainUAT / mainTotal * 100) : 0;
@@ -254,18 +265,21 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
 
   const byStatus = {};
   items.filter(i => ITEM_TYPES.includes(i.type)).forEach(i => { byStatus[i.state] = (byStatus[i.state]||0) + 1; });
-  const statusEntries = Object.entries(byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v,statusColor(k)]);
+  const statusEntries = Object.entries(byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v,statusColor(k, profile)]);
 
   const byAsgn = {};
   items.filter(i => ITEM_TYPES.includes(i.type)).forEach(i => { const n = i.assigned || t('no_assignee'); byAsgn[n]=(byAsgn[n]||0)+1; });
   const asgnEntries = Object.entries(byAsgn).sort((a,b)=>b[1]-a[1]).slice(0,12).map(([k,v])=>[k,v,'#60a5fa']);
 
-  const { bySprint, sorted: sortedSprintEntries, sprintMeta } = buildSprintData(items, iterMap);
+  const { bySprint, sorted: sortedSprintEntries, sprintMeta } = buildSprintData(items, iterMap, profile.states ? CLOSED_STATES : undefined, ITEM_TYPES);
   const allSprintData = JSON.stringify(sprintMeta).replace(/</g, '\\u003c').replace(/'/g, '&#39;');
 
   // Labels dinâmicos
-  const itemLabel = isTaskMode ? t('label_tasks') : t('label_user_stories');
-  const estimateLabel = isTaskMode ? t('label_hours') : t('label_story_points');
+  const itemLabel = profile.legacy
+    ? (profile.workItemType === 'Task' ? t('label_tasks') : t('label_user_stories'))
+    : _escHtml(profile.typeLabel);
+  const estimateLabel = isHoursProfile(profile) ? t('label_hours')
+    : (profile.legacy ? t('label_story_points') : t('label_points'));
 
   const escProj = projectName.replace(/'/g, "\\'");
   const cfgIcon = key => '<span class="ind-cfg-icon" onclick="openIndicatorConfig(\'' + escProj + '\',\'' + key + '\')" title="' + t('btn_indicator_cfg') + '">✏</span>';
@@ -303,7 +317,7 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
       '<div class="d-card"><div class="d-label">' + t('d_pts_delivered') + '</div><div class="d-val green">' + donePts + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_in_progress') + '</div><div class="d-val blue">' + active + '</div></div>' +
       '<div class="d-card d-card-clickable" onclick="openDetailStat(\'new\')" title="View new items"><div class="d-label">' + t('d_new') + '</div><div class="d-val">' + newItems + '</div></div>' +
-      '<div class="d-card d-card-clickable" onclick="openDetailStat(\'noEst\')" title="View no estimate items"><div class="d-label">' + t('d_no_estimate') + '</div><div class="d-val ' + (noEst>mainTotal*0.3?'yellow':'') + '">' + noEst + '</div></div>' +
+      '<div class="d-card d-card-clickable" onclick="openDetailStat(\'noEst\')" title="View no estimate items"><div class="d-label">' + t('d_no_estimate') + '</div><div class="d-val ' + (noEst>mainTotal*0.3?'yellow':'') + '">' + (profile.hasEstimate ? noEst : '\u2014') + '</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_hrs_tasks') + '</div><div class="d-val purple">' + completedHrsFmt + 'h</div></div>' +
       '<div class="d-card"><div class="d-label">' + t('d_hrs_bugs') + '</div><div class="d-val ' + (bugHrs>0?'red':'') + '">' + bugHrsFmt + 'h</div></div>' +
     '</div></div>' +
@@ -350,18 +364,21 @@ function buildDetailHTML(items, iterMap, selectedSprints, taskCompletedWork, tot
 }
 
 export function openDetailStat(stat) {
-  const { filtered, workItemType } = _ctx;
+  const { filtered, profile } = _ctx;
   if (!filtered.length) return;
-  const ITEM_TYPES = getItemTypes(workItemType);
+  const ITEM_TYPES = profile.mainTypes;
+  const CLOSED_STATES = closedStates(profile);
+  const NEW_STATES = profileStates(profile, 'new', ['New']);
   const mainItems = filtered.filter(i => ITEM_TYPES.includes(i.type));
   switch (stat) {
     case 'us':
-      openItemsModal({ title: t('label_user_stories'), items: mainItems, showPts: true });
+      openItemsModal({ title: profile.legacy ? t('label_user_stories') : profile.typeLabel, items: mainItems, showPts: true });
       break;
     case 'new':
-      openItemsModal({ title: t('d_new'), items: filtered.filter(i => i.state === 'New'), showPts: true });
+      openItemsModal({ title: t('d_new'), items: filtered.filter(i => NEW_STATES.includes(i.state)), showPts: true });
       break;
     case 'noEst': {
+      if (!profile.hasEstimate) break;
       const openMain = filtered.filter(i => ITEM_TYPES.includes(i.type) && !CLOSED_STATES.includes(i.state));
       openItemsModal({ title: t('d_no_estimate'), items: openMain.filter(i => i.pts == null || i.pts === 0), showPts: true });
       break;

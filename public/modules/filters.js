@@ -1,4 +1,4 @@
-import { US_TYPES, CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes } from './constants.js';
+import { ACTIVE_BUG_STATES, getProfile, closedStates, mainItemsLabel } from './constants.js';
 import { calcHealth } from './health.js';
 import { t } from './i18n.js';
 import { openItemsModal } from './itemsModal.js';
@@ -96,14 +96,15 @@ function syncSumBar() {
 
 export function applyFilter(card, selected) {
   const allItems = JSON.parse(card.dataset.items);
-  const workItemType = card.dataset.workitemtype || 'User Story';
-  const ITEM_TYPES = getItemTypes(workItemType);
+  const profile = getProfile(card);
+  const ITEM_TYPES = profile.mainTypes;
+  const CLOSED_STATES = closedStates(profile);
 
   const filtered = selected.length === 0 ? allItems : allItems.filter(i => selected.includes(i.iteration));
   const filteredItems = filtered.filter(i => ITEM_TYPES.includes(i.type));
   const total = filteredItems.length;
   const openItems = filteredItems.filter(i => !CLOSED_STATES.includes(i.state));
-  const semEst = openItems.filter(i => i.pts == null || i.pts === 0).length;
+  const semEst = profile.hasEstimate ? openItems.filter(i => i.pts == null || i.pts === 0).length : 0;
   const semResp = openItems.filter(i => !i.assigned).length;
   const bugs = filtered.filter(i => i.type === 'Bug' && ACTIVE_BUG_STATES.includes(i.state)).length;
 
@@ -113,7 +114,7 @@ export function applyFilter(card, selected) {
 
   const semEstEl = card.querySelector('.card-semest');
   if (semEstEl) {
-    semEstEl.textContent = semEst;
+    semEstEl.textContent = profile.hasEstimate ? semEst : '—';
     semEstEl.className = 'cstat-val card-semest ' + (semEst > 2 ? 'c' : semEst > 0 ? 'w' : 'g');
   }
 
@@ -168,8 +169,9 @@ export function applyFilter(card, selected) {
 export function openCardStat(statEl, stat) {
   const card = statEl.closest('.card');
   const allItems = JSON.parse(card.dataset.items);
-  const workItemType = card.dataset.workitemtype || 'User Story';
-  const ITEM_TYPES = getItemTypes(workItemType);
+  const profile = getProfile(card);
+  const ITEM_TYPES = profile.mainTypes;
+  const CLOSED_STATES = closedStates(profile);
   const project = card.dataset.project;
 
   const selected = JSON.parse(localStorage.getItem('filter_' + project) || '[]');
@@ -181,7 +183,7 @@ export function openCardStat(statEl, stat) {
   let title, items, showPts = false, defaultFilters = null;
 
   if (stat === 'us') {
-    title = t(workItemType === 'Task' ? 'stat_tasks' : 'stat_us');
+    title = mainItemsLabel(profile, t);
     items = mainItems;
     showPts = true;
   } else if (stat === 'noEst') {
@@ -240,9 +242,11 @@ export function initFilters() {
 export function initHealthBadges() {
   document.querySelectorAll('.card[data-project]').forEach(card => {
     const allItems = JSON.parse(card.dataset.items);
-    const filteredUS = allItems.filter(i => US_TYPES.includes(i.type));
+    const profile = getProfile(card);
+    const CLOSED_STATES = closedStates(profile);
+    const filteredUS = allItems.filter(i => profile.mainTypes.includes(i.type));
     const openUS = filteredUS.filter(i => !CLOSED_STATES.includes(i.state));
-    const semEst = openUS.filter(i => i.pts == null).length;
+    const semEst = profile.hasEstimate ? openUS.filter(i => i.pts == null).length : 0;
     const semResp = openUS.filter(i => !i.assigned).length;
     const bugs = allItems.filter(i => i.type === 'Bug' && ACTIVE_BUG_STATES.includes(i.state)).length;
     const health = calcHealth(openUS.length, semEst, semResp, bugs);

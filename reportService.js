@@ -3,6 +3,7 @@ const nodePath = require('path');
 const { getCfg, getProjectConfig, getSnConfig, getProjectSnGroup } = require('./config');
 const { azureGet, azurePost } = require('./azureClient');
 const { paginatedItems } = require('./utils/paginate');
+const { FIELD, getWorkItemProfile, wiqlList } = require('./utils/workItemProfile');
 const { snGet } = require('./servicenowClient');
 const { isSnConfigured } = require('./utils/snMode');
 
@@ -113,8 +114,17 @@ const _DEFAULT_DONE_STATES = ['Closed', 'Done', 'Resolved'];
 async function fetchAzureReport(displayName, period, groupFields = [], agingState = '', deliveryStates = null, usAgingColumns = null) {
   const pcfg = getProjectConfig(displayName);
   const proj  = pcfg?.name || displayName;
+  // Legados (inclusive Task) mantêm a consulta por US/PBI/Requirement e StoryPoints;
+  // tipos novos usam o próprio tipo, campo de estimativa e estados concluídos.
+  const profile   = getWorkItemProfile(pcfg || {});
+  const typeDone  = profile.states?.done?.length ? profile.states.done : null;
+  const estFields = profile.legacy ? [FIELD.storyPoints] : profile.estimateFields;
+  const ptsOf     = fields => {
+    for (const f of estFields) { if (fields[f]) return fields[f]; }
+    return 0;
+  };
 
-  const DONE_STATES      = (Array.isArray(deliveryStates) && deliveryStates.length) ? deliveryStates : _DEFAULT_DONE_STATES;
+  const DONE_STATES      = (Array.isArray(deliveryStates) && deliveryStates.length) ? deliveryStates : (typeDone || _DEFAULT_DONE_STATES);
   const usAgingState     = agingState || '';
   const cleanGroupFields = (groupFields || []).filter(f => f);
   // Only extend cache key when delivery states differ from default (backward compat)
@@ -129,7 +139,9 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   const cached = _readCache('azure', displayName, period.month, cacheKey);
   if (cached) return cached;
 
-  const US_TYPES = "('User Story','Product Backlog Item','Requirement')";
+  const US_TYPES = profile.legacy
+    ? "('User Story','Product Backlog Item','Requirement')"
+    : `(${wiqlList(profile.mainTypes)})`;
 
   const projEnc = encodeURIComponent(proj);
   const [delivRes, bugsRes, bugsNewRes, bugsFixRes, teamIterData, agingRes] = await Promise.all([
@@ -178,7 +190,7 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   const bugFixIds  = (bugsFixRes.workItems  || []).map(i => i.id);
   const agingIds   = (agingRes?.workItems  || []).map(i => i.id);
 
-  const baseFields   = 'System.Id,System.State,System.IterationPath,Microsoft.VSTS.Scheduling.StoryPoints,System.WorkItemType,System.CreatedDate';
+  const baseFields   = ['System.Id', 'System.State', 'System.IterationPath', ...estFields, 'System.WorkItemType', 'System.CreatedDate'].join(',');
   const extraFields  = cleanGroupFields.filter(r => !baseFields.includes(r));
   const fields       = extraFields.length ? `${baseFields},${extraFields.join(',')}` : baseFields;
   const bugFields    = 'System.Id,System.State,System.IterationPath';
@@ -220,8 +232,8 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   const sprintMap = {};
   filteredDelivItems.forEach(i => {
     const sp          = (i.fields['System.IterationPath'] || '').split('\\').pop() || 'Sem Sprint';
-    const pts         = i.fields['Microsoft.VSTS.Scheduling.StoryPoints'] || 0;
-    const done        = DONE_STATES.includes(i.fields['System.State']);
+    const pts         = ptsOf(i.fields);
+    const done       = DONE_STATES.includes(i.fields['System.State']);
     const createdDate = (i.fields['System.CreatedDate'] || '').slice(0, 10);
     const sprintStart = sprintStartMap[sp];
     const addedLate   = createdDate && sprintStart && createdDate > sprintStart ? 1 : 0;
@@ -271,7 +283,7 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   filteredDelivItems.forEach(i => {
     refs.forEach(r => {
       const t   = (r ? i.fields[r] : null) || i.fields['System.WorkItemType'] || '(sem tipo)';
-      const pts = i.fields['Microsoft.VSTS.Scheduling.StoryPoints'] || 0;
+      const pts = ptsOf(i.fields);
       rawMaps[r][t]    = (rawMaps[r][t]    || 0) + 1;
       rawPtsMaps[r][t] = (rawPtsMaps[r][t] || 0) + pts;
     });
@@ -1237,4 +1249,4 @@ async function fetchSnVolumeIncidents(displayName, month, nMonths = 1) {
   }
 }
 
-module.exports = { buildReport, buildPeriod, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents, fetchSnRequestBacklog, fetchSnPrbBacklog };
+module.exports = { buildReport, buildPeriod, getLast6Months, fetchAzureReport, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents, fetchSnRequestBacklog, fetchSnPrbBacklog };

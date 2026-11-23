@@ -506,6 +506,12 @@ input{font-family:inherit}
   background:var(--bg-el);transition:all var(--t);cursor:pointer;border:none;
 }
 .type-btn.active{background:var(--c-blue-bg);color:var(--c-blue)}
+.type-select{
+  max-width:200px;padding:4px 8px;font-size:11px;font-weight:600;color:var(--text-1);
+  background:var(--bg-el);border:1px solid var(--bg-border);border-radius:var(--r-sm);
+  outline:none;cursor:pointer;font-family:inherit;
+}
+.type-select:focus{border-color:var(--c-blue)}
 .proj-team-input{
   flex:1;padding:4px 8px;background:var(--bg-el);
   border:1px solid var(--bg-border);border-radius:var(--r-sm);
@@ -1304,7 +1310,7 @@ const state = {
   skipped: false,
   loadedProjects: [],   // [{name, teams:[]}] from API
   selectedKeys: new Set(),  // "projName" (single-team) or "projName|teamName" (multi-team)
-  projectTypes: {},     // key -> 'User Story' | 'Task'
+  projectTypes: {},     // key -> tipo escolhido pelo usuário (ausente = recomendado do projeto)
   showAll: false,
   snGroups: [],         // from SN test
   selectedSNGroups: new Set(),
@@ -1660,19 +1666,62 @@ function togglePw(inputId, btn) {
 const PROJECT_COLORS = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#64748b','#06b6d4','#f97316','#a78bfa','#22c55e','#ec4899','#0ea5e9'];
 const CHECK_SVG = '<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+// ── Tipo de item principal ──────────────────────────────────────────────────
+// Lista carregada por projeto (POST /api/work-item-types). Falha → User Story e Task.
+const _OB_WIT = {};   // projeto → { types, recommended } | 'loading' | 'error'
+function _obt(key, fallback) {
+  const v = typeof window._t === 'function' ? window._t(key) : null;
+  return v && v !== key ? v : fallback;
+}
+function _baseKey(key) { const i = key.indexOf('|'); return i >= 0 ? key.slice(0, i) : key; }
+function _typeFor(key) {
+  if (state.projectTypes[key]) return state.projectTypes[key];
+  const e = _OB_WIT[_baseKey(key)];
+  return (e && typeof e === 'object' && e.recommended) || 'User Story';
+}
+function _witOptionsOb(project, type) {
+  const e = _OB_WIT[project];
+  const opt = (n, label) => `<option value="${escHtml(n)}"${n === type ? ' selected' : ''}>${escHtml(label || n)}</option>`;
+  if (!e || typeof e !== 'object') return [...new Set([type, 'User Story', 'Task'])].map(n => opt(n)).join('');
+  const rec = _obt('setup_wit_recommended', 'recommended');
+  const known = new Set(e.types.map(x => x.name));
+  return (known.has(type) ? '' : opt(type)) +
+    e.types.map(x => opt(x.name, x.recommended ? x.name + ' (' + rec + ')' : x.name)).join('');
+}
+async function _loadObTypes(project) {
+  if (_OB_WIT[project]) return;
+  _OB_WIT[project] = 'loading';
+  try {
+    const r = await fetch('/api/work-item-types', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        org: document.getElementById('azOrg').value.trim(),
+        pat: document.getElementById('azPat').value.trim(),
+        project,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok || !Array.isArray(data.types) || !data.types.length) throw new Error(data.error || 'empty');
+    _OB_WIT[project] = { types: data.types, recommended: data.recommended || null };
+  } catch (_) {
+    _OB_WIT[project] = 'error';
+    return;
+  }
+  document.querySelectorAll('.type-select').forEach(sel => {
+    if (_baseKey(sel.dataset.key) === project) sel.innerHTML = _witOptionsOb(project, _typeFor(sel.dataset.key));
+  });
+}
 function _witToggle(key, type) {
   const k = escHtml(key);
-  return `<div class="type-toggle" onclick="event.stopPropagation()">
-    <button class="type-btn${type === 'User Story' ? ' active' : ''}" data-key="${k}" data-type="User Story" onclick="setTypeBtn(this)">US</button>
-    <button class="type-btn${type === 'Task' ? ' active' : ''}" data-key="${k}" data-type="Task" onclick="setTypeBtn(this)">Task</button>
-  </div>`;
+  if (state.selectedKeys.has(key)) _loadObTypes(_baseKey(key));
+  return `<select class="type-select" data-key="${k}" onclick="event.stopPropagation()" onchange="setTypeSelect(this)">${_witOptionsOb(_baseKey(key), type)}</select>`;
 }
 
 function _singleCard(p, realIdx) {
   const key = p.name;
   const selected = state.selectedKeys.has(key);
   const color = PROJECT_COLORS[realIdx % PROJECT_COLORS.length];
-  const type = state.projectTypes[key] || 'User Story';
+  const type = _typeFor(key);
   return `<div class="proj-card${selected ? ' selected' : ''}" data-proj="${escHtml(key)}" onclick="toggleSingleCard(this)">
     <div class="proj-card-head">
       <div class="proj-icon" style="background:${color}">${escHtml(p.name[0])}</div>
@@ -1681,7 +1730,7 @@ function _singleCard(p, realIdx) {
     </div>
     <div class="proj-config">
       <div class="proj-config-row">
-        <span>Item type:</span>
+        <span>${escHtml(_obt('setup_wit_label', 'Main work item type'))}:</span>
         ${_witToggle(key, type)}
       </div>
     </div>
@@ -1704,7 +1753,7 @@ function _multiCard(p, realIdx) {
       ${p.teams.map(team => {
         const key = p.name + '|' + team;
         const sel = state.selectedKeys.has(key);
-        const type = state.projectTypes[key] || 'User Story';
+        const type = _typeFor(key);
         return `<div class="proj-team-row${sel ? ' sel' : ''}" data-key="${escHtml(key)}" onclick="event.stopPropagation();toggleTeamRow(this)">
           <div class="proj-team-check">${sel ? CHECK_SVG : ''}</div>
           <div class="proj-team-label">${escHtml(team)}</div>
@@ -1833,6 +1882,10 @@ function toggleTeamRow(row) {
   if (state.selectedKeys.has(key)) state.selectedKeys.delete(key);
   else state.selectedKeys.add(key);
   renderProjects(document.getElementById('projSearch').value);
+}
+
+function setTypeSelect(sel) {
+  state.projectTypes[sel.dataset.key] = sel.value;
 }
 
 // WIT toggle button (single-team or per-team)
@@ -1977,22 +2030,16 @@ async function finishSetup() {
         return;
       }
 
-      // Build projects param: "ProjName:Type" or "ProjName:Type:TeamName"
-      const projectsParam = Array.from(state.selectedKeys)
-        .map(key => {
-          const type = state.projectTypes[key] || 'User Story';
-          const pipeIdx = key.indexOf('|');
-          if (pipeIdx >= 0) {
-            const name = key.slice(0, pipeIdx);
-            const team = key.slice(pipeIdx + 1);
-            return name + ':' + type + ':' + team;
-          }
-          return key + ':' + type;
-        })
-        .join(',');
+      // JSON evita quebrar com ':' ou ',' em nomes de tipo/time
+      const projectsJson = JSON.stringify(Array.from(state.selectedKeys).map(key => {
+        const workItemType = _typeFor(key);
+        const pipeIdx = key.indexOf('|');
+        if (pipeIdx >= 0) return { name: key.slice(0, pipeIdx), team: key.slice(pipeIdx + 1), workItemType };
+        return { name: key, workItemType };
+      }));
 
       try {
-        const body = new URLSearchParams({ org, pat, projects: projectsParam });
+        const body = new URLSearchParams({ org, pat, projectsJson });
         const resp = await fetch('/setup', { method: 'POST', body: body.toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));

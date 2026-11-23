@@ -3,6 +3,7 @@
 // Não usar `export let` — bindings são read-only em módulos importadores.
 export const S = {
   reportProject:      null,
+  reportProfile:      null,     // perfil do tipo de item do projeto (constants.getProfile)
   reportMonth:        null,
   reportCharts:       [],       // [{type, size, ref?, label?, chartStyle?, barColor?, months?}]
   agingState:         'In Review',

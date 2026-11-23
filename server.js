@@ -96,6 +96,14 @@ async function main() {
       return json(res, () => projH.listProjects({ org: qp.get('org')?.trim(), pat: qp.get('pat')?.trim() }));
     }
 
+    // ── POST /api/work-item-types ─────────────────────────────────────────
+    // POST para não expor o PAT na URL
+    if (req.method === 'POST' && url === '/api/work-item-types') {
+      const body = await readBody(req);
+      const { org, pat, project } = JSON.parse(body || '{}');
+      return json(res, () => projH.listWorkItemTypes({ org: org?.trim(), pat: pat?.trim(), project }));
+    }
+
     // ── POST /api/disconnect ──────────────────────────────────────────────
     if (req.method === 'POST' && url === '/api/disconnect') {
       return json(res, () => projH.disconnect());
@@ -121,6 +129,7 @@ async function main() {
         rawOrg:      params.get('org')?.trim(),
         pat:         params.get('pat')?.trim(),
         projectsRaw: params.get('projects') || '',
+        projectsJson: params.get('projectsJson') || '',
       }));
     }
 

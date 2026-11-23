@@ -1,8 +1,19 @@
-const { azureGet, azurePost } = require("./azureClient");
+const { azureGet, azurePost, AUTH_ERROR_CODE } = require("./azureClient");
 const { calcHealth }    = require("./utils/health");
 const { paginatedItems } = require("./utils/paginate");
 const { fetchIterMap }  = require("./utils/iterMap");
 const { getCfg }        = require("./config");
+const { getWorkItemProfile, readEstimate, lacksEstimate, excludedStates, statesOr, wiqlList, clientProfile } = require("./utils/workItemProfile");
+
+// Cláusula de exclusão de estados da consulta principal (vazia quando não há estados a excluir)
+function _esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _stateExclusion(profile) {
+  const ex = excludedStates(profile);
+  return ex.length ? ` AND [System.State] NOT IN (${wiqlList(ex)})` : '';
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -23,27 +34,24 @@ async function fetchProject(projectConfig) {
   const projectName  = typeof projectConfig === 'string' ? projectConfig : projectConfig.name;
   const team         = typeof projectConfig === 'string' ? undefined : (projectConfig.team || undefined);
   const displayName  = team ? `${projectName} - ${team}` : projectName;
-  const workItemType = typeof projectConfig === 'string' ? 'User Story' : (projectConfig.workItemType || 'User Story');
-  const isTaskMode   = workItemType === 'Task';
+  const profile      = getWorkItemProfile(projectConfig);
+  const workItemType = profile.workItemType;
+  // Tipos legados não carregam o perfil no resultado (saída idêntica à anterior)
+  const extra        = profile.legacy ? {} : { profile };
 
   try {
-    const types = isTaskMode
-      ? ['Task', 'Bug']
-      : ['User Story', 'Product Backlog Item', 'Requirement', 'Bug'];
+    const types = [...profile.mainTypes, 'Bug'];
 
     const wiql = await azurePost(
       `${encodeURIComponent(projectName)}/_apis/wit/wiql?api-version=7.0`,
-      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${projectName}' AND [System.WorkItemType] IN ('${types.join("','")}') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }
+      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${projectName}' AND [System.WorkItemType] IN (${wiqlList(types)})${_stateExclusion(profile)} ORDER BY [System.ChangedDate] DESC` }
     );
 
     const allIds = (wiql.workItems || []).slice(0, 500).map(w => w.id);
-    if (!allIds.length) return { project: displayName, items: [], sprint: null, error: null, workItemType };
+    if (!allIds.length) return { project: displayName, items: [], sprint: null, error: null, workItemType, ...extra };
 
-    const estimateField = isTaskMode
-      ? "Microsoft.VSTS.Scheduling.RemainingWork,Microsoft.VSTS.Scheduling.OriginalEstimate"
-      : "Microsoft.VSTS.Scheduling.StoryPoints";
-
-    const fields = `System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,${estimateField},System.IterationPath,Microsoft.VSTS.Common.StackRank`;
+    const fields = ['System.Id', 'System.Title', 'System.State', 'System.WorkItemType', 'System.AssignedTo',
+      ...profile.estimateFields, 'System.IterationPath', 'Microsoft.VSTS.Common.StackRank'].join(',');
     const [detailsValue, { map: iterMap, currentSprint }, planData] = await Promise.all([
       paginatedItems(projectName, allIds, fields),
       fetchIterMap(projectName, team),
@@ -56,9 +64,9 @@ async function fetchProject(projectConfig) {
       ? detailsValue.filter(i => (i.fields?.['System.IterationPath'] || '') in iterMap)
       : detailsValue;
 
-    return { project: displayName, items, sprint: currentSprint, iterMap, error: null, workItemType, testPlanCount };
+    return { project: displayName, items, sprint: currentSprint, iterMap, error: null, workItemType, testPlanCount, ...extra };
   } catch (e) {
-    return { project: displayName, items: [], sprint: null, error: e.message, workItemType };
+    return { project: displayName, items: [], sprint: null, error: e.message, workItemType, ...(e.code ? { errorCode: e.code } : {}) };
   }
 }
 
@@ -68,17 +76,15 @@ async function fetchProjectDetail(identifier) {
   const project      = projectConfig.name;
   const team         = projectConfig.team || undefined;
   const displayName  = projectConfig.displayName || identifier;
-  const workItemType = projectConfig.workItemType || 'User Story';
-  const isTaskMode   = workItemType === 'Task';
+  const profile      = getWorkItemProfile(projectConfig);
+  const workItemType = profile.workItemType;
 
   try {
-    const types = isTaskMode
-      ? ['Task', 'Bug']
-      : ['User Story', 'Product Backlog Item', 'Requirement', 'Bug'];
+    const types = [...profile.mainTypes, 'Bug'];
 
     const [mainWiql, taskWiql, bugWiql, { map: iterMap }] = await Promise.all([
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN ('${types.join("','")}') AND [System.State] NOT IN ('Done','Removed') ORDER BY [System.ChangedDate] DESC` }),
+        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN (${wiqlList(types)})${_stateExclusion(profile)} ORDER BY [System.ChangedDate] DESC` }),
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
         { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Task' ORDER BY [System.ChangedDate] DESC` }),
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
@@ -90,11 +96,8 @@ async function fetchProjectDetail(identifier) {
     const taskIds = (taskWiql.workItems || []).slice(0, 500).map(w => w.id);
     const bugIds  = (bugWiql.workItems  || []).slice(0, 500).map(w => w.id);
 
-    const estimateField = isTaskMode
-      ? "Microsoft.VSTS.Scheduling.RemainingWork,Microsoft.VSTS.Scheduling.OriginalEstimate"
-      : "Microsoft.VSTS.Scheduling.StoryPoints";
-
-    const mainFields = `System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,${estimateField},Microsoft.VSTS.Scheduling.CompletedWork,System.IterationPath`;
+    const mainFields = ['System.Id', 'System.Title', 'System.State', 'System.WorkItemType', 'System.AssignedTo',
+      ...profile.estimateFields, 'Microsoft.VSTS.Scheduling.CompletedWork', 'System.IterationPath'].join(',');
     const workFields = "Microsoft.VSTS.Scheduling.CompletedWork,Microsoft.VSTS.Scheduling.OriginalEstimate,System.IterationPath";
 
     const [rawItems, rawTaskItems, rawBugItems] = await Promise.all([
@@ -120,16 +123,9 @@ async function fetchProjectDetail(identifier) {
       taskItems,
       bugItems,
       workItemType,
+      ...(profile.legacy ? {} : { profile: clientProfile(profile) }),
       items: rawItems.map(i => {
-        let pts = null;
-        if (isTaskMode) {
-          pts = i.fields?.["Microsoft.VSTS.Scheduling.RemainingWork"];
-          if (pts == null || pts === 0) {
-            pts = i.fields?.["Microsoft.VSTS.Scheduling.OriginalEstimate"];
-          }
-        } else {
-          pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null;
-        }
+        const pts = readEstimate(i.fields, profile);
 
         const baseUrl = getCfg().baseUrl || '';
         return {
@@ -163,49 +159,41 @@ function projectInitials(name) {
 }
 
 function buildCardHTML(results, baseUrl = '') {
-  return results.map(({ project, items, sprint, iterMap = {}, error, workItemType = 'User Story', testPlanCount = 0 }) => {
+  return results.map(({ project, items, sprint, iterMap = {}, error, errorCode, workItemType = 'User Story', testPlanCount = 0, profile: resultProfile }) => {
+    if (errorCode === AUTH_ERROR_CODE) return `
+      <div class="card error card-auth-error">
+        <h2>${project}</h2>
+        <p class="card-error-msg" data-i18n="err_azure_auth_card">${_esc(error)}</p>
+        <a class="card-error-link" href="/settings" data-i18n="err_azure_auth_btn">Atualizar token</a>
+      </div>`;
     if (error) return `
       <div class="card error">
         <h2>❌ ${project}</h2>
         <p style="color:#f87171">${error}</p>
       </div>`;
 
-    const isTaskMode = workItemType === 'Task';
-    const ITEM_TYPES = isTaskMode
-      ? ["Task"]
-      : ["User Story", "Product Backlog Item", "Requirement"];
-    const CLOSED_STATES = ["Closed", "Done", "Resolved", "Removed"];
+    const profile       = resultProfile || getWorkItemProfile({ workItemType });
+    const ITEM_TYPES    = profile.mainTypes;
+    const CLOSED_STATES = statesOr(profile, 'closed', ["Closed", "Done", "Resolved", "Removed"]);
+    const hasEstimate   = profile.estimateFields.length > 0;
 
     const mainItems = items.filter(i => ITEM_TYPES.includes(i.fields?.["System.WorkItemType"]));
     const total = mainItems.length;
     const openItems = mainItems.filter(i => !CLOSED_STATES.includes(i.fields?.["System.State"]));
 
-    // Calcular itens sem estimativa baseado no modo
-    const semEst = openItems.filter(i => {
-      if (isTaskMode) {
-        const remainingWork = i.fields?.["Microsoft.VSTS.Scheduling.RemainingWork"];
-        const originalEstimate = i.fields?.["Microsoft.VSTS.Scheduling.OriginalEstimate"];
-        return (remainingWork == null || remainingWork === 0) && (originalEstimate == null || originalEstimate === 0);
-      }
-      return i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] == null;
-    }).length;
+    // Itens sem estimativa (tipo sem campo de estimativa nunca conta)
+    const semEst = openItems.filter(i => lacksEstimate(i.fields, profile)).length;
 
     const semResp = openItems.filter(i => !i.fields?.["System.AssignedTo"]).length;
     const ACTIVE_STATES = ["Active", "In Progress", "New"];
     const bugs = items.filter(i => i.fields?.["System.WorkItemType"] === "Bug" && ACTIVE_STATES.includes(i.fields?.["System.State"])).length;
 
-    const totalPts = isTaskMode ? null : mainItems.reduce((sum, i) => {
-      const pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"];
-      return sum + (pts != null ? pts : 0);
-    }, 0);
-    const closedCount = mainItems.filter(i => CLOSED_STATES.includes(i.fields?.["System.State"])).length;
-
     const health = calcHealth(openItems.length, semEst, semResp, bugs, getCfg().health);
 
-    // Labels dinâmicos baseados no modo
-    const itemLabel = isTaskMode ? 'Tasks' : 'User Stories';
-    const itemLabelKey = isTaskMode ? 'stat_tasks' : 'stat_us';
-    const estimateLabel = isTaskMode ? 'Horas' : 'Story Points';
+    // Labels dinâmicos: legados mantêm os textos de sempre; demais usam o nome do tipo no Azure
+    const itemLabel = profile.legacy
+      ? (profile.workItemType === 'Task' ? 'Tasks' : 'User Stories')
+      : _esc(profile.typeLabel);
 
     const iterations = [...new Set(
       items.map(i => i.fields?.["System.IterationPath"]).filter(Boolean)
@@ -228,15 +216,7 @@ function buildCardHTML(results, baseUrl = '') {
     }).join("");
 
     const itemsJson = JSON.stringify(items.map(i => {
-      let pts = null;
-      if (isTaskMode) {
-        pts = i.fields?.["Microsoft.VSTS.Scheduling.RemainingWork"];
-        if (pts == null || pts === 0) {
-          pts = i.fields?.["Microsoft.VSTS.Scheduling.OriginalEstimate"];
-        }
-      } else {
-        pts = i.fields?.["Microsoft.VSTS.Scheduling.StoryPoints"] ?? null;
-      }
+      const pts = readEstimate(i.fields, profile);
 
       return {
         id: i.id,
@@ -297,7 +277,7 @@ function buildCardHTML(results, baseUrl = '') {
     const noSprintHtml = `<div class="card-issues"${noSprint === 0 ? ' style="display:none"' : ''}><div class="itag i" onclick="openCardStat(this,'noSprint')"><span class="no-sprint-val">${noSprint}</span>&nbsp;<span data-i18n="itag_no_sprint">sem sprint</span></div></div>`;
 
     return `
-      <div class="card" data-project="${project.replace(/"/g, "&quot;")}" data-items='${itemsJson}' data-itermap='${JSON.stringify(iterMap).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}' data-workitemtype="${workItemType}">
+      <div class="card" data-project="${project.replace(/"/g, "&quot;")}" data-items='${itemsJson}' data-itermap='${JSON.stringify(iterMap).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}' data-workitemtype="${_esc(workItemType)}" data-profile='${JSON.stringify(clientProfile(profile)).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}'>
 
         <div class="health-hbar ${health[1]}"></div>
 
@@ -323,7 +303,7 @@ function buildCardHTML(results, baseUrl = '') {
                     </div>
                   </div>
                 </div>
-                <span class="card-sprint-type">· ${isTaskMode ? 'Task' : 'User Story'}</span>
+                <span class="card-sprint-type">· ${_esc(profile.typeLabel)}</span>
               </div>
             </div>
           </div>
@@ -345,8 +325,8 @@ function buildCardHTML(results, baseUrl = '') {
           </div>
           <div class="cstat" onclick="openCardStat(this,'noEst')">
             <div class="cstat-lbl" data-i18n="stat_no_est">No Estimate</div>
-            <div class="cstat-val ${semEst > 2 ? 'c' : semEst > 0 ? 'w' : 'g'} card-semest">${semEst}</div>
-            <div class="cstat-sub">${semEst > 2 ? `<span data-i18n="cstat_above_limit">above limit</span>` : `<span data-i18n="cstat_within_limit">within limit</span>`}</div>
+            <div class="cstat-val ${semEst > 2 ? 'c' : semEst > 0 ? 'w' : 'g'} card-semest">${hasEstimate ? semEst : '—'}</div>
+            <div class="cstat-sub">${!hasEstimate ? `<span data-i18n="cstat_no_estimate_field">no estimate field</span>` : semEst > 2 ? `<span data-i18n="cstat_above_limit">above limit</span>` : `<span data-i18n="cstat_within_limit">within limit</span>`}</div>
           </div>
           <div class="cstat" onclick="openCardStat(this,'noResp')">
             <div class="cstat-lbl" data-i18n="stat_no_resp">No Assignee</div>

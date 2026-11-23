@@ -869,5 +869,16 @@
   "snm_no_project": "No project selected.",
   "snmcp_login_url_label": "SSO login URL",
   "snmcp_login_url_hint": "Optional. Use your SSO provider direct URL if your Service Now administrator provides one.",
-  "snmcp_conn_idle_no_user": "Without your user, the login window will ask for your ID before going to Microsoft."
+  "snmcp_conn_idle_no_user": "Without your user, the login window will ask for your ID before going to Microsoft.",
+  "label_points": "Points",
+  "cstat_no_estimate_field": "no estimate field",
+  "setup_wit_label": "Main work item type",
+  "setup_wit_recommended": "recommended",
+  "setup_wit_group_main": "Suggested",
+  "setup_wit_group_other": "Other types",
+  "setup_wit_hint": "Health metrics are calculated from this type. Bugs are always counted separately.",
+  "err_azure_auth_title": "Your Azure DevOps token has expired or is invalid",
+  "err_azure_auth_sub": "Generate a new Personal Access Token in Azure DevOps (Work Items and Project and Team, read access) and update it in Settings to load your projects again.",
+  "err_azure_auth_card": "Could not access this project: the access token has expired or is invalid.",
+  "err_azure_auth_btn": "Update token"
 }

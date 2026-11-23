@@ -85,7 +85,14 @@ function getProjectConfig(identifier) {
   const name        = typeof found === 'string' ? found : found.name;
   const workItemType = typeof found === 'string' ? 'User Story' : (found.workItemType || 'User Story');
   const team        = typeof found === 'string' ? undefined : (found.team || undefined);
-  return { name, workItemType, team, displayName: getDisplayName(found) };
+  const out = { name, workItemType, team, displayName: getDisplayName(found) };
+  // Perfil de tipos não legados (ver utils/workItemProfile.js) — só quando existir
+  if (typeof found !== 'string') {
+    if (found.estimateField !== undefined) out.estimateField = found.estimateField;
+    if (found.estimateUnit)                out.estimateUnit  = found.estimateUnit;
+    if (found.states)                      out.states        = found.states;
+  }
+  return out;
 }
 
 function getAiCfg() {
