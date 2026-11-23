@@ -1,6 +1,6 @@
 jest.mock('../../../config');
 jest.mock('../../../servicenowClient');
-jest.mock('../../../snMcp', () => ({ isConnected: jest.fn(), connect: jest.fn() }));
+jest.mock('../../../snMcp', () => ({ isConnected: jest.fn(), ensure: jest.fn() }));
 
 const { getCfg }  = require('../../../config');
 const { snGet }   = require('../../../servicenowClient');
@@ -429,7 +429,7 @@ describe('fetchAndBuildCards — modo MCP', () => {
   test('sem sessão: não consulta, dispara conexão e mostra aviso pendente', async () => {
     getCfg.mockReturnValue(MCP_CFG);
     snMcp.isConnected.mockReturnValue(false);
-    snMcp.connect.mockResolvedValue({});
+    snMcp.ensure.mockResolvedValue({});
 
     const r = await snDash.fetchAndBuildCards();
 
@@ -437,7 +437,7 @@ describe('fetchAndBuildCards — modo MCP', () => {
     expect(r.cardsHtml).toContain('data-sn-pending="1"');
     expect(r.cardsHtml).toContain('snmcp_pending_cards');
     expect(r.kpi.totalOpen).toBe(0);
-    expect(snMcp.connect).toHaveBeenCalledWith(MCP_CFG.servicenow);
+    expect(snMcp.ensure).toHaveBeenCalledWith(MCP_CFG.servicenow);
     expect(snGet).not.toHaveBeenCalled();
   });
 
@@ -449,7 +449,7 @@ describe('fetchAndBuildCards — modo MCP', () => {
 
     expect(r.pending).toBeUndefined();
     expect(snGet).toHaveBeenCalled();
-    expect(snMcp.connect).not.toHaveBeenCalled();
+    expect(snMcp.ensure).not.toHaveBeenCalled();
   });
 });
 

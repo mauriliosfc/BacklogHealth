@@ -90,3 +90,22 @@ describe('persistRotatedToken', () => {
     expect(store.rotatedTokenFrom({})).toBe('');
   });
 });
+
+describe('absorbBigipRotation (C3)', () => {
+  test('grava o novo cookie do balanceador e a próxima leitura já usa o novo backend', () => {
+    const f = writeSession('session_e.json', { ...BASE, cookie_header: 'JSESSIONID=abc; BIGipServerpool_empresa=old' });
+    const store = createSessionStore();
+    store.readSessionHeaders(f);   // popula o cache
+    expect(store.absorbBigipRotation(f, ['BIGipServerpool_empresa=new; path=/'])).toBe(true);
+    expect(store.readSessionHeaders(f).Cookie).toBe('JSESSIONID=abc; BIGipServerpool_empresa=new');
+    expect(JSON.parse(fs.readFileSync(f, 'utf8')).session_token).toBe('tok1');   // demais chaves preservadas
+  });
+
+  test('sem dica, mesmo backend ou arquivo ausente: não regrava', () => {
+    const f = writeSession('session_e.json', { ...BASE, cookie_header: 'BIGipServerpool_empresa=same' });
+    const store = createSessionStore();
+    expect(store.absorbBigipRotation(f, null)).toBe(false);
+    expect(store.absorbBigipRotation(f, ['BIGipServerpool_empresa=same'])).toBe(false);
+    expect(store.absorbBigipRotation(nodePath.join(dir, 'nao-existe.json'), ['BIGipServerpool_empresa=x'])).toBe(false);
+  });
+});

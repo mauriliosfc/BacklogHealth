@@ -290,12 +290,12 @@ async function fetchAndBuildCards() {
   const groupNames = Array.isArray(snCfg?.assignmentGroups) && snCfg.assignmentGroups.length > 0
     ? snCfg.assignmentGroups : null;
 
-  // Modo MCP sem sessão: não bloqueia a página esperando o login. Dispara a conexão em
-  // background (o MCP abre a janela de SSO/MFA) e mostra um aviso; o front recarrega ao conectar.
+  // Modo SSO sem sessão: não bloqueia a página esperando o login. Dispara a conexão em
+  // background (login silencioso ou janela do Edge) e mostra um aviso; o front recarrega ao conectar.
   if (getSnMode(snCfg) === 'mcp') {
     const snMcp = require('../snMcp');
     if (!snMcp.isConnected()) {
-      snMcp.connect(snCfg).catch(() => {});
+      snMcp.ensure(snCfg).catch(() => {});
       return { kpi: _emptyKpi(), cardsHtml: _pendingHtml(), error: null, pending: true };
     }
   }
