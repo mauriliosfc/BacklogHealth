@@ -185,6 +185,7 @@ function renderSetup(prefill = {}) {
   const orgsForPage = orgs.map(o => ({
     id: o.id, org: o.org || '', baseUrl: o.baseUrl || '', label: o.label || '',
     display: _orgDisplay(o), hasPat: !!o.pat,
+    status: state.statusOf(o.id),
     projectCount: ownProjects(o).length,
     projects: _projectsMap(ownProjects(o)),
   }));
@@ -240,7 +241,20 @@ async function buildAndCache() {
   }
   const cfg     = getCfg();
   const results = await Promise.all(cfg.projects.map(fetchProject));
+  state.orgStatus = orgStatusFrom(results);
   state.html    = renderDashboard(results);
 }
 
-module.exports = { renderDashboard, renderSetup, buildAndCache, buildSummaryBar, buildAuthBanner, withOrgLabels };
+// Status por organização a partir dos resultados: token recusado em qualquer projeto
+// marca 'auth'; senão, um projeto carregado marca 'ok'. Organizações sem resultado ficam de fora.
+function orgStatusFrom(results) {
+  const out = {};
+  for (const r of results || []) {
+    if (!r || !r.orgId) continue;
+    if (r.errorCode === AUTH_ERROR_CODE) out[r.orgId] = 'auth';
+    else if (!r.error && out[r.orgId] !== 'auth') out[r.orgId] = 'ok';
+  }
+  return out;
+}
+
+module.exports = { renderDashboard, renderSetup, buildAndCache, buildSummaryBar, buildAuthBanner, withOrgLabels, orgStatusFrom };

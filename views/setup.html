@@ -54,14 +54,6 @@
         <span class="su-tab-dirty" id="dirty-sn" style="display:none" title="Unsaved changes"></span>
       </button>
 
-      <button class="su-tab-btn" data-tab="projects" onclick="switchTab('projects')">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="1.5" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="8" y="1.5" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1.5" y="8" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="8" y="8" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
-        <span data-i18n="settings_tab_projects">Projects</span>
-        <span class="su-tab-badge" id="tab-badge-projects"></span>
-        <span class="su-tab-dirty" id="dirty-projects" style="display:none" title="Unsaved changes"></span>
-      </button>
-
-
 <button class="su-tab-btn" data-tab="ai" onclick="switchTab('ai')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5C4 1.5 1.5 3.5 1.5 6c0 1.2.6 2.3 1.5 3.1V12l2.5-1.5A6.3 6.3 0 007 10.5c3 0 5.5-2 5.5-4.5S10 1.5 7 1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="4.5" cy="6" r=".7" fill="currentColor"/><circle cx="7" cy="6" r=".7" fill="currentColor"/><circle cx="9.5" cy="6" r=".7" fill="currentColor"/></svg>
         <span data-i18n="settings_tab_ai">Copilot AI</span>
@@ -76,100 +68,28 @@
   <div class="su-tab-panels">
 
     <!-- ─────────────────────── Azure DevOps ─────────────────────── -->
+    <!-- Lista de organizações à esquerda; conexão e projetos da selecionada à direita -->
     <div class="su-tab-panel active" id="panel-azure">
       <div class="su-tab-body">
-        <div class="su-tab-inner">
+        <div class="su-tab-inner su-tab-inner--wide">
 
           <div class="su-tab-page-header">
             <h1 class="su-tab-page-title" data-i18n="settings_tab_azure">Azure DevOps</h1>
             <p class="su-tab-page-sub">{{SUBTITLE}}</p>
           </div>
 
-          <div class="su-azure-grid">
+          <div class="az-layout" id="az-layout">
 
-            <!-- Left: credentials -->
-            <div class="su-azure-main">
-              <div class="su-orgs" id="su-orgs" style="display:none">
-                <div class="su-orgs-head">
-                  <div class="su-label" data-i18n="orgs_title">CONNECTED ORGANIZATIONS</div>
-                  <button type="button" class="su-orgs-add" onclick="addOrg()" data-i18n="orgs_add">+ Add organization</button>
-                </div>
-                <div class="su-orgs-list" id="su-orgs-list"></div>
-              </div>
+            <!-- Organizações -->
+            <aside class="az-orgs" id="su-orgs">
+              <div class="su-label" data-i18n="az_orgs_title">ORGANIZATIONS</div>
+              <div class="az-org-list" id="su-orgs-list"></div>
+              <button type="button" class="az-org-add" onclick="addOrg()">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 2v9M2 6.5h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                <span data-i18n="az_org_add">Add organization</span>
+              </button>
 
-              <div class="su-form-card">
-                <div class="su-org-editing" id="org-editing" style="display:none"></div>
-                <div class="err-box" id="err-box" style="display:none"></div>
-
-                <div class="su-field">
-                  <label class="su-label" data-i18n="setup_org_label">ORGANIZATION NAME</label>
-                  <div class="su-input-wrap">
-                    <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.4"/><path d="M6 9h4M8 7v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-                    <input type="text" id="inp-org" class="su-input" data-i18n-placeholder="setup_org_placeholder" placeholder="e.g. MyCompany" value="{{ORG_VALUE}}" autocomplete="off" oninput="updateOrgPreview(); markDirty('azure')">
-                  </div>
-                  <div class="su-hint" data-i18n="setup_org_hint">e.g. MyCompany · dev.azure.com/organization · or https://company.visualstudio.com/</div>
-                  <div id="org-url-preview" class="su-org-preview" style="display:none">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1l1.5 3h3l-2.5 2 1 3L6 7.5 3 9l1-3L1.5 4h3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
-                    <span>dev.azure.com/</span><strong id="org-preview-name"></strong>
-                  </div>
-                </div>
-
-                <div class="su-field">
-                  <label class="su-label" data-i18n="orgs_label_field">DISPLAY NAME (OPTIONAL)</label>
-                  <div class="su-input-wrap">
-                    <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l5-5.5h5.5v5.5l-5.5 5-5-5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10.5" cy="5.5" r="1" fill="currentColor"/></svg>
-                    <input type="text" id="inp-org-label" class="su-input" data-i18n-placeholder="orgs_label_placeholder" placeholder="e.g. Client A" value="{{ORG_LABEL_VALUE}}" autocomplete="off" oninput="markDirty('azure')">
-                  </div>
-                  <div class="su-hint" data-i18n="orgs_label_hint">Shown on the cards when more than one organization is connected.</div>
-                </div>
-
-                <div class="su-field">
-                  <div class="su-label-row">
-                    <label class="su-label" data-i18n="setup_pat_label">PERSONAL ACCESS TOKEN (PAT)</label>
-                    <button type="button" class="su-pat-help-btn" id="pat-help-btn" onclick="togglePatHelp()" data-i18n-title="setup_pat_help_btn" title="How to generate a PAT">
-                      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 5a1.5 1.5 0 013 .5c0 1-1.5 1.5-1.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="6.5" cy="9.5" r=".6" fill="currentColor"/></svg>
-                      <span data-i18n="setup_pat_help_btn">How to generate?</span>
-                    </button>
-                  </div>
-                  <div class="su-input-wrap">
-                    <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="7" r="3.5" stroke="currentColor" stroke-width="1.4"/><path d="M8.5 9.5l5 5M11 11l1.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-                    <input type="password" id="inp-pat" class="su-input" data-i18n-placeholder="setup_pat_placeholder" placeholder="Paste your PAT here" value="{{PAT_VALUE}}" autocomplete="off" oninput="markDirty('azure')">
-                  </div>
-                  <div class="su-pat-popover" id="pat-help-popover" style="display:none">
-                    <div class="su-pat-popover-title" data-i18n="setup_pat_popover_title">How to generate a PAT</div>
-                    <ol class="su-pat-popover-steps">
-                      <li data-i18n="setup_pat_step1">Go to <strong>dev.azure.com</strong> and sign in</li>
-                      <li data-i18n="setup_pat_step2">Click your <strong>profile icon</strong> (top right)</li>
-                      <li data-i18n="setup_pat_step3">Select <strong>Personal Access Tokens</strong></li>
-                      <li data-i18n="setup_pat_step4">Click <strong>New Token</strong></li>
-                      <li data-i18n="setup_pat_step5">Set permissions: <code>Work Items (Read)</code>, <code>Project and Team (Read)</code></li>
-                      <li data-i18n="setup_pat_step6">Click <strong>Create</strong> and copy the token</li>
-                    </ol>
-                  </div>
-                  <div class="su-hint su-pat-saved-hint" id="pat-saved-hint" style="display:none" data-i18n="orgs_pat_saved">A token is already saved for this organization. Leave blank to keep it.</div>
-                  <div class="su-hint su-pat-expiry-hint" data-i18n="settings_azure_pat_expiry">Tip: set a 1-year expiry and note the renewal date.</div>
-                </div>
-
-                <button class="su-test-btn" id="btn-test" onclick="loadProjects()">
-                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1v13M1 7.5h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.4"/></svg>
-                  <span id="btn-test-label" data-i18n="setup_btn_test">Test Connection and Load Projects</span>
-                </button>
-                <button class="su-test-btn su-save-org-btn" id="btn-save-org" style="display:none" onclick="saveNewOrg()">
-                  <span class="spinner" id="sp-save-org" style="display:none"></span>
-                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 7.5l3 3 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span id="lbl-save-org" data-i18n="orgs_test_save">Test access and save organization</span>
-                </button>
-                <div class="su-hint su-save-org-hint" id="save-org-hint" style="display:none" data-i18n="orgs_test_save_hint">We check the token with Azure DevOps and then take you to choose this organization's projects.</div>
-                <div id="conn-status" class="su-conn-status" style="display:none"></div>
-
-                <div class="su-security-note">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1L2 3.5v4C2 10.5 4.5 13 7 13s5-2.5 5-5.5v-4L7 1z" stroke="currentColor" stroke-width="1.3"/><path d="M5 7l1.5 1.5L9.5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <div><strong data-i18n="setup_security_label">Security Note:</strong> <span data-i18n="setup_security_text">Your PAT is stored locally in config.json on your device only. It is never sent to any external service other than Azure DevOps.</span></div>
-                </div>
-              </div>
-
-              <!-- Danger zone -->
-              <div class="su-danger-zone">
+              <div class="su-danger-zone az-danger">
                 <div class="su-danger-title" data-i18n="settings_danger_zone">Danger Zone</div>
                 <p class="su-danger-desc" data-i18n="settings_disconnect_confirm">Removes your Azure DevOps credentials and all project settings from this device.</p>
                 <div class="su-danger-confirm" id="danger-confirm" style="display:none">
@@ -181,24 +101,119 @@
                 </div>
                 <button class="su-disconnect-btn" id="danger-btn" onclick="showDangerConfirm()" data-i18n="settings_disconnect_btn">Disconnect Azure DevOps</button>
               </div>
-            </div>
+            </aside>
 
-            <!-- Right: PAT help sidebar -->
-            <div class="su-azure-side">
-              <div class="su-help-side-card">
-                <div class="su-help-side-title" data-i18n="setup_help_title">Can't find your project?</div>
-                <div class="su-help-side-sub" data-i18n="setup_help_sub">Ensure your Personal Access Token has the 'Project Read' and 'Work Items Read' permissions scope.</div>
-                <div class="su-pat-info">
-                  <h4 data-i18n="setup_pat_section">Required PAT Permissions</h4>
-                  <ul>
-                    <li><code>Work Items (Read)</code></li>
-                    <li><code>Project and Team (Read)</code></li>
-                  </ul>
-                  <div class="su-pat-link" data-i18n="setup_pat_link">Azure DevOps → User Settings → Personal Access Tokens</div>
+            <!-- Organização selecionada -->
+            <section class="az-org-panel">
+              <div class="az-panel-head">
+                <div class="az-panel-head-text">
+                  <div class="az-panel-title" id="az-panel-title"></div>
+                  <div class="az-panel-url" id="az-panel-url"></div>
+                </div>
+                <button type="button" class="su-org-btn su-org-btn--danger" id="az-remove-btn" style="display:none" onclick="removeOrgClick(CURRENT_ORG_ID)" data-i18n="orgs_remove">Remove</button>
+              </div>
+
+              <!-- Passo a passo ao adicionar uma organização -->
+              <div class="az-steps" id="az-steps" style="display:none">
+                <div class="az-step" data-step="1"><span class="az-step-num">1</span><span data-i18n="az_step_conn">Connection</span></div>
+                <div class="az-step" data-step="2"><span class="az-step-num">2</span><span data-i18n="az_step_projects">Projects</span></div>
+                <div class="az-step" data-step="3"><span class="az-step-num">3</span><span data-i18n="az_step_save">Save</span></div>
+              </div>
+
+              <div class="err-box" id="err-box" style="display:none"></div>
+
+              <!-- Conexão: recolhida quando está tudo certo -->
+              <div class="az-conn" id="az-conn">
+                <div class="az-conn-summary" id="az-conn-summary">
+                  <span class="az-conn-dot" id="az-conn-dot"></span>
+                  <span class="az-conn-text" id="az-conn-text"></span>
+                  <button type="button" class="az-conn-toggle" id="az-conn-toggle" onclick="toggleConn()"></button>
+                </div>
+                <div class="az-conn-body" id="az-conn-body">
+                  <div class="su-field">
+                    <label class="su-label" data-i18n="setup_org_label">ORGANIZATION NAME</label>
+                    <div class="su-input-wrap">
+                      <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.4"/><path d="M6 9h4M8 7v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                      <input type="text" id="inp-org" class="su-input" data-i18n-placeholder="setup_org_placeholder" placeholder="e.g. MyCompany" value="{{ORG_VALUE}}" autocomplete="off" oninput="updateOrgPreview(); markDirty('azure')">
+                    </div>
+                    <div class="su-hint" data-i18n="setup_org_hint">e.g. MyCompany · dev.azure.com/organization · or https://company.visualstudio.com/</div>
+                    <div id="org-url-preview" class="su-org-preview" style="display:none">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1l1.5 3h3l-2.5 2 1 3L6 7.5 3 9l1-3L1.5 4h3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+                      <span>dev.azure.com/</span><strong id="org-preview-name"></strong>
+                    </div>
+                  </div>
+
+                  <div class="su-field">
+                    <label class="su-label" data-i18n="orgs_label_field">DISPLAY NAME (OPTIONAL)</label>
+                    <div class="su-input-wrap">
+                      <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l5-5.5h5.5v5.5l-5.5 5-5-5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10.5" cy="5.5" r="1" fill="currentColor"/></svg>
+                      <input type="text" id="inp-org-label" class="su-input" data-i18n-placeholder="orgs_label_placeholder" placeholder="e.g. Client A" value="{{ORG_LABEL_VALUE}}" autocomplete="off" oninput="markDirty('azure')">
+                    </div>
+                    <div class="su-hint" data-i18n="orgs_label_hint">Shown on the cards when more than one organization is connected.</div>
+                  </div>
+
+                  <div class="su-field">
+                    <div class="su-label-row">
+                      <label class="su-label" data-i18n="setup_pat_label">PERSONAL ACCESS TOKEN (PAT)</label>
+                      <button type="button" class="su-pat-help-btn" id="pat-help-btn" onclick="togglePatHelp()" data-i18n-title="setup_pat_help_btn" title="How to generate a PAT">
+                        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 5a1.5 1.5 0 013 .5c0 1-1.5 1.5-1.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="6.5" cy="9.5" r=".6" fill="currentColor"/></svg>
+                        <span data-i18n="setup_pat_help_btn">How to generate?</span>
+                      </button>
+                    </div>
+                    <div class="su-input-wrap">
+                      <svg class="su-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="7" r="3.5" stroke="currentColor" stroke-width="1.4"/><path d="M8.5 9.5l5 5M11 11l1.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                      <input type="password" id="inp-pat" class="su-input" data-i18n-placeholder="setup_pat_placeholder" placeholder="Paste your PAT here" value="{{PAT_VALUE}}" autocomplete="off" oninput="markDirty('azure')">
+                    </div>
+                    <div class="su-pat-popover" id="pat-help-popover" style="display:none">
+                      <div class="su-pat-popover-title" data-i18n="setup_pat_popover_title">How to generate a PAT</div>
+                      <ol class="su-pat-popover-steps">
+                        <li data-i18n="setup_pat_step1">Go to <strong>dev.azure.com</strong> and sign in</li>
+                        <li data-i18n="setup_pat_step2">Click your <strong>profile icon</strong> (top right)</li>
+                        <li data-i18n="setup_pat_step3">Select <strong>Personal Access Tokens</strong></li>
+                        <li data-i18n="setup_pat_step4">Click <strong>New Token</strong></li>
+                        <li data-i18n="setup_pat_step5">Set permissions: <code>Work Items (Read)</code>, <code>Project and Team (Read)</code></li>
+                        <li data-i18n="setup_pat_step6">Click <strong>Create</strong> and copy the token</li>
+                      </ol>
+                    </div>
+                    <div class="su-hint su-pat-saved-hint" id="pat-saved-hint" style="display:none" data-i18n="orgs_pat_saved">A token is already saved for this organization. Leave blank to keep it.</div>
+                    <div class="su-hint su-pat-expiry-hint" data-i18n="settings_azure_pat_expiry">Tip: set a 1-year expiry and note the renewal date.</div>
+                  </div>
+
+                  <button class="su-test-btn" id="btn-test" onclick="loadProjects()">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 7.5l3 3 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span id="btn-test-label" data-i18n="az_test_access">Test access and load projects</span>
+                  </button>
+                  <div id="conn-status" class="su-conn-status" style="display:none"></div>
+
+                  <div class="su-security-note">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1L2 3.5v4C2 10.5 4.5 13 7 13s5-2.5 5-5.5v-4L7 1z" stroke="currentColor" stroke-width="1.3"/><path d="M5 7l1.5 1.5L9.5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div><strong data-i18n="setup_security_label">Security Note:</strong> <span data-i18n="setup_security_text">Your PAT is stored locally in config.json on your device only. It is never sent to any external service other than Azure DevOps.</span></div>
+                  </div>
                 </div>
               </div>
-            </div>
 
+              <!-- Projetos monitorados -->
+              <div class="az-projects" id="az-projects">
+                <div class="az-proj-head">
+                  <div class="az-proj-title"><span data-i18n="az_projects_title">Monitored projects</span> <span class="az-proj-count" id="az-proj-count"></span></div>
+                  <label class="az-only-selected"><input type="checkbox" id="az-only-selected" onchange="filterProjects()"> <span data-i18n="az_only_selected">only selected</span></label>
+                </div>
+                <div class="su-search-wrap az-search">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M9.5 9.5l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                  <input type="text" id="proj-search" class="su-search" data-i18n-placeholder="az_search_placeholder" placeholder="Search project or team" oninput="filterProjects()" autocomplete="off">
+                </div>
+                <div class="az-proj-locked" id="az-proj-locked" style="display:none" data-i18n="az_projects_locked">Test access to load this organization's projects.</div>
+                <div class="su-org-added" id="org-added-note" style="display:none"></div>
+                <div class="su-ok-box" id="ok-box" style="display:none"></div>
+                <div class="su-proj-list" id="proj-list"></div>
+                <div class="az-proj-empty" id="az-proj-empty" style="display:none" data-i18n="az_projects_empty_filter">No selected project matches. Clear the filter to see all.</div>
+                <div class="su-help az-help">
+                  <div class="su-help-title" data-i18n="setup_help_title">Can't find your project?</div>
+                  <div class="su-help-sub" data-i18n="setup_help_sub">Ensure your Personal Access Token has the 'Project Read' and 'Work Items Read' permissions scope.</div>
+                </div>
+                <div class="su-count" id="proj-count"></div>
+              </div>
+            </section>
           </div>
         </div>
       </div>
@@ -280,42 +295,6 @@
         </div>
       </div>
     </div>
-
-    <!-- ─────────────────────── Projects ─────────────────────── -->
-    <div class="su-tab-panel" id="panel-projects">
-      <div class="su-tab-body">
-        <div class="su-tab-inner">
-
-          <div class="su-tab-page-header su-tab-page-header--flex">
-            <div>
-              <h1 class="su-tab-page-title" data-i18n="settings_tab_projects">Projects</h1>
-              <div class="su-proj-org" id="proj-org-name" style="display:none"></div>
-            </div>
-            <div class="su-search-wrap">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M9.5 9.5l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-              <input type="text" id="proj-search" class="su-search" data-i18n-placeholder="setup_search_placeholder" placeholder="Filter projects…" oninput="filterProjects()" autocomplete="off">
-            </div>
-          </div>
-
-          <div class="su-org-added" id="org-added-note" style="display:none"></div>
-          <div class="su-ok-box" id="ok-box" style="display:none"></div>
-
-          <div class="su-proj-list" id="proj-list">
-            <!-- projects rendered by JS -->
-          </div>
-
-          <div class="su-help">
-            <svg class="su-help-icon" width="40" height="40" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="var(--text-faint)" stroke-width="1.5"/><circle cx="14" cy="20" r="2" fill="var(--text-faint)"/><circle cx="20" cy="20" r="2" fill="var(--text-faint)"/><circle cx="26" cy="20" r="2" fill="var(--text-faint)"/></svg>
-            <div class="su-help-title" data-i18n="setup_help_title">Can't find your project?</div>
-            <div class="su-help-sub" data-i18n="setup_help_sub">Ensure your Personal Access Token has the 'Project Read' and 'Work Items Read' permissions scope.</div>
-          </div>
-
-          <div class="su-count" id="proj-count"></div>
-
-        </div>
-      </div>
-    </div>
-
 
 <!-- ─────────────────────── Copilot AI ─────────────────────── -->
     <div class="su-tab-panel" id="panel-ai">
@@ -419,9 +398,11 @@
 <div id="su-fixed-footer" class="su-fixed-footer">
   <div class="su-footer-actions" id="footer-azure">
     <span class="su-tab-save-msg" id="azure-msg" style="display:none"></span>
-    <button class="su-save-btn" id="btn-save-azure" onclick="doSaveAzure()">
-      <span class="spinner" id="sp-azure" style="display:none"></span>
-      <span id="lbl-save-azure" data-i18n="settings_save_azure">Save Credentials</span>
+    <span class="az-dirty" id="az-dirty" style="display:none"></span>
+    <button class="su-btn-ghost" id="btn-discard" style="display:none" onclick="discardChanges()" data-i18n="az_discard">Discard</button>
+    <button class="su-save-btn" id="btn-save" onclick="doSave()">
+      <span class="spinner" id="sp-save" style="display:none"></span>
+      <span id="lbl-save" data-i18n="setup_btn_save">Save</span>
     </button>
   </div>
   <div class="su-footer-actions" id="footer-sn" style="display:none">
@@ -429,13 +410,6 @@
     <button class="su-save-btn" id="btn-save-sn" onclick="snSaveAndMark()">
       <span class="spinner" id="sp-sn" style="display:none"></span>
       <span id="lbl-save-sn" data-i18n="settings_save_sn">Save ServiceNow</span>
-    </button>
-  </div>
-  <div class="su-footer-actions" id="footer-projects" style="display:none">
-    <span class="su-tab-save-msg" id="projects-msg" style="display:none"></span>
-    <button class="su-save-btn" id="btn-save" onclick="doSave()">
-      <span class="spinner" id="sp-save" style="display:none"></span>
-      <span id="lbl-save" data-i18n="setup_btn_save">Save and Open Dashboard</span>
     </button>
   </div>
   <div class="su-footer-actions" id="footer-ai" style="display:none">
@@ -491,6 +465,7 @@
 
   // ── Tab switching ────────────────────────────────────────────────────────
   function switchTab(tab) {
+    if (tab === 'projects') tab = 'azure';
     document.querySelectorAll('.su-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.su-tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
     document.querySelectorAll('.su-footer-actions').forEach(a => a.style.display = 'none');
@@ -498,7 +473,6 @@
     if (fa) fa.style.display = 'flex';
     if (tab === 'sn')       { _snLoadGlobalGroups(); }
     if (tab === 'ai')       aiLoad();
-    if (tab === 'projects') updateTabBadgeProjects();
     try { sessionStorage.setItem('settings_tab', tab); } catch(_) {}
   }
 
@@ -509,16 +483,22 @@
       const storTab = sessionStorage.getItem('settings_tab');
       const allowed = ['azure','sn','projects','ai'];
       const tab = (urlTab && allowed.includes(urlTab)) ? urlTab : storTab;
-      if (tab && allowed.includes(tab)) switchTab(tab);
+      if (tab && allowed.includes(tab)) switchTab(tab === 'projects' ? 'azure' : tab);
     } catch(_) {}
   })();
 
   // ── Dirty tracking ───────────────────────────────────────────────────────
   function markDirty(tab) {
+    if (tab === 'projects' || tab === 'azure') {
+      if (typeof _refreshDirty === 'function') _refreshDirty();
+      if (typeof _syncSteps === 'function') _syncSteps();
+      return;
+    }
     const dot = document.getElementById('dirty-' + tab);
     if (dot) dot.style.display = 'inline-block';
   }
   function clearDirty(tab) {
+    if (tab === 'projects') tab = 'azure';
     const dot = document.getElementById('dirty-' + tab);
     if (dot) dot.style.display = 'none';
   }
@@ -661,6 +641,7 @@
     if (!org || (!pat && !_canUseSavedPat())) { showErr(_tr('setup_err_fill', 'Fill in the organization and PAT before continuing.')); return; }
     hideErr();
     clearConnStatus();
+    _connState = 'loading'; _syncConnSummary();
     const btn = document.getElementById('btn-test');
     btn.disabled = true;
     const lbl = document.getElementById('btn-test-label');
@@ -672,24 +653,25 @@
         showErr(data.error);
         setConnStatus('err', data.error);
         btn.disabled = false;
-        lbl.textContent = _tr('setup_btn_reload', 'Reload project list');
+        lbl.textContent = _tr('az_test_access', 'Test access and load projects');
+        _onConnResult(false, data.error);
         return;
       }
       const rawProjects = (data.projects || []).map(p => typeof p === 'string' ? { name: p, teams: [] } : p);
       ALL_PROJECTS = rawProjects;
       renderProjectList(rawProjects);
-      const okBox = document.getElementById('ok-box');
-      okBox.textContent = _tr('setup_conn_ok', 'Connection OK — {{count}} project(s) available.', { count: rawProjects.length });
-      okBox.style.display = 'block';
       setConnStatus('ok', org + ' · ' + rawProjects.length + ' ' + _tr('setup_projects_found', 'projects found'));
-      lbl.textContent = _tr('setup_btn_reload', 'Reload project list');
+      lbl.textContent = _tr('az_test_access', 'Test access and load projects');
       btn.disabled = false;
       updateTabBadges();
+      updateCount();
+      _onConnResult(true);
     } catch(e) {
-      showErr(_tr('setup_err_network', 'Network error: {{msg}}', { msg: e.message }));
-      setConnStatus('err', _tr('setup_err_network', 'Network error: {{msg}}', { msg: e.message }));
+      showErr(_tr('setup_err_network', 'Network error: ' + e.message, { msg: e.message }));
+      setConnStatus('err', _tr('setup_err_network', 'Network error: ' + e.message, { msg: e.message }));
       btn.disabled = false;
-      lbl.textContent = _tr('setup_btn_test', 'Test Connection');
+      lbl.textContent = _tr('az_test_access', 'Test access and load projects');
+      _onConnResult(false, e.message);
     }
   }
 
@@ -930,20 +912,31 @@
   // ── Filter ────────────────────────────────────────────────────────────────
   function filterProjects() {
     const q        = document.getElementById('proj-search').value.toLowerCase().trim();
+    const onlySel  = !q && document.getElementById('az-only-selected')?.checked;
+    const hasSel   = p => (p.teams && p.teams.length > 1)
+      ? p.teams.some(t => SELECTED_SET.has(p.name + '|' + t))
+      : _isSelected(p.name);
     const filtered = q ? ALL_PROJECTS.filter(p => {
       if (p.name.toLowerCase().includes(q)) return true;
       if (p.teams && p.teams.some(t => t.toLowerCase().includes(q))) return true;
       return false;
-    }) : ALL_PROJECTS;
+    }) : (onlySel ? ALL_PROJECTS.filter(hasSel) : ALL_PROJECTS);
     renderProjectList(filtered);
+    const empty = document.getElementById('az-proj-empty');
+    if (empty) empty.style.display = (onlySel && ALL_PROJECTS.length && !filtered.length) ? '' : 'none';
   }
 
   // ── Count ─────────────────────────────────────────────────────────────────
   function updateCount() {
     const keys = [...SELECTED_SET];
-    document.getElementById('proj-count').textContent = keys.length
-      ? _tr('setup_count', '{{count}} project(s) selected', { count: keys.length })
-      : '';
+    document.getElementById('proj-count').textContent = '';
+    const head = document.getElementById('az-proj-count');
+    if (head) {
+      head.textContent = ALL_PROJECTS.length
+        ? _tr('az_proj_of', 'of', { count: keys.length, total: ALL_PROJECTS.length })
+        : (keys.length ? String(keys.length) : '');
+      if (ALL_PROJECTS.length && !/\d/.test(head.textContent)) head.textContent = keys.length + ' / ' + ALL_PROJECTS.length;
+    }
   }
 
   // ── Build projects param ──────────────────────────────────────────────────
@@ -957,56 +950,20 @@
     });
   }
 
-  // ── Save Azure credentials ────────────────────────────────────────────────
-  async function doSaveAzure() {
-    if (_isAddingOrg()) return saveNewOrg();
-    const org = document.getElementById('inp-org').value.trim();
-    const pat = document.getElementById('inp-pat').value.trim();
-    if (!org || (!pat && !_canUseSavedPat())) { showErr(_tr('setup_err_fill', 'Fill in the organization and PAT before continuing.')); return; }
-    const selected = _buildProjectsParam();
-    if (!selected.length) {
-      showMsg('azure-msg', 'warn', _tr('settings_warn_select_projects', 'Select projects in the Projects tab first.'));
-      return;
-    }
-    hideErr();
-    const btn = document.getElementById('btn-save-azure');
-    btn.disabled = true;
-    document.getElementById('sp-azure').style.display   = 'inline-block';
-    document.getElementById('lbl-save-azure').textContent = _tr('settings_save_azure_saving', 'Saving…');
-    try {
-      const body = _setupBody(org, pat, selected);
-      const r    = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
-      const data = await r.json().catch(() => ({}));
-      if (r.ok && data.ok) {
-        // Organização nova ou renomeada: recarrega para atualizar a lista
-        if (!CURRENT_ORG_ID || data.orgId !== CURRENT_ORG_ID || _labelChanged()) {
-          location.href = '/settings?tab=azure&org=' + encodeURIComponent(data.orgId || '');
-          return;
-        }
-        showMsg('azure-msg', 'ok', _tr('settings_save_azure_ok', 'Credentials saved!'));
-        clearDirty('azure');
-        updateTabBadges();
-      } else {
-        showMsg('azure-msg', 'err', data.error || _tr('setup_err_save', 'Error saving settings.'));
-      }
-    } catch(e) { showMsg('azure-msg', 'err', e.message); }
-    btn.disabled = false;
-    document.getElementById('sp-azure').style.display   = 'none';
-    document.getElementById('lbl-save-azure').textContent = _tr('settings_save_azure', 'Save Credentials');
-  }
-
-  // ── Save projects + open dashboard ───────────────────────────────────────
+  // ── Salvar organização (conexão + projetos juntos) ───────────────────────
+  // POST /setup com orgId (organização existente) ou addOrg=1 (nova): só aquela organização muda.
   async function doSave() {
     const org = document.getElementById('inp-org').value.trim();
     const pat = document.getElementById('inp-pat').value.trim();
     if (!org || (!pat && !_canUseSavedPat())) {
       switchTab('azure');
+      _setConnOpen(true);
       showErr(_tr('setup_err_fields', 'Please fill in all required fields.'));
       return;
     }
     const selected = _buildProjectsParam();
-    if (!selected.length) {
-      showMsg('projects-msg', 'err', _tr('setup_err_select', 'Select at least one project to monitor.'));
+    if (!selected.length && !_isAddingOrg()) {
+      showMsg('azure-msg', 'err', _tr('setup_err_select', 'Select at least one project to monitor.'));
       return;
     }
     hideErr();
@@ -1015,24 +972,32 @@
     document.getElementById('sp-save').style.display = 'inline-block';
     document.getElementById('lbl-save').textContent  = _tr('setup_btn_saving', 'Saving…');
     try {
-      const body = _setupBody(org, pat, selected);
-      const r    = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+      const r    = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: _setupBody(org, pat, selected) });
       const data = await r.json().catch(() => ({}));
-      if (r.ok && data.ok) { location.href = '/'; return; }
-      showMsg('projects-msg', 'err', data.error || _tr('setup_err_save', 'Error saving settings.'));
-    } catch(e) { showMsg('projects-msg', 'err', e.message); }
+      if (r.ok && data.ok) {
+        // Primeira configuração: abre o dashboard. Depois: volta para a organização salva.
+        if (!ORGS.length) { location.href = '/'; return; }
+        try { sessionStorage.setItem('azSaved', data.orgId || ''); } catch (_) {}
+        location.href = '/settings?tab=azure&org=' + encodeURIComponent(data.orgId || '');
+        return;
+      }
+      showMsg('azure-msg', 'err', data.error || _tr('setup_err_save', 'Error saving settings.'));
+    } catch(e) { showMsg('azure-msg', 'err', e.message); }
     btn.disabled = false;
     document.getElementById('sp-save').style.display = 'none';
-    document.getElementById('lbl-save').textContent  = _tr('setup_btn_save', 'Save and Open Dashboard');
+    _syncSaveLabel();
+  }
+
+  // Volta a organização ao estado salvo
+  function discardChanges() {
+    if (CURRENT_ORG_ID) editOrg(CURRENT_ORG_ID);
+    else if (ORGS.length) addOrg();
+    else location.reload();
   }
 
   // ── Organizações ──────────────────────────────────────────────────────────
   function _currentOrg() { return ORGS.find(o => o.id === CURRENT_ORG_ID) || null; }
   function _canUseSavedPat() { const o = _currentOrg(); return !!(o && o.hasPat); }
-  function _labelChanged() {
-    const o = _currentOrg();
-    return (document.getElementById('inp-org-label').value.trim()) !== ((o && o.label) || '');
-  }
 
   function _setupBody(org, pat, selected) {
     return 'org=' + encodeURIComponent(org) +
@@ -1048,72 +1013,133 @@
   // Adicionando uma organização além das já salvas (não substitui nenhuma)
   function _isAddingOrg() { return !CURRENT_ORG_ID && ORGS.length > 0; }
 
-  // Organização recém-adicionada: aviso na aba Projetos (redesenhado quando as traduções carregam)
-  let _ADDED_ORG_ID = '';
-  function _syncAddedNote() {
-    const note = document.getElementById('org-added-note');
-    if (!note) return;
-    const o = _ADDED_ORG_ID && _ADDED_ORG_ID === CURRENT_ORG_ID ? ORGS.find(x => x.id === _ADDED_ORG_ID) : null;
-    if (!o) { note.style.display = 'none'; return; }
-    note.textContent = _tr('orgs_added_note', 'Organization saved. Pick the projects to monitor and click Save.', { name: _orgName(o) });
-    note.style.display = 'block';
+  // ── Alterações não salvas: compara com o estado salvo da organização ─────
+  let _BASELINE = { org: '', label: '', projects: {} };
+  function _takeBaseline() {
+    _BASELINE = {
+      org:      document.getElementById('inp-org').value.trim(),
+      label:    document.getElementById('inp-org-label').value.trim(),
+      projects: Object.fromEntries([...SELECTED_SET].map(k => [k, WORK_ITEM_TYPES[k] || 'User Story'])),
+    };
+    _refreshDirty();
+  }
+  function _changeCount() {
+    let n = 0;
+    if (document.getElementById('inp-org').value.trim() !== _BASELINE.org) n++;
+    if (document.getElementById('inp-org-label').value.trim() !== _BASELINE.label) n++;
+    if (document.getElementById('inp-pat').value.trim()) n++;
+    const now = new Set(SELECTED_SET);
+    Object.keys(_BASELINE.projects).forEach(k => { if (!now.has(k)) n++; });
+    now.forEach(k => {
+      if (!(k in _BASELINE.projects)) n++;
+      else if ((WORK_ITEM_TYPES[k] || 'User Story') !== _BASELINE.projects[k]) n++;
+    });
+    return n;
+  }
+  function _refreshDirty() {
+    const n = _changeCount();
+    const el = document.getElementById('az-dirty');
+    const discard = document.getElementById('btn-discard');
+    const dot = document.getElementById('dirty-azure');
+    if (el) {
+      el.textContent = n === 1 ? _tr('az_dirty_one', '1 unsaved change') : _tr('az_dirty_many', 'unsaved changes', { count: n });
+      if (n > 1 && !/\d/.test(el.textContent)) el.textContent = n + ' ' + el.textContent;
+      el.style.display = n ? '' : 'none';
+    }
+    if (discard) discard.style.display = (n && (CURRENT_ORG_ID || ORGS.length)) ? '' : 'none';
+    if (dot) dot.style.display = n ? 'inline-block' : 'none';
   }
 
-  function _syncAddMode() {
-    const adding = _isAddingOrg();
-    const testBtn = document.getElementById('btn-test');
-    const saveBtn = document.getElementById('btn-save-org');
-    const hint    = document.getElementById('save-org-hint');
-    if (testBtn) testBtn.style.display = adding ? 'none' : '';
-    if (saveBtn) saveBtn.style.display = adding ? '' : 'none';
-    if (hint)    hint.style.display    = adding ? 'block' : 'none';
+  // ── Conexão recolhível ────────────────────────────────────────────────────
+  let _connOpen = true;
+  let _connState = 'idle';   // idle | loading | ok | error
+  let _connError = '';
+  function _setConnOpen(open) {
+    _connOpen = !!open;
+    const body = document.getElementById('az-conn-body');
+    const box  = document.getElementById('az-conn');
+    if (body) body.style.display = _connOpen ? '' : 'none';
+    if (box)  box.classList.toggle('collapsed', !_connOpen);
+    _syncConnSummary();
+  }
+  function toggleConn() { _setConnOpen(!_connOpen); }
+
+  function _syncConnSummary() {
+    const text = document.getElementById('az-conn-text');
+    const dot  = document.getElementById('az-conn-dot');
+    const tog  = document.getElementById('az-conn-toggle');
+    const summary = document.getElementById('az-conn-summary');
+    if (!text || !dot || !tog || !summary) return;
+    const cur = _currentOrg();
+    // Organização nova ou primeira configuração: só o formulário, sem resumo
+    summary.style.display = cur ? '' : 'none';
+    dot.className = 'az-conn-dot az-conn-dot--' + _connState;
+    if (_connState === 'loading') text.textContent = _tr('az_conn_loading', 'Testing connection…');
+    else if (_connState === 'ok') text.textContent = _tr('az_conn_ok', 'Connection ok', { count: ALL_PROJECTS.length }) +
+      (_canUseSavedPat() ? ' · ' + _tr('az_conn_saved_token', 'token saved') : '');
+    else if (_connState === 'error') text.textContent = _tr('az_conn_error', 'Could not connect') + (_connError ? ': ' + _connError : '');
+    else text.textContent = _tr('az_conn_idle', 'Connection not tested yet');
+    tog.textContent = _connOpen ? _tr('az_conn_hide', 'Hide connection') : _tr('az_conn_edit', 'Edit connection');
   }
 
-  // Testa o token na organização nova e, se der certo, salva e abre a escolha de projetos
-  async function saveNewOrg() {
-    const org = document.getElementById('inp-org').value.trim();
-    const pat = document.getElementById('inp-pat').value.trim();
-    if (!org || !pat) { showErr(_tr('setup_err_fill', 'Fill in the organization and PAT before continuing.')); return; }
-    hideErr();
-    clearConnStatus();
-    const btn = document.getElementById('btn-save-org');
-    const lbl = document.getElementById('lbl-save-org');
-    const sp  = document.getElementById('sp-save-org');
-    const idle = _tr('orgs_test_save', 'Test access and save organization');
-    btn.disabled = true; sp.style.display = 'inline-block';
-    lbl.textContent = _tr('orgs_test_save_busy', 'Testing access and saving…');
-    try {
-      const r = await fetch('/api/projects?org=' + encodeURIComponent(org) + '&pat=' + encodeURIComponent(pat));
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok || data.error) {
-        const msg = data.error || _tr('setup_err_save', 'Error saving settings.');
-        showErr(msg); setConnStatus('err', msg);
-        return;
-      }
-      const count = (data.projects || []).length;
-      setConnStatus('ok', org + ' · ' + count + ' ' + _tr('setup_projects_found', 'projects found'));
-      const s = await fetch('/setup', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: _setupBody(org, pat, []) });
-      const saved = await s.json().catch(() => ({}));
-      if (!s.ok || !saved.ok) {
-        const msg = saved.error || _tr('setup_err_save', 'Error saving settings.');
-        showErr(msg); setConnStatus('err', msg);
-        return;
-      }
-      try { sessionStorage.setItem('orgJustAdded', saved.orgId || ''); } catch (_) {}
-      location.href = '/settings?tab=projects&org=' + encodeURIComponent(saved.orgId || '');
-      return;
-    } catch (e) {
-      showErr(_tr('setup_err_network', 'Network error') + ': ' + e.message);
-    } finally {
-      btn.disabled = false; sp.style.display = 'none'; lbl.textContent = idle;
+  // Resultado do teste da organização selecionada: atualiza resumo, cartão e lista
+  function _onConnResult(ok, errorMsg) {
+    _connState = ok ? 'ok' : 'error';
+    _connError = ok ? '' : (errorMsg || '');
+    const cur = _currentOrg();
+    if (cur) {
+      cur.status = ok ? 'ok' : (/PAT|401|token|permiss/i.test(errorMsg || '') ? 'auth' : cur.status);
+    }
+    _setConnOpen(!ok || !cur);
+    _syncProjectsLock();
+    renderOrgs();
+    if (ok && SELECTED_SET.size && !document.getElementById('proj-search').value.trim()) {
+      document.getElementById('az-only-selected').checked = true;
+      filterProjects();
     }
   }
 
+  // Organização nova: projetos só depois de testar o acesso
+  function _syncProjectsLock() {
+    const locked = !CURRENT_ORG_ID && !ALL_PROJECTS.length;
+    const box = document.getElementById('az-projects');
+    const msg = document.getElementById('az-proj-locked');
+    if (box) box.classList.toggle('az-locked', locked);
+    if (msg) msg.style.display = locked ? '' : 'none';
+    _syncSteps();
+  }
+
+  function _syncSteps() {
+    const steps = document.getElementById('az-steps');
+    if (!steps) return;
+    const adding = !CURRENT_ORG_ID;
+    steps.style.display = adding && ORGS.length ? '' : 'none';
+    const current = !ALL_PROJECTS.length ? 1 : (SELECTED_SET.size ? 3 : 2);
+    steps.querySelectorAll('.az-step').forEach(el => {
+      const n = Number(el.dataset.step);
+      el.classList.toggle('active', n === current);
+      el.classList.toggle('done', n < current);
+    });
+  }
+
+  function _syncSaveLabel() {
+    const lbl = document.getElementById('lbl-save');
+    if (!lbl) return;
+    const cur = _currentOrg();
+    if (cur) lbl.textContent = _tr('az_save_org', 'Save', { name: _orgName(cur) });
+    else if (ORGS.length) lbl.textContent = _tr('az_save_new_org', 'Save organization');
+    else lbl.textContent = _tr('setup_btn_save', 'Save and Open Dashboard');
+  }
+
+  function _statusChip(o) {
+    if (o.status === 'auth') return '<span class="az-chip az-chip--err">' + _escHtml(_tr('az_status_auth', 'token expired')) + '</span>';
+    if (o.status === 'ok')   return '<span class="az-chip az-chip--ok">' + _escHtml(_tr('az_status_ok', 'connected')) + '</span>';
+    return '<span class="az-chip">' + _escHtml(_tr('az_status_unknown', 'not checked')) + '</span>';
+  }
+
   function renderOrgs() {
-    const box  = document.getElementById('su-orgs');
     const list = document.getElementById('su-orgs-list');
-    const editing = document.getElementById('org-editing');
-    const projOrg = document.getElementById('proj-org-name');
+    const layout = document.getElementById('az-layout');
     const patHint = document.getElementById('pat-saved-hint');
     const cur = _currentOrg();
     if (patHint) patHint.style.display = _canUseSavedPat() ? 'block' : 'none';
@@ -1121,32 +1147,56 @@
     if (patInput) patInput.placeholder = _canUseSavedPat()
       ? _tr('orgs_pat_keep_placeholder', 'Saved token (leave blank to keep)')
       : _tr('setup_pat_placeholder', 'Paste your PAT here');
-    _syncAddMode();
-    _syncAddedNote();
-    if (!ORGS.length) { box.style.display = 'none'; editing.style.display = 'none'; projOrg.style.display = 'none'; return; }
-    box.style.display = 'block';
-    const rows = ORGS.map(o => {
+
+    // Primeira configuração (nenhuma organização salva): sem coluna de organizações
+    if (layout) layout.classList.toggle('az-layout--single', !ORGS.length);
+
+    const cards = ORGS.map(o => {
       const active = o.id === CURRENT_ORG_ID;
-      const count  = _tr('orgs_projects_count', '{{count}} project(s)', { count: o.projectCount });
-      return '<div class="su-org-row' + (active ? ' active' : '') + '">' +
-        '<div class="su-org-info">' +
-          '<div class="su-org-name">' + _escHtml(_orgName(o)) + (active ? ' <span class="su-org-badge">' + _escHtml(_tr('orgs_editing_badge', 'editing')) + '</span>' : '') + '</div>' +
-          '<div class="su-org-meta">' + _escHtml(o.baseUrl) + ' · ' + _escHtml(count) + '</div>' +
-        '</div>' +
-        (active ? '' : '<button type="button" class="su-org-btn" onclick="editOrg(\'' + _escHtml(o.id) + '\')">' + _escHtml(_tr('orgs_edit', 'Edit')) + '</button>') +
-        '<button type="button" class="su-org-btn su-org-btn--danger" onclick="removeOrgClick(\'' + _escHtml(o.id) + '\')">' + _escHtml(_tr('orgs_remove', 'Remove')) + '</button>' +
-      '</div>';
+      const count  = _tr('orgs_projects_count', 'project(s)', { count: o.projectCount });
+      const countText = /\d/.test(count) ? count : o.projectCount + ' ' + count;
+      return '<button type="button" class="az-org-card' + (active ? ' active' : '') + '"' +
+        (active ? ' aria-current="true"' : ' onclick="editOrg(\'' + _escHtml(o.id) + '\')"') + '>' +
+        '<span class="az-org-card-top"><span class="az-org-card-name">' + _escHtml(_orgName(o)) + '</span>' + _statusChip(o) + '</span>' +
+        '<span class="az-org-card-meta">' + _escHtml(countText) + '</span>' +
+      '</button>';
     });
-    if (!cur) rows.push('<div class="su-org-row active"><div class="su-org-info"><div class="su-org-name">' + _escHtml(_tr('orgs_new', 'New organization')) + '</div></div></div>');
-    list.innerHTML = rows.join('');
-    editing.textContent = cur
-      ? _tr('orgs_editing', 'Editing: {{name}}', { name: _orgName(cur) })
-      : _tr('orgs_new_editing', 'New organization: fill in the URL and token, then pick its projects.');
-    editing.style.display = 'block';
-    projOrg.textContent = cur
-      ? _tr('orgs_projects_of', 'Organization: {{name}}', { name: _orgName(cur) })
-      : _tr('orgs_projects_of_new', 'Organization: new');
-    projOrg.style.display = 'block';
+    if (!cur && ORGS.length) {
+      cards.push('<div class="az-org-card active az-org-card--new"><span class="az-org-card-top"><span class="az-org-card-name">' +
+        _escHtml(_tr('orgs_new', 'New organization')) + '</span></span></div>');
+    }
+    if (list) list.innerHTML = cards.join('');
+
+    // Cabeçalho do painel
+    const title = document.getElementById('az-panel-title');
+    const url   = document.getElementById('az-panel-url');
+    const rm    = document.getElementById('az-remove-btn');
+    if (title) title.textContent = cur ? _orgName(cur) : (ORGS.length ? _tr('orgs_new', 'New organization') : _tr('az_first_org', 'Connect your organization'));
+    if (url)   url.textContent   = cur ? cur.baseUrl : (ORGS.length ? _tr('az_new_org_hint', 'Fill in the URL and token, then pick its projects.') : '');
+    if (rm)    rm.style.display  = cur ? '' : 'none';
+
+    _syncAddedNote();
+    _syncConnSummary();
+    _syncProjectsLock();
+    _syncSaveLabel();
+  }
+
+  // Organização recém-adicionada ou salva: aviso acima da lista de projetos
+  let _ADDED_ORG_ID = '';
+  let _SAVED_ORG_ID = '';
+  function _syncAddedNote() {
+    const note = document.getElementById('org-added-note');
+    if (!note) return;
+    const cur = _currentOrg();
+    if (cur && _ADDED_ORG_ID === cur.id) {
+      note.textContent = _tr('orgs_added_note', 'Organization saved. Pick the projects to monitor and click Save.', { name: _orgName(cur) });
+      note.style.display = 'block';
+    } else if (cur && _SAVED_ORG_ID === cur.id) {
+      note.textContent = _tr('az_saved_note', 'Changes saved.', { name: _orgName(cur) });
+      note.style.display = 'block';
+    } else {
+      note.style.display = 'none';
+    }
   }
 
   function _resetProjectsForOrg(map) {
@@ -1158,13 +1208,17 @@
     renderProjectList([]);
     const okBox = document.getElementById('ok-box');
     if (okBox) okBox.style.display = 'none';
+    const search = document.getElementById('proj-search');
+    if (search) search.value = '';
+    const only = document.getElementById('az-only-selected');
+    if (only) only.checked = SELECTED_SET.size > 0;
     clearConnStatus();
     hideErr();
     updateCount();
     updateTabBadges();
   }
 
-  function editOrg(id, tab) {
+  function editOrg(id) {
     const o = ORGS.find(x => x.id === id);
     if (!o) return;
     CURRENT_ORG_ID = id;
@@ -1173,20 +1227,26 @@
     document.getElementById('inp-pat').value = '';
     updateOrgPreview();
     _resetProjectsForOrg(o.projects);
-    clearDirty('azure'); clearDirty('projects');
+    _connState = 'idle'; _connError = '';
+    _setConnOpen(o.status === 'auth' || !o.hasPat);
     renderOrgs();
-    switchTab(tab || 'azure');
+    _takeBaseline();
+    switchTab('azure');
     loadProjects();
   }
 
   function addOrg() {
     CURRENT_ORG_ID = null;
+    _ADDED_ORG_ID = ''; _SAVED_ORG_ID = '';
     document.getElementById('inp-org').value = '';
     document.getElementById('inp-org-label').value = '';
     document.getElementById('inp-pat').value = '';
     updateOrgPreview();
     _resetProjectsForOrg({});
+    _connState = 'idle'; _connError = '';
+    _setConnOpen(true);
     renderOrgs();
+    _takeBaseline();
     switchTab('azure');
     document.getElementById('inp-org').focus();
   }
@@ -1194,7 +1254,7 @@
   async function removeOrgClick(id) {
     const o = ORGS.find(x => x.id === id);
     if (!o) return;
-    const msg = _tr('orgs_remove_confirm', 'Remove the organization "{{name}}" and its {{count}} project(s) from the dashboard?', { name: _orgName(o), count: o.projectCount });
+    const msg = _tr('orgs_remove_confirm', 'Remove the organization and its projects from the dashboard?', { name: _orgName(o), count: o.projectCount });
     if (!confirm(msg)) return;
     try {
       const r = await fetch('/api/orgs/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orgId: id }) });
@@ -1204,16 +1264,22 @@
     } catch (e) { showErr(e.message); }
   }
 
-  // Organização escolhida pela URL (?org=id) após salvar uma nova
+  // Estado inicial: organização da URL (?org=id) ou a principal
   (function initOrgs() {
     const params = new URLSearchParams(location.search);
     const wanted = params.get('org');
-    const tab    = params.get('tab') || 'azure';
-    if (wanted && wanted !== CURRENT_ORG_ID && ORGS.some(o => o.id === wanted)) {
-      window.addEventListener('load', () => editOrg(wanted, tab));
-    }
     try { _ADDED_ORG_ID = sessionStorage.getItem('orgJustAdded') || ''; sessionStorage.removeItem('orgJustAdded'); } catch (_) {}
+    try { _SAVED_ORG_ID = sessionStorage.getItem('azSaved') || ''; sessionStorage.removeItem('azSaved'); } catch (_) {}
+    if (wanted && wanted !== CURRENT_ORG_ID && ORGS.some(o => o.id === wanted)) {
+      window.addEventListener('load', () => editOrg(wanted));
+    } else {
+      const cur = _currentOrg();
+      _setConnOpen(!cur || cur.status === 'auth' || !cur.hasPat);
+      const only = document.getElementById('az-only-selected');
+      if (only) only.checked = SELECTED_SET.size > 0;
+    }
     renderOrgs();
+    _takeBaseline();
   })();
 
   // ── ServiceNow helpers ────────────────────────────────────────────────────

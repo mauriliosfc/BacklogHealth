@@ -310,6 +310,7 @@ npm run test:coverage   # exibe cobertura por arquivo
 | 190 | `organizations[]` com a principal espelhada no topo | `getAppMode`, gates do `server.js` e downgrade seguem lendo `org`/`pat` do topo — manter o espelho |
 | 191 | Projeto identificado por `p.key || nome[ - time]`; `key` só na colisão entre organizações | Nunca migrar identificadores existentes — quebraria cache, aliases e filtros salvos |
 | 192 | PAT nunca vai para o HTML; campo em branco mantém o salvo | Não voltar a preencher `{{PAT_VALUE}}` |
+| 197 | Aba Azure de Configurações em lista e detalhe (sem aba Projetos); um save grava conexão e projetos da organização | Não separar de novo conexão e projetos em abas/saves diferentes |
 
 ---
 

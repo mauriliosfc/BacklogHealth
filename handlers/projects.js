@@ -273,7 +273,7 @@ function listOrganizations() {
       const own = projects.filter(p => typeof p === 'object' && (p.orgId || orgs[0]?.id) === o.id);
       return {
         id: o.id, org: o.org, baseUrl: o.baseUrl, label: o.label || '',
-        hasPat: !!o.pat, projectCount: own.length,
+        hasPat: !!o.pat, status: state.statusOf(o.id), projectCount: own.length,
         projects: own.map(p => ({ name: p.name, team: p.team || undefined, workItemType: p.workItemType || 'User Story' })),
       };
     }),
