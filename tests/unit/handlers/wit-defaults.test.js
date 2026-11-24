@@ -54,6 +54,26 @@ describe('dashboard com várias organizações', () => {
     expect(html).toContain('az-auth-banner-orgs">Cliente B<');
   });
 
+  test('orgStatusFrom: token recusado prevalece; projeto carregado marca ok', () => {
+    const { orgStatusFrom } = require('../../../handlers/dashboard');
+    expect(orgStatusFrom([
+      { orgId: 'a', items: [] },
+      { orgId: 'b', items: [] }, { orgId: 'b', error: 'x', errorCode: 'AZURE_AUTH' },
+      { orgId: 'c', error: 'HTTP 404' },
+      { project: 'sem org' },
+    ])).toEqual({ a: 'ok', b: 'auth' });
+  });
+
+  test('renderSetup inclui o status de cada organização', () => {
+    const state = require('../../../handlers/state');
+    state.orgStatus = { b: 'auth' };
+    const html = renderSetup({ org: 'A', organizations: [A, B], projects: [] });
+    expect(html).toContain('"id":"a","org":"A"');
+    expect(html).toMatch(/"id":"a"[^}]*"status":"unknown"/);
+    expect(html).toMatch(/"id":"b"[^}]*"status":"auth"/);
+    state.orgStatus = {};
+  });
+
   test('renderSetup não coloca o PAT na página e lista as organizações', () => {
     const html = renderSetup({
       org: 'A', baseUrl: A.baseUrl, pat: A.pat, organizations: [A, B],

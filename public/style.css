@@ -2092,3 +2092,66 @@ body.electron-app .su-topbar-right {
   z-index: 160;
 }
 
+/* ── Configurações › Azure DevOps: organizações à esquerda, organização selecionada à direita ── */
+.su-tab-inner--wide { max-width: 1120px; }
+.az-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 20px; align-items: start; }
+.az-layout--single { grid-template-columns: minmax(0, 1fr); }
+.az-layout--single .az-orgs { display: none; }
+.az-orgs { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 16px; }
+.az-orgs > .su-label { margin: 0 0 2px; }
+.az-org-list { display: flex; flex-direction: column; gap: 6px; }
+.az-org-card { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; padding: 10px 12px; background: var(--bg-card); border: 1px solid var(--bg-border); border-radius: 10px; color: var(--text-1); font-family: inherit; cursor: pointer; transition: border-color .15s, background .15s; }
+.az-org-card:hover { border-color: var(--c-blue-bd); }
+.az-org-card.active { border: 2px solid var(--c-blue); padding: 9px 11px; cursor: default; }
+.az-org-card--new { border-style: dashed; }
+.az-org-card-top { display: flex; align-items: center; gap: 8px; }
+.az-org-card-name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.az-org-card-meta { font-size: 11px; color: var(--text-faint); }
+.az-chip { flex-shrink: 0; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--bg-el2); color: var(--text-muted); white-space: nowrap; }
+.az-chip--ok { background: var(--c-green-bg); color: var(--c-green2); }
+.az-chip--err { background: var(--c-red-bg); color: var(--c-red2); }
+.az-org-add { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px; background: none; border: 1px dashed var(--bg-border); border-radius: 10px; color: var(--c-blue); font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; }
+.az-org-add:hover { background: var(--bg-el); }
+.az-danger { margin-top: 18px; padding: 14px; gap: 8px; }
+.az-danger .su-danger-desc { font-size: 11px; }
+.az-org-panel { background: var(--bg-card); border: 1px solid var(--bg-border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.az-panel-head { display: flex; align-items: flex-start; gap: 12px; }
+.az-panel-head-text { flex: 1; min-width: 0; }
+.az-panel-title { font-size: 17px; font-weight: 700; color: var(--text-1); }
+.az-panel-url { font-size: 12px; color: var(--text-faint); margin-top: 2px; word-break: break-all; }
+.az-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.az-step { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--bg-el); color: var(--text-faint); font-size: 12px; font-weight: 600; }
+.az-step-num { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--bg-el2); font-size: 11px; }
+.az-step.active { background: var(--c-blue-bg); color: var(--c-blue); }
+.az-step.active .az-step-num { background: var(--c-blue); color: #fff; }
+.az-step.done { color: var(--c-green2); }
+.az-conn { border: 1px solid var(--bg-border); border-radius: 10px; background: var(--bg-el); }
+.az-conn-summary { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.az-conn:not(.collapsed) .az-conn-summary { border-bottom: 1px solid var(--bg-border); }
+.az-conn-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-faint); }
+.az-conn-dot--ok { background: var(--c-green2); }
+.az-conn-dot--error { background: var(--c-red2); }
+.az-conn-dot--loading { background: var(--c-yellow2); }
+.az-conn-text { flex: 1; min-width: 0; font-size: 13px; color: var(--text-1); }
+.az-conn-toggle { background: none; border: 1px solid var(--bg-border); color: var(--text-muted); font-size: 12px; font-family: inherit; padding: 5px 10px; border-radius: 6px; cursor: pointer; flex-shrink: 0; }
+.az-conn-toggle:hover { background: var(--bg-el2); color: var(--text-1); }
+.az-conn-body { display: flex; flex-direction: column; gap: 16px; padding: 16px 14px; }
+.az-projects { display: flex; flex-direction: column; gap: 10px; }
+.az-projects.az-locked .su-proj-list, .az-projects.az-locked .az-search, .az-projects.az-locked .az-only-selected { opacity: .45; pointer-events: none; }
+.az-proj-head { display: flex; align-items: center; gap: 12px; }
+.az-proj-title { flex: 1; font-size: 14px; font-weight: 700; color: var(--text-1); }
+.az-proj-count { font-weight: 500; color: var(--text-faint); margin-left: 4px; }
+.az-only-selected { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); cursor: pointer; }
+.az-search { width: 100%; box-sizing: border-box; }
+.az-search .su-search { width: 100%; }
+.az-proj-locked, .az-proj-empty { font-size: 13px; color: var(--text-faint); padding: 12px; border: 1px dashed var(--bg-border); border-radius: 8px; text-align: center; }
+.az-help { padding: 16px; margin-top: 0; }
+.az-dirty { font-size: 13px; font-weight: 500; color: var(--c-yellow2); }
+.su-btn-ghost { background: none; border: 1px solid var(--bg-border); color: var(--text-muted); font-size: 13px; font-family: inherit; padding: 9px 16px; border-radius: 8px; cursor: pointer; }
+.su-btn-ghost:hover { background: var(--bg-el); color: var(--text-1); }
+@media (max-width: 820px) {
+  .az-layout { grid-template-columns: minmax(0, 1fr); }
+  .az-orgs { position: static; }
+  .az-org-list { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .az-org-card { width: auto; min-width: 160px; }
+}
