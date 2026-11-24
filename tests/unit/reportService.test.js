@@ -64,6 +64,19 @@ test('tipo personalizado: tipo, campo de estimativa e estados concluídos do tip
   expect(r.sprints[0]).toMatchObject({ points: 6, pointsDelivered: 4 });
 });
 
+test('multi-org: consultas e links usam a organização do projeto', async () => {
+  const { getOrg } = require('../../config');
+  const ORG_B = { id: 'b', org: 'B', baseUrl: 'https://b.visualstudio.com', pat: 'pb' };
+  getOrg.mockReturnValue(ORG_B);
+  getProjectConfig.mockReturnValue({ name: 'P', workItemType: 'User Story', displayName: 'P', orgId: 'b' });
+  paginatedItems.mockResolvedValue([item(1, 'User Story', 'Closed', { [SP]: 1, 'System.Title': 'x', 'Microsoft.VSTS.Common.StateChangeDate': '2026-10-02' })]);
+  const r = await fetchAzureReport('P', PERIOD, [], 'Closed');
+  expect(azurePost.mock.calls.every(c => c[2] === ORG_B)).toBe(true);
+  expect(paginatedItems.mock.calls.every(c => c[3] === ORG_B)).toBe(true);
+  expect(r.usAging.list[0].url).toBe('https://b.visualstudio.com/_workitems/edit/1');
+  getOrg.mockReset();
+});
+
 test('estados de entrega informados têm prioridade sobre os do tipo', async () => {
   getProjectConfig.mockReturnValue({ name: 'P', workItemType: 'Issue', displayName: 'P', estimateField: EF, states: { done: ['Done'] } });
   paginatedItems.mockResolvedValue([item(1, 'Issue', 'Done', {}), item(2, 'Issue', 'Doing', {})]);

@@ -1,4 +1,6 @@
-const { getCfg, getDisplayName, saveConfig } = require('../config');
+const { getCfg, getDisplayName, saveConfig, getOrg } = require('../config');
+
+const _orgOf = pcfg => (typeof getOrg === 'function' && getOrg(pcfg?.orgId)) || null;
 const { azureGet } = require('../azureClient');
 const { fetchProjectDetail, fetchUATPlans } = require('../projectService');
 const { fetchTeamCapacity } = require('../teamCapacityService');
@@ -24,7 +26,10 @@ async function getReportFields({ project }) {
   const cfg   = getCfg();
   const pcfg  = (cfg.projects || []).find(p => getDisplayName(p) === project);
   const proj  = pcfg?.name || project;
-  const r     = await azureGet(`${encodeURIComponent(proj)}/_apis/wit/fields?api-version=7.0`);
+  const org   = _orgOf(pcfg);
+  const r     = org
+    ? await azureGet(`${encodeURIComponent(proj)}/_apis/wit/fields?api-version=7.0`, org)
+    : await azureGet(`${encodeURIComponent(proj)}/_apis/wit/fields?api-version=7.0`);
   const STANDARD = new Set([
     'System.AreaPath',
     'System.IterationPath',
@@ -48,9 +53,9 @@ async function getUSStates({ project }) {
   const pcfg = (cfg.projects || []).find(p => getDisplayName(p) === project);
   const proj = pcfg?.name || project;
   const type = pcfg?.workItemType || 'User Story';
-  const r    = await azureGet(
-    `${encodeURIComponent(proj)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/states?api-version=7.0`
-  );
+  const org  = _orgOf(pcfg);
+  const url  = `${encodeURIComponent(proj)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/states?api-version=7.0`;
+  const r    = org ? await azureGet(url, org) : await azureGet(url);
   return { states: (r.value || []).map(s => s.name) };
 }
 

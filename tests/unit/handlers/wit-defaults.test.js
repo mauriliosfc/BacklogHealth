@@ -39,6 +39,34 @@ describe('buildAuthBanner', () => {
   });
 });
 
+describe('dashboard com várias organizações', () => {
+  const { withOrgLabels, buildAuthBanner, renderSetup } = require('../../../handlers/dashboard');
+  const A = { id: 'a', org: 'A', baseUrl: 'https://dev.azure.com/A', pat: 'segredo-a' };
+  const B = { id: 'b', org: 'B', baseUrl: 'https://dev.azure.com/B', pat: 'segredo-b', label: 'Cliente B' };
+
+  test('withOrgLabels só marca os cards quando há mais de uma organização', () => {
+    expect(withOrgLabels([{ project: 'X', orgId: 'a' }], [A])).toEqual([{ project: 'X', orgId: 'a' }]);
+    expect(withOrgLabels([{ project: 'X', orgId: 'b' }, { project: 'Y' }], [A, B]).map(r => r.orgLabel)).toEqual(['Cliente B', 'A']);
+  });
+
+  test('aviso de token cita as organizações afetadas', () => {
+    const html = buildAuthBanner([{ errorCode: 'AZURE_AUTH', orgLabel: 'Cliente B' }, { errorCode: 'AZURE_AUTH', orgLabel: 'Cliente B' }]);
+    expect(html).toContain('az-auth-banner-orgs">Cliente B<');
+  });
+
+  test('renderSetup não coloca o PAT na página e lista as organizações', () => {
+    const html = renderSetup({
+      org: 'A', baseUrl: A.baseUrl, pat: A.pat, organizations: [A, B],
+      projects: [{ name: 'P1', orgId: 'a' }, { name: 'P2', orgId: 'b', team: 'T' }],
+    });
+    expect(html).not.toContain('segredo-a');
+    expect(html).not.toContain('segredo-b');
+    expect(html).toContain('"id":"b"');
+    expect(html).toContain('"projectCount":1');
+    expect(html).toContain('const PREFILL = {"P1":"User Story"}');
+  });
+});
+
 describe('buildSummaryBar — tipo personalizado', () => {
   const f = (type, state, extra = {}) => ({ fields: { 'System.WorkItemType': type, 'System.State': state, 'System.AssignedTo': { displayName: 'D' }, ...extra } });
 

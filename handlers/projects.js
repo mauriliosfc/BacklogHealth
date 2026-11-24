@@ -4,8 +4,10 @@ const { buildAndCache } = require('./dashboard');
 const { httpError } = require('./utils');
 const state = require('./state');
 const { isLegacyType, pickEstimateField, statesFromCategories } = require('../utils/workItemProfile');
+const { orgIdFor, uniqueOrgId, orgLabel, sameBaseUrl, assignProjectKeys } = require('../utils/orgs');
 
-async function listProjects({ org, pat }) {
+async function listProjects({ org, pat, orgId }) {
+  pat = _patFor({ org, pat, orgId });
   if (!org || !pat) httpError(400, 'org e pat são obrigatórios');
   const auth    = Buffer.from(`:${pat}`).toString('base64');
   const { baseUrl } = parseOrgInput(org);
@@ -58,7 +60,8 @@ const EXCLUDED_CATEGORIES = new Set([
 // Lista os tipos de work item de um projeto para o seletor do setup.
 // O recomendado é o tipo padrão da categoria de requisitos do processo
 // (User Story no Agile, Product Backlog Item no Scrum, Requirement no CMMI, Issue no Basic).
-async function listWorkItemTypes({ org, pat, project }) {
+async function listWorkItemTypes({ org, pat, project, orgId }) {
+  pat = _patFor({ org, pat, orgId });
   if (!org || !pat || !project) httpError(400, 'org, pat e project são obrigatórios');
   const auth = Buffer.from(`:${pat}`).toString('base64');
   const { baseUrl } = parseOrgInput(org);
@@ -150,17 +153,47 @@ function _parseProjects(projectsRaw, projectsJson) {
     });
 }
 
-async function setup({ rawOrg, pat, projectsRaw, projectsJson }) {
+// addOrg: a tela está adicionando uma organização nova — nunca substitui uma existente
+// (sem isso, com uma só organização salva, o fluxo antigo trocaria a existente pela nova)
+// e pode salvar sem projetos (eles são escolhidos logo depois, na aba Projetos).
+async function setup({ rawOrg, pat, projectsRaw, projectsJson, orgId, label, addOrg = false }) {
   const existingForMerge = getCfg();
   const parsed = _parseProjects(projectsRaw, projectsJson);
-  if (!rawOrg || !pat || !parsed.length)
+  if (!rawOrg || (!parsed.length && !addOrg))
     httpError(400, 'Preencha todos os campos obrigatórios.');
   const { org, baseUrl } = parseOrgInput(rawOrg);
-  const auth = Buffer.from(`:${pat}`).toString('base64');
 
-  const projects = await Promise.all(parsed.map(async ({ name, workItemType, team }) => {
-    const prevProj = (existingForMerge.projects || []).find(
-      ep => typeof ep === 'object' && ep.name === name && (ep.team || undefined) === team
+  // Organização alvo: a indicada (orgId), a única existente (fluxo de sempre) ou a de mesma URL
+  const orgs   = _orgsOf(existingForMerge);
+  const target = addOrg ? null : _findTargetOrg(orgs, { orgId, baseUrl });
+  const dup    = orgs.find(o => o !== target && sameBaseUrl(o.baseUrl, baseUrl));
+  if (dup) httpError(409, `A organização "${orgLabel(dup)}" já está conectada.`);
+
+  // PAT em branco = manter o salvo da organização (o PAT não volta para a tela)
+  const effectivePat = pat || (target && sameBaseUrl(target.baseUrl, baseUrl) ? target.pat : '');
+  if (!effectivePat) httpError(400, 'Preencha todos os campos obrigatórios.');
+  const auth = Buffer.from(`:${effectivePat}`).toString('base64');
+
+  const newOrg = {
+    ...(target || {}),
+    id:      target ? target.id : uniqueOrgId(org, baseUrl, orgs),
+    org, baseUrl, pat: effectivePat,
+  };
+  if (label !== undefined) {
+    const clean = String(label || '').trim();
+    if (clean) newOrg.label = clean; else delete newOrg.label;
+  }
+
+  // Sem nenhuma organização salva, projetos sem orgId pertencem à que está sendo criada
+  const isTargetProject = ep => typeof ep === 'object' && (target
+    ? (ep.orgId || orgs[0]?.id) === target.id
+    : (!orgs.length && !ep.orgId));
+  const targetProjects  = (existingForMerge.projects || []).filter(isTargetProject);
+  const otherProjects   = (existingForMerge.projects || []).filter(ep => !isTargetProject(ep));
+
+  let projects = await Promise.all(parsed.map(async ({ name, workItemType, team }) => {
+    const prevProj = targetProjects.find(
+      ep => ep.name === name && (ep.team || undefined) === team
     );
     // Preserva as configurações do projeto (ServiceNow, indicadores, report, burndown...)
     const base = prevProj ? { ...prevProj } : {};
@@ -168,7 +201,7 @@ async function setup({ rawOrg, pat, projectsRaw, projectsJson }) {
     if (typeChanged) TYPE_DEPENDENT_FIELDS.forEach(f => { delete base[f]; });
     delete base.team;
 
-    const proj = { ...base, name, workItemType, ...(team ? { team } : {}) };
+    const proj = { ...base, name, workItemType, ...(team ? { team } : {}), orgId: newOrg.id };
 
     if (isLegacyType(workItemType)) {
       delete proj.estimateField; delete proj.estimateUnit; delete proj.states;
@@ -178,11 +211,107 @@ async function setup({ rawOrg, pat, projectsRaw, projectsJson }) {
     }
     return proj;
   }));
+  // Mesmo nome em outra organização → identificador com o nome da organização
+  projects = assignProjectKeys(projects, otherProjects, newOrg);
 
+  const organizations = target ? orgs.map(o => (o === target ? newOrg : o)) : [...orgs, newOrg];
+  const primary = organizations[0];
   const existing = getCfg();
-  saveConfig({ ...existing, org, baseUrl, pat, projects, _onboarded: true });
+  saveConfig({
+    ...existing,
+    org: primary.org, baseUrl: primary.baseUrl, pat: primary.pat,
+    organizations,
+    projects: _mergeOrgProjects(existingForMerge.projects || [], isTargetProject, projects),
+    _onboarded: true,
+  });
   await buildAndCache();
-  return { ok: true };
+  return { ok: true, orgId: newOrg.id };
+}
+
+// Organizações da config; configs antigas (sem organizations) viram uma lista de uma
+function _orgsOf(cfg) {
+  if (Array.isArray(cfg.organizations) && cfg.organizations.length) return cfg.organizations;
+  if (cfg.org || cfg.baseUrl) {
+    const baseUrl = cfg.baseUrl || `https://dev.azure.com/${cfg.org}`;
+    return [{ id: orgIdFor(cfg.org, baseUrl), org: cfg.org || '', baseUrl, pat: cfg.pat || '' }];
+  }
+  return [];
+}
+
+function _findTargetOrg(orgs, { orgId, baseUrl }) {
+  if (orgId) {
+    const byId = orgs.find(o => o.id === orgId);
+    if (!byId) httpError(404, 'Organização não encontrada.');
+    return byId;
+  }
+  if (orgs.length <= 1) return orgs[0] || null;   // fluxo de uma organização: substitui a existente
+  return orgs.find(o => sameBaseUrl(o.baseUrl, baseUrl)) || null;
+}
+
+// Substitui os projetos da organização mantendo a posição deles na lista
+function _mergeOrgProjects(existing, isTargetProject, newProjects) {
+  const out = [];
+  let inserted = false;
+  for (const p of existing) {
+    if (isTargetProject(p)) {
+      if (!inserted) { out.push(...newProjects); inserted = true; }
+    } else {
+      out.push(p);
+    }
+  }
+  if (!inserted) out.push(...newProjects);
+  return out;
+}
+
+// Organizações para a tela de Configurações — nunca devolve o PAT
+function listOrganizations() {
+  const cfg  = getCfg();
+  const orgs = _orgsOf(cfg);
+  const projects = cfg.projects || [];
+  return {
+    organizations: orgs.map(o => {
+      const own = projects.filter(p => typeof p === 'object' && (p.orgId || orgs[0]?.id) === o.id);
+      return {
+        id: o.id, org: o.org, baseUrl: o.baseUrl, label: o.label || '',
+        hasPat: !!o.pat, projectCount: own.length,
+        projects: own.map(p => ({ name: p.name, team: p.team || undefined, workItemType: p.workItemType || 'User Story' })),
+      };
+    }),
+  };
+}
+
+// Remove uma organização e os projetos dela. A próxima vira a principal.
+async function removeOrganization({ orgId } = {}) {
+  if (!orgId) httpError(400, 'orgId obrigatório');
+  const cfg  = getCfg();
+  const orgs = _orgsOf(cfg);
+  const target = orgs.find(o => o.id === orgId);
+  if (!target) httpError(404, 'Organização não encontrada.');
+  const isOwn = p => typeof p === 'object' && (p.orgId || orgs[0]?.id) === orgId;
+  const removedProjects = (cfg.projects || []).filter(isOwn).length;
+  const organizations = orgs.filter(o => o.id !== orgId);
+  const projects = (cfg.projects || []).filter(p => !isOwn(p));
+  if (!organizations.length) {
+    saveConfig({ ...cfg, org: '', baseUrl: '', pat: '', organizations: [], projects: [] });
+    state.html = '';
+    return { ok: true, removedProjects };
+  }
+  const primary = organizations[0];
+  saveConfig({ ...cfg, org: primary.org, baseUrl: primary.baseUrl, pat: primary.pat, organizations, projects });
+  await buildAndCache();
+  return { ok: true, removedProjects };
+}
+
+// PAT informado ou, em branco, o salvo da organização (por id ou pela URL)
+function _patFor({ org, pat, orgId }) {
+  if (pat) return pat;
+  const orgs = _orgsOf(getCfg() || {});
+  const byId = orgId ? orgs.find(o => o.id === orgId) : null;
+  if (byId) return byId.pat || '';
+  if (!org || !orgs.length) return '';
+  const { baseUrl } = parseOrgInput(org) || {};
+  const byUrl = orgs.find(o => sameBaseUrl(o.baseUrl, baseUrl));
+  return (byUrl && byUrl.pat) || '';
 }
 
 async function removeProject({ project }) {
@@ -195,7 +324,7 @@ async function removeProject({ project }) {
 
 async function disconnect() {
   const existing = getCfg();
-  saveConfig({ ...existing, org: '', baseUrl: '', pat: '', projects: [] });
+  saveConfig({ ...existing, org: '', baseUrl: '', pat: '', organizations: [], projects: [] });
   state.html = '';
   return { ok: true };
 }
@@ -205,4 +334,4 @@ async function markOnboarded() {
   return { ok: true };
 }
 
-module.exports = { listProjects, listWorkItemTypes, resolveTypeProfile, setup, removeProject, disconnect, markOnboarded };
+module.exports = { listProjects, listWorkItemTypes, resolveTypeProfile, setup, removeProject, disconnect, markOnboarded, listOrganizations, removeOrganization };

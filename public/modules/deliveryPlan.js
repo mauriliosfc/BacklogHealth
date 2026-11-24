@@ -32,7 +32,7 @@ function _renderContent() {
 
   const projects = cards.map(card => {
     const name    = card.dataset.project;
-    const label   = getAlias(name);
+    const label   = getAlias(name) + (card.dataset.org ? ' · ' + card.dataset.org : '');
     const iterMap = (() => { try { return JSON.parse(card.dataset.itermap || '{}'); } catch (_) { return {}; } })();
     const saved   = localStorage.getItem('filter_' + name);
     const selectedSprints = saved ? JSON.parse(saved) : [];

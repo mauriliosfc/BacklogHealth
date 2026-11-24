@@ -68,8 +68,18 @@ describe('azureGet', () => {
     await expect(azureGet('P/_apis/x')).rejects.toMatchObject({ code: AUTH_ERROR_CODE, status: 203 });
   });
 
-  test('outros corpos inválidos continuam como Parse error', async () => {
-    mockGet(500, 'oops');
+  test('erro HTTP sem JSON vira mensagem legível (sem o HTML da página)', async () => {
+    mockGet(500, '<html>erro</html>');
+    await expect(azureGet('P/_apis/x')).rejects.toThrow('Azure DevOps respondeu HTTP 500.');
+  });
+
+  test('404 sem JSON explica que a organização ou o projeto não existe', async () => {
+    mockGet(404, '<!DOCTYPE html><title>404</title>');
+    await expect(azureGet('P/_apis/x')).rejects.toThrow('organização ou projeto não encontrado');
+  });
+
+  test('200 com corpo inválido continua como Parse error', async () => {
+    mockGet(200, 'oops');
     await expect(azureGet('P/_apis/x')).rejects.toThrow('Parse error: oops');
   });
 });
@@ -83,6 +93,40 @@ describe('azurePost', () => {
   test('401 rejeita com código AZURE_AUTH', async () => {
     mockRequest(401, '');
     await expect(azurePost('P/_apis/wit/wiql', { query: 'x' })).rejects.toMatchObject({ code: AUTH_ERROR_CODE });
+  });
+});
+
+describe('organização informada', () => {
+  const ORG_B = { id: 'b', org: 'B', label: 'Cliente B', baseUrl: 'https://b.visualstudio.com', pat: 'pb' };
+
+  test('azureGet usa a URL e o token da organização', async () => {
+    mockGet(200, '{}');
+    await azureGet('P/_apis/x', ORG_B);
+    expect(https.get.mock.calls[0][0]).toBe('https://b.visualstudio.com/P/_apis/x');
+    expect(https.get.mock.calls[0][1].headers.Authorization).toBe('Basic ' + Buffer.from(':pb').toString('base64'));
+  });
+
+  test('azurePost usa o host e o token da organização', async () => {
+    mockRequest(200, '{}');
+    await azurePost('P/_apis/wit/wiql', { query: 'x' }, ORG_B);
+    const opts = https.request.mock.calls[0][0];
+    expect(opts.hostname).toBe('b.visualstudio.com');
+    expect(opts.path).toBe('/P/_apis/wit/wiql');
+    expect(opts.headers.Authorization).toBe('Basic ' + Buffer.from(':pb').toString('base64'));
+  });
+
+  test('sem organização continua usando a principal', async () => {
+    mockGet(200, '{}');
+    await azureGet('P/_apis/x');
+    expect(https.get.mock.calls[0][0]).toBe('https://dev.azure.com/org/P/_apis/x');
+    expect(https.get.mock.calls[0][1].headers.Authorization).toBe('Basic dG9rZW4=');
+  });
+
+  test('token recusado cita a organização e guarda o id', async () => {
+    mockGet(401, '');
+    await expect(azureGet('P/_apis/x', ORG_B)).rejects.toMatchObject({
+      code: AUTH_ERROR_CODE, orgId: 'b', message: expect.stringContaining('"Cliente B"'),
+    });
   });
 });
 

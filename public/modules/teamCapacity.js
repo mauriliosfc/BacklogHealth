@@ -54,6 +54,12 @@ function _getProjectList() {
   return [...document.querySelectorAll('.card[data-project]')].map(c => c.dataset.project).filter(Boolean);
 }
 
+// Nome da organização do projeto (data-org só existe com mais de uma organização)
+function _orgOf(project) {
+  const card = [...document.querySelectorAll('.card[data-project]')].find(c => c.dataset.project === project);
+  return (card && card.dataset.org) || '';
+}
+
 // ── Data fetching ─────────────────────────────────────────────────────────────
 async function _loadData() {
   if (_loading) return;
@@ -116,7 +122,7 @@ function _render() {
     <div class="tc-project-sel">
       <label class="tc-proj-label">${t('tc_project')}</label>
       <select class="tc-proj-select" onchange="tcChangeProject(this.value)">
-        ${projects.map(p => `<option value="${_esc(p)}"${p === _project ? ' selected' : ''}>${_esc(getAlias(p) || p)}</option>`).join('')}
+        ${projects.map(p => `<option value="${_esc(p)}"${p === _project ? ' selected' : ''}>${_esc(getAlias(p) || p)}${_orgOf(p) ? ' · ' + _esc(_orgOf(p)) : ''}</option>`).join('')}
       </select>
     </div>` : '';
 

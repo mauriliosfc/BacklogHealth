@@ -2,7 +2,16 @@ const { azureGet, azurePost, AUTH_ERROR_CODE } = require("./azureClient");
 const { calcHealth }    = require("./utils/health");
 const { paginatedItems } = require("./utils/paginate");
 const { fetchIterMap }  = require("./utils/iterMap");
-const { getCfg }        = require("./config");
+const { getCfg, getOrg } = require("./config");
+
+// Organização do projeto (multi-org); configs sem organizations caem na principal
+function _orgOf(projectConfig) {
+  const id = projectConfig && typeof projectConfig === 'object' ? projectConfig.orgId : undefined;
+  return (typeof getOrg === 'function' && getOrg(id)) || null;
+}
+function _orgFields(org) {
+  return org ? { orgId: org.id, baseUrl: org.baseUrl } : {};
+}
 const { getWorkItemProfile, readEstimate, lacksEstimate, excludedStates, statesOr, wiqlList, clientProfile } = require("./utils/workItemProfile");
 
 // Cláusula de exclusão de estados da consulta principal (vazia quando não há estados a excluir)
@@ -33,18 +42,20 @@ function fmtRange(iter) {
 async function fetchProject(projectConfig) {
   const projectName  = typeof projectConfig === 'string' ? projectConfig : projectConfig.name;
   const team         = typeof projectConfig === 'string' ? undefined : (projectConfig.team || undefined);
-  const displayName  = team ? `${projectName} - ${team}` : projectName;
+  const displayName  = (typeof projectConfig === 'object' && projectConfig.key) || (team ? `${projectName} - ${team}` : projectName);
   const profile      = getWorkItemProfile(projectConfig);
   const workItemType = profile.workItemType;
+  const org          = _orgOf(projectConfig);
   // Tipos legados não carregam o perfil no resultado (saída idêntica à anterior)
-  const extra        = profile.legacy ? {} : { profile };
+  const extra        = { ...(profile.legacy ? {} : { profile }), ..._orgFields(org) };
 
   try {
     const types = [...profile.mainTypes, 'Bug'];
 
     const wiql = await azurePost(
       `${encodeURIComponent(projectName)}/_apis/wit/wiql?api-version=7.0`,
-      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${projectName}' AND [System.WorkItemType] IN (${wiqlList(types)})${_stateExclusion(profile)} ORDER BY [System.ChangedDate] DESC` }
+      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${projectName}' AND [System.WorkItemType] IN (${wiqlList(types)})${_stateExclusion(profile)} ORDER BY [System.ChangedDate] DESC` },
+      org
     );
 
     const allIds = (wiql.workItems || []).slice(0, 500).map(w => w.id);
@@ -53,9 +64,9 @@ async function fetchProject(projectConfig) {
     const fields = ['System.Id', 'System.Title', 'System.State', 'System.WorkItemType', 'System.AssignedTo',
       ...profile.estimateFields, 'System.IterationPath', 'Microsoft.VSTS.Common.StackRank'].join(',');
     const [detailsValue, { map: iterMap, currentSprint }, planData] = await Promise.all([
-      paginatedItems(projectName, allIds, fields),
-      fetchIterMap(projectName, team),
-      azureGet(`${encodeURIComponent(projectName)}/_apis/testplan/plans?api-version=7.0`).catch(() => null),
+      paginatedItems(projectName, allIds, fields, org),
+      fetchIterMap(projectName, team, org),
+      azureGet(`${encodeURIComponent(projectName)}/_apis/testplan/plans?api-version=7.0`, org).catch(() => null),
     ]);
     const testPlanCount = planData ? (planData.count || (planData.value || []).length) : 0;
 
@@ -66,7 +77,7 @@ async function fetchProject(projectConfig) {
 
     return { project: displayName, items, sprint: currentSprint, iterMap, error: null, workItemType, testPlanCount, ...extra };
   } catch (e) {
-    return { project: displayName, items: [], sprint: null, error: e.message, workItemType, ...(e.code ? { errorCode: e.code } : {}) };
+    return { project: displayName, items: [], sprint: null, error: e.message, workItemType, ...(e.code ? { errorCode: e.code } : {}), ..._orgFields(org) };
   }
 }
 
@@ -78,18 +89,19 @@ async function fetchProjectDetail(identifier) {
   const displayName  = projectConfig.displayName || identifier;
   const profile      = getWorkItemProfile(projectConfig);
   const workItemType = profile.workItemType;
+  const org          = _orgOf(projectConfig);
 
   try {
     const types = [...profile.mainTypes, 'Bug'];
 
     const [mainWiql, taskWiql, bugWiql, { map: iterMap }] = await Promise.all([
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN (${wiqlList(types)})${_stateExclusion(profile)} ORDER BY [System.ChangedDate] DESC` }),
+        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] IN (${wiqlList(types)})${_stateExclusion(profile)} ORDER BY [System.ChangedDate] DESC` }, org),
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Task' ORDER BY [System.ChangedDate] DESC` }),
+        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Task' ORDER BY [System.ChangedDate] DESC` }, org),
       azurePost(`${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Bug' ORDER BY [System.ChangedDate] DESC` }),
-      fetchIterMap(project, team),
+        { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Bug' ORDER BY [System.ChangedDate] DESC` }, org),
+      fetchIterMap(project, team, org),
     ]);
 
     const mainIds = (mainWiql.workItems || []).slice(0, 500).map(w => w.id);
@@ -101,9 +113,9 @@ async function fetchProjectDetail(identifier) {
     const workFields = "Microsoft.VSTS.Scheduling.CompletedWork,Microsoft.VSTS.Scheduling.OriginalEstimate,System.IterationPath";
 
     const [rawItems, rawTaskItems, rawBugItems] = await Promise.all([
-      mainIds.length ? paginatedItems(project, mainIds, mainFields) : Promise.resolve([]),
-      taskIds.length ? paginatedItems(project, taskIds, workFields) : Promise.resolve([]),
-      bugIds.length  ? paginatedItems(project, bugIds,  workFields) : Promise.resolve([]),
+      mainIds.length ? paginatedItems(project, mainIds, mainFields, org) : Promise.resolve([]),
+      taskIds.length ? paginatedItems(project, taskIds, workFields, org) : Promise.resolve([]),
+      bugIds.length  ? paginatedItems(project, bugIds,  workFields, org) : Promise.resolve([]),
     ]);
 
     const taskItems = rawTaskItems.map(t => ({
@@ -127,7 +139,7 @@ async function fetchProjectDetail(identifier) {
       items: rawItems.map(i => {
         const pts = readEstimate(i.fields, profile);
 
-        const baseUrl = getCfg().baseUrl || '';
+        const baseUrl = (org && org.baseUrl) || getCfg().baseUrl || '';
         return {
           id:        i.id,
           url:       i.id && baseUrl ? `${baseUrl}/_workitems/edit/${i.id}` : "",
@@ -158,18 +170,20 @@ function projectInitials(name) {
   return base.split(/[\s_\-]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('').slice(0, 2) || '??';
 }
 
-function buildCardHTML(results, baseUrl = '') {
-  return results.map(({ project, items, sprint, iterMap = {}, error, errorCode, workItemType = 'User Story', testPlanCount = 0, profile: resultProfile }) => {
+function buildCardHTML(results, defaultBaseUrl = '') {
+  return results.map(({ project, items, sprint, iterMap = {}, error, errorCode, workItemType = 'User Story', testPlanCount = 0, profile: resultProfile, baseUrl: orgBaseUrl, orgLabel = '' }) => {
+    const baseUrl = orgBaseUrl || defaultBaseUrl;
+    const orgChip = orgLabel ? `<span class="card-org-chip" title="${_esc(orgLabel)}">${_esc(orgLabel)}</span>` : '';
     if (errorCode === AUTH_ERROR_CODE) return `
       <div class="card error card-auth-error">
-        <h2>${project}</h2>
+        <h2>${_esc(project)}${orgChip}</h2>
         <p class="card-error-msg" data-i18n="err_azure_auth_card">${_esc(error)}</p>
         <a class="card-error-link" href="/settings" data-i18n="err_azure_auth_btn">Atualizar token</a>
       </div>`;
     if (error) return `
       <div class="card error">
-        <h2>❌ ${project}</h2>
-        <p style="color:#f87171">${error}</p>
+        <h2>❌ ${_esc(project)}${orgChip}</h2>
+        <p style="color:#f87171">${_esc(error)}</p>
       </div>`;
 
     const profile       = resultProfile || getWorkItemProfile({ workItemType });
@@ -277,7 +291,7 @@ function buildCardHTML(results, baseUrl = '') {
     const noSprintHtml = `<div class="card-issues"${noSprint === 0 ? ' style="display:none"' : ''}><div class="itag i" onclick="openCardStat(this,'noSprint')"><span class="no-sprint-val">${noSprint}</span>&nbsp;<span data-i18n="itag_no_sprint">sem sprint</span></div></div>`;
 
     return `
-      <div class="card" data-project="${project.replace(/"/g, "&quot;")}" data-items='${itemsJson}' data-itermap='${JSON.stringify(iterMap).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}' data-workitemtype="${_esc(workItemType)}" data-profile='${JSON.stringify(clientProfile(profile)).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}'>
+      <div class="card" data-project="${project.replace(/"/g, "&quot;")}" data-items='${itemsJson}' data-itermap='${JSON.stringify(iterMap).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}' data-workitemtype="${_esc(workItemType)}" data-profile='${JSON.stringify(clientProfile(profile)).replace(/</g,"\\u003c").replace(/'/g,"&#39;")}'${orgLabel ? ` data-org="${_esc(orgLabel)}"` : ''}>
 
         <div class="health-hbar ${health[1]}"></div>
 
@@ -287,7 +301,7 @@ function buildCardHTML(results, baseUrl = '') {
             <div class="card-icon" style="background:${iconColor}">${initials}</div>
             <div class="card-header-info">
               <div class="card-name-row">
-                <h2 class="card-project-title">${project}</h2>
+                <h2 class="card-project-title">${project}</h2>${orgChip}
               </div>
               <div class="card-sprint-row">
                 <span class="sprint-dot" style="background:${sprintDotColor}"></span>
@@ -376,14 +390,15 @@ function buildCardHTML(results, baseUrl = '') {
   }).join("");
 }
 
-async function _fetchTestPoints(project, planId, suiteId) {
+async function _fetchTestPoints(project, planId, suiteId, org = null) {
   let allPoints = [], skip = 0;
   const top = 1000;
   while (true) {
     let data;
     try {
       data = await azureGet(
-        `${encodeURIComponent(project)}/_apis/testplan/Plans/${planId}/Suites/${suiteId}/TestPoint?isRecursive=true&$top=${top}&$skip=${skip}&api-version=7.0`
+        `${encodeURIComponent(project)}/_apis/testplan/Plans/${planId}/Suites/${suiteId}/TestPoint?isRecursive=true&$top=${top}&$skip=${skip}&api-version=7.0`,
+        org
       );
     } catch (_) { break; }
     const pts = data.value || [];
@@ -400,14 +415,15 @@ async function fetchUATPlans(identifier) {
   const { getProjectConfig, getCfg } = require('./config.js');
   const projectConfig = getProjectConfig(identifier) || { name: identifier };
   const project  = projectConfig.name;
-  const baseUrl  = getCfg().baseUrl || '';
-  const data     = await azureGet(`${encodeURIComponent(project)}/_apis/testplan/plans?api-version=7.0`);
+  const org      = _orgOf(projectConfig);
+  const baseUrl  = (org && org.baseUrl) || getCfg().baseUrl || '';
+  const data     = await azureGet(`${encodeURIComponent(project)}/_apis/testplan/plans?api-version=7.0`, org);
   const plans = await Promise.all((data.value || []).map(async p => {
     let passCount = 0, failCount = 0, blockedCount = 0, notExecutedCount = 0, points = [];
     const rootSuiteId = p.rootSuite && p.rootSuite.id;
     if (rootSuiteId) {
       try {
-        const raw = await _fetchTestPoints(project, p.id, rootSuiteId);
+        const raw = await _fetchTestPoints(project, p.id, rootSuiteId, org);
         points = raw.map(pt => {
           const outcome = ((pt.results && pt.results.outcome) || pt.outcome || '').toLowerCase();
           if      (outcome === 'passed')  passCount++;

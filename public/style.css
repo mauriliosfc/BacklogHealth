@@ -131,6 +131,29 @@ body.setup-body { font-family: 'Segoe UI', system-ui, sans-serif; background: va
 .su-wit-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; background: none; border: none; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s; }
 .su-wit-btn.active { background: var(--c-blue); color: #fff; font-weight: 600; }
 .su-wit-btn:not(.active):hover { background: var(--bg-el2); color: var(--text-1); }
+.su-orgs { background: var(--bg-card); border: 1px solid var(--bg-border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+.su-orgs-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.su-orgs-head .su-label { margin: 0; }
+.su-orgs-add { background: none; border: 1px solid var(--bg-border); color: var(--c-blue); font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.su-orgs-add:hover { background: var(--bg-el2); }
+.su-orgs-list { display: flex; flex-direction: column; gap: 6px; }
+.su-org-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--bg-border); border-radius: 8px; background: var(--bg-el); }
+.su-org-row.active { border-color: var(--c-blue); }
+.su-org-info { flex: 1; min-width: 0; }
+.su-org-name { font-size: 13px; font-weight: 600; color: var(--text-1); }
+.su-org-meta { font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.su-org-badge { font-size: 10px; font-weight: 600; color: var(--c-blue); text-transform: uppercase; letter-spacing: .5px; margin-left: 6px; }
+.su-org-btn { background: none; border: 1px solid var(--bg-border); color: var(--text-muted); font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; flex-shrink: 0; }
+.su-org-btn:hover { background: var(--bg-el2); color: var(--text-1); }
+.su-org-btn--danger:hover { color: var(--c-red2); border-color: var(--c-red); }
+.su-org-editing { font-size: 12px; font-weight: 600; color: var(--c-blue); margin-bottom: 4px; }
+.su-proj-org { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+.su-pat-saved-hint { color: var(--c-green2); }
+.su-save-org-btn { background: var(--c-blue); }
+.su-save-org-btn .spinner { width: 14px; height: 14px; }
+.su-save-org-hint { margin-top: -4px; }
+.su-org-added { background: var(--c-green-bg); border: 1px solid var(--c-green-bd); color: var(--text-1); border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+.card-org-chip { display: inline-block; margin-left: 8px; padding: 1px 8px; font-size: 10px; font-weight: 600; letter-spacing: .3px; color: var(--text-muted); background: var(--bg-el2); border: 1px solid var(--bg-border); border-radius: 999px; vertical-align: middle; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .su-wit-select { width: 100%; background: var(--bg-el); border: 1px solid var(--bg-border); color: var(--text-1); border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: inherit; outline: none; cursor: pointer; transition: border .2s; }
 .su-wit-select:focus { border-color: var(--c-blue); }
 .su-wit-hint { font-size: 11px; color: var(--text-faint); line-height: 1.4; margin-top: 6px; }
@@ -318,6 +341,7 @@ body.sidebar-collapsed .sl-icon-expand { display: block; }
 .az-auth-banner-text { flex: 1; min-width: 0; }
 .az-auth-banner-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
 .az-auth-banner-sub { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.az-auth-banner-orgs { font-size: 12px; font-weight: 600; color: var(--c-red2); margin-top: 4px; }
 .az-auth-banner-btn { flex-shrink: 0; padding: 8px 14px; background: var(--c-blue); color: #fff; font-size: 13px; font-weight: 600; border-radius: 8px; text-decoration: none; white-space: nowrap; }
 .az-auth-banner-btn:hover { opacity: .9; }
 @media (max-width: 640px) { .az-auth-banner { flex-wrap: wrap; } .az-auth-banner-btn { width: 100%; text-align: center; } }

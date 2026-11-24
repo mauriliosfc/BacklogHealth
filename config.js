@@ -1,6 +1,7 @@
 const fs          = require("fs");
 const { CONFIG_PATH } = require('./utils/paths');
 const { isSnConfigured } = require('./utils/snMode');
+const { orgIdFor, orgLabel, getBaseDisplayName, getDisplayName, assignProjectKeys } = require('./utils/orgs');
 
 // Mesma detecção de ambiente usada em utils/paths.js (ELECTRON_DATA_DIR → pkg → dev):
 // o app empacotado (Electron ou pkg) sempre usa 3030; rodando via `node server.js`/`npm run dev`
@@ -28,6 +29,37 @@ function parseOrgInput(input) {
   return { org: input, baseUrl: `https://dev.azure.com/${input}` };
 }
 
+// ── Organizações do Azure DevOps ─────────────────────────────────────────────
+// config.organizations = [{ id, org, baseUrl, pat, label? }]; a primeira é a principal.
+// Os campos do topo (org, baseUrl, pat) são sempre um espelho da principal: o restante
+// do app, as checagens de modo e uma eventual volta para versão antiga continuam funcionando.
+// Configs antigas (sem organizations) são migradas em memória e gravadas no próximo save.
+
+function _normalizeOrganizations(data) {
+  if (!data || typeof data !== 'object') return data;
+  let orgs = Array.isArray(data.organizations) ? data.organizations.filter(o => o && typeof o === 'object') : null;
+  if (!orgs || !orgs.length) {
+    orgs = (data.org || data.baseUrl)
+      ? [{ id: orgIdFor(data.org, data.baseUrl), org: data.org || '', baseUrl: data.baseUrl || '', pat: data.pat || '' }]
+      : [];
+  }
+  orgs = orgs.map(o => {
+    const baseUrl = o.baseUrl || (o.org ? `https://dev.azure.com/${o.org}` : '');
+    return { ...o, baseUrl, id: o.id || orgIdFor(o.org, baseUrl) };
+  });
+  data.organizations = orgs;
+  const primary = orgs[0];
+  if (primary) {
+    data.org = primary.org;
+    data.baseUrl = primary.baseUrl;
+    data.pat = primary.pat;
+    if (Array.isArray(data.projects)) {
+      data.projects = data.projects.map(p => (p && typeof p === 'object' && !p.orgId) ? { ...p, orgId: primary.id } : p);
+    }
+  }
+  return data;
+}
+
 function loadConfig() {
   try {
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
@@ -45,6 +77,8 @@ function loadConfig() {
       );
     }
 
+    _normalizeOrganizations(raw);
+
     cfg = raw;
     // Return true only when Azure is fully configured (projects to fetch exist)
     return !!(raw.org && raw.pat && Array.isArray(raw.projects) && raw.projects.length);
@@ -54,6 +88,8 @@ function loadConfig() {
 }
 
 function saveConfig(data) {
+  // Sem organizations: grava como antes (callers antigos que só mexem no topo)
+  if (Array.isArray(data.organizations)) _normalizeOrganizations(data);
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2), "utf8");
   cfg = data;
 }
@@ -61,6 +97,28 @@ function saveConfig(data) {
 function getAuth() {
   return Buffer.from(`:${cfg.pat}`).toString("base64");
 }
+
+function authFor(org) {
+  return Buffer.from(`:${(org && org.pat) || ''}`).toString("base64");
+}
+
+function getOrganizations() {
+  return Array.isArray(cfg.organizations) ? cfg.organizations : [];
+}
+
+// Organização pelo id; sem id (ou id desconhecido) devolve a principal.
+// Configs sem organizations (ex.: testes, estado parcial) caem nos campos do topo.
+function getOrg(orgId) {
+  const orgs = getOrganizations();
+  const found = orgId ? orgs.find(o => o.id === orgId) : null;
+  if (found) return found;
+  if (orgs[0]) return orgs[0];
+  if (cfg.baseUrl || cfg.org) {
+    return { id: orgIdFor(cfg.org, cfg.baseUrl), org: cfg.org || '', baseUrl: cfg.baseUrl || `https://dev.azure.com/${cfg.org}`, pat: cfg.pat || '' };
+  }
+  return null;
+}
+
 
 function getCfg() {
   return cfg;
@@ -71,11 +129,7 @@ function getProjectNames() {
   return cfg.projects.map(p => typeof p === 'string' ? p : p.name);
 }
 
-// Returns "ProjectName - TeamName" when a team is set, otherwise just "ProjectName"
-function getDisplayName(p) {
-  if (typeof p === 'string') return p;
-  return p.team ? `${p.name} - ${p.team}` : p.name;
-}
+// getDisplayName / getBaseDisplayName / assignProjectKeys: ver utils/orgs.js
 
 function getProjectConfig(identifier) {
   const cfg = getCfg();
@@ -88,6 +142,7 @@ function getProjectConfig(identifier) {
   const out = { name, workItemType, team, displayName: getDisplayName(found) };
   // Perfil de tipos não legados (ver utils/workItemProfile.js) — só quando existir
   if (typeof found !== 'string') {
+    if (found.orgId)                       out.orgId         = found.orgId;
     if (found.estimateField !== undefined) out.estimateField = found.estimateField;
     if (found.estimateUnit)                out.estimateUnit  = found.estimateUnit;
     if (found.states)                      out.states        = found.states;
@@ -127,7 +182,8 @@ function saveSnConfig({ instance, user, pass, assignmentGroups, mode, mcp } = {}
   }
   if (projectGroup) {
     const { projectName, assignmentGroup, assignmentGroupName, slaThresholds, slaEnabled } = projectGroup;
-    const proj = (cfg.projects || []).find(p => getDisplayName(p) === projectName || p.name === projectName);
+    const proj = (cfg.projects || []).find(p => getDisplayName(p) === projectName)
+              || (cfg.projects || []).find(p => p.name === projectName);
     if (proj) {
       const existing = proj.servicenow || {};
       proj.servicenow = {
@@ -143,7 +199,8 @@ function saveSnConfig({ instance, user, pass, assignmentGroups, mode, mcp } = {}
 }
 
 function getProjectSnGroup(displayName) {
-  const proj = (cfg.projects || []).find(p => getDisplayName(p) === displayName || p.name === displayName);
+  const proj = (cfg.projects || []).find(p => getDisplayName(p) === displayName)
+            || (cfg.projects || []).find(p => p.name === displayName);
   return proj?.servicenow || null;
 }
 
@@ -158,4 +215,4 @@ function getAppMode() {
   return 'empty';
 }
 
-module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getAiCfg, saveAiConfig, getGithubCfg, getSnConfig, saveSnConfig, getProjectSnGroup, getAppMode };
+module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, authFor, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getBaseDisplayName, assignProjectKeys, orgIdFor, getOrganizations, getOrg, orgLabel, getAiCfg, saveAiConfig, getGithubCfg, getSnConfig, saveSnConfig, getProjectSnGroup, getAppMode };

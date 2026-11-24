@@ -4,6 +4,7 @@ const { getCfg, getAppMode } = require('../config');
 const { fetchProject, buildCardHTML } = require('../projectService');
 const { getWorkItemProfile, lacksEstimate, statesOr } = require('../utils/workItemProfile');
 const { AUTH_ERROR_CODE } = require('../azureClient');
+const { orgIdFor, orgLabel } = require('../utils/orgs');
 const state = require('./state');
 
 const EMPTY_STATE_HTML = `
@@ -102,15 +103,32 @@ const SOURCE_TOGGLE_HTML = `<div class="source-switcher">
 
 // Aviso no topo quando o PAT do Azure DevOps foi recusado (expirado, revogado ou sem permissão)
 function buildAuthBanner(results) {
-  if (!results.some(r => r.errorCode === AUTH_ERROR_CODE)) return '';
+  const failed = results.filter(r => r.errorCode === AUTH_ERROR_CODE);
+  if (!failed.length) return '';
+  // Multi-org: mostra quais organizações estão com o token recusado
+  const orgNames = [...new Set(failed.map(r => r.orgLabel).filter(Boolean))];
+  const orgsLine = orgNames.length
+    ? `<div class="az-auth-banner-orgs">${orgNames.map(escapeHtml).join(' · ')}</div>`
+    : '';
   return `<div class="az-auth-banner" role="alert">
     <svg class="az-auth-banner-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
     <div class="az-auth-banner-text">
       <div class="az-auth-banner-title" data-i18n="err_azure_auth_title">Seu token do Azure DevOps expirou ou é inválido</div>
       <div class="az-auth-banner-sub" data-i18n="err_azure_auth_sub">Gere um novo Personal Access Token no Azure DevOps (permissões Work Items e Project and Team, leitura) e atualize em Configurações para voltar a carregar os projetos.</div>
+      ${orgsLine}
     </div>
     <a class="az-auth-banner-btn" href="/settings" data-i18n="err_azure_auth_btn">Atualizar token</a>
   </div>`;
+}
+
+// Com mais de uma organização, cada card ganha o nome da sua (chip no cabeçalho)
+function withOrgLabels(results, organizations) {
+  if (!Array.isArray(organizations) || organizations.length < 2) return results;
+  const byId = new Map(organizations.map(o => [o.id, o]));
+  return results.map(r => {
+    const org = byId.get(r.orgId) || organizations[0];
+    return { ...r, orgLabel: orgLabel(org) };
+  });
 }
 
 function renderDashboard(results) {
@@ -119,47 +137,71 @@ function renderDashboard(results) {
   const count   = results.filter(r => !r.error).length;
   const baseUrl = cfg.baseUrl || `https://dev.azure.com/${cfg.org}`;
   const orgSafe = escapeHtml(cfg.org);
+  const orgCount = Array.isArray(cfg.organizations) ? cfg.organizations.length : 0;
+  const labeled  = withOrgLabels(results, cfg.organizations);
+  const orgPart  = orgCount > 1 ? `${orgCount} organizations` : (orgSafe || 'Azure DevOps');
   return renderTemplate(templates.dashboard, {
     ORG:           orgSafe,
     SUBTITLE:      isEmpty
       ? (orgSafe || 'Azure DevOps')
-      : `${count} project${count !== 1 ? 's' : ''} · ${orgSafe || 'Azure DevOps'}`,
+      : `${count} project${count !== 1 ? 's' : ''} · ${orgPart}`,
     LAST_UPDATE:   new Date().toLocaleString('pt-BR'),
-    CARDS:         isEmpty ? EMPTY_STATE_HTML : buildCardHTML(results, baseUrl),
+    CARDS:         isEmpty ? EMPTY_STATE_HTML : buildCardHTML(labeled, baseUrl),
     EMPTY_CLASS:   isEmpty ? 'cards-grid--empty' : '',
-    SUMMARY_BAR:   isEmpty ? '' : buildAuthBanner(results) + buildSummaryBar(results),
+    SUMMARY_BAR:   isEmpty ? '' : buildAuthBanner(labeled) + buildSummaryBar(results),
     SOURCE_TOGGLE: getAppMode() === 'full' ? SOURCE_TOGGLE_HTML : '',
     VERSION:       APP_VERSION,
   });
 }
 
-function renderSetup(prefill = {}) {
-  const orgDisplay = prefill.baseUrl && prefill.baseUrl.includes('visualstudio.com')
-    ? prefill.baseUrl
-    : (prefill.org || '');
-  const pat        = (prefill.pat || '').replace(/"/g, '&quot;');
-  const isSettings = !!(prefill.org);
+// Texto do campo "organização": URL completa para *.visualstudio.com, senão o nome
+function _orgDisplay(org) {
+  if (!org) return '';
+  return org.baseUrl && org.baseUrl.includes('visualstudio.com') ? org.baseUrl : (org.org || '');
+}
 
-  const projectsMap = {};
-  if (prefill.projects && Array.isArray(prefill.projects)) {
-    prefill.projects.forEach(p => {
-      const name         = typeof p === 'string' ? p : p.name;
-      const team         = typeof p === 'string' ? undefined : p.team;
-      const workItemType = typeof p === 'string' ? 'User Story' : (p.workItemType || 'User Story');
-      const key          = team ? `${name}|${team}` : name;
-      projectsMap[key]   = workItemType;
-    });
-  }
-  const selectedProjectsJson = JSON.stringify(projectsMap).replace(/</g, '\\u003c');
+// Mapa "projeto[|time]" → tipo de item, como a tela de setup espera
+function _projectsMap(projects) {
+  const map = {};
+  (projects || []).forEach(p => {
+    const name         = typeof p === 'string' ? p : p.name;
+    const team         = typeof p === 'string' ? undefined : p.team;
+    const workItemType = typeof p === 'string' ? 'User Story' : (p.workItemType || 'User Story');
+    map[team ? `${name}|${team}` : name] = workItemType;
+  });
+  return map;
+}
+
+function renderSetup(prefill = {}) {
+  // Organizações salvas (configs antigas: uma, a partir dos campos do topo)
+  const orgs = Array.isArray(prefill.organizations) && prefill.organizations.length
+    ? prefill.organizations
+    : (prefill.org ? [{ id: orgIdFor(prefill.org, prefill.baseUrl), org: prefill.org, baseUrl: prefill.baseUrl || `https://dev.azure.com/${prefill.org}`, pat: prefill.pat }] : []);
+  const current    = orgs[0] || null;
+  const isSettings = !!current;
+  const ownProjects = o => (prefill.projects || []).filter(p => typeof p === 'string' || (p.orgId || orgs[0]?.id) === o.id);
+
+  // O PAT nunca volta para a página: campo em branco = manter o salvo
+  const orgsForPage = orgs.map(o => ({
+    id: o.id, org: o.org || '', baseUrl: o.baseUrl || '', label: o.label || '',
+    display: _orgDisplay(o), hasPat: !!o.pat,
+    projectCount: ownProjects(o).length,
+    projects: _projectsMap(ownProjects(o)),
+  }));
+  const toJson = v => JSON.stringify(v).replace(/</g, '\\u003c');
+  const selectedProjectsJson = toJson(current ? _projectsMap(ownProjects(current)) : {});
 
   return renderTemplate(templates.setup, {
     TITLE:                  isSettings ? 'Settings' : 'Setup',
     SUBTITLE:               isSettings
       ? 'Update your credentials and monitored projects'
       : 'Configure your Azure DevOps credentials to get started',
-    ORG_VALUE:              escapeHtml(orgDisplay),
-    PAT_VALUE:              pat,
+    ORG_VALUE:              escapeHtml(_orgDisplay(current)),
+    ORG_LABEL_VALUE:        escapeHtml(current?.label || ''),
+    PAT_VALUE:              '',
     SELECTED_PROJECTS_JSON: selectedProjectsJson,
+    ORGS_JSON:              toJson(orgsForPage),
+    CURRENT_ORG_JSON:       toJson(current ? current.id : null),
     BACK_LINK:              isSettings
       ? '<a class="su-back-link" href="/" data-i18n="setup_back">\u2190 Back to Dashboard</a>'
       : '',
@@ -201,4 +243,4 @@ async function buildAndCache() {
   state.html    = renderDashboard(results);
 }
 
-module.exports = { renderDashboard, renderSetup, buildAndCache, buildSummaryBar, buildAuthBanner };
+module.exports = { renderDashboard, renderSetup, buildAndCache, buildSummaryBar, buildAuthBanner, withOrgLabels };

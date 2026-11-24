@@ -23,13 +23,15 @@ function flattenClassificationNodes(node) {
   return results;
 }
 
-async function fetchIterMap(project, team) {
+// org: organização do projeto ({ baseUrl, pat }); sem ela, a principal
+async function fetchIterMap(project, team, org = null) {
   // If a specific team is provided, use the team settings endpoint first —
   // it returns accurate timeFrame:"current" without date math.
   if (team) {
     try {
       const sd = await azureGet(
-        `${encodeURIComponent(project)}/${encodeURIComponent(team)}/_apis/work/teamsettings/iterations?api-version=7.0`
+        `${encodeURIComponent(project)}/${encodeURIComponent(team)}/_apis/work/teamsettings/iterations?api-version=7.0`,
+        org
       );
       if (sd.value && sd.value.length) {
         const map = {};
@@ -52,7 +54,8 @@ async function fetchIterMap(project, team) {
   let classificationMap = null;
   try {
     const data = await azureGet(
-      `${encodeURIComponent(project)}/_apis/wit/classificationnodes/iterations?$depth=10&api-version=7.0`
+      `${encodeURIComponent(project)}/_apis/wit/classificationnodes/iterations?$depth=10&api-version=7.0`,
+      org
     );
     const iterations = flattenClassificationNodes(data);
     if (iterations.length) {
@@ -80,7 +83,8 @@ async function fetchIterMap(project, team) {
   for (const teamName of [`${project} Team`, project]) {
     try {
       const sd = await azureGet(
-        `${encodeURIComponent(project)}/${encodeURIComponent(teamName)}/_apis/work/teamsettings/iterations?api-version=7.0`
+        `${encodeURIComponent(project)}/${encodeURIComponent(teamName)}/_apis/work/teamsettings/iterations?api-version=7.0`,
+        org
       );
       if (sd.value && sd.value.length) {
         const currentEntry = sd.value.find(it => it.attributes && it.attributes.timeFrame === 'current');

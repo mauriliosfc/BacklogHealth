@@ -19,7 +19,8 @@ describe('paginatedItems', () => {
 
     expect(azureGet).toHaveBeenCalledTimes(1);
     expect(azureGet).toHaveBeenCalledWith(
-      expect.stringContaining('ids=1,2,3')
+      expect.stringContaining('ids=1,2,3'),
+      null
     );
     expect(result).toEqual(items);
   });
@@ -57,7 +58,15 @@ describe('paginatedItems', () => {
     azureGet.mockResolvedValue({ value: [] });
     await paginatedItems('My Project With Spaces', [1], 'System.Id');
     expect(azureGet).toHaveBeenCalledWith(
-      expect.stringContaining('My%20Project%20With%20Spaces')
+      expect.stringContaining('My%20Project%20With%20Spaces'),
+      null
     );
+  });
+
+  test('repassa a organização do projeto para azureGet', async () => {
+    azureGet.mockResolvedValue({ value: [] });
+    const org = { id: 'b', baseUrl: 'https://dev.azure.com/B', pat: 'x' };
+    await paginatedItems('P', [1], 'System.Id', org);
+    expect(azureGet).toHaveBeenCalledWith(expect.any(String), org);
   });
 });

@@ -111,14 +111,14 @@ describe('setup — tipos de item', () => {
       { name: 'Alpha', workItemType: 'User Story', team: 'Time: A, B' },
     ]) });
     expect(saveConfig.mock.calls[0][0].projects).toEqual([
-      { name: 'Alpha', workItemType: 'User Story', team: 'Time: A, B' },
+      { name: 'Alpha', workItemType: 'User Story', team: 'Time: A, B', orgId: 'myorg' },
     ]);
     expect(rawAzureGet).not.toHaveBeenCalled();
   });
 
   test('projectsJson sem tipo usa User Story e ignora entradas sem nome', async () => {
     await setup({ rawOrg: 'myorg', pat: 't', projectsJson: [{ name: ' Alpha ' }, { name: '' }, null] });
-    expect(saveConfig.mock.calls[0][0].projects).toEqual([{ name: 'Alpha', workItemType: 'User Story' }]);
+    expect(saveConfig.mock.calls[0][0].projects).toEqual([{ name: 'Alpha', workItemType: 'User Story', orgId: 'myorg' }]);
   });
 
   test('projectsJson inválido → 400', async () => {
@@ -129,7 +129,7 @@ describe('setup — tipos de item', () => {
   test('tipo novo grava campo de estimativa e estados detectados', async () => {
     await setup({ rawOrg: 'myorg', pat: 't', projectsJson: [{ name: 'Beta', workItemType: 'Issue' }] });
     expect(saveConfig.mock.calls[0][0].projects[0]).toEqual({
-      name: 'Beta', workItemType: 'Issue',
+      name: 'Beta', workItemType: 'Issue', orgId: 'myorg',
       estimateField: 'Microsoft.VSTS.Scheduling.Effort', estimateUnit: 'points',
       states: { new: ['To Do'], active: ['Doing'], done: ['Done'], removed: ['Removed'] },
     });
@@ -143,7 +143,7 @@ describe('setup — tipos de item', () => {
   test('falha ao detectar não bloqueia o save', async () => {
     rawAzureGet.mockRejectedValue(new Error('rede'));
     await setup({ rawOrg: 'myorg', pat: 't', projectsJson: [{ name: 'Beta', workItemType: 'Issue' }] });
-    expect(saveConfig.mock.calls[0][0].projects[0]).toEqual({ name: 'Beta', workItemType: 'Issue' });
+    expect(saveConfig.mock.calls[0][0].projects[0]).toEqual({ name: 'Beta', workItemType: 'Issue', orgId: 'myorg' });
   });
 
   test('resposta HTTP diferente de 200 na detecção mantém o perfil anterior', async () => {
@@ -151,7 +151,7 @@ describe('setup — tipos de item', () => {
     rawAzureGet.mockResolvedValue({ status: 500, data: {} });
     await setup({ rawOrg: 'myorg', pat: 't', projectsJson: [{ name: 'Beta', workItemType: 'Issue' }] });
     expect(saveConfig.mock.calls[0][0].projects[0]).toEqual({
-      name: 'Beta', workItemType: 'Issue', estimateField: null, states: { done: ['Fechado'] },
+      name: 'Beta', workItemType: 'Issue', estimateField: null, states: { done: ['Fechado'] }, orgId: 'myorg',
     });
   });
 
@@ -162,7 +162,7 @@ describe('setup — tipos de item', () => {
     };
     getCfg.mockReturnValue({ projects: [prev] });
     await setup({ rawOrg: 'myorg', pat: 't', projectsRaw: 'Alpha:User Story' });
-    expect(saveConfig.mock.calls[0][0].projects[0]).toEqual(prev);
+    expect(saveConfig.mock.calls[0][0].projects[0]).toEqual({ ...prev, orgId: 'myorg' });
   });
 
   test('tipo alterado: descarta configurações que dependem dos estados', async () => {
@@ -173,14 +173,14 @@ describe('setup — tipos de item', () => {
     }] });
     await setup({ rawOrg: 'myorg', pat: 't', projectsRaw: 'Alpha:Task' });
     expect(saveConfig.mock.calls[0][0].projects[0]).toEqual({
-      name: 'Alpha', workItemType: 'Task', reportCharts: [{ type: 'x' }], servicenow: { assignmentGroup: 'g1' },
+      name: 'Alpha', workItemType: 'Task', reportCharts: [{ type: 'x' }], servicenow: { assignmentGroup: 'g1' }, orgId: 'myorg',
     });
   });
 
   test('tipo legado descarta campos de perfil antigos', async () => {
     getCfg.mockReturnValue({ projects: [{ name: 'Alpha', workItemType: 'User Story', estimateField: 'X', estimateUnit: 'hours', states: { done: ['Done'] } }] });
     await setup({ rawOrg: 'myorg', pat: 't', projectsRaw: 'Alpha:User Story' });
-    expect(saveConfig.mock.calls[0][0].projects[0]).toEqual({ name: 'Alpha', workItemType: 'User Story' });
+    expect(saveConfig.mock.calls[0][0].projects[0]).toEqual({ name: 'Alpha', workItemType: 'User Story', orgId: 'myorg' });
   });
 
   test('projeto com time só herda do mesmo projeto e time', async () => {
@@ -190,7 +190,7 @@ describe('setup — tipos de item', () => {
     ] });
     await setup({ rawOrg: 'myorg', pat: 't', projectsJson: [{ name: 'Alpha', team: 'T1', workItemType: 'User Story' }] });
     expect(saveConfig.mock.calls[0][0].projects[0]).toEqual({
-      name: 'Alpha', workItemType: 'User Story', team: 'T1', reportCharts: ['t1'],
+      name: 'Alpha', workItemType: 'User Story', team: 'T1', reportCharts: ['t1'], orgId: 'myorg',
     });
   });
 });

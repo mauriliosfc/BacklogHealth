@@ -1,6 +1,6 @@
 const fs       = require('fs');
 const nodePath = require('path');
-const { getCfg, getProjectConfig, getSnConfig, getProjectSnGroup } = require('./config');
+const { getCfg, getProjectConfig, getSnConfig, getProjectSnGroup, getOrg } = require('./config');
 const { azureGet, azurePost } = require('./azureClient');
 const { paginatedItems } = require('./utils/paginate');
 const { FIELD, getWorkItemProfile, wiqlList } = require('./utils/workItemProfile');
@@ -45,11 +45,12 @@ function cacheInvalidate(project, month, groupField, snExtra) {
 
 // Retorna Set com IterationPaths das sprints do time que se sobrepõem ao período
 // Se team não informado, retorna null (sem filtro de sprint)
-async function _fetchTeamSprintsForPeriod(proj, team, period) {
+async function _fetchTeamSprintsForPeriod(proj, team, period, org = null) {
   if (!team) return { paths: null, allPaths: null, iterations: [] };
   try {
     const sd = await azureGet(
-      `${encodeURIComponent(proj)}/${encodeURIComponent(team)}/_apis/work/teamsettings/iterations?api-version=7.0`
+      `${encodeURIComponent(proj)}/${encodeURIComponent(team)}/_apis/work/teamsettings/iterations?api-version=7.0`,
+      org
     );
     if (sd.value && sd.value.length) {
       const all      = sd.value;
@@ -114,6 +115,7 @@ const _DEFAULT_DONE_STATES = ['Closed', 'Done', 'Resolved'];
 async function fetchAzureReport(displayName, period, groupFields = [], agingState = '', deliveryStates = null, usAgingColumns = null) {
   const pcfg = getProjectConfig(displayName);
   const proj  = pcfg?.name || displayName;
+  const org   = (typeof getOrg === 'function' && getOrg(pcfg?.orgId)) || null;
   // Legados (inclusive Task) mantêm a consulta por US/PBI/Requirement e StoryPoints;
   // tipos novos usam o próprio tipo, campo de estimativa e estados concluídos.
   const profile   = getWorkItemProfile(pcfg || {});
@@ -149,20 +151,20 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
       query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
                 AND [System.WorkItemType] IN ${US_TYPES}`
-    }),
+    }, org),
     azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
       query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
                 AND [System.WorkItemType] = 'Bug'
                 AND [System.State] NOT IN ('Closed','Done','Resolved','Removed')`
-    }),
+    }, org),
     azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
       query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
                 AND [System.WorkItemType] = 'Bug'
                 AND [System.CreatedDate] >= '${period.start}'
                 AND [System.CreatedDate] <= '${period.end}'`
-    }),
+    }, org),
     azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
       query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
@@ -170,15 +172,15 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
                 AND [System.State] IN ('Closed','Done','Resolved')
                 AND [Microsoft.VSTS.Common.StateChangeDate] >= '${period.start}'
                 AND [Microsoft.VSTS.Common.StateChangeDate] <= '${period.end}'`
-    }),
-    _fetchTeamSprintsForPeriod(proj, pcfg?.team, period),
+    }, org),
+    _fetchTeamSprintsForPeriod(proj, pcfg?.team, period, org),
     usAgingState
       ? azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
           query: `SELECT [System.Id] FROM WorkItems
                   WHERE [System.TeamProject] = '${proj}'
                     AND [System.WorkItemType] IN ${US_TYPES}
                     AND [System.State] = '${usAgingState}'`
-        }).catch(() => null)
+        }, org).catch(() => null)
       : Promise.resolve(null),
   ]);
 
@@ -200,11 +202,11 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
     : agingBaseFields;
 
   const [delivItems, bugOpenItems, bugNewItems, bugFixItems, agingItems] = await Promise.all([
-    delivIds.length   ? paginatedItems(proj, delivIds,   fields)      : Promise.resolve([]),
-    bugOpenIds.length ? paginatedItems(proj, bugOpenIds, bugFields)    : Promise.resolve([]),
-    bugNewIds.length  ? paginatedItems(proj, bugNewIds,  bugFields)    : Promise.resolve([]),
-    bugFixIds.length  ? paginatedItems(proj, bugFixIds,  bugFields)    : Promise.resolve([]),
-    agingIds.length   ? paginatedItems(proj, agingIds,   agingFields)  : Promise.resolve([]),
+    delivIds.length   ? paginatedItems(proj, delivIds, fields, org)      : Promise.resolve([]),
+    bugOpenIds.length ? paginatedItems(proj, bugOpenIds, bugFields, org)    : Promise.resolve([]),
+    bugNewIds.length  ? paginatedItems(proj, bugNewIds, bugFields, org)    : Promise.resolve([]),
+    bugFixIds.length  ? paginatedItems(proj, bugFixIds, bugFields, org)    : Promise.resolve([]),
+    agingIds.length   ? paginatedItems(proj, agingIds, agingFields, org)  : Promise.resolve([]),
   ]);
 
 
@@ -262,7 +264,7 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
                         AND [System.WorkItemType] IN ${US_TYPES}
                         AND [System.IterationPath] Was Ever '${it.path}'
                         AND [System.IterationPath] <> '${it.path}'`,
-            }).catch(() => ({ workItems: [] }))
+            }, org).catch(() => ({ workItems: [] }))
           : Promise.resolve({ workItems: [] })
       )
     );
@@ -326,7 +328,7 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
       const assignee   = i.fields['System.AssignedTo']?.displayName || i.fields['System.AssignedTo'] || '—';
       const bucketIdx  = BUCKETS.findIndex(b => agingDays < b.max);
       if (bucketIdx >= 0) counts[bucketIdx]++;
-      const baseUrl = getCfg().baseUrl || '';
+      const baseUrl = (org && org.baseUrl) || getCfg().baseUrl || '';
       const extra = {};
       extraAgingKeys.forEach(f => {
         const v = i.fields[f];
