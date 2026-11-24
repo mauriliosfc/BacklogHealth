@@ -184,11 +184,19 @@ describe('listOrganizations', () => {
     ]));
     const { organizations } = listOrganizations();
     expect(organizations[0]).toEqual({
-      id: 'orga', org: 'OrgA', baseUrl: 'https://dev.azure.com/OrgA', label: '', hasPat: true, projectCount: 2,
+      id: 'orga', org: 'OrgA', baseUrl: 'https://dev.azure.com/OrgA', label: '', hasPat: true, status: 'unknown', projectCount: 2,
       projects: [{ name: 'Alpha', team: 'T1', workItemType: 'Task' }, { name: 'Gamma', team: undefined, workItemType: 'User Story' }],
     });
     expect(organizations[1]).toMatchObject({ id: 'orgb', label: 'Cliente B', projectCount: 1 });
     expect(JSON.stringify(organizations)).not.toContain('pat-');
+  });
+
+  test('status vem da última montagem do dashboard', () => {
+    getCfg.mockReturnValue(cfgWith([ORG_A, ORG_B, { ...ORG_B, id: 'orgc', org: 'OrgC', baseUrl: 'https://dev.azure.com/OrgC' }], []));
+    state.orgStatus = { orga: 'ok', orgb: 'auth' };
+    const { organizations } = listOrganizations();
+    expect(organizations.map(o => o.status)).toEqual(['ok', 'auth', 'unknown']);
+    state.orgStatus = {};
   });
 
   test('config antiga (sem organizations) aparece como uma organização', () => {
