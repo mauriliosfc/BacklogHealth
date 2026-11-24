@@ -1,12 +1,14 @@
 const { getCfg, saveConfig, getDisplayName } = require('../config');
 const { httpError } = require('./utils');
 const { resolveIndicatorConfig } = require('../utils/healthIndicators');
+const { getWorkItemProfile } = require('../utils/workItemProfile');
 
 function getIndicatorConfig({ project } = {}) {
   if (!project) httpError(400, 'project required');
   const proj = (getCfg().projects || []).find(p => getDisplayName(p) === project);
   if (!proj) httpError(404, 'Projeto não encontrado');
-  return resolveIndicatorConfig(proj.healthIndicators || {});
+  const completionStates = getWorkItemProfile(proj).states?.done;
+  return resolveIndicatorConfig(proj.healthIndicators || {}, { completionStates });
 }
 
 function saveIndicatorConfig({ project, completion, uat, bugRate, estimateCoverage, effortSaved } = {}) {

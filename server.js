@@ -93,7 +93,28 @@ async function main() {
     // ── GET /api/projects ─────────────────────────────────────────────────
     if (url.startsWith('/api/projects')) {
       const qp = new URLSearchParams(url.split('?')[1] || '');
-      return json(res, () => projH.listProjects({ org: qp.get('org')?.trim(), pat: qp.get('pat')?.trim() }));
+      return json(res, () => projH.listProjects({ org: qp.get('org')?.trim(), pat: qp.get('pat')?.trim(), orgId: qp.get('orgId') || undefined }));
+    }
+
+    // ── GET /api/orgs ──────────────────────────────────────────────────────
+    // Organizações conectadas (sem o PAT)
+    if (req.method === 'GET' && url === '/api/orgs') {
+      return json(res, () => projH.listOrganizations());
+    }
+
+    // ── POST /api/orgs/remove ──────────────────────────────────────────────
+    if (req.method === 'POST' && url === '/api/orgs/remove') {
+      const body = await readBody(req);
+      const { orgId } = JSON.parse(body || '{}');
+      return json(res, () => projH.removeOrganization({ orgId }));
+    }
+
+    // ── POST /api/work-item-types ─────────────────────────────────────────
+    // POST para não expor o PAT na URL
+    if (req.method === 'POST' && url === '/api/work-item-types') {
+      const body = await readBody(req);
+      const { org, pat, project, orgId } = JSON.parse(body || '{}');
+      return json(res, () => projH.listWorkItemTypes({ org: org?.trim(), pat: pat?.trim(), project, orgId: orgId || undefined }));
     }
 
     // ── POST /api/disconnect ──────────────────────────────────────────────
@@ -121,6 +142,10 @@ async function main() {
         rawOrg:      params.get('org')?.trim(),
         pat:         params.get('pat')?.trim(),
         projectsRaw: params.get('projects') || '',
+        projectsJson: params.get('projectsJson') || '',
+        orgId:       params.get('orgId') || undefined,
+        label:       params.has('label') ? params.get('label') : undefined,
+        addOrg:      params.get('addOrg') === '1',
       }));
     }
 
@@ -133,7 +158,7 @@ async function main() {
     // ── GET /settings ──────────────────────────────────────────────────────
     if (urlPath === '/settings') {
       const cfg = getCfg();
-      return page(res, () => dashH.renderSetup({ org: cfg.org || '', pat: cfg.pat || '', projects: cfg.projects || [] }));
+      return page(res, () => dashH.renderSetup({ org: cfg.org || '', baseUrl: cfg.baseUrl || '', pat: cfg.pat || '', organizations: cfg.organizations || [], projects: cfg.projects || [] }));
     }
 
     // ── No config → onboarding (first time) | SN-only | settings (returning) ─

@@ -1,4 +1,4 @@
-import { CLOSED_STATES, ACTIVE_BUG_STATES, getItemTypes } from './constants.js';
+import { ACTIVE_BUG_STATES, getProfile, closedStates, mainItemsLabel } from './constants.js';
 import { calcHealth } from './health.js';
 import { t } from './i18n.js';
 import { fmtD } from './utils.js';
@@ -16,9 +16,9 @@ let _dailyForcedSprint = null;
 export function buildDailySlide(card, forcedSprintKey = null) {
   const project = card.dataset.project;
   const items = JSON.parse(card.dataset.items);
-  const workItemType = card.dataset.workitemtype || 'User Story';
-  const ITEM_TYPES = getItemTypes(workItemType);
-  const isTaskMode = workItemType === 'Task';
+  const profile = getProfile(card);
+  const ITEM_TYPES = profile.mainTypes;
+  const CLOSED_STATES = closedStates(profile);
 
   let currentIter, sprintName, sprintDate;
 
@@ -45,7 +45,7 @@ export function buildDailySlide(card, forcedSprintKey = null) {
   const mainItems = filteredForStats.filter(i => ITEM_TYPES.includes(i.type));
   const total = mainItems.length;
   const openItems = mainItems.filter(i => !CLOSED_STATES.includes(i.state));
-  const semEstItems = openItems.filter(i => i.pts == null || i.pts === 0);
+  const semEstItems = profile.hasEstimate ? openItems.filter(i => i.pts == null || i.pts === 0) : [];
   const semRespItems = openItems.filter(i => !i.assigned);
   const semEst = semEstItems.length;
   const semResp = semRespItems.length;
@@ -53,11 +53,12 @@ export function buildDailySlide(card, forcedSprintKey = null) {
   const activeBugs = allBugs.filter(i => ACTIVE_BUG_STATES.includes(i.state));
   const bugs = activeBugs.length;
 
-  _slidesData.push({ sprintName, mainItems, semEstItems, semRespItems, activeBugs, allBugs });
+  const itemLabel = mainItemsLabel(profile, t);
+
+  _slidesData.push({ sprintName, itemLabel, mainItems, semEstItems, semRespItems, activeBugs, allBugs });
 
   const health = calcHealth(total, semEst, semResp, bugs);
 
-  const itemLabel = isTaskMode ? t('stat_tasks') : t('stat_us');
 
   const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const tableRows = mainItems.map(i => {
@@ -92,7 +93,7 @@ export function buildDailySlide(card, forcedSprintKey = null) {
       '</div>' +
       '<div class="stats daily-stats">' +
         '<div class="stat stat-clickable" onclick="openDailyStat(\'us\')" title="View items"><div class="stat-label">' + itemLabel + '</div><div class="stat-val">' + total + '</div></div>' +
-        '<div class="stat stat-clickable" onclick="openDailyStat(\'noEst\')" title="View no estimate items"><div class="stat-label">' + t('stat_no_est') + '</div><div class="stat-val ' + (semEst > 2 ? 'warn' : '') + '">' + semEst + '</div></div>' +
+        '<div class="stat stat-clickable" onclick="openDailyStat(\'noEst\')" title="View no estimate items"><div class="stat-label">' + t('stat_no_est') + '</div><div class="stat-val ' + (semEst > 2 ? 'warn' : '') + '">' + (profile.hasEstimate ? semEst : '—') + '</div></div>' +
         '<div class="stat stat-clickable" onclick="openDailyStat(\'noResp\')" title="View no assignee items"><div class="stat-label">' + t('stat_no_resp') + '</div><div class="stat-val ' + (semResp > 2 ? 'warn' : '') + '">' + semResp + '</div></div>' +
         '<div class="stat stat-clickable" onclick="openDailyStat(\'bugs\')" title="View bugs"><div class="stat-label">' + t('stat_bugs') + '</div><div class="stat-val ' + (bugs > 3 ? 'crit' : '') + '">' + bugs + '</div></div>' +
       '</div>' +
@@ -106,7 +107,7 @@ export function openDailyStat(stat) {
   if (!data) return;
   switch (stat) {
     case 'us':
-      openItemsModal({ title: data.sprintName + ' — ' + t('stat_us'), items: data.mainItems, showPts: true });
+      openItemsModal({ title: data.sprintName + ' — ' + data.itemLabel, items: data.mainItems, showPts: true });
       break;
     case 'noEst':
       openItemsModal({ title: data.sprintName + ' — ' + t('stat_no_est'), items: data.semEstItems, showPts: true });

@@ -14,8 +14,8 @@
 ```
 dash_azure_gestao_pessoal/
 ├── server.js              ← thin router ~190 linhas + helpers json()/page()
-├── config.js              ← loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getProjectConfig
-├── azureClient.js         ← azureGet, azurePost, rawAzureGet (usa cfg.baseUrl)
+├── config.js              ← loadConfig, saveConfig, getCfg, parseOrgInput, getDisplayName, getProjectConfig, getOrg (multi-org)
+├── azureClient.js         ← azureGet(url, org?), azurePost(path, body, org?), rawAzureGet; sem org = principal
 ├── projectService.js      ← fetchProject, fetchProjectDetail, buildCardHTML, fetchUATPlans
 ├── teamCapacityService.js ← fetchTeamCapacity
 ├── reportService.js       ← buildReport, fetchAzureReport, fetchSnReport, cacheInvalidate (cache JSON 6h)
@@ -48,6 +48,8 @@ dash_azure_gestao_pessoal/
 ├── utils/
 │   ├── paths.js           ← DATA_DIR, CONFIG_PATH, CACHE_DIR (prioridade: ELECTRON_DATA_DIR → pkg → __dirname)
 │   ├── health.js          ← calcHealth (compartilhado com frontend via mesma lógica)
+│   ├── workItemProfile.js ← getWorkItemProfile, readEstimate, statesOr (perfil do tipo de item principal)
+│   ├── orgs.js            ← orgIdFor, getDisplayName, assignProjectKeys (funções puras de organização)
 │   ├── paginate.js        ← paginatedItems (lotes de 200)
 │   └── iterMap.js         ← fetchIterMap (classificationnodes + fallback team)
 ├── public/
@@ -77,7 +79,7 @@ dash_azure_gestao_pessoal/
 │       ├── timer.js       ← startTimer, doRefresh
 │       └── i18n.js        ← initI18n, t(), setLocale, applyTranslations
 ├── views/
-│   ├── dashboard.html     ← template com tokens {{ORG}}, {{CARDS}}, etc. + #dp-view + #update-banner
+│   ├── dashboard.html     ← template com tokens {{SUBTITLE}}, {{CARDS}}, {{SUMMARY_BAR}}, etc. + #dp-view + #update-banner
 │   ├── setup.html         ← template da tela de configuração
 │   └── report.html        ← template do Review Mensal
 ├── tests/
@@ -170,14 +172,29 @@ O listener global de `filters.js` exclui `.items-filter-select` do fechamento au
 
 ### work item types por projeto
 
-`workItemType`: `'User Story'` (padrão) ou `'Task'`.
-- Frontend: `getItemTypes(wt)` e `getEstimateField(wt)` em `constants.js`
-- Backend: `getProjectConfig(identifier)` em `config.js`
+`workItemType`: qualquer tipo do Azure. `'User Story'` (padrão) e `'Task'` são **legados**.
+- Backend: `getWorkItemProfile(projectCfg)` em `utils/workItemProfile.js` → `{ mainTypes, estimateFields, estimateUnit, typeLabel, states, legacy }`
+- Frontend: `getProfile(card)` em `constants.js` lê `data-profile` do card (fallback em `data-workitemtype`); `/detail` devolve `profile` só para tipos não legados (`profileFromDetail(data)`)
+- Estados: **sempre** `profile.states?.x ?? <lista literal atual>` (`statesOr` / `profileStates`) — legados têm `states: null` e mantêm as listas de cada módulo
+- Tipos não legados: `estimateField`, `estimateUnit` e `states` resolvidos no setup (`resolveTypeProfile` em `handlers/projects.js`) e gravados no projeto
 - Métricas calculadas apenas dos `mainItems` — **nunca** incluir Bugs nos indicadores
+- Fora do escopo: Team Capacity e horas de Task continuam sempre no tipo `'Task'`
+
+### Múltiplas organizações
+
+`config.organizations = [{ id, org, baseUrl, pat, label? }]`; a primeira é a principal e é **espelhada** em `org`/`baseUrl`/`pat` no topo (`saveConfig` faz isso). Configs antigas são migradas em memória no `loadConfig`.
+- Cada projeto tem `orgId`; serviços resolvem com `getOrg(pcfg.orgId)` e passam `org` para `azureGet`/`azurePost`/`paginatedItems`/`fetchIterMap`
+- Identificador do projeto = `getDisplayName(p)` = `p.key || "nome - time"`. `key` só é gravado quando o nome colide com projeto de outra organização — **não** renomear projetos existentes (cache, localStorage, `snGroupConfigs` usam esse nome)
+- `POST /setup` com `orgId` substitui só os projetos daquela organização; PAT em branco = manter o salvo. O PAT **nunca** vai para o HTML (`renderSetup` manda `ORGS_JSON` sem token)
+- Rotas: `GET /api/orgs`, `POST /api/orgs/remove`
+
+### renderTemplate — cuidado com `{{...}}` em JS
+
+`renderTemplate` troca **qualquer** `{{palavra}}` do template (tokens desconhecidos viram vazio), inclusive dentro de `<script>`. Em JS dos templates, não escrever chaves duplas literais (ex.: interpolação de reserva do `_tr` usa `new RegExp('\\{\\{' + k ...)`).
 
 ### URLs de work items
 
-Construir como `${baseUrl}/_workitems/edit/${id}`.
+Construir como `${baseUrl}/_workitems/edit/${id}`, com o `baseUrl` **da organização do projeto**.
 **Nunca** usar `_links.html` da API — quando `&fields=` é usado, `_links` é omitido da resposta.
 
 ### Service Now — normalização de campos
@@ -192,9 +209,14 @@ Usar `_snRaw` em `number` e `sys_id` para evitar `[object Object]` nos links.
 
 ```json
 {
-  "org": "myorg", "pat": "...", "baseUrl": "https://dev.azure.com/myorg",
-  "projects": [{ "name": "Alpha", "workItemType": "User Story", "team": "opcional",
-                 "servicenow": { "assignmentGroup": "sys_id", "assignmentGroupName": "..." } }],
+  "org": "myorg", "pat": "...", "baseUrl": "https://dev.azure.com/myorg",   // espelho da principal
+  "organizations": [{ "id": "myorg", "org": "myorg", "baseUrl": "https://dev.azure.com/myorg", "pat": "..." },
+                    { "id": "outra", "org": "outra", "baseUrl": "https://outra.visualstudio.com", "pat": "...", "label": "Cliente B" }],
+  "projects": [{ "name": "Alpha", "orgId": "myorg", "workItemType": "User Story", "team": "opcional",
+                 "servicenow": { "assignmentGroup": "sys_id", "assignmentGroupName": "..." } },
+               { "name": "Alpha", "orgId": "outra", "key": "Cliente B / Alpha", "workItemType": "Issue",
+                 "estimateField": "Microsoft.VSTS.Scheduling.Effort", "estimateUnit": "points",
+                 "states": { "new": ["To Do"], "active": ["Doing"], "done": ["Done"], "removed": [] } }],
   "ai": { "endpoint": "...", "apiKey": "...", "model": "...", "apiVersion": "..." },
   "servicenow": { "instance": "empresa.service-now.com", "user": "...", "pass": "..." }
 }
@@ -232,7 +254,7 @@ npm run test:coverage   # exibe cobertura por arquivo
 - Mensagens de teste em português
 - Framework: Jest (`jest.config.js` na raiz, `clearMocks: true`)
 
-### Estado atual: 600 testes, 28 suites, todos passando
+### Estado atual: 747 testes, 39 suites, todos passando
 
 | Arquivo | Cobertura |
 |---|---|
@@ -281,6 +303,13 @@ npm run test:coverage   # exibe cobertura por arquivo
 | 179 | Login SSO em Node controlando o Edge por CDP (`--remote-debugging-pipe`), sem Python/Playwright | EXE ~80 MB, sem instalação; casos especiais portados do `mfa-servicenow-mcp` com `// Origem:` — antes de mudar `snMcp/`, ler `docs/sn-sso.md` e `docs/sn-sso-upstream.md` |
 | 181 | Nome/formato de perfil e sessão iguais aos do MCP (`session-edge/profile_<host>_<user>`) | Migração da 1.3.x sem novo login — não renomear |
 | 182 | `npm run check:sn-upstream` + `snMcp/upstream.json` | Ao portar correção do original, atualizar `referenceVersion` e o histórico em `docs/sn-sso-upstream.md` |
+| 185 | Perfil do tipo em `utils/workItemProfile.js`; `User Story`/`Task` legados com `states: null` | Nunca trocar as listas literais dos legados — usar `profile.states?.x ?? <lista atual>`; testes de equivalência em `tests/unit/projectService.test.js` |
+| 186 | Estimativa e estados de tipos novos resolvidos no setup e gravados no projeto | Falha na API não bloqueia o save; `estimateField: null` = sem estimativa ("—", não penaliza a saúde) |
+| 187 | `POST /api/work-item-types` alimenta o seletor de tipo (recomendado = categoria de requisitos) | POST para não expor o PAT na URL |
+| 188 | `POST /setup` aceita `projectsJson` e preserva `...prevProj`; descarta campos de estados só se o tipo mudar | Não voltar a montar o projeto só com `servicenow` — apagava indicadores e burndown |
+| 190 | `organizations[]` com a principal espelhada no topo | `getAppMode`, gates do `server.js` e downgrade seguem lendo `org`/`pat` do topo — manter o espelho |
+| 191 | Projeto identificado por `p.key || nome[ - time]`; `key` só na colisão entre organizações | Nunca migrar identificadores existentes — quebraria cache, aliases e filtros salvos |
+| 192 | PAT nunca vai para o HTML; campo em branco mantém o salvo | Não voltar a preencher `{{PAT_VALUE}}` |
 
 ---
 

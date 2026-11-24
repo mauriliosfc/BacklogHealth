@@ -1,6 +1,14 @@
 const { getCfg, getDisplayName, saveConfig } = require('../config');
 const { buildReport, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents, fetchSnRequestBacklog, fetchSnPrbBacklog } = require('../reportService');
 const { buildXlsx } = require('../utils/xlsxServer');
+const { getWorkItemProfile } = require('../utils/workItemProfile');
+
+// Estados "concluído" do tipo de item (somente tipos não legados com estados detectados)
+function _typeDoneStates(pcfg) {
+  if (!pcfg || !pcfg.workItemType) return null;
+  const done = getWorkItemProfile(pcfg).states?.done;
+  return done?.length ? done : null;
+}
 
 function getReportConfig({ project }) {
   const cfg  = getCfg();
@@ -19,7 +27,7 @@ function getReportConfig({ project }) {
     agingState:           pcfg?.agingState           || 'In Review',
     agingCharts:          pcfg?.agingCharts          || null,
     agingBuckets:         pcfg?.agingBuckets         || null,
-    deliveryStates:       pcfg?.deliveryStates       || null,
+    deliveryStates:       pcfg?.deliveryStates       || _typeDoneStates(pcfg) || null,
     indicatorCards:        pcfg?.indicatorCards        || null,
     indicatorCardsPerRow:  pcfg?.indicatorCardsPerRow  || null,
     incidentCharts:        pcfg?.incidentCharts        || null,

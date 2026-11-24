@@ -188,8 +188,8 @@ describe('loadConfig', () => {
     fs.readFileSync.mockReturnValueOnce(raw);
     loadConfig();
     expect(getCfg().projects).toEqual([
-      { name: 'Alpha', workItemType: 'User Story' },
-      { name: 'Beta',  workItemType: 'User Story' },
+      { name: 'Alpha', workItemType: 'User Story', orgId: 'myorg' },
+      { name: 'Beta',  workItemType: 'User Story', orgId: 'myorg' },
     ]);
   });
 

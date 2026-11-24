@@ -12,8 +12,10 @@ export function fmtD(s) {
   return _parseLocalDate(s).toLocaleDateString(getDateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-export function buildSprintData(items, iterMap, doneStates) {
+// mainTypes: tipos principais do projeto (perfil); padrão = US/PBI/Requirement
+export function buildSprintData(items, iterMap, doneStates, mainTypes) {
   const done = Array.isArray(doneStates) && doneStates.length ? doneStates : CLOSED_STATES;
+  const MAIN = Array.isArray(mainTypes) && mainTypes.length ? mainTypes : US_TYPES;
   const bySprint = {};
   items.forEach(i => {
     const k = i.iteration || 'Sem Sprint';
@@ -21,7 +23,7 @@ export function buildSprintData(items, iterMap, doneStates) {
     bySprint[k].total++;
     bySprint[k].pts += i.pts || 0;
     if (done.includes(i.state)) bySprint[k].closed++;
-    if (US_TYPES.includes(i.type)) {
+    if (MAIN.includes(i.type)) {
       bySprint[k].us++;
       if (done.includes(i.state)) bySprint[k].usClosed++;
       if (i.state === 'UAT') bySprint[k].usUAT++;
