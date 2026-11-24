@@ -163,7 +163,7 @@ describe('setup', () => {
 
     expect(saveConfig).toHaveBeenCalledTimes(1);
     expect(buildAndCache).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, orgId: 'myorg' });
   });
 
   test('preserva campos existentes (ai, github, servicenow) no merge', async () => {
@@ -186,7 +186,7 @@ describe('setup', () => {
 
     expect(saveConfig).toHaveBeenCalledWith(
       expect.objectContaining({
-        projects: [{ name: 'MyProject', workItemType: 'User Story' }],
+        projects: [{ name: 'MyProject', workItemType: 'User Story', orgId: 'myorg' }],
       })
     );
   });
@@ -196,7 +196,7 @@ describe('setup', () => {
 
     expect(saveConfig).toHaveBeenCalledWith(
       expect.objectContaining({
-        projects: [{ name: 'MyProject', workItemType: 'User Story', team: 'Backend Team' }],
+        projects: [{ name: 'MyProject', workItemType: 'User Story', team: 'Backend Team', orgId: 'myorg' }],
       })
     );
   });
@@ -207,8 +207,8 @@ describe('setup', () => {
     expect(saveConfig).toHaveBeenCalledWith(
       expect.objectContaining({
         projects: [
-          { name: 'Alpha', workItemType: 'User Story' },
-          { name: 'Beta',  workItemType: 'Task' },
+          { name: 'Alpha', workItemType: 'User Story', orgId: 'myorg' },
+          { name: 'Beta',  workItemType: 'Task', orgId: 'myorg' },
         ],
       })
     );

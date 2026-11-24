@@ -6,9 +6,14 @@ const DEFAULT_INDICATORS = {
   effortSaved:      { color: '' },
 };
 
-function resolveIndicatorConfig(saved = {}) {
+// typeDefaults.completionStates: estados "concluído" do tipo de item do projeto
+// (somente tipos não legados — ver utils/workItemProfile.js)
+function resolveIndicatorConfig(saved = {}, typeDefaults = {}) {
+  const completionDefault = typeDefaults.completionStates?.length
+    ? { ...DEFAULT_INDICATORS.completion, states: [...typeDefaults.completionStates] }
+    : DEFAULT_INDICATORS.completion;
   return {
-    completion:       { ...DEFAULT_INDICATORS.completion,       ...saved.completion },
+    completion:       { ...completionDefault,                   ...saved.completion },
     uat:              { ...DEFAULT_INDICATORS.uat,              ...saved.uat },
     bugRate:          { ...DEFAULT_INDICATORS.bugRate,          ...saved.bugRate },
     estimateCoverage: { ...DEFAULT_INDICATORS.estimateCoverage, ...saved.estimateCoverage },

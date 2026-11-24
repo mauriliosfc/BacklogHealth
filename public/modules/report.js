@@ -1,6 +1,18 @@
 ﻿// ── Monthly Review — modal ES module ─────────────────────────────────────────
 import { openCopilotWithContext } from './copilot.js';
 import { S } from './report-state.js';
+import { getProfile, isHoursProfile } from './constants.js';
+
+// Rótulos de itens/estimativa: legados mantêm "User Stories"/"Story Points"
+function _itemsLabel() {
+  const p = S.reportProfile;
+  return p && !p.legacy ? _esc(p.typeLabel) : 'User Stories';
+}
+function _ptsLabel() {
+  const p = S.reportProfile;
+  if (!p || p.legacy) return 'Story Points';
+  return isHoursProfile(p) ? t('label_hours') : t('label_points');
+}
 import {
   _esc, _metric, _legendHtml, _barChart,
   _renderSprintChart, _renderVolatilityChart,
@@ -344,7 +356,7 @@ function _renderChartCell(chart, delivery, idx, sprints, incidents) {
       : '<div class="report-empty-hint">Service Now not configured for this project</div>';
   } else {
     const usePts      = chart.countBy === 'pts';
-    const metricLabel = usePts ? 'Story Points' : 'User Stories';
+    const metricLabel = usePts ? _ptsLabel() : _itemsLabel();
     const bySource    = usePts ? (delivery.byTypesPts || {}) : (delivery.byTypes || {});
     title   = `${metricLabel} ${t('rpt_by')} ${_esc(chart.label || t('rpt_item_type'))}`;
     const data = bySource[chart.ref || ''] || [];
@@ -738,7 +750,7 @@ function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality
     <div class="report-prb-cards">
       <div class="report-prb-card">
         <div class="report-prb-card-val">${totalUS} ${_deltaHtml(totalUS, prevDelivery?.totalUS, false)}</div>
-        <div class="report-prb-card-label">User Stories</div>
+        <div class="report-prb-card-label">${_itemsLabel()}</div>
         <div class="report-prb-card-sub">${t('rpt_in_period')}</div>
       </div>
       <div class="report-prb-card">
@@ -748,7 +760,7 @@ function _renderDelivery(delivery, quality, incidents, prevDelivery, prevQuality
       </div>
       <div class="report-prb-card">
         <div class="report-prb-card-val">${totalSP}</div>
-        <div class="report-prb-card-label">Story Points</div>
+        <div class="report-prb-card-label">${_ptsLabel()}</div>
         <div class="report-prb-card-sub">comprometidos</div>
       </div>
       <div class="report-prb-card">
@@ -1145,6 +1157,7 @@ initPickerCallbacks({ saveConfig: _saveReportConfig, rerender: _rerender, load: 
 export async function openReport(btn) {
   const card = btn.closest('[data-project]');
   S.reportProject = card ? card.dataset.project : '';
+  S.reportProfile = card ? getProfile(card) : null;
   S.reportMonth   = null;
   await _loadReportConfig();
 

@@ -1,7 +1,7 @@
 const { azurePost }       = require('./azureClient');
 const { paginatedItems }  = require('./utils/paginate');
 const { fetchIterMap }    = require('./utils/iterMap');
-const { getProjectConfig, getDisplayName, getCfg } = require('./config');
+const { getProjectConfig, getDisplayName, getCfg, getOrg } = require('./config');
 
 const r1 = v => Math.round(v * 10) / 10;
 const spName = iter => (iter || '').split('\\').pop();
@@ -17,14 +17,16 @@ async function fetchTeamCapacity(identifier) {
   const project     = projectConfig.name;
   const team        = projectConfig.team;
   const displayName = getDisplayName(projectConfig);
+  const org         = (typeof getOrg === 'function' && getOrg(projectConfig.orgId)) || null;
 
   // Fetch tasks and iterMap in parallel
   const [taskWiql, { map: iterMap, currentSprint }] = await Promise.all([
     azurePost(
       `${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`,
-      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Task' ORDER BY [System.IterationPath] DESC` }
+      { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.WorkItemType] = 'Task' ORDER BY [System.IterationPath] DESC` },
+      org
     ),
-    fetchIterMap(project, team),
+    fetchIterMap(project, team, org),
   ]);
 
   const taskIds = (taskWiql.workItems || []).slice(0, 500).map(w => w.id);
@@ -32,7 +34,7 @@ async function fetchTeamCapacity(identifier) {
   let rawTasks = [];
   if (taskIds.length) {
     const fields = 'System.AssignedTo,Microsoft.VSTS.Scheduling.CompletedWork,Microsoft.VSTS.Scheduling.RemainingWork,System.IterationPath,System.State';
-    rawTasks = await paginatedItems(project, taskIds, fields);
+    rawTasks = await paginatedItems(project, taskIds, fields, org);
   }
 
   // If team-scoped, restrict to that team's sprint paths

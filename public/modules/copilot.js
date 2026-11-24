@@ -1,5 +1,6 @@
 import { t } from './i18n.js';
 import { getAlias } from './alias.js';
+import { getProfile, profileStates } from './constants.js';
 
 let _history = [];
 let _richContext = null;
@@ -482,16 +483,21 @@ function _buildContext() {
     const inFilter = sp => !hasFilter || activeFilter.includes(sp);
 
     // agregar por sprint
+    const profile = getProfile(card);
     const US_TYPES = ['User Story','Product Backlog Item','Requirement'];
-    const CLOSED = ['Closed','Done','Resolved'];
-    const usItems = items.filter(i => (US_TYPES.includes(i.type) || itemType === 'Task') && inFilter(i.iteration.split('\\').pop()));
+    const CLOSED = profileStates(profile, 'done', ['Closed','Done','Resolved']);
+    const ACTIVE = profileStates(profile, 'active', ['Active','In Progress','Doing']);
+    const isMain = profile.legacy
+      ? i => US_TYPES.includes(i.type) || itemType === 'Task'
+      : i => profile.mainTypes.includes(i.type);
+    const usItems = items.filter(i => isMain(i) && inFilter(i.iteration.split('\\').pop()));
     const sprintMap = {};
     for (const i of usItems) {
       const sp = i.iteration.split('\\').pop();
       if (!sprintMap[sp]) sprintMap[sp] = { total: 0, completed: 0, active: 0, points: 0 };
       sprintMap[sp].total++;
       if (CLOSED.includes(i.state)) sprintMap[sp].completed++;
-      else if (['Active','In Progress','Doing'].includes(i.state)) sprintMap[sp].active++;
+      else if (ACTIVE.includes(i.state)) sprintMap[sp].active++;
       if (i.pts) sprintMap[sp].points += i.pts;
     }
 

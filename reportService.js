@@ -1,8 +1,9 @@
 const fs       = require('fs');
 const nodePath = require('path');
-const { getCfg, getProjectConfig, getSnConfig, getProjectSnGroup } = require('./config');
+const { getCfg, getProjectConfig, getSnConfig, getProjectSnGroup, getOrg } = require('./config');
 const { azureGet, azurePost } = require('./azureClient');
 const { paginatedItems } = require('./utils/paginate');
+const { FIELD, getWorkItemProfile, wiqlList } = require('./utils/workItemProfile');
 const { snGet } = require('./servicenowClient');
 const { isSnConfigured } = require('./utils/snMode');
 
@@ -44,11 +45,12 @@ function cacheInvalidate(project, month, groupField, snExtra) {
 
 // Retorna Set com IterationPaths das sprints do time que se sobrepõem ao período
 // Se team não informado, retorna null (sem filtro de sprint)
-async function _fetchTeamSprintsForPeriod(proj, team, period) {
+async function _fetchTeamSprintsForPeriod(proj, team, period, org = null) {
   if (!team) return { paths: null, allPaths: null, iterations: [] };
   try {
     const sd = await azureGet(
-      `${encodeURIComponent(proj)}/${encodeURIComponent(team)}/_apis/work/teamsettings/iterations?api-version=7.0`
+      `${encodeURIComponent(proj)}/${encodeURIComponent(team)}/_apis/work/teamsettings/iterations?api-version=7.0`,
+      org
     );
     if (sd.value && sd.value.length) {
       const all      = sd.value;
@@ -113,8 +115,18 @@ const _DEFAULT_DONE_STATES = ['Closed', 'Done', 'Resolved'];
 async function fetchAzureReport(displayName, period, groupFields = [], agingState = '', deliveryStates = null, usAgingColumns = null) {
   const pcfg = getProjectConfig(displayName);
   const proj  = pcfg?.name || displayName;
+  const org   = (typeof getOrg === 'function' && getOrg(pcfg?.orgId)) || null;
+  // Legados (inclusive Task) mantêm a consulta por US/PBI/Requirement e StoryPoints;
+  // tipos novos usam o próprio tipo, campo de estimativa e estados concluídos.
+  const profile   = getWorkItemProfile(pcfg || {});
+  const typeDone  = profile.states?.done?.length ? profile.states.done : null;
+  const estFields = profile.legacy ? [FIELD.storyPoints] : profile.estimateFields;
+  const ptsOf     = fields => {
+    for (const f of estFields) { if (fields[f]) return fields[f]; }
+    return 0;
+  };
 
-  const DONE_STATES      = (Array.isArray(deliveryStates) && deliveryStates.length) ? deliveryStates : _DEFAULT_DONE_STATES;
+  const DONE_STATES      = (Array.isArray(deliveryStates) && deliveryStates.length) ? deliveryStates : (typeDone || _DEFAULT_DONE_STATES);
   const usAgingState     = agingState || '';
   const cleanGroupFields = (groupFields || []).filter(f => f);
   // Only extend cache key when delivery states differ from default (backward compat)
@@ -129,7 +141,9 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   const cached = _readCache('azure', displayName, period.month, cacheKey);
   if (cached) return cached;
 
-  const US_TYPES = "('User Story','Product Backlog Item','Requirement')";
+  const US_TYPES = profile.legacy
+    ? "('User Story','Product Backlog Item','Requirement')"
+    : `(${wiqlList(profile.mainTypes)})`;
 
   const projEnc = encodeURIComponent(proj);
   const [delivRes, bugsRes, bugsNewRes, bugsFixRes, teamIterData, agingRes] = await Promise.all([
@@ -137,20 +151,20 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
       query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
                 AND [System.WorkItemType] IN ${US_TYPES}`
-    }),
+    }, org),
     azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
       query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
                 AND [System.WorkItemType] = 'Bug'
                 AND [System.State] NOT IN ('Closed','Done','Resolved','Removed')`
-    }),
+    }, org),
     azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
       query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
                 AND [System.WorkItemType] = 'Bug'
                 AND [System.CreatedDate] >= '${period.start}'
                 AND [System.CreatedDate] <= '${period.end}'`
-    }),
+    }, org),
     azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
       query: `SELECT [System.Id] FROM WorkItems
               WHERE [System.TeamProject] = '${proj}'
@@ -158,15 +172,15 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
                 AND [System.State] IN ('Closed','Done','Resolved')
                 AND [Microsoft.VSTS.Common.StateChangeDate] >= '${period.start}'
                 AND [Microsoft.VSTS.Common.StateChangeDate] <= '${period.end}'`
-    }),
-    _fetchTeamSprintsForPeriod(proj, pcfg?.team, period),
+    }, org),
+    _fetchTeamSprintsForPeriod(proj, pcfg?.team, period, org),
     usAgingState
       ? azurePost(`${projEnc}/_apis/wit/wiql?api-version=7.0`, {
           query: `SELECT [System.Id] FROM WorkItems
                   WHERE [System.TeamProject] = '${proj}'
                     AND [System.WorkItemType] IN ${US_TYPES}
                     AND [System.State] = '${usAgingState}'`
-        }).catch(() => null)
+        }, org).catch(() => null)
       : Promise.resolve(null),
   ]);
 
@@ -178,7 +192,7 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   const bugFixIds  = (bugsFixRes.workItems  || []).map(i => i.id);
   const agingIds   = (agingRes?.workItems  || []).map(i => i.id);
 
-  const baseFields   = 'System.Id,System.State,System.IterationPath,Microsoft.VSTS.Scheduling.StoryPoints,System.WorkItemType,System.CreatedDate';
+  const baseFields   = ['System.Id', 'System.State', 'System.IterationPath', ...estFields, 'System.WorkItemType', 'System.CreatedDate'].join(',');
   const extraFields  = cleanGroupFields.filter(r => !baseFields.includes(r));
   const fields       = extraFields.length ? `${baseFields},${extraFields.join(',')}` : baseFields;
   const bugFields    = 'System.Id,System.State,System.IterationPath';
@@ -188,11 +202,11 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
     : agingBaseFields;
 
   const [delivItems, bugOpenItems, bugNewItems, bugFixItems, agingItems] = await Promise.all([
-    delivIds.length   ? paginatedItems(proj, delivIds,   fields)      : Promise.resolve([]),
-    bugOpenIds.length ? paginatedItems(proj, bugOpenIds, bugFields)    : Promise.resolve([]),
-    bugNewIds.length  ? paginatedItems(proj, bugNewIds,  bugFields)    : Promise.resolve([]),
-    bugFixIds.length  ? paginatedItems(proj, bugFixIds,  bugFields)    : Promise.resolve([]),
-    agingIds.length   ? paginatedItems(proj, agingIds,   agingFields)  : Promise.resolve([]),
+    delivIds.length   ? paginatedItems(proj, delivIds, fields, org)      : Promise.resolve([]),
+    bugOpenIds.length ? paginatedItems(proj, bugOpenIds, bugFields, org)    : Promise.resolve([]),
+    bugNewIds.length  ? paginatedItems(proj, bugNewIds, bugFields, org)    : Promise.resolve([]),
+    bugFixIds.length  ? paginatedItems(proj, bugFixIds, bugFields, org)    : Promise.resolve([]),
+    agingIds.length   ? paginatedItems(proj, agingIds, agingFields, org)  : Promise.resolve([]),
   ]);
 
 
@@ -220,8 +234,8 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   const sprintMap = {};
   filteredDelivItems.forEach(i => {
     const sp          = (i.fields['System.IterationPath'] || '').split('\\').pop() || 'Sem Sprint';
-    const pts         = i.fields['Microsoft.VSTS.Scheduling.StoryPoints'] || 0;
-    const done        = DONE_STATES.includes(i.fields['System.State']);
+    const pts         = ptsOf(i.fields);
+    const done       = DONE_STATES.includes(i.fields['System.State']);
     const createdDate = (i.fields['System.CreatedDate'] || '').slice(0, 10);
     const sprintStart = sprintStartMap[sp];
     const addedLate   = createdDate && sprintStart && createdDate > sprintStart ? 1 : 0;
@@ -250,7 +264,7 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
                         AND [System.WorkItemType] IN ${US_TYPES}
                         AND [System.IterationPath] Was Ever '${it.path}'
                         AND [System.IterationPath] <> '${it.path}'`,
-            }).catch(() => ({ workItems: [] }))
+            }, org).catch(() => ({ workItems: [] }))
           : Promise.resolve({ workItems: [] })
       )
     );
@@ -271,7 +285,7 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
   filteredDelivItems.forEach(i => {
     refs.forEach(r => {
       const t   = (r ? i.fields[r] : null) || i.fields['System.WorkItemType'] || '(sem tipo)';
-      const pts = i.fields['Microsoft.VSTS.Scheduling.StoryPoints'] || 0;
+      const pts = ptsOf(i.fields);
       rawMaps[r][t]    = (rawMaps[r][t]    || 0) + 1;
       rawPtsMaps[r][t] = (rawPtsMaps[r][t] || 0) + pts;
     });
@@ -314,7 +328,7 @@ async function fetchAzureReport(displayName, period, groupFields = [], agingStat
       const assignee   = i.fields['System.AssignedTo']?.displayName || i.fields['System.AssignedTo'] || '—';
       const bucketIdx  = BUCKETS.findIndex(b => agingDays < b.max);
       if (bucketIdx >= 0) counts[bucketIdx]++;
-      const baseUrl = getCfg().baseUrl || '';
+      const baseUrl = (org && org.baseUrl) || getCfg().baseUrl || '';
       const extra = {};
       extraAgingKeys.forEach(f => {
         const v = i.fields[f];
@@ -1237,4 +1251,4 @@ async function fetchSnVolumeIncidents(displayName, month, nMonths = 1) {
   }
 }
 
-module.exports = { buildReport, buildPeriod, getLast6Months, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents, fetchSnRequestBacklog, fetchSnPrbBacklog };
+module.exports = { buildReport, buildPeriod, getLast6Months, fetchAzureReport, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents, fetchSnRequestBacklog, fetchSnPrbBacklog };
