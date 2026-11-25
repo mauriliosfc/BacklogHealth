@@ -932,5 +932,6 @@
   "az_save_org": "Save {{name}}",
   "az_save_new_org": "Save organization",
   "az_saved_note": "{{name}} changes saved.",
-  "az_new_org_hint": "Fill in the URL and token, then pick its projects."
+  "az_new_org_hint": "Fill in the URL and token, then pick its projects.",
+  "splash_loading": "Loading Azure DevOps projects…"
 }
