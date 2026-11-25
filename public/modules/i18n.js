@@ -6,6 +6,8 @@ let _messages = {};
 export async function initI18n() {
   _locale = localStorage.getItem('lang') || 'en';
   if (!LOCALES[_locale]) _locale = 'en';
+  // Electron: a janela de carregamento (antes do servidor) usa o idioma salvo aqui
+  window.electronAPI?.localeChanged?.(_locale);
   const resp = await fetch('/i18n/' + _locale + '.json');
   _messages = await resp.json();
 }
