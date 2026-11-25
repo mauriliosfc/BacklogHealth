@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Tema
   themeChanged: (theme) => ipcRenderer.send('theme-changed', theme),
 
+  // Idioma (para a janela de carregamento da próxima abertura)
+  localeChanged: (lang) => ipcRenderer.send('locale-changed', lang),
+
   // Atualizações
   onUpdateAvailable:   (cb) => ipcRenderer.on('update:available',  (_e, info) => cb(info)),
   onDownloadProgress:  (cb) => ipcRenderer.on('update:progress',   (_e, pct)  => cb(pct)),

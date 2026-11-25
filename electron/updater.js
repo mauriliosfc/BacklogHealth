@@ -105,8 +105,12 @@ function downloadUpdate(url, onProgress) {
 
 // ── Lançar o installer e fechar o app ────────────────────────────────────────
 // /S = silent mode: reinstala sem wizard, sempre recria atalhos Start Menu e Desktop
+// --force-run = o installer do electron-builder abre o app no fim da instalação silenciosa
+// (sem ele, o instalador assistido só abre o app pela página final do wizard, que o /S pula)
+const INSTALLER_ARGS = ['/S', '--force-run'];
+
 function launchAndQuit(installerPath) {
-  spawn(installerPath, ['/S'], { detached: true, stdio: 'ignore' }).unref();
+  spawn(installerPath, INSTALLER_ARGS, { detached: true, stdio: 'ignore' }).unref();
 }
 
-module.exports = { checkForUpdates, downloadUpdate, launchAndQuit };
+module.exports = { checkForUpdates, downloadUpdate, launchAndQuit, isNewer, INSTALLER_ARGS };

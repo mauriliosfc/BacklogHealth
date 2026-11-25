@@ -31,9 +31,11 @@ dash_azure_gestao_pessoal/
 │   └── upstream.json      ← versão de referência do original + mapa de casos (docs/sn-sso-upstream.md)
 ├── scripts/               ← release.js, check-sn-upstream.js, sn-sso-debug.js
 ├── electron/
-│   ├── main.js            ← BrowserWindow, Menu.setApplicationMenu(null), nativeTheme, ipcMain, update check
-│   ├── preload.js         ← contextBridge — expõe electronAPI ao renderer (themeChanged, updater events)
-│   └── updater.js         ← checkForUpdates, downloadUpdate, launchAndQuit (native https, GitHub Releases API)
+│   ├── main.js            ← instância única, splash, BrowserWindow pré-aquecida, nativeTheme, ipcMain, update check
+│   ├── preload.js         ← contextBridge — expõe electronAPI ao renderer (themeChanged, localeChanged, updater events)
+│   ├── splash.html        ← janela de carregamento autocontida (sem servidor); também vira build/splash.bmp
+│   ├── splashPrefs.js     ← resolveLang, resolveTheme, splashText, readPrefs/writePrefs (userData/splash.json)
+│   └── updater.js         ← checkForUpdates, downloadUpdate, launchAndQuit (/S --force-run; GitHub Releases API)
 ├── handlers/              ← funções puras async — sem req/res, reutilizáveis por HTTP ou Electron IPC
 │   ├── utils.js           ← HttpError, httpError(), readBody()
 │   ├── state.js           ← singleton cachedHTML (getter/setter)
@@ -254,7 +256,7 @@ npm run test:coverage   # exibe cobertura por arquivo
 - Mensagens de teste em português
 - Framework: Jest (`jest.config.js` na raiz, `clearMocks: true`)
 
-### Estado atual: 747 testes, 39 suites, todos passando
+### Estado atual: 774 testes, 42 suites, todos passando
 
 | Arquivo | Cobertura |
 |---|---|
@@ -311,6 +313,11 @@ npm run test:coverage   # exibe cobertura por arquivo
 | 191 | Projeto identificado por `p.key || nome[ - time]`; `key` só na colisão entre organizações | Nunca migrar identificadores existentes — quebraria cache, aliases e filtros salvos |
 | 192 | PAT nunca vai para o HTML; campo em branco mantém o salvo | Não voltar a preencher `{{PAT_VALUE}}` |
 | 197 | Aba Azure de Configurações em lista e detalhe (sem aba Projetos); um save grava conexão e projetos da organização | Não separar de novo conexão e projetos em abas/saves diferentes |
+| 198 | `requestSingleInstanceLock()` antes de `require('../server')` | A 2ª instância nunca sobe o servidor — cliques repetidos só trazem a janela para frente |
+| 199 | Splash com `show: true` imediato (sem `ready-to-show`) | Processo de renderização leva 4–9 s em máquina corporativa; esperar deixava a tela vazia |
+| 200 | Janela principal pré-aquecida em `about:blank`; mostrar só quando a URL for a do servidor (`loadServerPage`) | Não voltar a confiar na promise do `loadURL` — resolve cedo e mostrava a janela em branco |
+| 201 | `main.js` usa `PORT` do `config.js` | 3031 em dev, 3030 empacotado — nunca fixar a porta no Electron |
+| 203 | Installer do update com `/S --force-run` | Sem `--force-run` o app não reabre após a atualização silenciosa |
 
 ---
 
