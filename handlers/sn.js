@@ -1,4 +1,4 @@
-const { getSnConfig, saveSnConfig, saveConfig, getProjectSnGroup, getCfg } = require('../config');
+const { saveSnConfig, saveConfig, getProjectSnGroup, getCfg, getSnInstance, getSnInstances, getProjectSnContext, getDisplayName, snPublic, snLabel } = require('../config');
 const { snGet } = require('../servicenowClient');
 const { httpError } = require('./utils');
 const { getSnMode, isSnConfigured } = require('../utils/snMode');
@@ -6,10 +6,11 @@ const { getSnMode, isSnConfigured } = require('../utils/snMode');
 const _host = v => String(v || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
 
 // Monta o snCfg usado pelo snGet a partir de parâmetros crus (onboarding/teste antes de salvar).
-function _buildSnCfg({ instance, user, pass, mode, mcpUsername, mcpLoginUrl } = {}) {
+function _buildSnCfg({ instance, user, pass, mode, mcpUsername, mcpLoginUrl, instanceId } = {}) {
+  const savedSn = getSnInstance(instanceId) || {};
   if (getSnMode({ mode }) === 'mcp') {
     if (!instance) httpError(400, 'instance is required.');
-    const saved = getSnConfig()?.mcp || {};
+    const saved = savedSn.mcp || {};
     return {
       mode: 'mcp',
       instance: _host(instance),
@@ -19,13 +20,20 @@ function _buildSnCfg({ instance, user, pass, mode, mcpUsername, mcpLoginUrl } = 
       },
     };
   }
-  if (!instance || !user || !pass) httpError(400, 'instance, user and pass are required.');
-  return { mode: 'api', instance: instance.trim(), user: user.trim(), pass };
+  // Instância já salva: senha em branco usa a senha salva (a tela não recebe a senha)
+  const samePass = !pass && instanceId && savedSn.pass && _host(savedSn.instance).toLowerCase() === _host(instance).toLowerCase();
+  const effPass = pass || (samePass ? savedSn.pass : '');
+  if (!instance || !user || !effPass) httpError(400, 'instance, user and pass are required.');
+  return { mode: 'api', instance: instance.trim(), user: user.trim(), pass: effPass };
 }
 
-function getSnCfg({ project = '' } = {}) {
-  const sn   = getSnConfig();
+function getSnCfg({ project = '', instanceId = '' } = {}) {
+  const all  = getSnInstances();
+  const sn   = project ? getProjectSnContext(project).snCfg : getSnInstance(instanceId);
   const resp = {
+    instanceId:  sn?.id || '',
+    label:       sn?.label || '',
+    isPrimary:   !!(sn && all[0] && sn.id === all[0].id),
     instance:    sn?.instance || '',
     user:        sn?.user || '',
     hasPass:     !!(sn?.pass),
@@ -47,6 +55,8 @@ function getSnCfg({ project = '' } = {}) {
 
 function saveSnCfg(p = {}) {
   const snGlobal = {
+    ...(p.instanceId                      ? { instanceId: p.instanceId }    : {}),
+    ...(p.label             !== undefined ? { label: String(p.label || '') } : {}),
     ...(p.instance          !== undefined ? { instance: String(p.instance).trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '') } : {}),
     ...(p.user              !== undefined ? { user: String(p.user).trim() } : {}),
     ...(p.pass                            ? { pass: p.pass }                : {}),
@@ -63,9 +73,17 @@ function saveSnCfg(p = {}) {
     assignmentGroupName: p.assignmentGroupName !== undefined ? (p.assignmentGroupName || '') : undefined,
     slaEnabled:          p.slaEnabled          !== undefined ? p.slaEnabled            : undefined,
     slaThresholds:       p.slaThresholds       || null,
+    ...(p.instanceId !== undefined ? { instanceId: p.instanceId === 'new' ? undefined : (p.instanceId || '') } : {}),
   } : null;
-  saveSnConfig(snGlobal, projectGroup);
-  return { ok: true };
+  // Só a instância do projeto mudou (sem credenciais): não mexe nas instâncias
+  const credKeys = ['label', 'instance', 'user', 'pass', 'assignmentGroups', 'mode', 'mcp'];
+  const global = credKeys.some(k => snGlobal[k] !== undefined) ? snGlobal : {};
+  // Instância que não existe mais (removida em outra janela): não grava por cima da principal
+  if (global.instanceId && global.instanceId !== 'new' && !getSnInstances().some(s => s.id === global.instanceId)) {
+    httpError(404, 'Service Now instance not found.');
+  }
+  const savedId = saveSnConfig(global, projectGroup);
+  return { ok: true, ...(savedId ? { instanceId: savedId } : {}) };
 }
 
 async function testSn(p = {}) {
@@ -131,28 +149,31 @@ async function fetchGroups(p = {}) {
 
 // A lista de grupos muda pouco e é cara de baixar — cache em memória por instância/modo/usuário.
 const GROUPS_CACHE_TTL_MS = 60 * 60 * 1000;
-let _groupsCache = null;   // { key, at, value }
-let _groupsInFlight = null; // { key, promise }
+const _groupsCache    = new Map();   // chave → { at, value }
+const _groupsInFlight = new Map();   // chave → promise
 
-function _clearGroupsCache() { _groupsCache = null; _groupsInFlight = null; }
+function _clearGroupsCache() { _groupsCache.clear(); _groupsInFlight.clear(); }
 
-// Fetches groups using credentials already saved in config (no need to pass them again).
-async function fetchGroupsFromConfig() {
-  const sn = getSnConfig();
+// Grupos da instância indicada (ou da principal), com as credenciais salvas.
+async function fetchGroupsFromConfig({ instanceId = '' } = {}) {
+  const sn = getSnInstance(instanceId);
   if (!isSnConfigured(sn)) httpError(400, 'ServiceNow not configured.');
   const mode = getSnMode(sn);
-  const key  = [mode, sn.instance, mode === 'api' ? sn.user : ''].join('|');
-  if (_groupsCache && _groupsCache.key === key && Date.now() - _groupsCache.at < GROUPS_CACHE_TTL_MS) {
-    return _groupsCache.value;
+  const key  = [mode, sn.instance, mode === 'api' ? sn.user : (sn.mcp && sn.mcp.username) || ''].join('|');
+  const hit = _groupsCache.get(key);
+  if (hit && Date.now() - hit.at < GROUPS_CACHE_TTL_MS) return hit.value;
+  // SSO sem sessão: não busca (a busca abriria a janela de login só por abrir a tela)
+  if (mode === 'mcp' && !require('../snMcp').isConnected(sn)) {
+    return { groups: [], error: 'Service Now session not connected.', needsLogin: true };
   }
-  if (_groupsInFlight && _groupsInFlight.key === key) return _groupsInFlight.promise;
-  const promise = fetchGroups({ instance: sn.instance, user: sn.user, pass: sn.pass, mode })
+  if (_groupsInFlight.has(key)) return _groupsInFlight.get(key);
+  const promise = fetchGroups({ instance: sn.instance, user: sn.user, pass: sn.pass, mode, instanceId: sn.id })
     .then(value => {
-      if (!value.error && value.groups.length) _groupsCache = { key, at: Date.now(), value };
+      if (!value.error && value.groups.length) _groupsCache.set(key, { at: Date.now(), value });
       return value;
     })
-    .finally(() => { if (_groupsInFlight && _groupsInFlight.promise === promise) _groupsInFlight = null; });
-  _groupsInFlight = { key, promise };
+    .finally(() => { if (_groupsInFlight.get(key) === promise) _groupsInFlight.delete(key); });
+  _groupsInFlight.set(key, promise);
   return promise;
 }
 
@@ -161,18 +182,24 @@ function getAllProjectsSnCfg() {
   return {
     projects: projects.map(p => ({
       name:                p.name,
+      displayName:         getDisplayName(p),
+      instanceId:          p.servicenow?.instanceId          || '',
       assignmentGroup:     p.servicenow?.assignmentGroup     || '',
       assignmentGroupName: p.servicenow?.assignmentGroupName || '',
     })),
   };
 }
 
+// Card de grupo removido no dashboard do SN: sai da lista da instância que o tem (qualquer uma)
 function removeSnGroup({ group } = {}) {
   if (!group) return { ok: false };
   const cfg = getCfg();
   if (cfg.servicenow?.assignmentGroups) {
     cfg.servicenow.assignmentGroups = cfg.servicenow.assignmentGroups.filter(g => g !== group);
   }
+  (Array.isArray(cfg.snInstances) ? cfg.snInstances : []).forEach(s => {
+    if (Array.isArray(s.assignmentGroups)) s.assignmentGroups = s.assignmentGroups.filter(g => g !== group);
+  });
   if (cfg.snGroupConfigs) delete cfg.snGroupConfigs[group];
   saveConfig(cfg);
   return { ok: true };
@@ -180,8 +207,8 @@ function removeSnGroup({ group } = {}) {
 
 // Returns available columns for the problem table via sys_dictionary.
 // Uses saved credentials — no need to pass them again.
-async function fetchPrbFields() {
-  const sn = getSnConfig();
+async function fetchPrbFields({ project = '', instanceId = '' } = {}) {
+  const sn = project ? getProjectSnContext(project).snCfg : getSnInstance(instanceId);
   if (!isSnConfigured(sn)) httpError(400, 'ServiceNow not configured.');
   try {
     const qs = [
@@ -200,4 +227,48 @@ async function fetchPrbFields() {
   }
 }
 
-module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg, removeSnGroup, fetchPrbFields, _clearGroupsCache };
+// Instâncias para a tela de Configurações — nunca devolve senha
+function listSnInstances() {
+  const all = getSnInstances();
+  const projects = getCfg().projects || [];
+  const snMcp = require('../snMcp');
+  return {
+    instances: all.map((sn, i) => {
+      // Projeto sem instanceId usa a principal
+      const projectCount = projects.filter(p => (p.servicenow?.instanceId || all[0]?.id) === sn.id).length;
+      const status = getSnMode(sn) === 'mcp' ? (snMcp.isConnected(sn) ? 'ok' : 'unknown') : 'unknown';
+      const assignmentGroups = Array.isArray(sn.assignmentGroups) ? sn.assignmentGroups : [];
+      return snPublic(sn, { isPrimary: i === 0, status, projectCount, assignmentGroups });
+    }),
+  };
+}
+
+// Remove uma instância. Projetos que a usavam voltam para a principal, sem grupo.
+// Removida a principal, a próxima assume (inclusive no dashboard do Service Now).
+function removeSnInstance({ instanceId } = {}) {
+  if (!instanceId) httpError(400, 'instanceId required');
+  const cfg = getCfg();
+  const all = getSnInstances();
+  const idx = all.findIndex(s => s.id === instanceId);
+  if (idx < 0) httpError(404, 'Service Now instance not found.');
+  const removed = all[idx];
+  let affected = 0;
+  (cfg.projects || []).forEach(p => {
+    const usesIt = (p.servicenow?.instanceId || all[0].id) === instanceId;
+    if (!usesIt || !p.servicenow) return;
+    if (p.servicenow.instanceId === instanceId || idx === 0) {
+      delete p.servicenow.instanceId;
+      delete p.servicenow.assignmentGroup;
+      delete p.servicenow.assignmentGroupName;
+      affected++;
+    }
+  });
+  cfg.snInstances = all.filter(s => s.id !== instanceId);
+  if (idx === 0) delete cfg.servicenow;          // recriado a partir da nova principal
+  if (!cfg.snInstances.length) delete cfg.servicenow;
+  saveConfig(cfg);
+  if (getSnMode(removed) === 'mcp') { try { require('../snMcp').logout(removed); } catch (_) {} }
+  return { ok: true, affectedProjects: affected };
+}
+
+module.exports = { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg, removeSnGroup, fetchPrbFields, listSnInstances, removeSnInstance, _clearGroupsCache };

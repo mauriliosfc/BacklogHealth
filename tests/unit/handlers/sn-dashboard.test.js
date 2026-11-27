@@ -481,3 +481,89 @@ describe('P4', () => {
     expect(html).toContain('0 P3 &middot; 1 P4');
   });
 });
+
+// ── Várias instâncias no dashboard do Service Now ────────────────────────────
+
+describe('várias instâncias', () => {
+  const snMcp = require('../../../snMcp');
+  const A = { id: 'a', instance: 'a.service-now.com', user: 'u', pass: 'p', assignmentGroups: ['Rede'] };
+  const B = { id: 'b', instance: 'b.service-now.com', label: 'Cliente B', mode: 'mcp', assignmentGroups: ['Rede', 'Banco'] };
+  const C = { id: 'c', instance: 'c.service-now.com', user: 'u', pass: 'p' };
+  const { id, ...mirrorA } = A;
+  const cfg = { servicenow: mirrorA, snInstances: [A, B, C] };
+
+  const incOf = (group, n) => ({ number: n, short_description: 'x', priority: '2', assignment_group: group,
+    opened_at: new Date().toISOString(), sys_id: n });
+
+  test('dashboardInstances: principal e as outras com grupos, sem repetir grupo da principal', () => {
+    const list = snDash.dashboardInstances(cfg);
+    expect(list.map(s => s.instance)).toEqual(['a.service-now.com', 'b.service-now.com']);
+    expect(list[1].assignmentGroups).toEqual(['Banco']);
+    expect(list[0].id).toBe('a');
+  });
+
+  test('config antiga (só servicenow) continua com a principal', () => {
+    expect(snDash.dashboardInstances(BASE_CFG)).toEqual([expect.objectContaining({ instance: 'dev.service-now.com' })]);
+  });
+
+  test('cards de cada instância, com o nome dela e links do host certo', async () => {
+    getCfg.mockReturnValue(cfg);
+    snMcp.isConnected.mockReturnValue(true);
+    snGet.mockImplementation(async (sn, path) => {
+      if (!path.includes('active=true')) return { result: [] };
+      return { result: sn.instance === 'a.service-now.com' ? [incOf('Rede', 'INCA')] : [incOf('Banco', 'INCB')] };
+    });
+    const r = await snDash.fetchAndBuildCards();
+    expect(r.kpi.totalOpen).toBe(2);
+    expect(r.cardsHtml).toContain('data-sn-instance="b"');
+    expect(r.cardsHtml).toContain('Cliente B');
+    expect(r.cardsHtml).toContain('https://b.service-now.com/nav_to.do');
+    expect(r.cardsHtml).toContain('https://a.service-now.com/nav_to.do');
+  });
+
+  test('instância SSO sem sessão: as outras aparecem e o aviso fica embaixo', async () => {
+    getCfg.mockReturnValue(cfg);
+    snMcp.isConnected.mockReturnValue(false);
+    snMcp.ensure.mockResolvedValue({});
+    snGet.mockResolvedValue({ result: [incOf('Rede', 'INCA')] });
+    const r = await snDash.fetchAndBuildCards();
+    expect(r.pending).toBeUndefined();
+    expect(r.cardsHtml).toContain('Rede');
+    expect(r.cardsHtml).toContain('data-sn-pending="1"');
+    expect(snMcp.ensure).toHaveBeenCalledWith(expect.objectContaining({ instance: 'b.service-now.com' }));
+  });
+
+  test('erro numa instância não esconde a outra', async () => {
+    // Principal sem grupos (consulta todos os incidentes) falha; a B continua aparecendo
+    const P = { id: 'a', instance: 'a.service-now.com', user: 'u', pass: 'p' };
+    const { id: _i, ...mirrorP } = P;
+    getCfg.mockReturnValue({ servicenow: mirrorP, snInstances: [P, B] });
+    snMcp.isConnected.mockReturnValue(true);
+    snGet.mockImplementation(async sn => {
+      if (sn.instance === 'a.service-now.com') throw new Error('HTTP 401');
+      return { result: [incOf('Banco', 'INCB')] };
+    });
+    const r = await snDash.fetchAndBuildCards();
+    expect(r.error).toBeNull();
+    expect(r.cardsHtml).toContain('Banco');
+    expect(r.cardsHtml).toContain('a.service-now.com: HTTP 401');
+  });
+});
+
+test('principal sem grupos: grupo listado em outra instância aparece uma vez só, na dela', async () => {
+  const snMcp = require('../../../snMcp');
+  snMcp.isConnected.mockReturnValue(true);
+  const P = { id: 'a', instance: 'a.service-now.com', user: 'u', pass: 'p' };
+  const B = { id: 'b', instance: 'b.service-now.com', user: 'u', pass: 'p', label: 'Cliente B', assignmentGroups: ['X'] };
+  const { id: _i, ...mirrorP } = P;
+  getCfg.mockReturnValue({ servicenow: mirrorP, snInstances: [P, B] });
+  const inc = (g, n) => ({ number: n, short_description: 'x', priority: '3', assignment_group: g, opened_at: new Date().toISOString(), sys_id: n });
+  snGet.mockImplementation(async (sn, path) => {
+    if (!path.includes('active=true')) return { result: [] };
+    return { result: sn.instance === 'a.service-now.com' ? [inc('X', 'A1'), inc('Y', 'A2')] : [inc('X', 'B1')] };
+  });
+  const r = await snDash.fetchAndBuildCards();
+  expect((r.cardsHtml.match(/data-group="X"/g) || []).length).toBe(1);
+  expect(r.cardsHtml).toContain('data-group="X" data-sn-instance="b"');
+  expect(r.cardsHtml).toContain('data-group="Y" data-sn-instance="a"');
+});

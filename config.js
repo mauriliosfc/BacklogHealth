@@ -2,6 +2,7 @@ const fs          = require("fs");
 const { CONFIG_PATH } = require('./utils/paths');
 const { isSnConfigured } = require('./utils/snMode');
 const { orgIdFor, orgLabel, getBaseDisplayName, getDisplayName, assignProjectKeys } = require('./utils/orgs');
+const { normalizeSnInstances, snIdFor, uniqueSnId, snLabel, snPublic } = require('./utils/snInstances');
 
 // Mesma detecção de ambiente usada em utils/paths.js (ELECTRON_DATA_DIR → pkg → dev):
 // o app empacotado (Electron ou pkg) sempre usa 3030; rodando via `node server.js`/`npm run dev`
@@ -78,6 +79,7 @@ function loadConfig() {
     }
 
     _normalizeOrganizations(raw);
+    normalizeSnInstances(raw);
 
     cfg = raw;
     // Return true only when Azure is fully configured (projects to fetch exist)
@@ -90,6 +92,7 @@ function loadConfig() {
 function saveConfig(data) {
   // Sem organizations: grava como antes (callers antigos que só mexem no topo)
   if (Array.isArray(data.organizations)) _normalizeOrganizations(data);
+  if (Array.isArray(data.snInstances)) normalizeSnInstances(data);
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2), "utf8");
   cfg = data;
 }
@@ -167,10 +170,21 @@ function getSnConfig() {
   return cfg.servicenow || null;
 }
 
-function saveSnConfig({ instance, user, pass, assignmentGroups, mode, mcp } = {}, projectGroup = null) {
-  if (instance !== undefined || user !== undefined || pass !== undefined || assignmentGroups !== undefined || mode !== undefined || mcp !== undefined) {
-    const current = cfg.servicenow || {};
-    cfg.servicenow = {
+// Grava a conexão de uma instância do Service Now e/ou o grupo de um projeto.
+// snGlobal.instanceId: instância a alterar (ausente = principal; 'new' = adiciona uma nova).
+// projectGroup.instanceId: instância do Service Now do projeto ('' = principal).
+// Devolve o id da instância gravada (ou null quando só o grupo do projeto mudou).
+function saveSnConfig({ instanceId, label, instance, user, pass, assignmentGroups, mode, mcp } = {}, projectGroup = null) {
+  normalizeSnInstances(cfg);
+  let savedId = null;
+  const hasFields = [label, instance, user, pass, assignmentGroups, mode, mcp].some(v => v !== undefined);
+  if (hasFields) {
+    const list = cfg.snInstances;
+    let idx = instanceId && instanceId !== 'new' ? list.findIndex(s => s.id === instanceId) : 0;
+    if (instanceId === 'new' || !list.length) idx = -1;
+    if (idx < 0 && instanceId && instanceId !== 'new') idx = 0;   // id desconhecido: principal
+    const current = idx >= 0 && list[idx] ? list[idx] : { id: uniqueSnId(instance, list) };
+    const next = {
       ...current,
       ...(instance         !== undefined ? { instance }         : {}),
       ...(user             !== undefined ? { user }             : {}),
@@ -179,9 +193,22 @@ function saveSnConfig({ instance, user, pass, assignmentGroups, mode, mcp } = {}
       ...(mode             !== undefined ? { mode }             : {}),
       ...(mcp              !== undefined ? { mcp: { ...(current.mcp || {}), ...mcp } } : {}),
     };
+    if (label !== undefined) {
+      const clean = String(label || '').trim();
+      if (clean) next.label = clean; else delete next.label;
+    }
+    if (idx >= 0) list[idx] = next; else list.push(next);
+    const pos = idx >= 0 ? idx : list.length - 1;
+    // `servicenow` é o armazenamento canônico da principal: atualiza junto
+    if (pos === 0) {
+      const { id, label: _l, ...mirror } = next;
+      cfg.servicenow = mirror;
+    }
+    normalizeSnInstances(cfg);
+    savedId = cfg.snInstances[pos] ? cfg.snInstances[pos].id : next.id;
   }
   if (projectGroup) {
-    const { projectName, assignmentGroup, assignmentGroupName, slaThresholds, slaEnabled } = projectGroup;
+    const { projectName, assignmentGroup, assignmentGroupName, slaThresholds, slaEnabled, instanceId: projInstanceId } = projectGroup;
     const proj = (cfg.projects || []).find(p => getDisplayName(p) === projectName)
               || (cfg.projects || []).find(p => p.name === projectName);
     if (proj) {
@@ -193,15 +220,48 @@ function saveSnConfig({ instance, user, pass, assignmentGroups, mode, mcp } = {}
         ...(slaEnabled          !== undefined ? { slaEnabled: slaEnabled === true } : {}),
         ...(slaThresholds                     ? { slaThresholds }                   : {}),
       };
+      if (projInstanceId !== undefined) {
+        if (projInstanceId) proj.servicenow.instanceId = projInstanceId;
+        else delete proj.servicenow.instanceId;
+      }
     }
   }
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+  return savedId;
 }
 
 function getProjectSnGroup(displayName) {
   const proj = (cfg.projects || []).find(p => getDisplayName(p) === displayName)
             || (cfg.projects || []).find(p => p.name === displayName);
   return proj?.servicenow || null;
+}
+
+// ── Várias instâncias do Service Now ─────────────────────────────────────────
+function getSnInstances() {
+  if (Array.isArray(cfg.snInstances) && cfg.snInstances.length) return cfg.snInstances;
+  const sn = cfg.servicenow;
+  return sn && sn.instance ? [{ id: snIdFor(sn.instance), ...sn }] : [];
+}
+
+// Instância pelo id; sem id (ou id desconhecido) devolve a principal
+function getSnInstance(id) {
+  const list = getSnInstances();
+  return (id && list.find(s => s.id === id)) || list[0] || null;
+}
+
+// Instância e grupo do Service Now de um projeto. Projeto sem instanceId usa a principal.
+// Identificador que não é projeto (card de grupo do dashboard do SN): a instância que lista esse
+// grupo, com a principal primeiro (mesmo nome em duas instâncias fica na principal).
+function getProjectSnContext(displayName) {
+  const isProject = (cfg.projects || []).some(p => getDisplayName(p) === displayName || p.name === displayName);
+  const group = getProjectSnGroup(displayName);
+  const list = getSnInstances();
+  const byGroup = !isProject && displayName
+    ? list.find(s => Array.isArray(s.assignmentGroups) && s.assignmentGroups.includes(displayName))
+    : null;
+  const snCfg = byGroup || getSnInstance(group && group.instanceId);
+  const primary = list[0];
+  return { snCfg, group, instanceId: snCfg ? snCfg.id : null, isPrimary: !!(snCfg && primary && snCfg.id === primary.id) };
 }
 
 // Returns one of: 'empty' | 'sn-only' | 'azure' | 'full'
@@ -215,4 +275,4 @@ function getAppMode() {
   return 'empty';
 }
 
-module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, authFor, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getBaseDisplayName, assignProjectKeys, orgIdFor, getOrganizations, getOrg, orgLabel, getAiCfg, saveAiConfig, getGithubCfg, getSnConfig, saveSnConfig, getProjectSnGroup, getAppMode };
+module.exports = { PORT, CONFIG_PATH, loadConfig, saveConfig, getAuth, authFor, getCfg, parseOrgInput, getProjectNames, getProjectConfig, getDisplayName, getBaseDisplayName, assignProjectKeys, orgIdFor, getOrganizations, getOrg, orgLabel, getAiCfg, saveAiConfig, getGithubCfg, getSnConfig, saveSnConfig, getProjectSnGroup, getAppMode, getSnInstances, getSnInstance, getProjectSnContext, snLabel, snPublic, uniqueSnId };

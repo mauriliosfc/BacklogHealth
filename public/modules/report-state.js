@@ -23,7 +23,7 @@ export const S = {
   deliveryStates:     ['Closed', 'Done', 'Resolved'],
   slaEnabled:         false,
   slaThresholds:      { p1: 4, p2: 8, p3: 72 },
-  slaTargets:         { p1: 95, p2: 90, p3: 85 },
+  slaTargets:         { p1: 95, p2: 90, p3: 85, p4: 80 },
   pickerIdx:          -1,
   lastPayload:        null,
   activeSectionFilter: 'all',

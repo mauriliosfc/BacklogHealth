@@ -1,20 +1,25 @@
-const STORAGE_KEY = 'cardOrder';
-const CARD_SEL    = '.card[data-project], .sn-inc-card[data-project]';
+const CARD_SEL = '.card[data-project], .sn-inc-card[data-project]';
+// Cada área de cards tem a sua ordem salva: #content (Azure, ou Service Now no modo SN-only)
+// e #sn-view (visão SN do botão AZ/SN no topo). Chaves separadas para uma não apagar a outra.
+const STORAGE_KEYS = { content: 'cardOrder', 'sn-view': 'cardOrderSn' };
 let _dragSrc  = null;
 let _fromIcon = false;
 
-function saveOrder() {
-  const order = Array.from(
-    document.querySelectorAll(`#content ${CARD_SEL}`)
-  ).map(c => c.dataset.project);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
+function _key(containerId) { return STORAGE_KEYS[containerId] || `cardOrder:${containerId}`; }
+
+function saveOrder(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const order = Array.from(container.querySelectorAll(CARD_SEL)).map(c => c.dataset.project);
+  localStorage.setItem(_key(containerId), JSON.stringify(order));
 }
 
-export function applyOrder() {
-  const content = document.getElementById('content');
+// Reaplica a ordem salva da área (chamar depois de trocar o HTML dos cards)
+export function applyOrder(containerId = 'content') {
+  const content = document.getElementById(containerId);
   if (!content) return;
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    const saved = JSON.parse(localStorage.getItem(_key(containerId)) || '[]');
     if (!saved.length) return;
     const cards = Array.from(content.querySelectorAll(CARD_SEL));
     if (cards.length < 2) return;
@@ -34,10 +39,11 @@ export function applyOrder() {
   } catch (_) {}
 }
 
-// Uses event delegation on #content — survives innerHTML refresh, call only once.
-export function initDragOrder() {
-  const content = document.getElementById('content');
-  if (!content) return;
+// Uses event delegation on the container — survives innerHTML refresh, call once per container.
+export function initDragOrder(containerId = 'content') {
+  const content = document.getElementById(containerId);
+  if (!content || content.dataset.dragOrder) return;
+  content.dataset.dragOrder = '1';
 
   // Enable draggable while cursor is over the project icon
   content.addEventListener('mouseover', e => {
@@ -73,7 +79,7 @@ export function initDragOrder() {
     e.preventDefault();
     if (!_dragSrc) return;
     const target = e.target.closest(CARD_SEL);
-    if (!target || target === _dragSrc) return;
+    if (!target || target === _dragSrc || !content.contains(target)) return;
     const rect = target.getBoundingClientRect();
     if (e.clientY < rect.top + rect.height / 2) {
       target.parentElement.insertBefore(_dragSrc, target);
@@ -92,6 +98,6 @@ export function initDragOrder() {
     // Keep the empty card always last after any reorder
     const emptyCard = content.querySelector('.card-empty');
     if (emptyCard) content.appendChild(emptyCard);
-    saveOrder();
+    saveOrder(containerId);
   });
 }

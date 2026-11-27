@@ -111,19 +111,99 @@ function createSnMcpFacade({
   return { get, connect, ensure, warmup: snCfg => manager.warmup(snCfg) };
 }
 
-const manager = createSessionManager();
-const facade  = createSnMcpFacade({ manager });
+// ── Várias instâncias ─────────────────────────────────────────────────────────
+// Cada instância (host + usuário + URL de login) tem o seu gerenciador de sessão e a sua fachada:
+// sessão, janela de login, keep-alive, cooldown e limite de chamadas próprios. Uma instância não
+// invalida a sessão da outra. Os arquivos em session-edge/ já são separados por host e usuário.
+function _host(instance) {
+  return String(instance || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '').toLowerCase();
+}
+function keyOf(snCfg) {
+  const m = (snCfg && snCfg.mcp) || {};
+  return [_host(snCfg && snCfg.instance), String(m.username || '').trim().toLowerCase(), String(m.loginUrl || '').trim()].join('|');
+}
+
+function createSnMcpRegistry({
+  createManager = () => createSessionManager(),
+  createFacade  = manager => createSnMcpFacade({ manager }),
+  findEdge      = () => require('./cdpPipe').findEdge(),
+} = {}) {
+  const { EventEmitter } = require('events');
+  const entries = new Map();          // chave → { manager, facade, snCfg }
+  const events  = new EventEmitter();
+
+  function entryFor(snCfg) {
+    const k = keyOf(snCfg);
+    let e = entries.get(k);
+    if (!e) {
+      const manager = createManager();
+      e = { manager, facade: createFacade(manager), snCfg };
+      manager.events.on('status', s => events.emit('status', { ...s, key: k, instance: s.instance || _host(snCfg && snCfg.instance) }));
+      entries.set(k, e);
+    }
+    if (snCfg) e.snCfg = snCfg;
+    return e;
+  }
+
+  // Sem snCfg: a única instância em uso (compatibilidade com quem chama sem argumento)
+  function _single() {
+    return entries.size === 1 ? entries.values().next().value : null;
+  }
+  function _statusOf(e, snCfg) {
+    // Nenhuma instância em uso ainda (ex.: setup novo, antes de digitar a instância): procura o Edge
+    // do mesmo jeito, senão o painel diria "Edge não encontrado" e bloquearia o botão de entrar
+    if (!e) return { state: 'stopped', user: '', message: '', reason: '', instance: _host(snCfg && snCfg.instance), edgeAvailable: !!findEdge() };
+    return { ...e.manager.getStatus(), edgeAvailable: e.manager.edgeAvailable() };
+  }
+
+  return {
+    keyOf,
+    get:     (snCfg, path) => entryFor(snCfg).facade.get(snCfg, path),
+    connect: snCfg => entryFor(snCfg).facade.connect(snCfg),
+    ensure:  snCfg => entryFor(snCfg).facade.ensure(snCfg),
+    warmup:  snCfg => entryFor(snCfg).facade.warmup(snCfg),
+    getStatus(snCfg) {
+      if (snCfg && snCfg.instance) return _statusOf(entryFor(snCfg), snCfg);
+      return _statusOf(_single(), snCfg);
+    },
+    isConnected(snCfg) {
+      const e = snCfg && snCfg.instance ? entries.get(keyOf(snCfg)) : _single();
+      return !!e && e.manager.getStatus().state === 'connected';
+    },
+    // Com snCfg: sai só daquela instância. Sem: sai de todas e apaga todas as sessões.
+    logout(snCfg) {
+      if (snCfg && snCfg.instance) { entryFor(snCfg).manager.logout({ snCfg }); return; }
+      const all = [...entries.values()];
+      if (all.length) all.forEach((e, i) => e.manager.logout(i === 0 ? {} : { snCfg: e.snCfg }));
+      else createManager().logout();
+    },
+    stop(snCfg) {
+      if (snCfg && snCfg.instance) { const e = entries.get(keyOf(snCfg)); if (e) e.manager.stop(); return; }
+      entries.forEach(e => e.manager.stop());
+    },
+    shutdown() { entries.forEach(e => e.manager.stop({ silent: true })); },
+    listStatuses() {
+      return [...entries.entries()].map(([key, e]) => ({ key, ..._statusOf(e, e.snCfg), instance: _host(e.snCfg && e.snCfg.instance) }));
+    },
+    events,
+  };
+}
+
+const registry = createSnMcpRegistry();
 
 module.exports = {
   createSnMcpFacade,
-  get:     facade.get,
-  connect: facade.connect,
-  ensure:  facade.ensure,
-  warmup:  facade.warmup,
-  getStatus: () => ({ ...manager.getStatus(), edgeAvailable: manager.edgeAvailable() }),
-  shutdown:  () => manager.stop({ silent: true }),
-  logout:    () => manager.logout(),
-  stop:      () => manager.stop(),
-  isConnected: () => manager.getStatus().state === 'connected',
-  events: manager.events,
+  createSnMcpRegistry,
+  keyOf,
+  get:          registry.get,
+  connect:      registry.connect,
+  ensure:       registry.ensure,
+  warmup:       registry.warmup,
+  getStatus:    registry.getStatus,
+  isConnected:  registry.isConnected,
+  logout:       registry.logout,
+  stop:         registry.stop,
+  shutdown:     registry.shutdown,
+  listStatuses: registry.listStatuses,
+  events:       registry.events,
 };
