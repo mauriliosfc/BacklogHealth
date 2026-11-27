@@ -3,6 +3,7 @@
 //
 //   const panel = mountSnMcpPanel(container, {
 //     getInstance: () => '...',          // instância digitada no formulário que hospeda o painel
+//     getInstanceId: () => '...',        // id da instância salva (várias instâncias); '' = nova/principal
 //     initial:     { username, loginUrl },
 //     onConnected: (status) => {},       // chamado ao concluir o login (ex.: salvar a config)
 //   });
@@ -62,7 +63,7 @@ function _template() {
   </div>`;
 }
 
-export function mountSnMcpPanel(root, { getInstance = () => '', initial = {}, onConnected, onChange } = {}) {
+export function mountSnMcpPanel(root, { getInstance = () => '', getInstanceId = () => '', initial = {}, onConnected, onChange } = {}) {
   if (!root) return null;
   root.innerHTML = _template();
   const $  = sel => root.querySelector(`[data-el="${sel}"]`);
@@ -162,7 +163,7 @@ export function mountSnMcpPanel(root, { getInstance = () => '', initial = {}, on
     clearTimeout(timer);
     let st;
     try {
-      const r = await fetch('/api/sn-mcp/status');
+      const r = await fetch('/api/sn-mcp/status?' + _statusQuery());
       st = await r.json();
     } catch (_) { return; }
     const typed     = _host(getInstance());
@@ -176,7 +177,7 @@ export function mountSnMcpPanel(root, { getInstance = () => '', initial = {}, on
     // Sessão salva de um uso anterior: confere em background (sem navegador) para já mostrar conectado
     if (!warmed && st.state === 'stopped' && typed) {
       warmed = true;
-      _post('/api/sn-mcp/warmup', { instance: getInstance().trim(), ...getValues() })
+      _post('/api/sn-mcp/warmup', { instance: getInstance().trim(), ..._idParam(), ...getValues() })
         .then(() => setTimeout(refresh, 1500)).catch(() => {});
     }
     if (BUSY_STATES.includes(st.state) || wantConnect) timer = setTimeout(refresh, POLL_MS);
@@ -187,6 +188,24 @@ export function mountSnMcpPanel(root, { getInstance = () => '', initial = {}, on
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     return d;
+  }
+
+  function _idParam() {
+    const id = getInstanceId();
+    return id ? { instanceId: id } : {};
+  }
+
+  // Status da instância digitada (cada instância tem a sua sessão)
+  function _statusQuery() {
+    const q = new URLSearchParams(_idParam());
+    const typed = getInstance().trim();
+    if (typed) {
+      q.set('instance', typed);
+      const v = getValues();
+      q.set('mcpUsername', v.mcpUsername);
+      q.set('mcpLoginUrl', v.mcpLoginUrl);
+    }
+    return q.toString();
   }
 
   function getValues() {
@@ -206,7 +225,7 @@ export function mountSnMcpPanel(root, { getInstance = () => '', initial = {}, on
     }
     wantConnect = true;
     try {
-      await _post('/api/sn-mcp/connect', { instance, ...getValues() });
+      await _post('/api/sn-mcp/connect', { instance, ..._idParam(), ...getValues() });
     } catch (e) {
       wantConnect = false;
       localError = e.message;
@@ -216,7 +235,9 @@ export function mountSnMcpPanel(root, { getInstance = () => '', initial = {}, on
 
   $a('logout').addEventListener('click', async () => {
     localError = '';
-    try { await _post('/api/sn-mcp/disconnect'); } catch (_) {}
+    // Só a sessão desta instância (as outras continuam conectadas)
+    const instance = getInstance().trim();
+    try { await _post('/api/sn-mcp/disconnect', instance ? { instance, ..._idParam(), ...getValues() } : _idParam()); } catch (_) {}
     refresh();
   });
 

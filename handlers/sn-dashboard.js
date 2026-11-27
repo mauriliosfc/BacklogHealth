@@ -1,6 +1,7 @@
 const { getCfg } = require('../config');
 const { snGet }  = require('../servicenowClient');
 const { getSnMode } = require('../utils/snMode');
+const { snLabel }   = require('../utils/snInstances');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -170,13 +171,14 @@ function _incCardHTML(g) {
       </div>
     </div>`).join('');
 
-  return `<div class="sn-inc-card" data-project="${escHtml(g.name)}" data-group="${escHtml(g.name)}">
+  const instTag = g.instanceLabel ? `<span class="sn-inc-inst" title="Service Now">${escHtml(g.instanceLabel)}</span>` : '';
+  return `<div class="sn-inc-card" data-project="${escHtml(g.name)}" data-group="${escHtml(g.name)}"${g.instanceId ? ` data-sn-instance="${escHtml(g.instanceId)}"` : ''}>
   <div class="sn-inc-hbar" style="background:${hbarColor}"></div>
   <div class="sn-inc-head">
     <div class="sn-inc-avatar ${avatarCls} card-icon" title="Arrastar para reordenar">${escHtml(_initials(g.name))}</div>
     <div class="sn-inc-head-text">
       <div class="sn-inc-group-name card-project-title">${escHtml(g.name)}</div>
-      <span class="sn-inc-open-badge">${openCount} open</span>
+      <span class="sn-inc-open-badge">${openCount} open</span>${instTag}
     </div>
   </div>
   <div class="sn-inc-stats-row">
@@ -284,41 +286,93 @@ function _pendingHtml() {
 
 // ── Public: called by dashboard.js buildAndCache ──────────────────────────────
 
-async function fetchAndBuildCards() {
-  const cfg        = getCfg();
-  const snCfg      = cfg.servicenow;
-  const groupNames = Array.isArray(snCfg?.assignmentGroups) && snCfg.assignmentGroups.length > 0
-    ? snCfg.assignmentGroups : null;
+// Instâncias que entram no dashboard: a principal (como sempre: sem grupos, todos os incidentes)
+// e as outras que têm grupos selecionados. Um grupo que já está na principal não se repete.
+function dashboardInstances(cfg) {
+  const list    = Array.isArray(cfg.snInstances) && cfg.snInstances.length ? cfg.snInstances : [];
+  const primary = cfg.servicenow || list[0] || null;
+  const seen    = new Set(Array.isArray(primary?.assignmentGroups) ? primary.assignmentGroups : []);
+  const others  = list.slice(1)
+    .filter(s => s && s.instance && Array.isArray(s.assignmentGroups) && s.assignmentGroups.length)
+    .map(s => {
+      const groups = s.assignmentGroups.filter(g => !seen.has(g));
+      groups.forEach(g => seen.add(g));
+      return { ...s, assignmentGroups: groups };
+    })
+    .filter(s => s.assignmentGroups.length);
+  const primaryEntry = primary ? { ...primary, id: (list[0] && list[0].id) || primary.id, label: list[0] ? list[0].label : primary.label } : null;
+  return primaryEntry ? [primaryEntry, ...others] : others;
+}
 
+async function _instanceData(snCfg, multi) {
+  const groupNames = Array.isArray(snCfg.assignmentGroups) && snCfg.assignmentGroups.length > 0
+    ? snCfg.assignmentGroups : null;
   // Modo SSO sem sessão: não bloqueia a página esperando o login. Dispara a conexão em
-  // background (login silencioso ou janela do Edge) e mostra um aviso; o front recarrega ao conectar.
+  // background (login silencioso ou janela do Edge); o front recarrega ao conectar.
   if (getSnMode(snCfg) === 'mcp') {
     const snMcp = require('../snMcp');
-    if (!snMcp.isConnected()) {
+    if (!snMcp.isConnected(snCfg)) {
       snMcp.ensure(snCfg).catch(() => {});
-      return { kpi: _emptyKpi(), cardsHtml: _pendingHtml(), error: null, pending: true };
+      return { pending: true };
     }
   }
-
   try {
-    const [snData, resolvedIncs] = await Promise.all([
+    const [snData, resolved] = await Promise.all([
       fetchSNGroups(snCfg),
       fetchSNResolved(snCfg, groupNames).catch(() => []),
     ]);
-    const { groups, kpi } = snData;
-    kpi.resolvedThisMonth = resolvedIncs.length;
-    kpi.mttr = _fmtMttr(_calcMttr(resolvedIncs));
-    return { kpi, cardsHtml: buildIncidentCardsHTML(groups), error: null };
+    if (multi) snData.groups.forEach(g => { g.instanceLabel = snLabel(snCfg); g.instanceId = snCfg.id || ''; });
+    return { groups: snData.groups, resolved };
   } catch (err) {
-    const errHtml = `<div class="sn-empty-incidents" style="color:var(--c-red)">
-      Failed to load incidents: ${escHtml(err.message)}
-    </div>`;
+    return { error: err.message };
+  }
+}
+
+async function fetchAndBuildCards() {
+  const instances = dashboardInstances(getCfg());
+  const multi     = instances.length > 1;
+  const results   = await Promise.all(instances.map(s => _instanceData(s, multi)));
+
+  // Principal sem grupos (mostra todos os incidentes): um grupo que outra instância lista
+  // explicitamente fica só no card dessa instância, que é a que o card de grupo resolve
+  // (getProjectSnContext acha a instância pela lista de grupos)
+  const primaryHasGroups = Array.isArray(instances[0]?.assignmentGroups) && instances[0].assignmentGroups.length > 0;
+  if (multi && !primaryHasGroups && results[0] && results[0].groups) {
+    const listedElsewhere = new Set(instances.slice(1).flatMap(s => s.assignmentGroups || []));
+    results[0].groups = results[0].groups.filter(g => !listedElsewhere.has(g.name));
+  }
+  const ok      = results.filter(r => r.groups);
+  const pending = results.some(r => r.pending);
+  const errors  = results.map((r, i) => r.error ? (multi ? `${snLabel(instances[i])}: ${r.error}` : r.error) : null).filter(Boolean);
+
+  if (!ok.length && pending) return { kpi: _emptyKpi(), cardsHtml: _pendingHtml(), error: null, pending: true };
+  if (!ok.length) {
+    const msg = errors.join(' · ') || 'Service Now not configured.';
     return {
       kpi: _emptyKpi(),
-      cardsHtml: errHtml,
-      error: err.message,
+      cardsHtml: `<div class="sn-empty-incidents" style="color:var(--c-red)">
+      Failed to load incidents: ${escHtml(msg)}
+    </div>`,
+      error: msg,
     };
   }
+
+  const groups   = ok.flatMap(r => r.groups).sort((a, b) => _prioScore(b) - _prioScore(a));
+  const resolved = ok.flatMap(r => r.resolved);
+  const kpi = {
+    totalOpen:    groups.reduce((s, g) => s + g.total, 0),
+    totalP1:      groups.reduce((s, g) => s + g.p1, 0),
+    totalP2:      groups.reduce((s, g) => s + g.p2, 0),
+    totalP3:      groups.reduce((s, g) => s + g.p3, 0),
+    totalP4:      groups.reduce((s, g) => s + (g.p4 || 0), 0),
+    activeGroups: groups.filter(g => g.total > 0).length,
+    resolvedThisMonth: resolved.length,
+    mttr: _fmtMttr(_calcMttr(resolved)),
+  };
+  // Instância ainda conectando ou com erro: os cards das outras aparecem e o aviso fica embaixo
+  const extra = (pending ? _pendingHtml() : '') + errors.map(e =>
+    `<div class="sn-empty-incidents" style="color:var(--c-red)">Failed to load incidents: ${escHtml(e)}</div>`).join('');
+  return { kpi, cardsHtml: buildIncidentCardsHTML(groups) + extra, error: null };
 }
 
 async function buildSnViewHtml() {
@@ -362,4 +416,4 @@ async function buildSnViewHtml() {
   </div>`;
 }
 
-module.exports = { fetchSNGroups, fetchSNResolved, buildIncidentCardsHTML, fetchAndBuildCards, buildSnViewHtml, _calcMttr, _fmtMttr };
+module.exports = { fetchSNGroups, fetchSNResolved, buildIncidentCardsHTML, fetchAndBuildCards, buildSnViewHtml, dashboardInstances, _calcMttr, _fmtMttr };

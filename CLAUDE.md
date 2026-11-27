@@ -22,7 +22,7 @@ dash_azure_gestao_pessoal/
 ├── servicenowClient.js    ← snGet (HTTPS Basic auth, mesma estrutura do azureClient)
 ├── aiClient.js            ← chatCompletion, testConnection (Foundry / Azure OpenAI / genérico)
 ├── snMcp/                 ← login SSO do Service Now pelo Edge (CDP, sem Python) — ver docs/sn-sso.md
-│   ├── index.js           ← fachada: get() na Table API com a sessão, limite de 8, 202/429, BIG-IP
+│   ├── index.js           ← registro por instância + fachada: get() na Table API com a sessão, limite de 8, 202/429, BIG-IP
 │   ├── sessionManager.js  ← estados, sessão salva → sem janela → janela, cooldown, keep-alive
 │   ├── edgeLogin.js       ← fluxo SSO → Microsoft → instância; captura cookies, g_ck e UA
 │   ├── cdpPipe.js         ← CDP por --remote-debugging-pipe, findEdge, killProfileProcesses
@@ -44,7 +44,7 @@ dash_azure_gestao_pessoal/
 │   ├── azure.js           ← getDetail, getTeamCapacity, getUAT, getReportFields, getUSStates, getContext
 │   ├── ai.js              ← getAiConfig, saveAiCfg, testAiConnection, chat
 │   ├── report.js          ← getReportConfig, saveReportConfig, getReport, getIncidents
-│   ├── sn.js              ← getSnCfg, saveSnCfg, testSn
+│   ├── sn.js              ← getSnCfg, saveSnCfg, testSn, listSnInstances, removeSnInstance (por instanceId)
 │   ├── feedback.js        ← submitFeedback
 │   └── snMcp.js           ← getMcpStatus, connectMcp, warmupMcp, disconnectMcp (modo SSO)
 ├── utils/
@@ -52,6 +52,7 @@ dash_azure_gestao_pessoal/
 │   ├── health.js          ← calcHealth (compartilhado com frontend via mesma lógica)
 │   ├── workItemProfile.js ← getWorkItemProfile, readEstimate, statesOr (perfil do tipo de item principal)
 │   ├── orgs.js            ← orgIdFor, getDisplayName, assignProjectKeys (funções puras de organização)
+│   ├── snInstances.js     ← normalizeSnInstances, snIdFor, uniqueSnId, snPublic (funções puras de instâncias SN)
 │   ├── paginate.js        ← paginatedItems (lotes de 200)
 │   └── iterMap.js         ← fetchIterMap (classificationnodes + fallback team)
 ├── public/
@@ -88,9 +89,9 @@ dash_azure_gestao_pessoal/
 │   ├── unit/
 │   │   ├── config.test.js
 │   │   ├── handlers/      ← ai, azure, projects, report, sn, sn-dashboard, snMcp, utils
-│   │   ├── snMcp/         ← loginRules, cdpPipe, edgeLogin, sessionManager, sessionStore, index
+│   │   ├── snMcp/         ← loginRules, cdpPipe, edgeLogin, sessionManager, sessionStore, index, registry
 │   │   ├── scripts/       ← check-sn-upstream, sn-sso-debug
-│   │   └── utils/         ← health, paginate
+│   │   └── utils/         ← health, paginate, snInstances
 │   └── integration/       ← planejado: supertest + nock
 ├── dist/electron/         ← Backlog Health Setup x.x.x.exe + Backlog Health x.x.x.exe (não versionado)
 └── config.json            ← credenciais (gerado automaticamente, não versionado)
@@ -190,6 +191,17 @@ O listener global de `filters.js` exclui `.items-filter-select` do fechamento au
 - `POST /setup` com `orgId` substitui só os projetos daquela organização; PAT em branco = manter o salvo. O PAT **nunca** vai para o HTML (`renderSetup` manda `ORGS_JSON` sem token)
 - Rotas: `GET /api/orgs`, `POST /api/orgs/remove`
 
+### Vários Service Now
+
+`config.snInstances = [{ id, instance, label?, mode, user/pass | mcp, assignmentGroups? }]`; a primeira é a principal e é **espelhada** em `servicenow` (armazenamento canônico dela; `normalizeSnInstances` em `loadConfig`/`saveConfig`/`saveSnConfig`).
+- Projeto aponta para a instância em `servicenow.instanceId`; sem o campo = principal. Serviços resolvem com `getProjectSnContext(displayName)` (`_snContext` no `reportService`)
+- Review Mensal usa a instância do projeto. Dashboard do Service Now mostra os grupos de **todas** as instâncias (`dashboardInstances` em `handlers/sn-dashboard.js`); o card é identificado pelo nome do grupo e `getProjectSnContext` acha a instância pelo grupo
+- Aba Service Now: grupos e projetos (com o grupo de cada um) por instância; a aba Azure não tem seletor de grupo
+- Cache do SN: `@<id>` no nome só para instância não principal — não mudar o nome da principal
+- SSO: um gerenciador por instância (`createSnMcpRegistry` em `snMcp/index.js`); passar sempre o `snCfg` da instância. Ver `docs/sn-sso.md`
+- Rotas aceitam `instanceId`: `/api/sn-config`, `/api/sn-test`, `/api/sn-groups`, `/api/prb-fields`, `/api/sn-mcp/*` (`status?all=1`); `GET /api/sn-instances` (sem senha), `POST /api/sn-instances/remove`
+- `saveSnCfg` com `instanceId: 'new'` acrescenta; sem `instanceId` edita a principal
+
 ### renderTemplate — cuidado com `{{...}}` em JS
 
 `renderTemplate` troca **qualquer** `{{palavra}}` do template (tokens desconhecidos viram vazio), inclusive dentro de `<script>`. Em JS dos templates, não escrever chaves duplas literais (ex.: interpolação de reserva do `_tr` usa `new RegExp('\\{\\{' + k ...)`).
@@ -220,7 +232,9 @@ Usar `_snRaw` em `number` e `sys_id` para evitar `[object Object]` nos links.
                  "estimateField": "Microsoft.VSTS.Scheduling.Effort", "estimateUnit": "points",
                  "states": { "new": ["To Do"], "active": ["Doing"], "done": ["Done"], "removed": [] } }],
   "ai": { "endpoint": "...", "apiKey": "...", "model": "...", "apiVersion": "..." },
-  "servicenow": { "instance": "empresa.service-now.com", "user": "...", "pass": "..." }
+  "servicenow": { "instance": "empresa.service-now.com", "user": "...", "pass": "..." },   // espelho da principal
+  "snInstances": [{ "id": "empresa", "instance": "empresa.service-now.com", "mode": "api", "user": "...", "pass": "..." },
+                  { "id": "clienteb", "instance": "clienteb.service-now.com", "label": "Cliente B", "mode": "mcp", "mcp": { "username": "..." } }]
 }
 ```
 
@@ -256,7 +270,7 @@ npm run test:coverage   # exibe cobertura por arquivo
 - Mensagens de teste em português
 - Framework: Jest (`jest.config.js` na raiz, `clearMocks: true`)
 
-### Estado atual: 774 testes, 42 suites, todos passando
+### Estado atual: 848 testes, 46 suites, todos passando
 
 | Arquivo | Cobertura |
 |---|---|
@@ -318,6 +332,11 @@ npm run test:coverage   # exibe cobertura por arquivo
 | 200 | Janela principal pré-aquecida em `about:blank`; mostrar só quando a URL for a do servidor (`loadServerPage`) | Não voltar a confiar na promise do `loadURL` — resolve cedo e mostrava a janela em branco |
 | 201 | `main.js` usa `PORT` do `config.js` | 3031 em dev, 3030 empacotado — nunca fixar a porta no Electron |
 | 203 | Installer do update com `/S --force-run` | Sem `--force-run` o app não reabre após a atualização silenciosa |
+| 204 | `snInstances[]` com a principal espelhada em `servicenow` | `getAppMode`, dashboard SN e downgrade seguem lendo `servicenow` — manter o espelho |
+| 205 | Instância do SN por projeto (`servicenow.instanceId`) no Review Mensal | Cache da principal sem sufixo |
+| 206 | SSO com gerenciador por instância (`createSnMcpRegistry`) | Nunca voltar ao singleton: uma instância derrubava a sessão da outra |
+| 208 | Dashboard do SN com os grupos de todas as instâncias; card identificado pelo nome do grupo | Não trocar o identificador: apelidos, cache e `snGroupConfigs` usam o nome |
+| 210 | Grupos em SSO sem sessão: `needsLogin`, sem consultar | Consultar abria a janela de login só por abrir Configurações |
 
 ---
 

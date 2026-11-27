@@ -17,7 +17,8 @@ Tela (snMcpPanel / snStatus)         ← polling de /api/sn-mcp/status
         │
 handlers/snMcp.js                    ← connect / warmup / disconnect (funções puras)
         │
-snMcp/index.js  (fachada)            ← get(): Table API com a sessão, limite de 8, retry 202/429,
+snMcp/index.js  (registro + fachada) ← um gerenciador e uma fachada por instância;
+        │                               get(): Table API com a sessão, limite de 8, retry 202/429,
         │                               BIG-IP, revalidação após 401
 snMcp/sessionManager.js              ← estados, sessão salva → login sem janela → janela,
         │                               cooldown, circuit breaker, keep-alive
@@ -33,6 +34,27 @@ snMcp/sessionStore.js                ← lê/atualiza o arquivo de sessão (toke
 - **O navegador só serve para o login.**
 - **Edge controlado pelo CDP.** O Edge é iniciado com `--remote-debugging-pipe`, que é o mesmo transporte que o Playwright usa com `channel=msedge`. É o Edge corporativo, então SSO, Conditional Access e "Connected to Windows" funcionam como no navegador do dia a dia.
 - **Sem Python nem Playwright.** Até a 1.3.x isso era feito pelo `mfa-servicenow-mcp` (Python + Playwright), com ~92 MB de runtime e 8–16 min de instalação na rede corporativa. A migração está registrada nas decisões #177–#184.
+
+### Várias instâncias
+
+Com mais de um Service Now em SSO (`config.snInstances`, decisões #204–#207), cada instância tem o
+seu gerenciador de sessão e a sua fachada, criados sob demanda em `createSnMcpRegistry`. A chave é
+`host|usuário|loginUrl` (`keyOf`). Por isso, cada instância tem os seus próprios:
+- estado, sessão, janela de login, keep-alive, cooldown e circuit breaker;
+- limite de 8 chamadas simultâneas.
+
+Uma instância não derruba a sessão da outra.
+
+- **Chamadas:** todas recebem o `snCfg` da instância. Sem `snCfg`, `getStatus` e `isConnected` usam
+  a única instância em uso (compatibilidade). `logout()` sem `snCfg` sai de todas.
+- **Rotas:** `/api/sn-mcp/*` aceitam `instanceId` (instância salva) ou `instance` (digitada, ainda
+  não salva). `GET /api/sn-mcp/status?all=1` lista as instâncias em SSO para o aviso do dashboard
+  (`snStatus.js`), que cita a instância e reconecta só ela.
+- **Ao abrir o app:** o servidor confere em background a sessão salva de cada instância em SSO. O
+  dashboard SN-only é reconstruído quando conecta uma instância que aparece nele (a principal ou
+  uma com grupos).
+- **Grupos na tela de Configurações:** com a sessão da instância caída, a lista de grupos não é
+  buscada (`needsLogin`), para não abrir a janela de login só por abrir a aba.
 
 ## Estados (`/api/sn-mcp/status`)
 
@@ -149,8 +171,9 @@ node scripts/sn-sso-debug.js vale.service-now.com C0733221 --profile "$env:APPDA
 
 O script não grava a sessão do app. Os códigos de erro são os mesmos do log.
 
-Para zerar tudo de um usuário, use **Sair / trocar conta** no painel: ele apaga `session-edge/` e a
-pasta antiga `session/`. Se não der, feche o app e apague `%APPDATA%\backlog-health\sn-mcp`.
+Para zerar a sessão de uma instância, use **Sair / trocar conta** no painel dela: ele apaga só o
+perfil e o arquivo de sessão daquela instância e usuário. As outras instâncias continuam
+conectadas. Para zerar tudo, feche o app e apague `%APPDATA%\backlog-health\sn-mcp`.
 
 ## Problemas conhecidos
 
@@ -175,7 +198,8 @@ Todos os testes de `tests/unit/snMcp/`:
 | `loginRules.test.js` | Casos C1, C2, C3 e C5 |
 | `cdpPipe.test.js` | Enquadramento `\0`, ids, timeout, `findEdge`, `killProfileProcesses`, fechar com garantia |
 | `edgeLogin.test.js` | Fluxo com um Edge falso: SSO, conta, erro de rede, MFA, cancelamento, perfil preso, nomes e formato |
-| `sessionManager.test.js` | Estados, single-flight, nascida morta, cooldown e circuit breaker, keep-alive, warmup, logout |
+| `sessionManager.test.js` | Estados, single-flight, nascida morta, cooldown e circuit breaker, keep-alive, warmup, logout (inclusive de uma instância só) |
+| `registry.test.js` | Várias instâncias: fachada e status por instância, logout de uma sem mexer na outra, eventos com a instância |
 | `index.test.js` | REST com a sessão, BIG-IP, revalidação, 202/429, limite de 8 |
 
 Os testes do script de acompanhamento ficam em `tests/unit/scripts/check-sn-upstream.test.js`.

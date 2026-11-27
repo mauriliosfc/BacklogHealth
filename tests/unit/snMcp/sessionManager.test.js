@@ -269,6 +269,21 @@ describe('warmup, invalidate, stop e logout', () => {
     expect(s.hasKeepAlive()).toBe(false);
   });
 
+  test('logout com a instância apaga só o perfil e a sessão dela', async () => {
+    const s = setup({ savedValid: true });
+    const OTHER = nodePath.join(ROOT, 'session-edge', 'session_cnhi_service-now_com_maurilio.json');
+    s.files.set(OTHER, '{}');
+    await s.m.ensureSession(SN);
+    s.m.logout({ snCfg: SN });
+    expect(s.removed).toEqual([
+      nodePath.join(ROOT, 'session-edge', 'profile_vale_service-now_com_C0733221'),
+      FILE,
+    ]);
+    expect(s.files.has(FILE)).toBe(false);
+    expect(s.files.has(OTHER)).toBe(true);
+    expect(s.m.getStatus().state).toBe('stopped');
+  });
+
   test('getSessionFile segue o nome do MCP', () => {
     const s = setup();
     expect(s.m.getSessionFile(SN)).toBe(FILE);

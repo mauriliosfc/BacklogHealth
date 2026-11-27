@@ -317,13 +317,23 @@ function createSessionManager({
     if (!silent) setState('stopped', { user: '' });
   }
 
-  // "Sair / trocar conta": apaga sessões e perfis do Edge (e a pasta antiga do Chromium do MCP).
-  function logout() {
+  // "Sair / trocar conta".
+  // Com snCfg: apaga só o perfil do Edge e o arquivo de sessão daquela instância/usuário
+  // (várias instâncias convivem em session-edge/). Sem snCfg: apaga todas as sessões e perfis
+  // (e a pasta antiga do Chromium do MCP), como antes.
+  function logout({ snCfg = null } = {}) {
     stop({ silent: true });
     key = '';
-    ['session-edge', 'session'].forEach(d => {
-      try { fsImpl.rmSync(nodePath.join(root, d), { recursive: true, force: true }); } catch (_) {}
-    });
+    if (snCfg && snCfg.instance) {
+      const p = _cfgParts(snCfg);
+      const paths = edgeLogin.sessionPaths(root, p.host, p.username);
+      try { fsImpl.rmSync(paths.profile, { recursive: true, force: true }); } catch (_) {}
+      try { fsImpl.rmSync(paths.file, { force: true }); } catch (_) {}
+    } else {
+      ['session-edge', 'session'].forEach(d => {
+        try { fsImpl.rmSync(nodePath.join(root, d), { recursive: true, force: true }); } catch (_) {}
+      });
+    }
     failures = 0;
     cooldownUntil = 0;
     lastLoginAt = 0;

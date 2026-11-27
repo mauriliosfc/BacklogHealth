@@ -40,7 +40,7 @@ export function setAlias(projectName, alias) {
 }
 
 export function applyAliases() {
-  const sel = '#content .card[data-project], #content .sn-inc-card[data-project]';
+  const sel = '#content .card[data-project], #content .sn-inc-card[data-project], #sn-view .sn-inc-card[data-project]';
   document.querySelectorAll(sel).forEach(card => {
     const name  = card.dataset.project;
     const alias = getAlias(name);

@@ -85,10 +85,10 @@ describe('getReportConfig', () => {
 
   test('retorna slaTargets configurado do projeto', () => {
     getCfg.mockReturnValue({
-      projects: [{ name: 'Alpha', slaTargets: { p1: 98, p2: 92, p3: 80 } }],
+      projects: [{ name: 'Alpha', slaTargets: { p1: 98, p2: 92, p3: 80, p4: 70 } }],
     });
     const result = getReportConfig({ project: 'Alpha' });
-    expect(result.slaTargets).toEqual({ p1: 98, p2: 92, p3: 80 });
+    expect(result.slaTargets).toEqual({ p1: 98, p2: 92, p3: 80, p4: 70 });
   });
 
   test('retorna null para slaTargets quando não configurado', () => {
@@ -221,6 +221,12 @@ describe('saveReportConfig', () => {
     saveReportConfig({ project: 'Alpha', slaTargets: { p1: 98, p2: 110, p3: -5 } });
     const call = saveConfig.mock.calls[0][0];
     expect(call.projects[0].slaTargets).toEqual({ p1: 98, p2: 100, p3: 0 });
+  });
+
+  test('salva a meta de SLA de P4 (com clamp)', () => {
+    saveReportConfig({ project: 'Alpha', slaTargets: { p1: 95, p2: 90, p3: 85, p4: 130 } });
+    const call = saveConfig.mock.calls[0][0];
+    expect(call.projects[0].slaTargets).toEqual({ p1: 95, p2: 90, p3: 85, p4: 100 });
   });
 
   test('salva slaTargets parcial sem sobrescrever chaves ausentes', () => {

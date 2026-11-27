@@ -81,6 +81,7 @@ function saveReportConfig({ project, reportCharts, incidentMonths, incidentTarge
     if (slaTargets.p1 !== undefined) t.p1 = Math.min(100, Math.max(0, parseInt(slaTargets.p1) || 0));
     if (slaTargets.p2 !== undefined) t.p2 = Math.min(100, Math.max(0, parseInt(slaTargets.p2) || 0));
     if (slaTargets.p3 !== undefined) t.p3 = Math.min(100, Math.max(0, parseInt(slaTargets.p3) || 0));
+    if (slaTargets.p4 !== undefined) t.p4 = Math.min(100, Math.max(0, parseInt(slaTargets.p4) || 0));
     if (Object.keys(t).length) pcfg.slaTargets = { ...(pcfg.slaTargets || {}), ...t };
   }
   saveConfig(cfg);
