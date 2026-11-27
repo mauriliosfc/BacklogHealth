@@ -4,7 +4,7 @@ const fs       = require('fs');
 const nodePath = require('path');
 dns.setDefaultResultOrder('ipv4first');
 
-const { PORT, loadConfig, getCfg, getDisplayName, getAppMode } = require('./config');
+const { PORT, loadConfig, getCfg, getDisplayName, getAppMode, getSnInstances } = require('./config');
 const { HttpError, readBody } = require('./handlers/utils');
 const state     = require('./handlers/state');
 const dashH     = require('./handlers/dashboard');
@@ -400,11 +400,24 @@ async function main() {
       return json(res, () => snH.getAllProjectsSnCfg());
     }
 
+    // ── Instâncias do Service Now (lista sem senha; remover) ──────────────
+    if (req.method === 'GET' && url === '/api/sn-instances') {
+      return json(res, () => snH.listSnInstances());
+    }
+    if (req.method === 'POST' && url === '/api/sn-instances/remove') {
+      const body = await readBody(req);
+      return json(res, async () => {
+        const result = snH.removeSnInstance(JSON.parse(body || '{}'));
+        if (getAppMode() === 'sn-only') await dashH.buildAndCache();
+        return result;
+      });
+    }
+
     // ── GET/POST /api/sn-config ────────────────────────────────────────────
     if (url.startsWith('/api/sn-config')) {
       if (req.method === 'GET') {
         const qp = new URLSearchParams(url.split('?')[1] || '');
-        return json(res, () => snH.getSnCfg({ project: qp.get('project') || '' }));
+        return json(res, () => snH.getSnCfg({ project: qp.get('project') || '', instanceId: qp.get('instanceId') || '' }));
       }
       if (req.method === 'POST') {
         const body = await readBody(req);
@@ -420,15 +433,22 @@ async function main() {
     }
 
     // ── Service Now SSO (login SSO/MFA pelo Edge) ─────────────────────────
-    if (req.method === 'GET' && url === '/api/sn-mcp/status') {
-      return json(res, () => snMcpH.getMcpStatus());
+    if (req.method === 'GET' && (url === '/api/sn-mcp/status' || url.startsWith('/api/sn-mcp/status?'))) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => snMcpH.getMcpStatus({
+        all:        qp.get('all') === '1',
+        instanceId: qp.get('instanceId') || undefined,
+        ...(qp.has('instance')    ? { instance: qp.get('instance') }       : {}),
+        ...(qp.has('mcpUsername') ? { mcpUsername: qp.get('mcpUsername') } : {}),
+        ...(qp.has('mcpLoginUrl') ? { mcpLoginUrl: qp.get('mcpLoginUrl') } : {}),
+      }));
     }
     if (req.method === 'POST' && url.startsWith('/api/sn-mcp/')) {
       const body   = await readBody(req);
       const params = JSON.parse(body || '{}');
       if (url === '/api/sn-mcp/connect')    return json(res, () => snMcpH.connectMcp(params));
       if (url === '/api/sn-mcp/warmup')     return json(res, () => snMcpH.warmupMcp(params));
-      if (url === '/api/sn-mcp/disconnect') return json(res, () => snMcpH.disconnectMcp());
+      if (url === '/api/sn-mcp/disconnect') return json(res, () => snMcpH.disconnectMcp(params));
     }
 
     // ── POST /api/sn-test ──────────────────────────────────────────────────
@@ -438,13 +458,15 @@ async function main() {
     }
 
     // ── GET /api/sn-groups (uses saved config credentials) ────────────────
-    if (req.method === 'GET' && url === '/api/sn-groups') {
-      return json(res, () => snH.fetchGroupsFromConfig());
+    if (req.method === 'GET' && (url === '/api/sn-groups' || url.startsWith('/api/sn-groups?'))) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => snH.fetchGroupsFromConfig({ instanceId: qp.get('instanceId') || '' }));
     }
 
     // ── GET /api/prb-fields ───────────────────────────────────────────────
-    if (req.method === 'GET' && url === '/api/prb-fields') {
-      return json(res, () => snH.fetchPrbFields());
+    if (req.method === 'GET' && (url === '/api/prb-fields' || url.startsWith('/api/prb-fields?'))) {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return json(res, () => snH.fetchPrbFields({ project: qp.get('project') || '', instanceId: qp.get('instanceId') || '' }));
     }
 
     // ── POST /api/sn-groups (raw credentials — onboarding) ────────────────
@@ -482,21 +504,24 @@ async function main() {
   });
 }
 
-// Modo SSO: reconstrói o dashboard SN-only quando a sessão conecta e, ao sair, cancela um login
-// em andamento (fecha o Edge) e para o keep-alive.
+// Modo SSO: reconstrói o dashboard SN-only quando conecta a sessão de uma instância que aparece
+// nele e, ao sair, cancela logins em andamento (fecha o Edge) e para o keep-alive de todas.
 function _wireSnMcpLifecycle() {
   const snMcp = require('./snMcp');
-  let wasConnected = false;
+  const { dashboardInstances } = require('./handlers/sn-dashboard');
+  const wasConnected = {};
   snMcp.events.on('status', s => {
+    const inDashboard = dashboardInstances(getCfg()).some(sn => snMcp.keyOf(sn) === s.key);
     const connected = s.state === 'connected';
-    if (connected && !wasConnected && getAppMode() === 'sn-only') {
+    if (inDashboard && connected && !wasConnected[s.key] && getAppMode() === 'sn-only') {
       dashH.buildAndCache().catch(e => console.error('[sn-sso] rebuild failed:', e.message));
     }
-    wasConnected = connected;
+    wasConnected[s.key] = connected;
   });
-  // Modo SSO salvo: confere a sessão salva em background (sem navegador) para já abrir conectado
-  const sn = getCfg().servicenow;
-  if (sn && sn.mode === 'mcp' && sn.instance) snMcp.warmup(sn).catch(() => {});
+  // Instâncias em modo SSO: confere as sessões salvas em background (sem navegador) para já abrir conectado
+  getSnInstances()
+    .filter(sn => sn.mode === 'mcp' && sn.instance)
+    .forEach(sn => snMcp.warmup(sn).catch(() => {}));
   process.on('exit', () => snMcp.shutdown());
   ['SIGINT', 'SIGTERM'].forEach(sig => process.once(sig, () => { snMcp.shutdown(); process.exit(0); }));
 }

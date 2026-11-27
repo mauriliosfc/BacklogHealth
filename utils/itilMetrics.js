@@ -29,7 +29,7 @@ function _avg(values) {
  * Returns hours (null when no data for that priority).
  */
 function calcMttrByPriority(incClosedInPeriod) {
-  const buckets = { p1: [], p2: [], p3: [], all: [] };
+  const buckets = { p1: [], p2: [], p3: [], p4: [], all: [] };
 
   (incClosedInPeriod || []).forEach(i => {
     const closedAt = i.resolved_at;
@@ -40,6 +40,7 @@ function calcMttrByPriority(incClosedInPeriod) {
     if (p === '1') buckets.p1.push(hours);
     else if (p === '2') buckets.p2.push(hours);
     else if (p === '3') buckets.p3.push(hours);
+    else if (p === '4') buckets.p4.push(hours);
   });
 
   const round1 = v => v === null ? null : Math.round(v * 10) / 10;
@@ -47,10 +48,12 @@ function calcMttrByPriority(incClosedInPeriod) {
     p1:  round1(_avg(buckets.p1)),
     p2:  round1(_avg(buckets.p2)),
     p3:  round1(_avg(buckets.p3)),
+    p4:  round1(_avg(buckets.p4)),
     all: round1(_avg(buckets.all)),
     countP1: buckets.p1.length,
     countP2: buckets.p2.length,
     countP3: buckets.p3.length,
+    countP4: buckets.p4.length,
   };
 }
 
@@ -245,6 +248,7 @@ function getIndicatorCatalog() {
     { id: 'inc_p1',       section: 'incidents', label: 'P1 — Crítico',             description: 'Incidentes de prioridade máxima abertos no período. P1 indica impacto total no serviço.',                defaultVisible: true  },
     { id: 'inc_p2',       section: 'incidents', label: 'P2 — Alto',               description: 'Incidentes de alta prioridade. Impacto severo, exige resolução rápida conforme SLA.',                    defaultVisible: true  },
     { id: 'inc_p3',       section: 'incidents', label: 'P3 — Médio',              description: 'Incidentes de média prioridade. Impacto moderado, dentro do SLA estendido.',                             defaultVisible: true  },
+    { id: 'inc_p4',       section: 'incidents', label: 'P4 — Baixo',              description: 'Incidentes de baixa prioridade. Baixo impacto, tratados na fila normal.',                             defaultVisible: true  },
     { id: 'inc_target',   section: 'incidents', label: 'vs Target',               description: 'Percentual do volume de incidentes em relação ao target mensal configurado. Acima de 100% = alerta.',     defaultVisible: true  },
     // Incidents — new ITIL
     { id: 'inc_mttr_p1',  section: 'incidents', label: 'MTTR P1 (horas)',          description: 'Tempo médio de resolução exclusivo para P1 em horas. Meta típica: < 2h. Calculado dos fechados no mês.', defaultVisible: false },

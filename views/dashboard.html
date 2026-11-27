@@ -477,6 +477,10 @@
       <!-- Credenciais globais -->
       <div class="snm-section">
         <div class="snm-section-title" data-i18n="snm_global_title">Credenciais globais</div>
+        <div class="snm-field" id="snm-inst-field" style="display:none">
+          <label class="snm-label" data-i18n="snm_inst_label">SERVICE NOW DO PROJETO</label>
+          <select id="snm-inst-select" class="snm-input-full" onchange="snConfigSetInstance(this.value)"></select>
+        </div>
         <div class="snmcp-mode" role="tablist" style="margin-bottom:12px">
           <button type="button" class="snmcp-mode-btn active" data-snm-mode="api" onclick="snConfigSetMode('api')" data-i18n="snmcp_mode_api">Username and password (API)</button>
           <button type="button" class="snmcp-mode-btn" data-snm-mode="mcp" onclick="snConfigSetMode('mcp')" data-i18n="snmcp_mode_mcp">Corporate login (SSO/MFA)</button>

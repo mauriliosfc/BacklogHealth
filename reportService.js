@@ -1,6 +1,6 @@
 const fs       = require('fs');
 const nodePath = require('path');
-const { getCfg, getProjectConfig, getSnConfig, getProjectSnGroup, getOrg } = require('./config');
+const { getCfg, getProjectConfig, getOrg, getProjectSnContext } = require('./config');
 const { azureGet, azurePost } = require('./azureClient');
 const { paginatedItems } = require('./utils/paginate');
 const { FIELD, getWorkItemProfile, wiqlList } = require('./utils/workItemProfile');
@@ -34,13 +34,44 @@ function _writeCache(type, project, month, data, extra) {
 }
 
 function cacheInvalidate(project, month, groupField, snExtra) {
+  const snName = _snCacheName(project);
   try { fs.unlinkSync(_cacheFile('azure', project, month, groupField)); } catch (_) {}
-  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra));         } catch (_) {}
-  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v2')); } catch (_) {}
-  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v3')); } catch (_) {}
-  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v4')); } catch (_) {}
-  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v5')); } catch (_) {}
-  try { fs.unlinkSync(_cacheFile('sn', project, month, snExtra + '_v6')); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', snName, month, snExtra));         } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', snName, month, snExtra + '_v2')); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', snName, month, snExtra + '_v3')); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', snName, month, snExtra + '_v4')); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', snName, month, snExtra + '_v5')); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', snName, month, snExtra + '_v6')); } catch (_) {}
+  try { fs.unlinkSync(_cacheFile('sn', snName, month, snExtra + '_v7')); } catch (_) {}
+}
+
+// ── Service Now por projeto ───────────────────────────────────────────────────
+// Nome usado no arquivo de cache do SN: instância principal mantém o nome de sempre
+// (cache atual continua valendo); outras instâncias ganham o id para não colidir.
+function _snCacheName(displayName) {
+  const ctx = getProjectSnContext(displayName);
+  return ctx && ctx.snCfg && !ctx.isPrimary ? `${displayName}@${ctx.instanceId}` : displayName;
+}
+
+// Instância e filtro de grupo do Service Now de um projeto (ou de um grupo do dashboard do SN).
+// group: nome de grupo vindo da tela (drill-down), tem prioridade.
+// Sem grupo configurado, o identificador é tratado como nome de grupo (modo SN-only), limitado
+// aos grupos permitidos da instância. Devolve null quando não há SN ou o grupo não é permitido.
+function _snContext(displayName, group = '', { requireName = true } = {}) {
+  // Sem projeto (ex.: "Ver todos os incidentes" do card de grupo): a instância vem do grupo
+  const { snCfg, group: snGrp, isPrimary, instanceId } = getProjectSnContext(displayName || group);
+  if (!isSnConfigured(snCfg)) return null;
+  const base = { snCfg, isPrimary, instanceId, snGrp };
+  if (group) return { ...base, grp: group, isSysId: false, grpFilter: `assignment_group.name=${group}` };
+  if (snGrp?.assignmentGroup) {
+    const grp     = snGrp.assignmentGroup.trim();
+    const isSysId = /^[0-9a-f]{32}$/i.test(grp);
+    return { ...base, grp, isSysId, grpFilter: isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}` };
+  }
+  const allowed = snCfg.assignmentGroups;
+  if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
+  if (requireName && !displayName) return null;
+  return { ...base, grp: displayName, isSysId: false, grpFilter: `assignment_group.name=${displayName}` };
 }
 
 // Retorna Set com IterationPaths das sprints do time que se sobrepõem ao período
@@ -391,31 +422,20 @@ function _snRaw(v) {
 }
 
 async function fetchSnReport(displayName, period, prbAgingColumns = null, ciFilter = '') {
-  const snCfg  = getSnConfig();
-  if (!isSnConfigured(snCfg)) return null;
-
-  const snGrp  = getProjectSnGroup(displayName);
-  let grp, isSysId;
-  if (snGrp?.assignmentGroup) {
-    // Normal path: project has a linked SN assignment group config
-    grp     = snGrp.assignmentGroup.trim();
-    isSysId = /^[0-9a-f]{32}$/i.test(grp);
-  } else {
-    // SN-only mode: displayName IS the group display name from the SN dashboard card
-    const allowed = snCfg.assignmentGroups;
-    if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
-    grp     = displayName;
-    isSysId = false;
-  }
+  // Instância do projeto e filtro de grupo (projeto com grupo vinculado ou grupo do dashboard do SN)
+  const snCtx = _snContext(displayName, '', { requireName: false });
+  if (!snCtx) return null;
+  const { snCfg, grp, isSysId, snGrp } = snCtx;
+  const snCacheName = snCtx.isPrimary ? displayName : `${displayName}@${snCtx.instanceId}`;
 
   const extraPrbKeys = (prbAgingColumns || []).filter(c => c.key.startsWith('sn:')).map(c => c.key.slice(3)).sort();
-  const snCacheKey = String(period.history.length) + '_v6' + (extraPrbKeys.length ? '_prb:' + extraPrbKeys.join(',') : '') + (ciFilter ? '_ci:' + ciFilter : '');
-  const cached = _readCache('sn', displayName, period.month, snCacheKey);
+  // _v7: P4 nos indicadores de incidentes (o cache antigo não tem p4)
+  const snCacheKey = String(period.history.length) + '_v7' + (extraPrbKeys.length ? '_prb:' + extraPrbKeys.join(',') : '') + (ciFilter ? '_ci:' + ciFilter : '');
+  const cached = _readCache('sn', snCacheName, period.month, snCacheKey);
   if (cached) return cached;
 
-  // ServiceNow assignment_group field accepts sys_id (32-char hex) directly.
-  // If user provided a display name, use dot-notation: assignment_group.name=
-  const grpFilter = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
+  // assignment_group aceita sys_id (32 hex) ou nome (assignment_group.name=)
+  const grpFilter = snCtx.grpFilter;
   // Filtro opcional por Configuration Item — mesmo campo (cmdb_ci.name) nas três entidades,
   // validado contra a instância real (incident/problem/sc_task todos populam cmdb_ci diretamente).
   const ciFrag = ciFilter ? `^cmdb_ci.name=${ciFilter}` : '';
@@ -526,14 +546,15 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null, ciFilt
     p1: { total: 0, breached: 0, withinSla: 0, pct: null },
     p2: { total: 0, breached: 0, withinSla: 0, pct: null },
     p3: { total: 0, breached: 0, withinSla: 0, pct: null },
+    p4: { total: 0, breached: 0, withinSla: 0, pct: null },
   };
   Object.values(taskSlaMap).forEach(({ pct, prio }) => {
-    const key = prio === '1' ? 'p1' : prio === '2' ? 'p2' : prio === '3' ? 'p3' : null;
+    const key = prio === '1' ? 'p1' : prio === '2' ? 'p2' : prio === '3' ? 'p3' : prio === '4' ? 'p4' : null;
     if (!key) return;
     slaByPriority[key].total++;
     if (pct > 100) slaByPriority[key].breached++;
   });
-  ['p1', 'p2', 'p3'].forEach(k => {
+  ['p1', 'p2', 'p3', 'p4'].forEach(k => {
     const s   = slaByPriority[k];
     s.withinSla = s.total - s.breached;
     s.pct       = s.total > 0 ? Math.round(s.withinSla / s.total * 100) : null;
@@ -590,7 +611,7 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null, ciFilt
     const incOpened    = rIncO.result || [];
     const incClosed    = (rIncC.result || []).length;
     const incCancelled = (rIncCanc.result || []).length;
-    let mP1 = 0, mP2 = 0, mP3 = 0;
+    let mP1 = 0, mP2 = 0, mP3 = 0, mP4 = 0;
     incOpened.forEach(i => {
       const name = _snVal(i['cmdb_ci.name']) || 'Outros';
       if (!sysMonthData[name]) sysMonthData[name] = new Array(period.history.length).fill(0);
@@ -607,6 +628,7 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null, ciFilt
       if (prio === '1') mP1++;
       else if (prio === '2') mP2++;
       else if (prio === '3') mP3++;
+      else if (prio === '4') mP4++;
     });
     monthly.push({
       label:     m,
@@ -616,6 +638,7 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null, ciFilt
       p1:        mP1,
       p2:        mP2,
       p3:        mP3,
+      p4:        mP4,
     });
     prbMonthly.push({
       label:    m,
@@ -662,23 +685,25 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null, ciFilt
   }
 
 
-  const byPriority = { p1: 0, p2: 0, p3: 0 };
+  const byPriority = { p1: 0, p2: 0, p3: 0, p4: 0 };
   incidents.forEach(i => {
     const p = _snRaw(i.priority);
     if (p === '1') byPriority.p1++;
     else if (p === '2') byPriority.p2++;
     else if (p === '3') byPriority.p3++;
+    else if (p === '4') byPriority.p4++;
   });
 
   const sysMap = {};
   incidents.forEach(i => {
     const name = _snVal(i['cmdb_ci.name']) || 'Outros';
     const p    = _snRaw(i.priority);
-    if (!sysMap[name]) sysMap[name] = { name, total: 0, p1: 0, p2: 0, p3: 0 };
+    if (!sysMap[name]) sysMap[name] = { name, total: 0, p1: 0, p2: 0, p3: 0, p4: 0 };
     sysMap[name].total++;
     if (p === '1') sysMap[name].p1++;
     else if (p === '2') sysMap[name].p2++;
     else if (p === '3') sysMap[name].p3++;
+    else if (p === '4') sysMap[name].p4++;
   });
   const bySystem = Object.values(sysMap).sort((a, b) => b.total - a.total);
   const bySystemMonthly = Object.entries(sysMonthData)
@@ -689,12 +714,13 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null, ciFilt
   incidents.forEach(i => {
     const name    = _snVal(i['u_additional_res_code']) || 'N/A';
     const rawName = _snRaw(i['u_additional_res_code']) || name;
-    if (!altSysMap[name]) altSysMap[name] = { name, rawValue: rawName, total: 0, p1: 0, p2: 0, p3: 0 };
+    if (!altSysMap[name]) altSysMap[name] = { name, rawValue: rawName, total: 0, p1: 0, p2: 0, p3: 0, p4: 0 };
     const p = _snRaw(i.priority);
     altSysMap[name].total++;
     if (p === '1') altSysMap[name].p1++;
     else if (p === '2') altSysMap[name].p2++;
     else if (p === '3') altSysMap[name].p3++;
+    else if (p === '4') altSysMap[name].p4++;
   });
   const byGroupAlt = Object.values(altSysMap).sort((a, b) => b.total - a.total);
   const byGroupAltMonthly = Object.entries(altMonthData)
@@ -892,7 +918,7 @@ async function fetchSnReport(displayName, period, prbAgingColumns = null, ciFilt
     },
   };
 
-  _writeCache('sn', displayName, period.month, data, snCacheKey);
+  _writeCache('sn', snCacheName, period.month, data, snCacheKey);
   return data;
 }
 
@@ -934,26 +960,9 @@ async function buildReport(displayName, month, groupFields = [], agingState = 'I
 // ── Incident backlog list (for modal) ──────────────────────────────────────────
 
 async function fetchSnIncidentBacklog(displayName, month, { mode = 'backlog', filterField = '', filterValue = '', ciFilter = '', group = '' } = {}) {
-  const snCfg = getSnConfig();
-  if (!isSnConfigured(snCfg)) return null;
-
-  let grpFilter;
-  if (group) {
-    grpFilter = `assignment_group.name=${group}`;
-  } else {
-    const snGrp = getProjectSnGroup(displayName);
-    if (snGrp?.assignmentGroup) {
-      const grp     = snGrp.assignmentGroup.trim();
-      const isSysId = /^[0-9a-f]{32}$/i.test(grp);
-      grpFilter     = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
-    } else {
-      // SN-only mode: displayName é o nome do grupo SN diretamente
-      const allowed = snCfg.assignmentGroups;
-      if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
-      if (!displayName) return null;
-      grpFilter = `assignment_group.name=${displayName}`;
-    }
-  }
+  const snCtx = _snContext(displayName, group);
+  if (!snCtx) return null;
+  const { snCfg, grpFilter } = snCtx;
 
   const [y, m] = month.split('-').map(Number);
   const start    = new Date(y, m - 1, 1).toISOString().slice(0, 19) + 'Z';
@@ -1028,26 +1037,9 @@ function _agingRangeFrag(dayMin, dayMax) {
 }
 
 async function fetchSnRequestBacklog(displayName, month, { mode = 'backlog', filterField = '', filterValue = '', ciFilter = '', dayMin, dayMax, group = '' } = {}) {
-  const snCfg = getSnConfig();
-  if (!isSnConfigured(snCfg)) return null;
-
-  let grpFilter;
-  if (group) {
-    grpFilter = `assignment_group.name=${group}`;
-  } else {
-    const snGrp = getProjectSnGroup(displayName);
-    if (snGrp?.assignmentGroup) {
-      const grp     = snGrp.assignmentGroup.trim();
-      const isSysId = /^[0-9a-f]{32}$/i.test(grp);
-      grpFilter     = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
-    } else {
-      // SN-only mode: displayName é o nome do grupo SN diretamente
-      const allowed = snCfg.assignmentGroups;
-      if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
-      if (!displayName) return null;
-      grpFilter = `assignment_group.name=${displayName}`;
-    }
-  }
+  const snCtx = _snContext(displayName, group);
+  if (!snCtx) return null;
+  const { snCfg, grpFilter } = snCtx;
 
   const [y, m] = month.split('-').map(Number);
   const start    = new Date(y, m - 1, 1).toISOString().slice(0, 19) + 'Z';
@@ -1107,26 +1099,9 @@ async function fetchSnRequestBacklog(displayName, month, { mode = 'backlog', fil
 // mesma regra de `prbQuery` em fetchSnReport: state!=106^state!=107).
 
 async function fetchSnPrbBacklog(displayName, { filterField = '', filterValue = '', ciFilter = '', dayMin, dayMax, group = '' } = {}) {
-  const snCfg = getSnConfig();
-  if (!isSnConfigured(snCfg)) return null;
-
-  let grpFilter;
-  if (group) {
-    grpFilter = `assignment_group.name=${group}`;
-  } else {
-    const snGrp = getProjectSnGroup(displayName);
-    if (snGrp?.assignmentGroup) {
-      const grp     = snGrp.assignmentGroup.trim();
-      const isSysId = /^[0-9a-f]{32}$/i.test(grp);
-      grpFilter     = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
-    } else {
-      // SN-only mode: displayName é o nome do grupo SN diretamente
-      const allowed = snCfg.assignmentGroups;
-      if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
-      if (!displayName) return null;
-      grpFilter = `assignment_group.name=${displayName}`;
-    }
-  }
+  const snCtx = _snContext(displayName, group);
+  if (!snCtx) return null;
+  const { snCfg, grpFilter } = snCtx;
 
   const fieldFrag = _PRB_GROUPBY_WHITELIST.has(filterField) ? `^${filterField}=${filterValue}` : '';
   const ciFrag    = ciFilter ? `^cmdb_ci.name=${ciFilter}` : '';
@@ -1162,21 +1137,9 @@ async function fetchSnPrbBacklog(displayName, { filterField = '', filterValue = 
 // Fetches all incidents opened OR closed in the month (union, deduplicated by sys_id)
 // with the full set of fields needed for CSV export.
 async function fetchSnVolumeIncidents(displayName, month, nMonths = 1) {
-  const snCfg = getSnConfig();
-  if (!isSnConfigured(snCfg)) return null;
-
-  let grpFilter;
-  const snGrp = getProjectSnGroup(displayName);
-  if (snGrp?.assignmentGroup) {
-    const grp     = snGrp.assignmentGroup.trim();
-    const isSysId = /^[0-9a-f]{32}$/i.test(grp);
-    grpFilter     = isSysId ? `assignment_group=${grp}` : `assignment_group.name=${grp}`;
-  } else {
-    const allowed = snCfg.assignmentGroups;
-    if (Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(displayName)) return null;
-    if (!displayName) return null;
-    grpFilter = `assignment_group.name=${displayName}`;
-  }
+  const snCtx = _snContext(displayName);
+  if (!snCtx) return null;
+  const { snCfg, grpFilter } = snCtx;
 
   const [y, m] = month.split('-').map(Number);
   // start = first day of (month - nMonths + 1), JS handles negative month indices automatically
@@ -1251,4 +1214,4 @@ async function fetchSnVolumeIncidents(displayName, month, nMonths = 1) {
   }
 }
 
-module.exports = { buildReport, buildPeriod, getLast6Months, fetchAzureReport, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents, fetchSnRequestBacklog, fetchSnPrbBacklog };
+module.exports = { buildReport, buildPeriod, getLast6Months, fetchAzureReport, cacheInvalidate, fetchSnIncidentBacklog, fetchSnVolumeIncidents, fetchSnRequestBacklog, fetchSnPrbBacklog, fetchSnReport };

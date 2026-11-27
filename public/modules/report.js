@@ -208,6 +208,7 @@ const _INDICATOR_CATALOG = [
   { id: 'inc_p1',      section: 'incidents', get label() { return t('rpt_ind_inc_p1'); },      get desc() { return t('rpt_ind_inc_p1_desc'); },      defaultVisible: true  },
   { id: 'inc_p2',      section: 'incidents', get label() { return t('rpt_ind_inc_p2'); },      get desc() { return t('rpt_ind_inc_p2_desc'); },      defaultVisible: true  },
   { id: 'inc_p3',      section: 'incidents', get label() { return t('rpt_ind_inc_p3'); },      get desc() { return t('rpt_ind_inc_p3_desc'); },      defaultVisible: true  },
+  { id: 'inc_p4',      section: 'incidents', get label() { return t('rpt_ind_inc_p4'); },      get desc() { return t('rpt_ind_inc_p4_desc'); },      defaultVisible: true  },
   { id: 'inc_target',  section: 'incidents', get label() { return t('rpt_ind_inc_target'); },  get desc() { return t('rpt_ind_inc_target_desc'); },  defaultVisible: true  },
   // ── Incidents — novos ITIL ──
   { id: 'inc_mttr_p1', section: 'incidents', get label() { return t('rpt_ind_inc_mttr_p1'); }, get desc() { return t('rpt_ind_inc_mttr_p1_desc'); }, defaultVisible: false },
@@ -240,7 +241,7 @@ async function _loadReportConfig() {
   S.incidentCharts = [];
   S.prbCharts      = [];
   S.requestCharts  = [];
-  S.slaTargets     = { p1: 95, p2: 90, p3: 85 };
+  S.slaTargets     = { p1: 95, p2: 90, p3: 85, p4: 80 };
   S.ciFilter       = '';
   S.ciList         = [];
 
@@ -273,7 +274,7 @@ async function _loadReportConfig() {
     if (data.indicatorCardsPerRow != null) S.indicatorCardsPerRow = data.indicatorCardsPerRow;
     if (Array.isArray(data.incidentCharts) && data.incidentCharts.length) S.incidentCharts = data.incidentCharts;
     if (Array.isArray(data.prbCharts)      && data.prbCharts.length)      S.prbCharts      = data.prbCharts;
-    if (data.slaTargets != null && typeof data.slaTargets === 'object') S.slaTargets = { p1: 95, p2: 90, p3: 85, ...data.slaTargets };
+    if (data.slaTargets != null && typeof data.slaTargets === 'object') S.slaTargets = { p1: 95, p2: 90, p3: 85, p4: 80, ...data.slaTargets };
     if (Array.isArray(data.usAgingColumns)  && data.usAgingColumns.length)  S.usAgingColumns  = data.usAgingColumns;
     if (Array.isArray(data.prbAgingColumns) && data.prbAgingColumns.length) S.prbAgingColumns = data.prbAgingColumns;
     if (data.requestMonths != null)  S.requestMonths = data.requestMonths;
@@ -448,7 +449,7 @@ function _renderIncidentChartCell(chart, idx, inc) {
         'u_additional_res_code': { get label() { return t('rpt_groupby_res_code'); },     data: () => _flat(inc.byGroupAlt) },
         'assignment_group':      { get label() { return t('rpt_groupby_assignment'); },   data: () => _flat(inc.byAssignmentGroup) },
         'assigned_to':           { get label() { return t('rpt_groupby_assignee'); },     data: () => _flat(inc.byAssignedTo) },
-        'priority':              { get label() { return t('rpt_groupby_priority'); },     data: () => { const p = inc.byPriority || {}; return [{ type: 'P1', count: p.p1||0, rawValue: '1' }, { type: 'P2', count: p.p2||0, rawValue: '2' }, { type: 'P3', count: p.p3||0, rawValue: '3' }].filter(x => x.count > 0); } },
+        'priority':              { get label() { return t('rpt_groupby_priority'); },     data: () => { const p = inc.byPriority || {}; return [{ type: 'P1', count: p.p1||0, rawValue: '1' }, { type: 'P2', count: p.p2||0, rawValue: '2' }, { type: 'P3', count: p.p3||0, rawValue: '3' }, { type: 'P4', count: p.p4||0, rawValue: '4' }].filter(x => x.count > 0); } },
         'impact':                { get label() { return t('rpt_groupby_impact'); },       data: () => _flat(inc.byImpact) },
         'urgency':               { get label() { return t('rpt_groupby_urgency'); },      data: () => _flat(inc.byUrgency) },
         'state':                 { get label() { return t('rpt_groupby_state'); },        data: () => _flat(inc.byState) },
@@ -902,6 +903,10 @@ function _renderCardValue(id, inc, prbs, req) {
       const subHtml = S.slaEnabled ? _slaBadge(inc?.slaByPriority?.p3) : `<div class="report-prb-card-sub">${t('rpt_sub_medium_priority')}</div>`;
       return { val: String(inc?.byPriority?.p3 ?? 0), label: t('rpt_ind_inc_p3'), subHtml, cls: '' };
     }
+    case 'inc_p4': {
+      const subHtml = S.slaEnabled ? _slaBadge(inc?.slaByPriority?.p4) : `<div class="report-prb-card-sub">${t('rpt_sub_low_priority')}</div>`;
+      return { val: String(inc?.byPriority?.p4 ?? 0), label: t('rpt_ind_inc_p4'), subHtml, cls: '' };
+    }
     case 'inc_target': {
       if (S.incidentTarget === null) {
         return { val: '<span style="font-size:20px;line-height:1;opacity:.55">&#9881;</span>', label: t('rpt_ind_inc_target'), sub: t('rpt_sub_click_configure'), cls: '', clickable: true, onclick: 'reportOpenTargetModal()' };
@@ -1345,6 +1350,7 @@ function _buildReportContext(payload) {
         p1_pct: incidents.slaByPriority?.p1?.pct ?? null,
         p2_pct: incidents.slaByPriority?.p2?.pct ?? null,
         p3_pct: incidents.slaByPriority?.p3?.pct ?? null,
+        p4_pct: incidents.slaByPriority?.p4?.pct ?? null,
       } : null,
       topSistemas: (incidents.bySystem || []).slice(0, 5).map(s => ({
         sistema: s.name, total: s.total, p1: s.p1, p2: s.p2,

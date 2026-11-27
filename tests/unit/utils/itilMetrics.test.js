@@ -47,6 +47,19 @@ describe('calcMttrByPriority', () => {
     expect(r.all).toBe(Math.round((2 + 8 + 24) / 3 * 10) / 10);
   });
 
+  test('calcula MTTR de P4 separado', () => {
+    const items = [
+      makeInc('4', '2026-06-01T00:00:00Z', '2026-06-03T00:00:00Z'), // 48h P4
+      makeInc('4', '2026-06-01T00:00:00Z', '2026-06-02T00:00:00Z'), // 24h P4
+      makeInc('3', '2026-06-01T00:00:00Z', '2026-06-01T12:00:00Z'), // 12h P3
+    ];
+    const r = calcMttrByPriority(items);
+    expect(r.p4).toBe(36);
+    expect(r.countP4).toBe(2);
+    expect(r.p3).toBe(12);
+    expect(r.all).toBe(28);
+  });
+
   test('ignora item com closed_at mas sem resolved_at', () => {
     const items = [{ priority: '2', opened_at: '2026-06-01T00:00:00Z', closed_at: '2026-06-01T04:00:00Z' }];
     const r = calcMttrByPriority(items);

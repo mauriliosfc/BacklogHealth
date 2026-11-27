@@ -438,7 +438,7 @@ export function reportOpenIncChartPicker(idx) {
     ` : ''}
     ${showSla ? `
       <div class="report-field-picker-label">${t('rpt_label_sla_targets')}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:4px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:4px">
         <div>
           <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p1')}</label>
           <div style="display:flex;align-items:center;gap:4px">
@@ -457,6 +457,13 @@ export function reportOpenIncChartPicker(idx) {
           <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p3')}</label>
           <div style="display:flex;align-items:center;gap:4px">
             <input type="number" id="report-sla-p3" min="0" max="100" value="${S.slaTargets.p3 ?? 85}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
+            <span style="font-size:12px;color:var(--text-faint)">%</span>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p4')}</label>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="number" id="report-sla-p4" min="0" max="100" value="${S.slaTargets.p4 ?? 80}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
             <span style="font-size:12px;color:var(--text-faint)">%</span>
           </div>
         </div>
@@ -539,6 +546,7 @@ function _applyIncChartPicker() {
   const newSlaP1     = document.getElementById('report-sla-p1') ? clamp01(document.getElementById('report-sla-p1').value) : null;
   const newSlaP2     = document.getElementById('report-sla-p2') ? clamp01(document.getElementById('report-sla-p2').value) : null;
   const newSlaP3     = document.getElementById('report-sla-p3') ? clamp01(document.getElementById('report-sla-p3').value) : null;
+  const newSlaP4     = document.getElementById('report-sla-p4') ? clamp01(document.getElementById('report-sla-p4').value) : null;
 
   const clampedMonths = !isNaN(newMonths) ? Math.min(24, Math.max(1, newMonths)) : null;
 
@@ -551,8 +559,8 @@ function _applyIncChartPicker() {
   if (newGroupBy            && newGroupBy  !== S.incidentGroupBy)  { S.incidentGroupBy = newGroupBy; needReload = true; }
   if (!isNaN(newHeatMax))                                         { S.heatmapMax      = Math.max(0, newHeatMax); }
   if (!isNaN(newLocMonths) && newLocMonths !== S.locationMonths)   { S.locationMonths  = newLocMonths; needReload = true; }
-  if (newSlaP1 !== null || newSlaP2 !== null || newSlaP3 !== null) {
-    S.slaTargets = { p1: newSlaP1 ?? S.slaTargets.p1, p2: newSlaP2 ?? S.slaTargets.p2, p3: newSlaP3 ?? S.slaTargets.p3 };
+  if (newSlaP1 !== null || newSlaP2 !== null || newSlaP3 !== null || newSlaP4 !== null) {
+    S.slaTargets = { p1: newSlaP1 ?? S.slaTargets.p1, p2: newSlaP2 ?? S.slaTargets.p2, p3: newSlaP3 ?? S.slaTargets.p3, p4: newSlaP4 ?? S.slaTargets.p4 ?? 80 };
   }
 
   const isGroupby      = type === 'inc-groupby';
@@ -711,7 +719,8 @@ export async function reportOpenPrbChartPicker(idx) {
   if (showPrbOldest) {
     _renderAgColChips();
     try {
-      const r    = await fetch('/api/prb-fields');
+      // Campos do Service Now do projeto aberto (cada projeto pode usar outra instância)
+      const r    = await fetch('/api/prb-fields' + (S.reportProject ? '?' + new URLSearchParams({ project: S.reportProject }) : ''));
       const data = await r.json();
       const snExtra = (data.fields || []).map(f => ({ key: 'sn:' + f.key, label: f.label || f.key }));
       const allFields = [..._PRB_PREDEFINED.map(f => ({ key: f.key, label: f.label })), ...snExtra];
@@ -1257,7 +1266,7 @@ export function reportOpenSlaPicker() {
         <label for="report-sla-enabled-chk" style="font-size:13px;color:var(--text-1);cursor:pointer;user-select:none">${t('rpt_label_show_sla')}</label>
       </div>
       <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">${t('rpt_label_sla_targets')}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:4px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:4px">
         <div>
           <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p1')}</label>
           <div style="display:flex;align-items:center;gap:4px">
@@ -1279,6 +1288,13 @@ export function reportOpenSlaPicker() {
             <span style="font-size:12px;color:var(--text-faint)">%</span>
           </div>
         </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-faint);display:block;margin-bottom:4px">${t('rpt_priority_p4')}</label>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="number" id="report-sla-p4" min="0" max="100" value="${S.slaTargets.p4 ?? 80}" style="width:56px;padding:4px 6px;background:var(--bg-el);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;text-align:right">
+            <span style="font-size:12px;color:var(--text-faint)">%</span>
+          </div>
+        </div>
       </div>`,
     onApply: _applySlaPicker,
   });
@@ -1290,9 +1306,10 @@ async function _applySlaPicker() {
   const p1 = clamp(document.getElementById('report-sla-p1')?.value);
   const p2 = clamp(document.getElementById('report-sla-p2')?.value);
   const p3 = clamp(document.getElementById('report-sla-p3')?.value);
+  const p4 = clamp(document.getElementById('report-sla-p4')?.value ?? 80);
   _closeFieldPicker();
   S.slaEnabled  = enabled;
-  S.slaTargets  = { p1, p2, p3 };
+  S.slaTargets  = { p1, p2, p3, p4 };
   await fetch('/api/sn-config', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },

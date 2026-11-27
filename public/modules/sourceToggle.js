@@ -1,4 +1,14 @@
+import { applyOrder } from './cardOrder.js';
+import { applyAliases } from './alias.js';
+
 let _snLoaded = false;
+
+// Cards do Service Now carregados na visão SN: reaplica a ordem salva e os apelidos
+function _setSnHtml(snView, html) {
+  snView.innerHTML = html;
+  applyOrder('sn-view');
+  applyAliases();
+}
 
 export function toggleSource(src) {
   const content  = document.getElementById('content');
@@ -24,7 +34,7 @@ export function toggleSource(src) {
         snView.innerHTML = '<div class="sn-view-loading">Carregando incidentes...</div>';
         fetch('/api/sn-view')
           .then(r => r.json())
-          .then(d => { snView.innerHTML = d.html; })
+          .then(d => { _setSnHtml(snView, d.html); })
           .catch(e => {
             snView.innerHTML = `<div class="sn-view-error">Erro ao carregar: ${e.message}</div>`;
             _snLoaded = false;
@@ -52,7 +62,7 @@ export async function refreshSnView() {
   try {
     const r = await fetch('/api/sn-view');
     const d = await r.json();
-    snView.innerHTML = d.html;
+    _setSnHtml(snView, d.html);
   } catch (e) {
     snView.innerHTML = `<div class="sn-view-error">Erro ao carregar: ${e.message}</div>`;
     _snLoaded = false;

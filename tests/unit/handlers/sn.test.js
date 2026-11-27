@@ -1,11 +1,22 @@
 jest.mock('../../../config');
 jest.mock('../../../servicenowClient');
+jest.mock('../../../snMcp', () => ({ isConnected: jest.fn(() => true), logout: jest.fn() }));
 
 const { getSnCfg, saveSnCfg, testSn, fetchGroups, fetchGroupsFromConfig, getAllProjectsSnCfg, removeSnGroup, _clearGroupsCache } = require('../../../handlers/sn');
-const { getSnConfig, saveSnConfig, saveConfig, getProjectSnGroup, getCfg } = require('../../../config');
+const { getSnConfig, saveSnConfig, saveConfig, getProjectSnGroup, getCfg, getSnInstance, getSnInstances, getProjectSnContext, getDisplayName, snPublic, snLabel } = require('../../../config');
 const { snGet } = require('../../../servicenowClient');
 
-beforeEach(() => _clearGroupsCache());
+// Uma instância só (a principal): as funções de instância leem o mesmo getSnConfig dos testes
+const realSn = jest.requireActual('../../../utils/snInstances');
+beforeEach(() => {
+  _clearGroupsCache();
+  getSnInstance.mockImplementation(() => getSnConfig());
+  getSnInstances.mockImplementation(() => (getSnConfig() ? [getSnConfig()] : []));
+  getProjectSnContext.mockImplementation(name => ({ snCfg: getSnConfig(), group: getProjectSnGroup(name) }));
+  getDisplayName.mockImplementation(p => p.key || p.name);
+  snPublic.mockImplementation(realSn.snPublic);
+  snLabel.mockImplementation(realSn.snLabel);
+});
 
 // ── getSnCfg ──────────────────────────────────────────────────────────────────
 
@@ -343,12 +354,12 @@ describe('getAllProjectsSnCfg', () => {
     expect(projects[1]).toMatchObject({ name: 'Beta',  assignmentGroup: '',     assignmentGroupName: '' });
   });
 
-  test('não expõe campos internos além de name, assignmentGroup, assignmentGroupName', () => {
+  test('não expõe campos internos além do nome, da instância e do grupo', () => {
     getCfg.mockReturnValue({
       projects: [{ name: 'X', pat: 'secret', servicenow: { assignmentGroup: 'g1', assignmentGroupName: 'G1' } }],
     });
     const { projects } = getAllProjectsSnCfg();
-    expect(Object.keys(projects[0])).toEqual(['name', 'assignmentGroup', 'assignmentGroupName']);
+    expect(Object.keys(projects[0])).toEqual(['name', 'displayName', 'instanceId', 'assignmentGroup', 'assignmentGroupName']);
   });
 });
 
@@ -369,6 +380,18 @@ describe('removeSnGroup', () => {
     expect(cfg.servicenow.assignmentGroups).toEqual(['IT Support', 'Database']);
     expect(saveConfig).toHaveBeenCalledWith(cfg);
     expect(result).toEqual({ ok: true });
+  });
+
+  test('remove o grupo da instância que o tem (várias instâncias)', () => {
+    const cfg = {
+      servicenow: { assignmentGroups: ['IT Support'] },
+      snInstances: [{ id: 'a', assignmentGroups: ['IT Support'] }, { id: 'b', assignmentGroups: ['Banco', 'Rede'] }],
+    };
+    getCfg.mockReturnValue(cfg);
+    removeSnGroup({ group: 'Banco' });
+    expect(cfg.snInstances[1].assignmentGroups).toEqual(['Rede']);
+    expect(cfg.snInstances[0].assignmentGroups).toEqual(['IT Support']);
+    expect(cfg.servicenow.assignmentGroups).toEqual(['IT Support']);
   });
 
   test('não falha quando servicenow.assignmentGroups não existe', () => {
@@ -552,5 +575,133 @@ describe('modo MCP', () => {
     const r = await fetchPrbFields();
     expect(r.fields).toEqual([{ key: 'u_x', label: 'X' }]);
     expect(snGet).toHaveBeenCalledWith(sn, expect.stringContaining('sys_dictionary'));
+  });
+});
+
+// ── Várias instâncias ─────────────────────────────────────────────────────────
+
+describe('várias instâncias', () => {
+  const { fetchPrbFields, listSnInstances, removeSnInstance } = require('../../../handlers/sn');
+  const A = { id: 'a', instance: 'a.service-now.com', user: 'ua', pass: 'pa', assignmentGroups: ['G1'] };
+  const B = { id: 'b', instance: 'b.service-now.com', label: 'Cliente B', user: 'ub', pass: 'pb' };
+  const instances = () => [A, B];
+
+  beforeEach(() => {
+    getSnInstances.mockImplementation(instances);
+    getSnInstance.mockImplementation(id => instances().find(s => s.id === id) || A);
+    getProjectSnContext.mockImplementation(name => ({ snCfg: name === 'Beta' ? B : A, group: null }));
+  });
+
+  test('getSnCfg por instanceId devolve a instância, sem senha', () => {
+    const r = getSnCfg({ instanceId: 'b' });
+    expect(r).toMatchObject({ instanceId: 'b', label: 'Cliente B', isPrimary: false, instance: 'b.service-now.com', user: 'ub', hasPass: true });
+    expect(r).not.toHaveProperty('pass');
+  });
+
+  test('getSnCfg com projeto usa a instância do projeto', () => {
+    getProjectSnGroup.mockReturnValue({ assignmentGroup: 'g' });
+    expect(getSnCfg({ project: 'Beta' })).toMatchObject({ instanceId: 'b', assignmentGroup: 'g' });
+  });
+
+  test('saveSnCfg repassa a instância e devolve o id salvo', () => {
+    saveSnConfig.mockReturnValue('nova');
+    expect(saveSnCfg({ instanceId: 'new', label: 'Nova', instance: 'nova.service-now.com', user: 'u', pass: 'p' }))
+      .toEqual({ ok: true, instanceId: 'nova' });
+    expect(saveSnConfig).toHaveBeenCalledWith(expect.objectContaining({ instanceId: 'new', label: 'Nova' }), null);
+  });
+
+  test('saveSnCfg com instância que não existe mais: 404, não grava por cima da principal', () => {
+    expect(() => saveSnCfg({ instanceId: 'removida', instance: 'x.service-now.com', user: 'u' })).toThrow(expect.objectContaining({ status: 404 }));
+    expect(saveSnConfig).not.toHaveBeenCalled();
+  });
+
+  test('saveSnCfg só com a instância do projeto não mexe nas credenciais', () => {
+    saveSnConfig.mockReturnValue(null);
+    expect(saveSnCfg({ project: 'Alpha', instanceId: 'b', assignmentGroup: 'g', assignmentGroupName: 'G' })).toEqual({ ok: true });
+    expect(saveSnConfig).toHaveBeenCalledWith({}, expect.objectContaining({ projectName: 'Alpha', instanceId: 'b', assignmentGroup: 'g' }));
+  });
+
+  test('testSn de instância salva com senha em branco usa a senha salva', async () => {
+    snGet.mockResolvedValue({ result: [] });
+    await testSn({ instanceId: 'b', instance: 'b.service-now.com', user: 'ub', pass: '' });
+    expect(snGet.mock.calls[0][0]).toMatchObject({ instance: 'b.service-now.com', pass: 'pb' });
+  });
+
+  test('testSn com senha em branco e outra instância exige a senha', async () => {
+    await expect(testSn({ instanceId: 'b', instance: 'outra.service-now.com', user: 'ub', pass: '' })).rejects.toMatchObject({ status: 400 });
+  });
+
+  test('grupos são buscados e guardados por instância', async () => {
+    snGet.mockImplementation(async cfg => ({ result: [{ name: cfg.instance, sys_id: cfg.instance }] }));
+    const a = await fetchGroupsFromConfig({ instanceId: 'a' });
+    const b = await fetchGroupsFromConfig({ instanceId: 'b' });
+    await fetchGroupsFromConfig({ instanceId: 'a' });
+    expect(a.groups[0].name).toBe('a.service-now.com');
+    expect(b.groups[0].name).toBe('b.service-now.com');
+    expect(snGet).toHaveBeenCalledTimes(2);
+  });
+
+  test('SSO sem sessão: não busca grupos (não abre a janela de login)', async () => {
+    const snMcp = require('../../../snMcp');
+    snMcp.isConnected.mockReturnValueOnce(false);
+    const S = { id: 's', instance: 's.service-now.com', mode: 'mcp', mcp: { username: 'x' } };
+    getSnInstance.mockReturnValue(S);
+    const r = await fetchGroupsFromConfig({ instanceId: 's' });
+    expect(r).toMatchObject({ groups: [], needsLogin: true });
+    expect(snGet).not.toHaveBeenCalled();
+    expect(snMcp.isConnected).toHaveBeenCalledWith(S);
+  });
+
+  test('fetchPrbFields consulta a instância do projeto', async () => {
+    snGet.mockResolvedValue({ result: [] });
+    await fetchPrbFields({ project: 'Beta' });
+    expect(snGet.mock.calls[0][0]).toBe(B);
+  });
+
+  test('listSnInstances não devolve senha e conta projetos', () => {
+    getCfg.mockReturnValue({ projects: [
+      { name: 'Alpha', servicenow: { assignmentGroup: 'g' } },
+      { name: 'Beta',  servicenow: { instanceId: 'b', assignmentGroup: 'h' } },
+      { name: 'Gama' },
+    ] });
+    const { instances: list } = listSnInstances();
+    // Projeto sem instanceId (Alpha, Gama) usa a principal
+    expect(list.map(s => [s.id, s.isPrimary, s.projectCount])).toEqual([['a', true, 2], ['b', false, 1]]);
+    expect(JSON.stringify(list)).not.toMatch(/"pa"|"pb"/);
+    expect(list[0].assignmentGroups).toEqual(['G1']);
+    expect(list[1].assignmentGroups).toEqual([]);   // B não tem grupos
+  });
+
+  test('removeSnInstance devolve os projetos dela para a principal, sem grupo', () => {
+    const cfg = { snInstances: [A, B], servicenow: { ...A }, projects: [
+      { name: 'Alpha', servicenow: { assignmentGroup: 'g' } },
+      { name: 'Beta',  servicenow: { instanceId: 'b', assignmentGroup: 'h', assignmentGroupName: 'H' } },
+    ] };
+    getCfg.mockReturnValue(cfg);
+    expect(removeSnInstance({ instanceId: 'b' })).toEqual({ ok: true, affectedProjects: 1 });
+    const saved = saveConfig.mock.calls[0][0];
+    expect(saved.snInstances.map(s => s.id)).toEqual(['a']);
+    expect(saved.projects[0].servicenow).toEqual({ assignmentGroup: 'g' });
+    expect(saved.projects[1].servicenow).toEqual({});
+    expect(saved.servicenow).toBeDefined();
+  });
+
+  test('removeSnInstance da principal: a próxima assume e o espelho é recriado', () => {
+    const cfg = { snInstances: [A, B], servicenow: { ...A }, projects: [
+      { name: 'Alpha', servicenow: { assignmentGroup: 'g' } },
+      { name: 'Beta',  servicenow: { instanceId: 'b', assignmentGroup: 'h' } },
+    ] };
+    getCfg.mockReturnValue(cfg);
+    expect(removeSnInstance({ instanceId: 'a' })).toEqual({ ok: true, affectedProjects: 1 });
+    const saved = saveConfig.mock.calls[0][0];
+    expect(saved.snInstances.map(s => s.id)).toEqual(['b']);
+    expect(saved).not.toHaveProperty('servicenow');
+    expect(saved.projects[1].servicenow).toEqual({ instanceId: 'b', assignmentGroup: 'h' });
+  });
+
+  test('removeSnInstance: 400 sem id e 404 para id desconhecido', () => {
+    getCfg.mockReturnValue({ projects: [] });
+    expect(() => removeSnInstance({})).toThrow(expect.objectContaining({ status: 400 }));
+    expect(() => removeSnInstance({ instanceId: 'x' })).toThrow(expect.objectContaining({ status: 404 }));
   });
 });

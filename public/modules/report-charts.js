@@ -388,11 +388,13 @@ export function _renderIncPriorityDonut(inc, onClick) {
   const p1     = inc?.byPriority?.p1 || 0;
   const p2     = inc?.byPriority?.p2 || 0;
   const p3     = inc?.byPriority?.p3 || 0;
-  const outros = Math.max(0, (inc?.total || 0) - p1 - p2 - p3);
+  const p4     = inc?.byPriority?.p4 || 0;
+  const outros = Math.max(0, (inc?.total || 0) - p1 - p2 - p3 - p4);
   const items  = [
     { get type() { return t('rpt_priority_p1'); }, count: p1,     color: '#ef4444', rawValue: '1' },
     { get type() { return t('rpt_priority_p2'); }, count: p2,     color: '#f97316', rawValue: '2' },
     { get type() { return t('rpt_priority_p3'); }, count: p3,     color: '#eab308', rawValue: '3' },
+    { get type() { return t('rpt_priority_p4'); }, count: p4,     color: '#3b82f6', rawValue: '4' },
     ...(outros > 0 ? [{ get type() { return t('rpt_others'); }, count: outros, color: '#6b7280' }] : []),
   ].filter(item => item.count > 0);
   if (!items.length) return `<div class="report-empty-hint">${t('rpt_chart_no_incidents')}</div>`;
@@ -513,8 +515,8 @@ export function _renderIncidentSystemBars(bySystem, reportMonth, groupby) {
     const rest  = all.slice(cutoff);
     const outros = rest.reduce((acc, s) => ({
       name: 'Outros', total: acc.total + (s.total || 0),
-      p1: acc.p1 + (s.p1 || 0), p2: acc.p2 + (s.p2 || 0), p3: acc.p3 + (s.p3 || 0),
-    }), { name: 'Outros', total: 0, p1: 0, p2: 0, p3: 0 });
+      p1: acc.p1 + (s.p1 || 0), p2: acc.p2 + (s.p2 || 0), p3: acc.p3 + (s.p3 || 0), p4: acc.p4 + (s.p4 || 0),
+    }), { name: 'Outros', total: 0, p1: 0, p2: 0, p3: 0, p4: 0 });
     items = outros.total > 0 ? [...topN, outros] : topN;
   }
 
@@ -537,6 +539,7 @@ export function _renderIncidentSystemBars(bySystem, reportMonth, groupby) {
     { key: 'p1',   color: 'rgba(239,68,68,0.65)',  label: 'P1' },
     { key: 'p2',   color: 'rgba(249,115,22,0.55)', label: 'P2' },
     { key: 'p3',   color: 'rgba(250,204,21,0.45)', label: 'P3' },
+    { key: 'p4',   color: 'rgba(59,130,246,0.45)', label: 'P4' },
     { key: 'rest', color: 'rgba(34,197,94,0.35)',  label: 'Outros' },
   ];
 
@@ -544,8 +547,8 @@ export function _renderIncidentSystemBars(bySystem, reportMonth, groupby) {
   items.forEach((s, i) => {
     const cx  = pad.l + i * slotW + slotW / 2;
     const bx  = cx - bw / 2;
-    const rest = Math.max(0, s.total - s.p1 - s.p2 - s.p3);
-    const vals = { p1: s.p1, p2: s.p2, p3: s.p3, rest };
+    const rest = Math.max(0, s.total - s.p1 - s.p2 - s.p3 - (s.p4 || 0));
+    const vals = { p1: s.p1, p2: s.p2, p3: s.p3, p4: s.p4 || 0, rest };
     let yBottom = pad.t + chartH;
 
     SEGS.forEach(seg => {
@@ -583,6 +586,7 @@ export function _renderIncidentSystemBars(bySystem, reportMonth, groupby) {
     { type: 'rect', color: 'rgba(239,68,68,0.65)',  label: 'P1' },
     { type: 'rect', color: 'rgba(249,115,22,0.55)', label: 'P2' },
     { type: 'rect', color: 'rgba(250,204,21,0.45)', label: 'P3' },
+    { type: 'rect', color: 'rgba(59,130,246,0.45)', label: 'P4' },
   ]);
 }
 
@@ -1111,7 +1115,7 @@ export function _renderIncPriorityTrend(monthly, months) {
   const cW = W - padL - padR;
   const n  = data.length;
 
-  const maxV = Math.max(...data.flatMap(m => [m.p1 || 0, m.p2 || 0, m.p3 || 0]), 1);
+  const maxV = Math.max(...data.flatMap(m => [m.p1 || 0, m.p2 || 0, m.p3 || 0, m.p4 || 0]), 1);
   const xOf  = i => padL + (n === 1 ? cW / 2 : i / (n - 1) * cW);
   const yOf  = v => padT + cH - (v / maxV) * cH;
 
@@ -1119,6 +1123,7 @@ export function _renderIncPriorityTrend(monthly, months) {
     { key: 'p1', color: '#ef4444', get label() { return t('rpt_priority_p1'); } },
     { key: 'p2', color: '#f97316', get label() { return t('rpt_priority_p2'); } },
     { key: 'p3', color: '#eab308', get label() { return t('rpt_priority_p3'); } },
+    { key: 'p4', color: '#3b82f6', get label() { return t('rpt_priority_p4'); } },
   ];
 
   const grid = Array.from({ length: 4 }, (_, i) => {
@@ -1154,6 +1159,7 @@ export function _renderIncSlaBars(slaByPriority) {
     { key: 'p1', get label() { return t('rpt_priority_p1'); }, color: '#ef4444', target: S.slaTargets.p1 ?? 95 },
     { key: 'p2', get label() { return t('rpt_priority_p2'); }, color: '#f97316', target: S.slaTargets.p2 ?? 90 },
     { key: 'p3', get label() { return t('rpt_priority_p3'); }, color: '#eab308', target: S.slaTargets.p3 ?? 85 },
+    { key: 'p4', get label() { return t('rpt_priority_p4'); }, color: '#3b82f6', target: S.slaTargets.p4 ?? 80 },
   ];
   const rows = PRIOS.map(p => {
     const d = slaByPriority[p.key];

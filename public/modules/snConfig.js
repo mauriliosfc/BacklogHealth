@@ -6,6 +6,9 @@ let _snProject  = null;
 let _snMode     = 'api';
 let _mcpPanel   = null;
 let _mcpInitial = { username: '', loginUrl: '' };
+let _instances  = [];   // instâncias salvas (sem senha)
+let _instanceId = '';   // instância exibida (do projeto, ou a principal)
+let _hasPass    = false; // a instância exibida já tem senha salva
 
 function _tt(key, fallback) {
   const v = t(key);
@@ -52,6 +55,7 @@ export function snConfigSetMode(mode) {
     if (!_mcpPanel && panelEl) {
       _mcpPanel = mountSnMcpPanel(panelEl, {
         getInstance: () => document.getElementById('snm-instance')?.value || '',
+        getInstanceId: () => _instanceId,
         initial:     _mcpInitial,
         onConnected: () => snConfigSaveGlobal(),
       });
@@ -63,12 +67,56 @@ export function snConfigSetMode(mode) {
 }
 
 async function _loadSnData(project) {
-  const [globalCfg, projCfg] = await Promise.all([
-    fetch('/api/sn-config').then(r => r.json()).catch(() => ({})),
+  const [list, projCfg] = await Promise.all([
+    fetch('/api/sn-instances').then(r => r.json()).catch(() => ({})),
     project
       ? fetch('/api/sn-config?' + new URLSearchParams({ project })).then(r => r.json()).catch(() => ({}))
       : Promise.resolve({}),
   ]);
+  _instances  = Array.isArray(list.instances) ? list.instances : [];
+  _instanceId = projCfg.instanceId || (_instances[0] && _instances[0].id) || '';
+  _renderInstanceSelect(project);
+  await _loadInstance(_instanceId);
+
+  const elAg  = document.getElementById('snm-ag');
+  const elAgN = document.getElementById('snm-ag-name');
+  if (elAg)  elAg.value  = projCfg.assignmentGroup     || '';
+  if (elAgN) elAgN.value = projCfg.assignmentGroupName || '';
+}
+
+// Com mais de uma instância e um projeto aberto: escolha de qual Service Now o projeto usa
+function _renderInstanceSelect(project) {
+  const wrap = document.getElementById('snm-inst-field');
+  const sel  = document.getElementById('snm-inst-select');
+  if (!wrap || !sel) return;
+  const show = !!project && _instances.length > 1;
+  wrap.style.display = show ? '' : 'none';
+  if (!show) return;
+  sel.innerHTML = '';
+  _instances.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = (s.label || s.instance) + (s.label ? ' (' + s.instance + ')' : '');
+    sel.appendChild(opt);
+  });
+  sel.value = _instanceId;
+}
+
+// Troca a instância do projeto: o grupo é da instância anterior, então é limpo
+export async function snConfigSetInstance(id) {
+  if (!id || id === _instanceId) return;
+  _instanceId = id;
+  const elAg  = document.getElementById('snm-ag');
+  const elAgN = document.getElementById('snm-ag-name');
+  if (elAg)  elAg.value  = '';
+  if (elAgN) elAgN.value = '';
+  _setStatus(document.getElementById('snm-proj-status'), '', _tt('snm_inst_changed', 'Salve o grupo para aplicar a troca de Service Now.'));
+  await _loadInstance(id);
+}
+
+async function _loadInstance(id) {
+  const globalCfg = await fetch('/api/sn-config?' + new URLSearchParams(id ? { instanceId: id } : {}))
+    .then(r => r.json()).catch(() => ({}));
 
   const elInst = document.getElementById('snm-instance');
   const elUser = document.getElementById('snm-user');
@@ -78,13 +126,10 @@ async function _loadSnData(project) {
   if (elPass) elPass.value = '';
   if (elPass && globalCfg.hasPass) elPass.placeholder = '•••••••• ' + _tt('snm_saved_suffix', '(salvo)');
 
+  if (elPass && !globalCfg.hasPass) elPass.placeholder = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+  _hasPass = !!globalCfg.hasPass;
   _mcpInitial = { username: globalCfg.mcpUsername || '', loginUrl: globalCfg.mcpLoginUrl || '' };
   snConfigSetMode(globalCfg.mode === 'mcp' ? 'mcp' : 'api');
-
-  const elAg  = document.getElementById('snm-ag');
-  const elAgN = document.getElementById('snm-ag-name');
-  if (elAg)  elAg.value  = projCfg.assignmentGroup     || '';
-  if (elAgN) elAgN.value = projCfg.assignmentGroupName || '';
 }
 
 export async function snConfigTest() {
@@ -92,7 +137,8 @@ export async function snConfigTest() {
   const user     = document.getElementById('snm-user').value.trim();
   const pass     = document.getElementById('snm-pass').value;
   const st       = document.getElementById('snm-global-status');
-  if (!instance || !user || !pass) {
+  const hasSavedPass = !!_instanceId && _hasPass;
+  if (!instance || !user || (!pass && !hasSavedPass)) {
     _setStatus(st, 'error', _tt('sn_err_fill', 'Preencha instância, usuário e senha.'));
     return;
   }
@@ -101,7 +147,7 @@ export async function snConfigTest() {
     const r = await fetch('/api/sn-test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instance, user, pass }),
+      body: JSON.stringify({ instance, user, pass, ...(_instanceId ? { instanceId: _instanceId } : {}) }),
     });
     const d = await r.json().catch(() => ({}));
     _setStatus(st, d.ok ? 'ok' : 'error', d.ok ? _tt('sn_ok', 'Conexão OK') : (d.error || _tt('snm_conn_error', 'Erro na conexão')));
@@ -124,6 +170,7 @@ export async function snConfigSaveGlobal() {
     ? { instance, mode: 'mcp', ...(_mcpPanel ? _mcpPanel.getValues() : {}) }
     : { instance, user, mode: 'api' };
   if (_snMode === 'api' && pass) body.pass = pass;
+  if (_instanceId) body.instanceId = _instanceId;
   try {
     const r = await fetch('/api/sn-config', {
       method: 'POST',
@@ -150,6 +197,7 @@ export async function snConfigSaveProject() {
   if (!project) { _setStatus(st, 'error', _tt('snm_no_project', 'Nenhum projeto selecionado.')); return; }
   _setStatus(st, '', _tt('sn_saving', 'Salvando…'));
   const body = { project, assignmentGroup, assignmentGroupName };
+  if (_instances.length > 1 && _instanceId) body.instanceId = _instanceId;
   try {
     const r = await fetch('/api/sn-config', {
       method: 'POST',
